@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+packages/nova-state/target/
+
+# Test and coverage output
+coverage/
+test-results/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Nova CLI local state (sessions, checkpoint index, security brain)
+.nova/
+
+# Scratch output
+tmp/
+*.log

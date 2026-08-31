@@ -1,0 +1,24 @@
+{
+  "//": "The workspace root: the shared packages and the tooling that builds and releases them. `bun run typecheck` at the root runs against this.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@archymedes/nova-core": ["./packages/agent-core/src/index.ts"],
+      "@archymedes/nova-core/*": ["./packages/agent-core/src/*"]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "tooling/**/*.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/dist",
+    "packages/nova-state/target"
+  ]
+}
