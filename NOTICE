@@ -1,0 +1,7 @@
+Archymedes CLI
+Copyright (c) 2026 Archymedes CLI contributors
+
+This product is a fork of the Nova CLI ("Circuit-Nova"), used under the MIT License.
+
+Bundled and dependent third-party components retain their own licenses; see each
+package's metadata and node_modules for details.
