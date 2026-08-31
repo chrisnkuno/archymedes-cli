@@ -102,11 +102,11 @@ describe("panels", () => {
   });
 
   it("draws the corners the active theme actually asks for, not a fixed shape", () => {
-    // nebula asks for a single-line border; starry-night (the default) asks for round.
-    const nebula = buildPalette(findBuiltinTheme("nebula")!, "none");
-    const starryNight = buildPalette(findBuiltinTheme("starry-night")!, "none");
-    const single = plain(panel(["x"], { ...style(), palette: nebula }));
-    const round = plain(panel(["x"], { ...style(), palette: starryNight }));
+    // chalkboard asks for a single-line border; blueprint (the default) asks for round.
+    const chalkboard = buildPalette(findBuiltinTheme("chalkboard")!, "none");
+    const blueprint = buildPalette(findBuiltinTheme("blueprint")!, "none");
+    const single = plain(panel(["x"], { ...style(), palette: chalkboard }));
+    const round = plain(panel(["x"], { ...style(), palette: blueprint }));
     expect(single).toContain("┌");
     expect(single).not.toContain("╭");
     expect(round).toContain("╭");
@@ -114,8 +114,8 @@ describe("panels", () => {
   });
 
   it("never draws a themed border character outside the ASCII set on an ASCII terminal", () => {
-    const nebula = buildPalette(findBuiltinTheme("nebula")!, "none");
-    const rendered = plain(panel(["x"], { ...style(), palette: nebula, glyphs: ASCII_GLYPHS }));
+    const chalkboard = buildPalette(findBuiltinTheme("chalkboard")!, "none");
+    const rendered = plain(panel(["x"], { ...style(), palette: chalkboard, glyphs: ASCII_GLYPHS }));
     for (const character of rendered) expect(character.codePointAt(0)).toBeLessThan(128);
   });
 });

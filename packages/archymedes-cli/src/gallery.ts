@@ -78,7 +78,7 @@ export function renderGallery(options: GalleryOptions): string {
   const paint = { dim: plain, cyan: plain, green: plain, yellow: plain, bold: plain };
   const parts: string[] = [];
 
-  parts.push(renderBanner({ depth, glyphs, width }), renderTagline("a coding agent that runs in your terminal", depth), "");
+  parts.push(renderBanner({ depth, glyphs, width }), renderTagline("a coding agent that shows its work", depth), "");
 
   parts.push(section("rules, headings, notes", style, [
     rule(style, { label: "labelled", tone: "accent" }),
@@ -115,9 +115,9 @@ export function renderGallery(options: GalleryOptions): string {
   ]));
 
   const chooserItems: ChooserItem<string>[] = [
-    { label: "starry-night", hint: "the default", value: "a" },
-    { label: "starry-dawn", hint: "light", value: "b" },
-    { label: "nebula", hint: "purple", value: "c" },
+    { label: "blueprint", hint: "the default", value: "a" },
+    { label: "parchment", hint: "light", value: "b" },
+    { label: "chalkboard", hint: "purple", value: "c" },
     { label: "high-contrast", hint: "accessible", value: "d" },
   ];
   parts.push(section("choosers and menus", style, [

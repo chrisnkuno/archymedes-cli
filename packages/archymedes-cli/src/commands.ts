@@ -43,7 +43,7 @@ export const COMMANDS = defineCommands({
   "/slow": { args: "[on|strict|off]", description: "Spend at a slower pace: fewer model rounds, smaller replies, a pause between turns" },
   "/workspace": { description: "Open the control panel: every tab and watched job, live, on one screen" },
   "/watch": { args: "[id|show <id>|stop <id>]", description: "Follow a background job's output without giving up the prompt" },
-  "/theme": { args: "[name|list|where]", description: "Change the colours — starry-night, starry-dawn, nebula, high-contrast, or a .tss file of your own" },
+  "/theme": { args: "[name|list|where]", description: "Change the colours — blueprint, parchment, chalkboard, high-contrast, or a .tss file of your own" },
   "/tab": { args: "[new|next|prev|close|rename|N]", description: "Several pieces of work, one at a time — only the tab in front runs (/detach for parallel)" },
   "/pull": { args: "[dir]", description: "Copy sandbox files here" },
   "/where": { description: "Show the current workspace" },

@@ -122,12 +122,12 @@ type MessageKey =
 
 const MESSAGES: Record<MessageKey, Partial<Record<ControlLanguage, string>> & { en: string }> = {
   "tagline": {
-    en: "a coding agent in your terminal",
-    zh: "终端里的编码代理", hi: "आपके टर्मिनल में एक कोडिंग एजेंट", es: "un agente de programación en tu terminal",
-    fr: "un agent de codage dans votre terminal", ar: "وكيل برمجة في طرفيتك", bn: "আপনার টার্মিনালে একটি কোডিং এজেন্ট",
-    pt: "um agente de programação no seu terminal", ru: "агент-программист в вашем терминале", ur: "آپ کے ٹرمینل میں ایک کوڈنگ ایجنٹ",
-    ja: "ターミナルで動くコーディングエージェント", ko: "터미널에서 동작하는 코딩 에이전트", de: "ein Coding-Agent in deinem Terminal",
-    id: "agen pemrograman di terminal Anda", vi: "một tác nhân lập trình trong terminal của bạn", tr: "terminalinizde bir kodlama aracı",
+    en: "a coding agent that shows its work",
+    zh: "会展示推导过程的编码代理", hi: "अपना काम दिखाने वाला कोडिंग एजेंट", es: "un agente de programación que muestra su razonamiento",
+    fr: "un agent de codage qui montre son raisonnement", ar: "وكيل برمجة يُظهر خطوات عمله", bn: "যে কোডিং এজেন্ট তার কাজ দেখায়",
+    pt: "um agente de programação que mostra seu raciocínio", ru: "агент-программист, который показывает ход решения", ur: "ایک کوڈنگ ایجنٹ جو اپنا کام دکھاتا ہے",
+    ja: "途中の考え方まで示すコーディングエージェント", ko: "풀이 과정을 보여주는 코딩 에이전트", de: "ein Coding-Agent, der seinen Rechenweg zeigt",
+    id: "agen pemrograman yang menunjukkan cara kerjanya", vi: "một tác nhân lập trình trình bày cách làm", tr: "yaptığı işi adım adım gösteren bir kodlama aracı",
   },
   "help.startHere": {
     en: "Start here",

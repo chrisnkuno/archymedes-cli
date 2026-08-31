@@ -593,7 +593,7 @@ describe("main() — branches that resolve before any interactive input is neede
   it("--help prints the command list and exits 0 without touching stdin", async () => {
     const { code, stdout } = await run(["--help"]);
     expect(code).toBe(0);
-    expect(stdout).toContain("a coding agent in your terminal");
+    expect(stdout).toContain("a coding agent that shows its work");
     expect(stdout).toContain("/todos");
     expect(stdout).toContain("archymedes update");
   });

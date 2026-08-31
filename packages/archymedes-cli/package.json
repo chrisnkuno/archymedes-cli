@@ -1,7 +1,7 @@
 {
   "name": "archymedes-cli",
   "version": "1.9.1",
-  "description": "Archymedes CLI \u2014 a coding agent in your terminal. Runs against your working tree or an isolated remote sandbox, with guarded approvals, git checkpoints, and real cost accounting.",
+  "description": "Archymedes CLI \u2014 a coding agent that shows its work. Runs against your working tree or an isolated remote sandbox, with guarded approvals, git checkpoints, and exact, measured cost accounting.",
   "keywords": [
     "cli",
     "coding-agent",

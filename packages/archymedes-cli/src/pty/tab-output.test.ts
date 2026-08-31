@@ -135,22 +135,22 @@ describe("what a tab keeps, under a real pty", () => {
   }, 90_000);
 
   it("paints in the theme it was told to, and changes it without restarting", async () => {
-    // starry-night's primary is #8ab4f8. A theme that resolved but never reached the renderer
+    // blueprint's primary is #7cc5ff. A theme that resolved but never reached the renderer
     // looks identical to one that was ignored, so the assertion is on the code itself.
-    const p = boot({ args: ["--theme", "starry-night"], env: { COLORTERM: "truecolor", NO_COLOR: undefined } });
+    const p = boot({ args: ["--theme", "blueprint"], env: { COLORTERM: "truecolor", NO_COLOR: undefined } });
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
     const before = p.output().length;
     p.writeLine("/theme");
-    await p.waitFor(/starry-night/, { timeoutMs: 20_000, since: before });
-    expect(p.output().slice(before)).toContain("\x1b[38;2;138;180;248m");
+    await p.waitFor(/blueprint/, { timeoutMs: 20_000, since: before });
+    expect(p.output().slice(before)).toContain("\x1b[38;2;124;197;255m");
 
     const switching = p.output().length;
-    p.writeLine("/theme nebula");
+    p.writeLine("/theme chalkboard");
     // Waiting on the colour rather than on the name: the terminal echoes the typed command, so
-    // /nebula/ is satisfied by the keystrokes themselves before Archymedes has answered them.
-    // nebula's primary is #66e0ff — a different code, emitted after the switch and not before.
-    await p.waitFor(/\x1b\[38;2;102;224;255m/, { timeoutMs: 20_000, since: switching });
+    // /chalkboard/ is satisfied by the keystrokes themselves before Archymedes has answered them.
+    // chalkboard's primary is #9fe8d8 — a different code, emitted after the switch and not before.
+    await p.waitFor(/\x1b\[38;2;159;232;216m/, { timeoutMs: 20_000, since: switching });
   }, 90_000);
 
   it("says so rather than quietly rendering something else when a theme does not exist", async () => {

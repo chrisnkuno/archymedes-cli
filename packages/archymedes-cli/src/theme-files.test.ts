@@ -30,7 +30,7 @@ async function writeTheme(scope: "project" | "user", name: string, contents: str
 describe("finding themes on disk", () => {
   it("offers the built-ins when there is nothing on disk at all", async () => {
     const themes = await discoverThemes(root, environment);
-    expect(themes.map((theme) => theme.name)).toContain("starry-night");
+    expect(themes.map((theme) => theme.name)).toContain("blueprint");
     expect(themes.every((theme) => theme.source === "builtin")).toBe(true);
   });
 
@@ -50,11 +50,11 @@ describe("finding themes on disk", () => {
   });
 
   it("lets a project override a built-in by name, without losing the rest of them", async () => {
-    await writeTheme("project", "starry-night", "@theme starry-night { --primary: #abcdef; }");
+    await writeTheme("project", "blueprint", "@theme blueprint { --primary: #abcdef; }");
     const themes = await discoverThemes(root, environment);
-    expect(themes.filter((theme) => theme.name === "starry-night")).toHaveLength(1);
-    expect((await findTheme("starry-night", root, environment))?.tokens.primary).toBe("#abcdef");
-    expect(themes.map((theme) => theme.name)).toContain("nebula");
+    expect(themes.filter((theme) => theme.name === "blueprint")).toHaveLength(1);
+    expect((await findTheme("blueprint", root, environment))?.tokens.primary).toBe("#abcdef");
+    expect(themes.map((theme) => theme.name)).toContain("chalkboard");
   });
 
   it("skips a file it cannot parse rather than costing the user every other theme", async () => {

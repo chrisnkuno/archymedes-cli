@@ -212,8 +212,10 @@ export function renderBanner(options: BannerOptions): string {
   const stars = glyphs.starGlyphs;
 
   if (width < wordmarkWidth + 4) {
-    const starColor = intensity === 1 ? STAR_COLORS[3] : dimmed(STAR_COLORS[3], intensity);
-    const compact = `${paint(glyphs.star, starColor, depth)} ${paint("ARCHYMEDES", NIGHT_GRADIENT[4], depth)} ${paint(glyphs.star, starColor, depth)}`;
+    // "∴" — therefore — for a tool that shows its work; "::" where the terminal has no unicode.
+    const mark = ascii ? "::" : "\u2234";
+    const markColor = intensity === 1 ? STAR_COLORS[3] : dimmed(STAR_COLORS[3], intensity);
+    const compact = `${paint(mark, markColor, depth)} ${paint("ARCHYMEDES", NIGHT_GRADIENT[4], depth)} ${paint(mark, markColor, depth)}`;
     return options.subtitle ? `${compact} ${paint(options.subtitle, NIGHT_GRADIENT[0], depth)}` : compact;
   }
 

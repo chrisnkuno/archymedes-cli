@@ -125,10 +125,10 @@ describe("the themes that ship", () => {
     }
   });
 
-  it("defaults to the starry night", () => {
-    expect(DEFAULT_THEME_NAME).toBe("starry-night");
-    expect(findBuiltinTheme("starry-night")).toBeDefined();
-    expect(findBuiltinTheme("STARRY-NIGHT")).toBeDefined();
+  it("defaults to the blueprint", () => {
+    expect(DEFAULT_THEME_NAME).toBe("blueprint");
+    expect(findBuiltinTheme("blueprint")).toBeDefined();
+    expect(findBuiltinTheme("BLUEPRINT")).toBeDefined();
     expect(findBuiltinTheme("no-such-theme")).toBeUndefined();
   });
 
@@ -150,8 +150,8 @@ describe("the themes that ship", () => {
   });
 
   it("keeps a light theme light and a dark theme dark, which is the only thing 'dawn' has to mean", () => {
-    const night = findBuiltinTheme("starry-night")!;
-    const dawn = findBuiltinTheme("starry-dawn")!;
+    const night = findBuiltinTheme("blueprint")!;
+    const dawn = findBuiltinTheme("parchment")!;
     const brightness = (value: string) => {
       const parsed = parseColor(value);
       return typeof parsed === "object" && parsed ? (parsed.r + parsed.g + parsed.b) / 3 : 0;
@@ -163,8 +163,8 @@ describe("the themes that ship", () => {
 
 describe("the palette", () => {
   it("carries the border shape the theme asked for, defaulting to round", () => {
-    expect(buildPalette(findBuiltinTheme("nebula")!, "truecolor").borderStyle).toBe("single");
-    expect(buildPalette(findBuiltinTheme("starry-night")!, "truecolor").borderStyle).toBe("round");
+    expect(buildPalette(findBuiltinTheme("chalkboard")!, "truecolor").borderStyle).toBe("single");
+    expect(buildPalette(findBuiltinTheme("blueprint")!, "truecolor").borderStyle).toBe("round");
   });
 
   it("is entirely empty codes when colour is off, so nothing paints by accident", () => {
@@ -176,18 +176,18 @@ describe("the palette", () => {
 
 describe("choosing a theme for the terminal", () => {
   it("obeys an explicit choice above everything else", () => {
-    expect(detectPreferredTheme({ ARCHYMEDES_THEME: "nebula", COLORFGBG: "0;15" })).toBe("nebula");
+    expect(detectPreferredTheme({ ARCHYMEDES_THEME: "chalkboard", COLORFGBG: "0;15" })).toBe("chalkboard");
   });
 
   it("reads a light terminal from the two variables that report one", () => {
-    expect(detectPreferredTheme({ TERM_BACKGROUND: "light" })).toBe("starry-dawn");
-    expect(detectPreferredTheme({ COLORFGBG: "0;15" })).toBe("starry-dawn");
+    expect(detectPreferredTheme({ TERM_BACKGROUND: "light" })).toBe("parchment");
+    expect(detectPreferredTheme({ COLORFGBG: "0;15" })).toBe("parchment");
   });
 
   it("assumes dark, the commoner case and the safer mistake", () => {
-    expect(detectPreferredTheme({})).toBe("starry-night");
-    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("starry-night");
-    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("starry-night");
+    expect(detectPreferredTheme({})).toBe("blueprint");
+    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("blueprint");
+    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("blueprint");
   });
 });
 
@@ -197,7 +197,7 @@ describe("the /theme grammar", () => {
   });
 
   it("takes a name with no verb, which is how it will nearly always be typed", () => {
-    expect(parseThemeCommand("/theme nebula")).toEqual({ kind: "set", name: "nebula" });
+    expect(parseThemeCommand("/theme chalkboard")).toEqual({ kind: "set", name: "chalkboard" });
   });
 
   it("keeps list and where as verbs", () => {
@@ -206,13 +206,13 @@ describe("the /theme grammar", () => {
   });
 
   it("says so rather than searching for a name that cannot exist", () => {
-    const parsed = parseThemeCommand("/theme starry night");
+    const parsed = parseThemeCommand("/theme blue print");
     expect(parsed?.kind).toBe("invalid");
-    expect(parsed && "reason" in parsed && parsed.reason).toContain("starry");
+    expect(parsed && "reason" in parsed && parsed.reason).toContain("blue");
   });
 
   it("ignores anything that is not the command", () => {
     expect(parseThemeCommand("/themes")).toBeNull();
-    expect(parseThemeCommand("theme nebula")).toBeNull();
+    expect(parseThemeCommand("theme chalkboard")).toBeNull();
   });
 });

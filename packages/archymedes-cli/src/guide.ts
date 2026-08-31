@@ -284,12 +284,12 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     title: "How it looks",
     summary: "Themes, symbols, and terminals that need help.",
     body: [
-      "Archymedes ships a starry-night theme and three others, and reads themes you write yourself as .tss files in .archymedes/themes — the same format TermUI apps use, so a palette written once works in both.",
+      "Archymedes ships a blueprint theme and three others, and reads themes you write yourself as .tss files in .archymedes/themes — the same format TermUI apps use, so a palette written once works in both.",
       "If your terminal draws question marks instead of symbols, --ascii switches to characters every terminal has. If you would rather have a status line pinned to the bottom row, --pin does that, at the cost of your terminal's scrollback.",
     ],
     examples: [
       { input: "/theme list", effect: "every theme available, including your own" },
-      { input: "/theme nebula", effect: "change the colours immediately" },
+      { input: "/theme chalkboard", effect: "change the colours immediately" },
       { input: "/theme where", effect: "where to put a theme file of your own" },
       { input: "archymedes --ascii", effect: "plain characters for terminals that mangle symbols" },
     ],

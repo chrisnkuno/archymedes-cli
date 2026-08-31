@@ -457,7 +457,7 @@ ${style.bold(t(language, "help.memory"))}
 ${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
-  archymedes --theme nebula       Start in a named theme (/theme list shows them all)
+  archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
   archymedes --pin                Pin the status line to the bottom row. Costs the terminal's
                             scrollback: a reserved footer means scrolled-off lines are
                             never saved, so this is off unless you ask for it.
@@ -1531,6 +1531,11 @@ async function main(): Promise<number> {
     Object.assign(environment, mergedEnvironment(savedSettings, processEnvironment));
     language = resolveControlLanguage(args.language ?? environment.ARCHYMEDES_LANGUAGE ?? environment.LANG);
     resolved = resolveProvider(environment, { provider: args.provider, model: args.model });
+    // Archimedes' word for the moment the missing piece is found: the key is in, the tool can run.
+    if (!("error" in resolved)) {
+      out.write(`${style.green(style.bold("Eureka."))} ${style.dim(`${resolved.spec.label} \u00b7 ${resolved.model}`)}
+`);
+    }
   }
   if ("error" in resolved) {
     process.stderr.write(`${style.red("Archymedes is not configured.")} ${resolved.error}\n`);

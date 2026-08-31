@@ -48,66 +48,65 @@ export type Theme = {
 /**
  * Archymedes's own.
  *
- * A night sky rather than a colour scheme: a deep blue-black ground, starlight for ordinary text,
- * and the two things a star actually looks like — cold blue-white for what is live, warm gold for
- * what deserves attention. Status colours are pulled toward that sky (a desaturated dawn red rather
- * than a terminal red) so a failure reads as part of the same picture instead of an alarm pasted
- * onto it.
+ * A drafting table rather than a colour scheme: a deep blueprint navy ground, chalk-white for
+ * ordinary text, cyan-blue for the drawn line that is live, and an amber pencil for what deserves
+ * attention. Status colours are pulled toward that blueprint (a muted vermilion rather than a
+ * terminal red) so a failure reads as part of the same drawing instead of an alarm pasted onto it.
  */
-export const STARRY_NIGHT = `
-/* Deep space, starlight and a warm gold accent — Archymedes's own. */
-@theme starry-night {
-    --primary: #8ab4f8;
-    --secondary: #c7a6ff;
-    --accent: #ffd98a;
-    --bg: #0b1020;
-    --surface: #141b33;
-    --text: #e6ecff;
-    --text-muted: #6b7ba8;
-    --success: #7ee0a8;
-    --warning: #ffc98a;
-    --error: #ff8a9b;
+export const BLUEPRINT = `
+/* Blueprint navy, chalk-white ink and an amber pencil — Archymedes's own. */
+@theme blueprint {
+    --primary: #7cc5ff;
+    --secondary: #9fb4e8;
+    --accent: #ffcf6b;
+    --bg: #0a1524;
+    --surface: #122135;
+    --text: #e8eefb;
+    --text-muted: #6f89b0;
+    --success: #79dfa6;
+    --warning: #ffcf6b;
+    --error: #ff8f7a;
     --border: round;
-    --border-color: #2a3556;
-    --border-focus: #8ab4f8;
+    --border-color: #24406a;
+    --border-focus: #7cc5ff;
 }
 `;
 
-const STARRY_DAWN = `
-/* The same sky an hour before sunrise, for a light terminal. */
-@theme starry-dawn {
+const PARCHMENT = `
+/* The same drawing inked on paper, for a light terminal. */
+@theme parchment {
     --primary: #2f5fbf;
-    --secondary: #6b3fbf;
-    --accent: #a86a00;
-    --bg: #f7f8fc;
-    --surface: #eceff8;
-    --text: #131726;
-    --text-muted: #5d6684;
-    --success: #17694a;
+    --secondary: #5a4a86;
+    --accent: #9a6a00;
+    --bg: #faf6ec;
+    --surface: #f1eadd;
+    --text: #1b1a16;
+    --text-muted: #6a6252;
+    --success: #196a44;
     --warning: #8a5300;
     --error: #b3243b;
     --border: round;
-    --border-color: #c8cfe3;
+    --border-color: #d8cfb8;
     --border-focus: #2f5fbf;
 }
 `;
 
-const NEBULA = `
-/* Louder: magenta and cyan, for terminals with a lot of contrast to spare. */
-@theme nebula {
-    --primary: #66e0ff;
-    --secondary: #ff6ad5;
+const CHALKBOARD = `
+/* A slate: near-black green, chalk white, chalk yellow — for terminals with contrast to spare. */
+@theme chalkboard {
+    --primary: #9fe8d8;
+    --secondary: #d8d0b0;
     --accent: #ffe066;
-    --bg: #0a0a2e;
-    --surface: #1a1a4e;
-    --text: #eaf6ff;
-    --text-muted: #7a7ab5;
-    --success: #55f2a0;
-    --warning: #ffb454;
-    --error: #ff5c7a;
+    --bg: #0d1a15;
+    --surface: #16271f;
+    --text: #f2efe4;
+    --text-muted: #86987f;
+    --success: #7ef2b0;
+    --warning: #ffd166;
+    --error: #ff7a7a;
     --border: single;
-    --border-color: #3a3a7e;
-    --border-focus: #ff6ad5;
+    --border-color: #2c443a;
+    --border-focus: #ffe066;
 }
 `;
 
@@ -131,13 +130,13 @@ const HIGH_CONTRAST = `
 `;
 
 export const BUILTIN_THEME_SOURCES: Record<string, string> = {
-  "starry-night": STARRY_NIGHT,
-  "starry-dawn": STARRY_DAWN,
-  nebula: NEBULA,
+  "blueprint": BLUEPRINT,
+  "parchment": PARCHMENT,
+  "chalkboard": CHALKBOARD,
   "high-contrast": HIGH_CONTRAST,
 };
 
-export const DEFAULT_THEME_NAME = "starry-night";
+export const DEFAULT_THEME_NAME = "blueprint";
 
 /** The 16 names ANSI defines, in the order the codes run. */
 const NAMED_COLORS: Record<string, number> = {
@@ -363,11 +362,11 @@ export const NO_COLOR_PALETTE: Palette = buildPalette(
 export function detectPreferredTheme(environment: Record<string, string | undefined>): string {
   const explicit = environment.ARCHYMEDES_THEME?.trim();
   if (explicit) return explicit;
-  if (environment.TERM_BACKGROUND?.toLowerCase() === "light") return "starry-dawn";
+  if (environment.TERM_BACKGROUND?.toLowerCase() === "light") return "parchment";
   const fgbg = environment.COLORFGBG;
   if (fgbg) {
     const background = Number.parseInt(fgbg.split(";").pop() ?? "", 10);
-    if (Number.isInteger(background) && background >= 8) return "starry-dawn";
+    if (Number.isInteger(background) && background >= 8) return "parchment";
   }
   return DEFAULT_THEME_NAME;
 }

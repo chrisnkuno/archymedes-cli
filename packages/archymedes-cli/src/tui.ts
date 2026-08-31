@@ -26,13 +26,11 @@ function paint(text: string, code: string, depth: ColorDepth): string {
 }
 
 /**
- * A tiny spiral rather than a generic wheel.
+ * A drawn arc sweeping a full turn — a compass tracing a spiral, not a generic wheel.
  *
- * Every frame is five columns wide, so the activity text never jitters left and right while the
- * core brightens and the two outer sparks collapse back in. The glyphs come from the opening
- * starfield, making this feel like a living piece of Archymedes instead of a borrowed loader — and from
- * the *terminal's* starfield: a console that cannot draw `✦` gets the four-frame ASCII wheel from
- * `ASCII_GLYPHS` rather than five columns of question marks rotating in place.
+ * Every frame is five columns wide, so the activity text beside it never jitters left and right
+ * as the arc rotates through its six positions. A console that cannot draw the arc glyphs gets the
+ * four-frame ASCII radius (`- \ | /`) from `ASCII_GLYPHS` rather than columns of question marks.
  */
 export function archymedesSpinnerFrame(index: number, glyphs: GlyphSet = UNICODE_GLYPHS): string {
   const frames = glyphs.spinnerFrames;
@@ -357,13 +355,13 @@ export type ProgressBarOptions = {
   depth: ColorDepth;
   /** ASCII terminals get `#`/`-` at whole-cell precision; anything else gets eighth-cell blocks. */
   glyphs?: GlyphSet;
-  /** Gradient endpoints. Defaults to Archymedes's own sky: starlight blue cooling into warm gold. */
+  /** Gradient endpoints. Defaults to Archymedes's own blueprint: cyan line warming into amber pencil. */
   from?: Rgb;
   to?: Rgb;
 };
 
-const DEFAULT_GRADIENT_FROM: Rgb = { r: 138, g: 180, b: 248 }; // starry-night --primary
-const DEFAULT_GRADIENT_TO: Rgb = { r: 255, g: 138, b: 155 }; // starry-night --error
+const DEFAULT_GRADIENT_FROM: Rgb = { r: 124, g: 197, b: 255 }; // blueprint --primary
+const DEFAULT_GRADIENT_TO: Rgb = { r: 255, g: 207, b: 107 }; // blueprint --accent
 
 function lerp(from: Rgb, to: Rgb, t: number): Rgb {
   return { r: from.r + (to.r - from.r) * t, g: from.g + (to.g - from.g) * t, b: from.b + (to.b - from.b) * t };

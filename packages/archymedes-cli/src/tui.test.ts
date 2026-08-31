@@ -331,11 +331,12 @@ describe("thinkingVerb", () => {
 });
 
 describe("Archymedes activity", () => {
-  it("pulses within a fixed width so its label never jitters", () => {
+  it("sweeps an arc within a fixed width so its label never jitters", () => {
     const frames = Array.from({ length: 12 }, (_unused, index) => archymedesSpinnerFrame(index));
     expect(new Set(frames).size).toBeGreaterThan(3);
     expect(new Set(frames.map((frame) => visibleWidth(frame)))).toEqual(new Set([5]));
-    expect(frames.join("")).toContain("✶");
+    // Every frame is one of the six arc segments, centred.
+    for (const frame of frames) expect(frame).toMatch(/^ {2}[◜◠◝◞◡◟] {2}$/u);
   });
 
   it("falls back safely for invalid frame indexes", () => {

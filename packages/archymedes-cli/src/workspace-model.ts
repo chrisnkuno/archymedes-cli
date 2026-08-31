@@ -232,7 +232,7 @@ export function tabPanes(
  * One row of the drawn frame: the text, how it is weighted, and what colour it takes.
  *
  * The colour is a *value from the theme*, resolved here rather than in the component, so the panel
- * is painted in whatever the session is painted in — a `/theme nebula` at the prompt changes the
+ * is painted in whatever the session is painted in — a `/theme chalkboard` at the prompt changes the
  * control panel too. Kept as a token string (a hex or an ANSI name) because that is what TermUI's
  * `parseColor` accepts, so nothing has to translate on the way to the screen.
  */

@@ -60,7 +60,7 @@ async function readThemeDirectory(directory: string, source: ThemeSource): Promi
  *
  * Built-in first, then personal, then the project's — the same precedence memory uses, and for the
  * same reason: the repository is the most specific statement about the work at hand, so a project
- * that ships `starry-night.tss` gets its own version of it.
+ * that ships `blueprint.tss` gets its own version of it.
  */
 export async function discoverThemes(root: string, environment: Record<string, string | undefined>): Promise<DiscoveredTheme[]> {
   const builtin: DiscoveredTheme[] = Object.values(BUILTIN_THEME_SOURCES)

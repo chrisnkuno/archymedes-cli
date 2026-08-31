@@ -77,7 +77,7 @@ export type GlyphSet = {
 
 export const UNICODE_GLYPHS: GlyphSet = {
   starGlyphs: [".", "·", "✧", "✦", "✶"],
-  spinnerFrames: ["·   ·", "· ✧ ·", "· ✦ ·", "✧ ✶ ✧", "· ✦ ·", "· ✧ ·"],
+  spinnerFrames: ["  ◜  ", "  ◠  ", "  ◝  ", "  ◞  ", "  ◡  ", "  ◟  "],
   star: "✦",
   starDim: "✧",
   check: "✓",
