@@ -63,11 +63,16 @@ function exactCapabilities(models: readonly string[], contextWindow: number, max
 }
 
 const KNOWN_CAPABILITIES: ReadonlyArray<CapabilityEntry> = [
-  // CircuitNotion live catalog, GET /v1/models, recorded 2026-08-23. These are explicit model
-  // contracts, not guesses about whichever upstream a route happens to select.
-  ...exactCapabilities(["auto", "circuit-1", "circuit-1-mini", "circuit-2", "circuit-2-turbo", "circuit-3", "deepseek-v4-flash", "deepseek-v4-pro"], 1_000_000, 384_000),
-  ...exactCapabilities(["kimi", "kimi-k3"], 1_048_576, 1_048_576),
-  ...exactCapabilities(["kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6", "kimi-k2", "kimi-k2.5"], 262_144, 32_768),
+  // Default models for the OpenAI-compatible providers, from each vendor's public docs. Recorded
+  // once; an overridden model that is not listed falls through to the conservative default.
+  { prefix: "gemini-2.5-pro", match: "prefix", capabilities: { contextWindow: 1_048_576, maxOutputTokens: 65_536, supportsEffort: true } },
+  { prefix: "gemini-2.5-flash", match: "prefix", capabilities: { contextWindow: 1_048_576, maxOutputTokens: 65_536, supportsEffort: true } },
+  { prefix: "gemini", match: "prefix", capabilities: { contextWindow: 1_048_576, maxOutputTokens: 65_536, supportsEffort: false } },
+  { prefix: "grok-4", match: "prefix", capabilities: { contextWindow: 256_000, maxOutputTokens: 64_000, supportsEffort: false } },
+  { prefix: "grok", match: "prefix", capabilities: { contextWindow: 131_072, maxOutputTokens: 32_768, supportsEffort: false } },
+  ...exactCapabilities(["deepseek-chat", "deepseek-reasoner"], 131_072, 65_536),
+  ...exactCapabilities(["mistral-large-latest", "mistral-small-latest"], 131_072, 32_768),
+  ...exactCapabilities(["llama-3.3-70b-versatile"], 131_072, 32_768),
 
   { prefix: "claude-fable-5", match: "prefix", capabilities: { contextWindow: 1_000_000, maxOutputTokens: 128_000, supportsEffort: true } },
   { prefix: "claude-mythos-5", match: "prefix", capabilities: { contextWindow: 1_000_000, maxOutputTokens: 128_000, supportsEffort: true } },

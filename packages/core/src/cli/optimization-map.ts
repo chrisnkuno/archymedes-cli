@@ -172,7 +172,7 @@ async function transcriptCostFor(rawChars: number, budget: number): Promise<numb
   const runtime = new BoundedAgentRuntime({
     model: { async complete() { return turns[Math.min(call++, turns.length - 1)]; } },
     tools: [echoTool(content)],
-    prices: { inputRwfPerMillionTokens: 1, outputRwfPerMillionTokens: 1 },
+    prices: { inputRatePerMillion: 1, outputRatePerMillion: 1 },
     artifacts: {
       async put(input) {
         return { path: ".archymedes/artifacts/echo-probe.txt", bytes: input.content.length, lines: 1, elided: false };
@@ -218,7 +218,7 @@ async function parallelIterationCost(calls: number, rawChars: number, budget: nu
   const runtime = new BoundedAgentRuntime({
     model: { async complete() { return turns[Math.min(call++, turns.length - 1)]; } },
     tools: names.map((name) => ({ ...echoTool(content), name })),
-    prices: { inputRwfPerMillionTokens: 1, outputRwfPerMillionTokens: 1 },
+    prices: { inputRatePerMillion: 1, outputRatePerMillion: 1 },
     control: {
       async heartbeat() {},
       async isCancellationRequested() { return false; },
@@ -279,7 +279,7 @@ async function nudgeRoundTrips(): Promise<number> {
       },
     },
     tools: [verifier],
-    prices: { inputRwfPerMillionTokens: 1, outputRwfPerMillionTokens: 1 },
+    prices: { inputRatePerMillion: 1, outputRatePerMillion: 1 },
     control: {
       async heartbeat() {},
       async isCancellationRequested() { return false; },

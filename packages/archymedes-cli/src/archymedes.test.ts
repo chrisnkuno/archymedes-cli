@@ -175,22 +175,23 @@ describe("argument parsing", () => {
 
 describe("exchange rates", () => {
   it("reads a configured rate and records where it came from", () => {
-    const rates = readFxRates({ ARCHYMEDES_FX_RWF_PER_USD: "1320", ARCHYMEDES_FX_ASOF: "2026-08-08", ARCHYMEDES_FX_SOURCE: "BNR" });
-    expect(rates).toEqual([{ from: "USD", to: "RWF", rate: 1_320, asOf: "2026-08-08", source: "BNR" }]);
+    const rates = readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "0.92", ARCHYMEDES_FX_ASOF: "2026-08-08", ARCHYMEDES_FX_SOURCE: "ECB" });
+    expect(rates).toEqual([{ from: "USD", to: "EUR", rate: 0.92, asOf: "2026-08-08", source: "ECB" }]);
   });
 
   it("dates an undated rate to today rather than leaving it unattributable", () => {
-    const rates = readFxRates({ ARCHYMEDES_FX_RWF_PER_USD: "1300" });
+    const rates = readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "0.9" });
     expect(rates[0].asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(rates[0].source).toBe("ARCHYMEDES_FX_RWF_PER_USD");
+    expect(rates[0].source).toBe("ARCHYMEDES_FX_RATE");
   });
 
   it("returns no rate at all for missing or nonsensical configuration", () => {
     // No rate means costs stay in the provider's currency — better than a guessed conversion.
     expect(readFxRates({})).toEqual([]);
-    expect(readFxRates({ ARCHYMEDES_FX_RWF_PER_USD: "0" })).toEqual([]);
-    expect(readFxRates({ ARCHYMEDES_FX_RWF_PER_USD: "-5" })).toEqual([]);
-    expect(readFxRates({ ARCHYMEDES_FX_RWF_PER_USD: "not-a-number" })).toEqual([]);
+    expect(readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "0" })).toEqual([]);
+    expect(readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "-5" })).toEqual([]);
+    expect(readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "not-a-number" })).toEqual([]);
+    expect(readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "USD", ARCHYMEDES_FX_RATE: "1" })).toEqual([]);
   });
 
   it("supports an auditable manual rate for any currency pair", () => {
@@ -244,7 +245,7 @@ describe("provider status view", () => {
     const rendered = plain(renderProviders({}, "none"));
     expect(rendered).toContain("set ANTHROPIC_API_KEY");
     expect(rendered).toContain("set OPENAI_API_KEY");
-    expect(rendered).toContain("set CIRCUITNOTION_API_KEY");
+    expect(rendered).toContain("set DEEPSEEK_API_KEY");
   });
 
   it("shows a configured provider with its model and where its price came from", () => {
@@ -254,22 +255,22 @@ describe("provider status view", () => {
   });
 
   it("explains an unpriced-but-working provider, which is otherwise baffling", () => {
-    // OpenAI's catalog is deliberately unverified here — unlike CircuitNotion, which ships a real
-    // RWF rate card from the operator, a scraped OpenAI list price risks being confidently wrong.
+    // OpenAI's catalog is deliberately unverified here — a scraped list price risks being
+    // confidently wrong, and a wrong cost is worse than an honest "unknown".
     const rendered = plain(renderProviders({ OPENAI_API_KEY: "k", OPENAI_MODEL: "gpt-5.6-terra" }, "none"));
     expect(rendered).toContain("pricing: unknown");
     expect(rendered).toContain("costs show as unknown");
     expect(rendered).toContain("MODEL_INPUT_PER_MILLION");
   });
 
-  it("prices CircuitNotion from its own RWF catalog, not just a working credential", () => {
-    const rendered = plain(renderProviders({ CIRCUITNOTION_API_KEY: "k", CIRCUITNOTION_MODEL: "gpt-5.6-luna" }, "none"));
-    expect(rendered).toContain("gpt-5.6-luna · pricing: catalog");
+  it("prices a configured OpenAI-compatible provider from the catalog when the model is known", () => {
+    const rendered = plain(renderProviders({ DEEPSEEK_API_KEY: "k" }, "none"));
+    expect(rendered).toContain("deepseek-chat · pricing: catalog");
   });
 
   it("stops nagging about the exchange rate once one is configured", () => {
-    expect(plain(renderProviders({ ANTHROPIC_API_KEY: "k" }, "none"))).toContain("ARCHYMEDES_FX_RWF_PER_USD");
-    expect(plain(renderProviders({ ANTHROPIC_API_KEY: "k", ARCHYMEDES_FX_RWF_PER_USD: "1320" }, "none"))).not.toContain("Set ARCHYMEDES_FX_RWF_PER_USD");
+    expect(plain(renderProviders({ ANTHROPIC_API_KEY: "k" }, "none"))).toContain("ARCHYMEDES_FX_RATE");
+    expect(plain(renderProviders({ ANTHROPIC_API_KEY: "k", ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EUR", ARCHYMEDES_FX_RATE: "0.92" }, "none"))).not.toContain("ARCHYMEDES_FX_RATE to price");
   });
 
   it("emits no escape codes when colour is unwanted", () => {
@@ -559,7 +560,7 @@ describe("main() — branches that resolve before any interactive input is neede
     tmpRoot = await mkdtemp(path.join(os.tmpdir(), "archymedes-main-"));
     // A clean slate: no provider keys leak in from the developer's own shell into the "unconfigured" tests.
     for (const key of Object.keys(process.env)) {
-      if (/^(ANTHROPIC|OPENAI|CIRCUITNOTION|E2B|ARCHYMEDES)_/.test(key)) delete process.env[key];
+      if (/^(ANTHROPIC|OPENAI|GOOGLE|XAI|DEEPSEEK|MISTRAL|GROQ|OLLAMA|OPENAI_COMPATIBLE|E2B|ARCHYMEDES)_/.test(key)) delete process.env[key];
     }
     // ...and no keys leak in from the developer's own *saved settings* either. Clearing the
     // environment alone was not enough and was in fact counterproductive: the loop above deletes

@@ -15,8 +15,8 @@ import { ArchymedesSessionDaemon, type DaemonApprovalRequest, type DaemonNotific
 import type { ArchymedesMode, PermissionDecision } from "@archymedes/core/cli/permissions";
 import { assessTaskSafety, type SafetyAssessment } from "@archymedes/core/cli/safety";
 import { listSessions, loadSession, type SessionRecord } from "@archymedes/core/cli/session";
-import { catalogPrices, describeProviders, PRICE_ENVIRONMENT_HINT, PROVIDER_IDS, resolveProvider, type ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { convertTo, fromUnits, formatMoney, isCurrency, priceUsage, type Currency, type FxRate, type Money, type TokenPrices } from "@archymedes/core/money";
+import { catalogPrices, describeProviders, PRICE_ENVIRONMENT_HINT, PROVIDER_IDS, providerEnvPrefix, resolveProvider, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { convertTo, fromUnits, toUnits, formatMoney, isCurrency, priceUsage, type Currency, type FxRate, type Money, type TokenPrices } from "@archymedes/core/money";
 import { createExaClient } from "@archymedes/core/providers/exa";
 import { downloadProject, DockerWorkspace, E2BWorkspace, LocalWorkspace, uploadProject, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
@@ -80,8 +80,8 @@ import {
 } from "@archymedes/core";
 import { runJobWorkerForever, workerId } from "./job-worker";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./jobs-command";
-import { BILLING_NOT_CONFIGURED, CRITICAL_BALANCE_RWF, BalanceWatch, assessTaskBalance, formatRwf, parseManualBalanceCommand, parsePayCommand, renderBalance, renderCheckout, renderPaymentOutcome, renderTopUpQuote } from "./pay";
-import { BillingError, billingFromEnvironment, newIdempotencyKey, waitForPayment, type Balance } from "@archymedes/core/cli/billing";
+import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance } from "./balance";
+import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
 import { renderTools } from "./tools-command";
 import { removeRecording, startRecording, transcribeAudio } from "./voice";
@@ -928,8 +928,8 @@ export function renderProviders(environment: Record<string, string | undefined>,
     lines.push(paint(`  No published price for ${unpriced.map((status) => status.model).join(", ")} — costs show as unknown.`, style.dim));
     lines.push(paint(`  Set ${PRICE_ENVIRONMENT_HINT} to price it.`, style.dim));
   }
-  if (!environment.ARCHYMEDES_FX_RWF_PER_USD) {
-    lines.push(paint("  Set ARCHYMEDES_FX_RWF_PER_USD to show USD-priced models in RWF.", style.dim));
+  if (readFxRates(environment).length === 0) {
+    lines.push(paint("  Set ARCHYMEDES_FX_FROM / ARCHYMEDES_FX_TO / ARCHYMEDES_FX_RATE to price models in another currency offline.", style.dim));
   }
   return lines.join("\n");
 }
@@ -939,7 +939,7 @@ export function renderProviders(environment: Record<string, string | undefined>,
  *
  * Deliberately not fetched: a CLI that silently calls a rates API turns every cost display into a
  * network dependency, and a stale-but-known rate is more auditable than a fresh-but-invisible one.
- * `ARCHYMEDES_FX_RWF_PER_USD=1320` is the whole interface, and the rate's date is recorded beside it so
+ * `ARCHYMEDES_FX_FROM=USD ARCHYMEDES_FX_TO=EUR ARCHYMEDES_FX_RATE=0.92` is the whole interface, and the rate's date is recorded beside it so
  * a historical figure can be reconciled later.
  */
 /**
@@ -979,16 +979,6 @@ export function readFxRates(environment: Record<string, string | undefined>): Fx
       rate: genericRate,
       asOf: environment.ARCHYMEDES_FX_ASOF?.trim() || new Date().toISOString().slice(0, 10),
       source: environment.ARCHYMEDES_FX_SOURCE?.trim() || "ARCHYMEDES_FX_RATE",
-    });
-  }
-  const rate = Number(environment.ARCHYMEDES_FX_RWF_PER_USD);
-  if (Number.isFinite(rate) && rate > 0 && !configured.some((candidate) => candidate.from === "USD" && candidate.to === "RWF")) {
-    configured.push({
-      from: "USD",
-      to: "RWF",
-      rate,
-      asOf: environment.ARCHYMEDES_FX_ASOF?.trim() || new Date().toISOString().slice(0, 10),
-      source: environment.ARCHYMEDES_FX_SOURCE?.trim() || "ARCHYMEDES_FX_RWF_PER_USD",
     });
   }
   return configured;
@@ -1168,10 +1158,10 @@ async function modelChoicesForSettingsField(
 }
 
 function modelPriceCatalogFor(prices: Pick<TokenPrices, "inputPerMillion" | "outputPerMillion" | "largeContext"> | undefined, exact: boolean) {
-  if (!prices) return { inputRwfPerMillionTokens: 1, outputRwfPerMillionTokens: 1 };
+  if (!prices) return { inputRatePerMillion: 1, outputRatePerMillion: 1 };
   const rates = exact
-    ? { inputRwfPerMillionTokens: prices.inputPerMillion, outputRwfPerMillionTokens: prices.outputPerMillion }
-    : { inputRwfPerMillionTokens: Math.max(1, Math.round(prices.inputPerMillion / 1_000_000)), outputRwfPerMillionTokens: Math.max(1, Math.round(prices.outputPerMillion / 1_000_000)) };
+    ? { inputRatePerMillion: prices.inputPerMillion, outputRatePerMillion: prices.outputPerMillion }
+    : { inputRatePerMillion: Math.max(1, Math.round(prices.inputPerMillion / 1_000_000)), outputRatePerMillion: Math.max(1, Math.round(prices.outputPerMillion / 1_000_000)) };
   return { ...rates, ...(prices.largeContext ? { largeContext: prices.largeContext } : {}) };
 }
 
@@ -1569,7 +1559,7 @@ async function main(): Promise<number> {
       const tried = fxFailures.map((failure) => `${failure.host}: ${failure.diagnosis.message}`).join(" ");
       if (args.budget) {
         process.stderr.write(`${style.red("Cannot enforce the approved budget.")} No ${prices.currency}→${display} exchange rate is available${tried ? ` — the automatic lookup failed (${tried})` : ""}.\n`);
-        process.stderr.write(`  ${style.dim(`Continue offline with a manual rate: set ARCHYMEDES_FX_RWF_PER_USD=1320 (or ARCHYMEDES_FX_FROM/ARCHYMEDES_FX_TO/ARCHYMEDES_FX_RATE), or keep costs in the provider currency with --currency ${prices.currency}. Run archymedes --doctor to see exactly which endpoint is failing.`)}\n`);
+        process.stderr.write(`  ${style.dim(`Continue offline with a manual rate: set ARCHYMEDES_FX_FROM / ARCHYMEDES_FX_TO / ARCHYMEDES_FX_RATE, or keep costs in the provider currency with --currency ${prices.currency}. Run archymedes --doctor to see exactly which endpoint is failing.`)}\n`);
         return 1;
       }
       localCurrencyWarning = `No current ${prices.currency}→${display} rate was available${tried ? ` (${tried})` : ""}; costs remain in ${prices.currency}.`;
@@ -1808,105 +1798,63 @@ async function main(): Promise<number> {
     ...(approvedBudget ? { budget: approvedBudget } : {}),
   });
 
-  // Balance alerts are deliberately separate from the session cap. The cap is a hard local guard;
-  // this watches account credit reported by the billing gateway and never pretends one is the
-  // other. An invalid override falls back to the calm default instead of disabling warnings.
-  const configuredLowBalance = Number(environment.ARCHYMEDES_LOW_BALANCE_RWF);
-  const lowBalanceRwf = Number.isFinite(configuredLowBalance) && configuredLowBalance >= 0 ? configuredLowBalance : 2_000;
-  const balanceWatch = new BalanceWatch({
-    lowBalanceRwf,
-  });
-  let lastConfirmedBalance: { balance: Balance; readAt: number } | undefined;
-  let balanceReadState: "checking" | "current" | "manual" | "unavailable" | "not_connected" = "checking";
-  const parseManualBalance = (value: string | undefined): number | undefined => {
-    const amount = Number(value);
-    return Number.isSafeInteger(amount) && amount >= 0 ? amount : undefined;
+  // The tracked balance is a figure the user sets with /balance, kept in the session's display
+  // currency and drawn down by the measured cost of each turn. It is deliberately separate from
+  // the session cap: the cap is a hard local guard, this is a soft "am I running low" watch.
+  const usdInDisplay = (usd: number): number => {
+    const converted = convertTo(fromUnits(usd, "USD"), display, rates);
+    return converted ? toUnits(converted) : usd;
   };
-  let manualBalanceRwf = parseManualBalance(environment.ARCHYMEDES_ACCOUNT_BALANCE_RWF);
-  const useManualBalance = (): Balance | undefined => manualBalanceRwf === undefined
-    ? undefined
-    : { balanceRwf: manualBalanceRwf, asOf: Date.now() };
-  const persistManualBalance = async (amount: number | undefined): Promise<string> => {
-    if (amount === undefined) delete savedSettings.ARCHYMEDES_ACCOUNT_BALANCE_RWF;
-    else savedSettings.ARCHYMEDES_ACCOUNT_BALANCE_RWF = String(Math.max(0, Math.trunc(amount)));
+  const configuredLowBalance = Number(environment.ARCHYMEDES_LOW_BALANCE);
+  const configuredCriticalBalance = Number(environment.ARCHYMEDES_CRITICAL_BALANCE);
+  const lowBalance = Number.isFinite(configuredLowBalance) && configuredLowBalance >= 0 ? configuredLowBalance : usdInDisplay(LOW_BALANCE_USD);
+  const criticalBalance = Number.isFinite(configuredCriticalBalance) && configuredCriticalBalance >= 0 ? configuredCriticalBalance : usdInDisplay(CRITICAL_BALANCE_USD);
+  const balanceWatch = new BalanceWatch({ lowBalance, criticalBalance });
+
+  const parseManualBalance = (value: string | undefined, currencyValue?: string): Balance | undefined => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return undefined;
+    const currency = currencyValue?.trim().toUpperCase();
+    return { amount, currency: currency && isCurrency(currency) ? currency : display, asOf: Date.now() };
+  };
+  let manualBalance = parseManualBalance(environment.ARCHYMEDES_ACCOUNT_BALANCE, environment.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY);
+  const currentBalance = (): Balance | undefined => manualBalance;
+  const persistManualBalance = async (next: Balance | undefined): Promise<string> => {
+    if (next === undefined) {
+      delete savedSettings.ARCHYMEDES_ACCOUNT_BALANCE;
+      delete savedSettings.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY;
+    } else {
+      savedSettings.ARCHYMEDES_ACCOUNT_BALANCE = String(next.amount);
+      savedSettings.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY = next.currency;
+    }
     const file = await saveSettings(savedSettings, processEnvironment);
-    // An exported value remains authoritative on the next launch, but an explicit `/balance`
-    // command should still take effect in this session and say so to its caller.
-    manualBalanceRwf = amount;
-    if (amount === undefined) delete environment.ARCHYMEDES_ACCOUNT_BALANCE_RWF;
-    else environment.ARCHYMEDES_ACCOUNT_BALANCE_RWF = String(amount);
-    lastConfirmedBalance = useManualBalance() ? { balance: useManualBalance()!, readAt: Date.now() } : undefined;
-    balanceReadState = amount === undefined ? "checking" : "manual";
+    manualBalance = next;
+    if (next === undefined) {
+      delete environment.ARCHYMEDES_ACCOUNT_BALANCE;
+      delete environment.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY;
+    } else {
+      environment.ARCHYMEDES_ACCOUNT_BALANCE = String(next.amount);
+      environment.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY = next.currency;
+    }
     return file;
   };
-  const sessionSpendRwf = (): number | undefined => {
+  const sessionSpend = (): number | undefined => {
     const total = ledger.displayTotal;
-    const rwf = total ? convertTo(total, "RWF", rates) : undefined;
-    return rwf ? Math.round(rwf.micros / 1_000_000) : undefined;
-  };
-  const readConfirmedBalance = async (force = false) => {
-    const manual = useManualBalance();
-    if (manual) {
-      lastConfirmedBalance = { balance: manual, readAt: Date.now() };
-      balanceReadState = "manual";
-      return manual;
-    }
-    // A proactive notice must not hold the prompt hostage to an unhealthy billing endpoint. The
-    // explicit `/pay` command keeps the longer timeout because the user is waiting on that service.
-    const gateway = billingFromEnvironment(environment, undefined, { timeoutMs: 3_000 });
-    if (!gateway) {
-      lastConfirmedBalance = undefined;
-      balanceReadState = "not_connected";
-      return undefined;
-    }
-    if (!force && lastConfirmedBalance && Date.now() - lastConfirmedBalance.readAt < 30_000) return lastConfirmedBalance.balance;
-    balanceReadState = "checking";
-    // Monitoring must never turn a healthy model turn into a billing failure. A transient gateway
-    // problem stays quiet; `/pay` remains the explicit diagnostic path when the user asks for it.
-    const balance = await gateway.getBalance().catch(() => undefined);
-    if (!balance) {
-      balanceReadState = "unavailable";
-      return undefined;
-    }
-    lastConfirmedBalance = { balance, readAt: Date.now() };
-    balanceReadState = "current";
-    return balance;
+    return total ? toUnits(convertTo(total, display, rates) ?? total) : undefined;
   };
 
-  const compactRwf = (amount: number): string => amount < 1_000
-    ? `${Math.trunc(amount)} RWF`
-    : `${(amount / 1_000).toFixed(amount % 1_000 === 0 ? 0 : 1)}k RWF`;
   const balanceHeader = (): { full: string; compact: string } => {
-    if (spec.id !== "circuitnotion") return { full: "balance managed by provider", compact: "balance external" };
-    if (!lastConfirmedBalance) {
-      const label = balanceReadState === "checking" ? "balance checking"
-        : balanceReadState === "not_connected" ? "balance not connected"
-          : "balance unavailable";
-      return { full: label, compact: "balance —" };
-    }
-    const amount = lastConfirmedBalance.balance.balanceRwf;
-    const paintBalance = amount < CRITICAL_BALANCE_RWF ? style.red : amount <= lowBalanceRwf ? style.yellow : style.green;
-    if (balanceReadState === "manual") {
-      return {
-        full: `${style.dim("balance")} ${paintBalance(`${formatRwf(amount)} locally estimated`)}`,
-        compact: paintBalance(`~${compactRwf(amount)}`),
-      };
-    }
-    if (balanceReadState === "unavailable") {
-      return {
-        full: `${style.dim("balance")} ${paintBalance(`${formatRwf(amount)} last confirmed`)}`,
-        compact: paintBalance(`~${compactRwf(amount)}`),
-      };
-    }
-    const text = `${formatRwf(amount)} left`;
-    return { full: `${style.dim("balance")} ${paintBalance(text)}`, compact: paintBalance(compactRwf(amount)) };
+    const balance = currentBalance();
+    if (!balance) return { full: "", compact: "" };
+    const paintBalance = balance.amount < criticalBalance ? style.red : balance.amount <= lowBalance ? style.yellow : style.green;
+    const text = formatBalance(balance.amount, balance.currency);
+    return { full: `${style.dim("balance")} ${paintBalance(text)}`, compact: paintBalance(`~${text}`) };
   };
   const checkBalance = async (silent = false): Promise<void> => {
-    if (spec.id !== "circuitnotion") return;
-    const balance = await readConfirmedBalance(true);
+    const balance = currentBalance();
     if (!balance) return;
     const alert = balanceWatch.observe(balance, {
-      sessionSpendRwf: sessionSpendRwf(),
+      sessionSpend: sessionSpend(),
       sessionTurns: ledger.history.length,
       silent,
     });
@@ -2649,21 +2597,19 @@ async function main(): Promise<number> {
     try {
       const prediction = await agent.estimate(request);
       out.write(style.dim(`  ${ledger.formatPrediction(prediction)}\n`));
-      if (spec.id === "circuitnotion" && prices) {
-        const balance = await readConfirmedBalance();
-        if (balance) {
-          const alert = balanceWatch.observe(balance, {
-            sessionSpendRwf: sessionSpendRwf(),
-            sessionTurns: ledger.history.length,
-          });
-          if (alert) for (const line of alert.lines) out.write(`  ${style.yellow(line)}\n`);
-        }
-        const low = convertTo(priceUsage({ inputTokens: prediction.inputTokensLow, outputTokens: prediction.outputTokensLow }, prices), "RWF", rates);
-        const high = convertTo(priceUsage({ inputTokens: prediction.inputTokensHigh, outputTokens: prediction.outputTokensHigh }, prices), "RWF", rates);
-        const gate = balance && low && high ? assessTaskBalance(balance, {
-          lowRwf: Math.ceil(low.micros / 1_000_000),
-          highRwf: Math.ceil(high.micros / 1_000_000),
-        }, { source: balanceReadState === "manual" ? "manual" : "confirmed" }) : undefined;
+      const trackedBalance = currentBalance();
+      if (trackedBalance && prices) {
+        const alert = balanceWatch.observe(trackedBalance, {
+          sessionSpend: sessionSpend(),
+          sessionTurns: ledger.history.length,
+        });
+        if (alert) for (const line of alert.lines) out.write(`  ${style.yellow(line)}\n`);
+        const low = convertTo(priceUsage({ inputTokens: prediction.inputTokensLow, outputTokens: prediction.outputTokensLow }, prices), trackedBalance.currency, rates);
+        const high = convertTo(priceUsage({ inputTokens: prediction.inputTokensHigh, outputTokens: prediction.outputTokensHigh }, prices), trackedBalance.currency, rates);
+        const gate = low && high ? assessTaskBalance(trackedBalance, {
+          low: toUnits(low),
+          high: toUnits(high),
+        }) : undefined;
         if (gate) {
           for (const line of gate.lines) out.write(`  ${gate.blocked ? style.red(line) : style.yellow(line)}\n`);
           if (gate.blocked) return false;
@@ -2742,7 +2688,7 @@ async function main(): Promise<number> {
     // balance or budget preflight was never attempted and must not become a misleading /retry.
     recoveryState.last = { request, status: "failed", toolCalls: 0, changedFiles: 0 };
     try {
-      const spendBeforeTurnRwf = sessionSpendRwf() ?? 0;
+      const spendBeforeTurn = sessionSpend() ?? 0;
       // Durable recall belongs to the shared agent, so CLI, desktop and jobs pay for each selected
       // fact once per thread. Wrapping here as well duplicated it on the first turn and left every
       // other front end without the incremental-deduplication policy.
@@ -2816,12 +2762,12 @@ async function main(): Promise<number> {
         elapsed: `${(turn.elapsedMs / 1_000).toFixed(1)}s`,
         cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
       }, sectionStyle())}\n`);
-      if (manualBalanceRwf !== undefined) {
-        const turnSpendRwf = Math.max(0, (sessionSpendRwf() ?? spendBeforeTurnRwf) - spendBeforeTurnRwf);
-        if (turnSpendRwf > 0) {
-          const remaining = Math.max(0, manualBalanceRwf - turnSpendRwf);
+      if (manualBalance !== undefined) {
+        const turnSpend = Math.max(0, (sessionSpend() ?? spendBeforeTurn) - spendBeforeTurn);
+        if (turnSpend > 0) {
+          const remaining: Balance = { amount: Math.max(0, manualBalance.amount - turnSpend), currency: manualBalance.currency, asOf: Date.now() };
           await persistManualBalance(remaining).catch((error: unknown) => {
-            manualBalanceRwf = remaining;
+            manualBalance = remaining;
             out.write(style.yellow(`  Balance was updated for this session but could not be saved: ${error instanceof Error ? error.message : String(error)}\n`));
           });
         }
@@ -3369,9 +3315,7 @@ async function main(): Promise<number> {
     const file = await saveSettings(savedSettings, processEnvironment);
     for (const field of SETTING_FIELDS) delete environment[field.key];
     Object.assign(environment, mergedEnvironment(savedSettings, processEnvironment));
-    manualBalanceRwf = parseManualBalance(environment.ARCHYMEDES_ACCOUNT_BALANCE_RWF);
-    lastConfirmedBalance = undefined;
-    balanceReadState = manualBalanceRwf === undefined ? "checking" : "manual";
+    manualBalance = parseManualBalance(environment.ARCHYMEDES_ACCOUNT_BALANCE, environment.ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY);
     language = resolveControlLanguage(args.language ?? environment.ARCHYMEDES_LANGUAGE ?? environment.LANG);
     const previous = agent;
     const carried = await previous.relinquish();
@@ -3401,7 +3345,7 @@ async function main(): Promise<number> {
    * itself is bounded at three seconds, and every reason not to act — a pipe, CI, a session that
    * already looked today — is decided before the network is touched at all.
    */
-  const startupBalance = spec.id === "circuitnotion" ? readConfirmedBalance(true) : Promise.resolve(undefined);
+  const startupBalance: Promise<Balance | undefined> = Promise.resolve(currentBalance());
   // Knowledge replication is independent of package updates and model calls. It is deliberately
   // detached: an offline feed must add zero startup latency, and the last verified/bundled corpus
   // remains usable while this attempt completes in the background.
@@ -3750,13 +3694,13 @@ async function main(): Promise<number> {
       const previous = agent;
       const carried = await previous.relinquish();
       agent = await openClient(carried);
-      if (spec.id === "circuitnotion") await readConfirmedBalance(true);
+      await checkBalance(true);
       const priceNote = prices ? "" : " — no price configured, costs will show as unknown";
 
       // Persisted, because a switch the user had to make again on every launch is a switch they
       // never really made. Both halves are written: the model alone would be re-read under whatever
       // provider happened to sort first, which is how you ask for one model and get another.
-      const modelKey = `${spec.id.toUpperCase()}_MODEL` as SettingKey;
+      const modelKey = `${providerEnvPrefix(spec.id)}_MODEL` as SettingKey;
       savedSettings = { ...savedSettings, ARCHYMEDES_PROVIDER: spec.id, [modelKey]: resolvedModelId };
       let persistence = "";
       try {
@@ -4705,117 +4649,28 @@ async function main(): Promise<number> {
         continue;
       }
       if (manualBalanceCommand.kind === "set") {
-        const file = await persistManualBalance(manualBalanceCommand.amountRwf);
-        out.write(style.green(`  Local balance set to ${formatRwf(manualBalanceCommand.amountRwf)}. Archymedes will subtract measured token costs after each completed turn.\n`));
-        out.write(style.dim(`  This is an estimate, not a provider statement. Saved to ${file}; /balance clear returns to the endpoint.\n`));
+        const currency = manualBalanceCommand.currency ?? display;
+        const next: Balance = { amount: manualBalanceCommand.amount, currency, asOf: Date.now() };
+        const file = await persistManualBalance(next);
+        out.write(style.green(`  Balance set to ${formatBalance(next.amount, currency)}. Archymedes will subtract each turn's measured cost from it.\n`));
+        out.write(style.dim(`  This is a local estimate, not a provider statement. Saved to ${file}; /balance clear stops tracking.\n`));
         continue;
       }
       if (manualBalanceCommand.kind === "clear") {
         await persistManualBalance(undefined);
-        const balance = await readConfirmedBalance(true);
-        out.write(balance
-          ? style.green(`  Local balance cleared. Gateway balance: ${formatRwf(balance.balanceRwf)}.\n`)
-          : style.dim("  Local balance cleared. Archymedes will use the balance endpoint when it is configured and available.\n"));
+        out.write(style.dim("  Balance tracking cleared. Set a new figure any time with /balance <amount>.\n"));
         continue;
       }
-      const local = useManualBalance();
-      if (local) {
-        out.write(`  Locally estimated balance: ${formatRwf(local.balanceRwf)}\n`);
-        out.write(style.dim("  Based on the amount you set minus Archymedes's measured token costs. Use /balance <amount> to reconcile it with your account.\n"));
+      const balance = currentBalance();
+      if (balance) {
+        for (const line of renderBalance(balance, criticalBalance, { sessionSpend: sessionSpend() })) out.write(`  ${line}\n`);
+        out.write(style.dim("  Local estimate: the figure you set minus Archymedes's measured token costs. /balance <amount> resets it.\n"));
       } else {
-        const balance = await readConfirmedBalance(true);
-        out.write(balance
-          ? `  Gateway-confirmed balance: ${formatRwf(balance.balanceRwf)}\n`
-          : style.dim("  No local balance is set and the balance endpoint is unavailable. Use /balance <amount> to track an estimate locally.\n"));
+        out.write(style.dim("  No balance is being tracked. Use /balance <amount> [currency] to track one locally.\n"));
       }
       continue;
     }
 
-    const payCommand = parsePayCommand(input);
-    if (payCommand) {
-      if (payCommand.kind === "invalid") {
-        out.write(style.yellow(`  ${payCommand.reason}\n`));
-        continue;
-      }
-      if (payCommand.kind === "balance" && manualBalanceRwf !== undefined) {
-        out.write(`  Locally estimated balance: ${formatRwf(manualBalanceRwf)}\n`);
-        out.write(style.dim("  This bypasses the balance endpoint and subtracts measured token costs. Use /balance <amount> to reconcile or /balance clear to return to the gateway.\n"));
-        continue;
-      }
-      // Both settings or neither: refusing here, before any amount is discussed, is kinder than
-      // failing at the moment someone is trying to hand over money.
-      const gateway = billingFromEnvironment(environment);
-      if (!gateway) {
-        for (const line of BILLING_NOT_CONFIGURED) out.write(`  ${line}\n`);
-        continue;
-      }
-      const currentSessionSpendRwf = sessionSpendRwf();
-      try {
-        if (payCommand.kind === "balance") {
-          const balance = await gateway.getBalance();
-          lastConfirmedBalance = { balance, readAt: Date.now() };
-          balanceWatch.observe(balance, { sessionSpendRwf: currentSessionSpendRwf, sessionTurns: ledger.history.length, silent: true });
-          for (const line of renderBalance(balance, { sessionSpendRwf: currentSessionSpendRwf })) out.write(`  ${line}\n`);
-          continue;
-        }
-        if (payCommand.kind === "status") {
-          const payment = await gateway.getPayment(payCommand.reference);
-          // The balance is only ever read back, never worked out from the amount — a figure Archymedes
-          // computed that disagrees with the provider's ledger is the disagreement users notice.
-          const balance = payment.status === "paid" ? await gateway.getBalance().catch(() => undefined) : undefined;
-          if (balance) lastConfirmedBalance = { balance, readAt: Date.now() };
-          if (balance) balanceWatch.observe(balance, { sessionSpendRwf: currentSessionSpendRwf, sessionTurns: ledger.history.length, silent: true });
-          for (const line of renderPaymentOutcome(payment, { timedOut: false, balance })) out.write(`  ${line}\n`);
-          continue;
-        }
-
-        const before = await gateway.getBalance().catch(() => undefined);
-        if (before) lastConfirmedBalance = { balance: before, readAt: Date.now() };
-        if (before) balanceWatch.observe(before, { sessionSpendRwf: currentSessionSpendRwf, sessionTurns: ledger.history.length, silent: true });
-        out.write(`${box(renderTopUpQuote(payCommand.amountRwf, before), { depth: renderDepth, title: "payment", glyphs })}\n`);
-        // Money never moves without a person saying so in this session. A piped or scripted run has
-        // nobody to ask, so it stops rather than treating the command itself as consent.
-        if (!interactive) {
-          out.write(style.yellow("  Paying needs an interactive session — run /pay from the Archymedes prompt.\n"));
-          continue;
-        }
-        statusBar.clear();
-        const confirmation = (await readline.question(`  ${style.yellow("?")} Create this payment? ${style.dim("[y/N]: ")}`)).trim().toLowerCase();
-        if (confirmation !== "y" && confirmation !== "yes") {
-          out.write(style.dim("  Cancelled — nothing was charged.\n"));
-          continue;
-        }
-
-        const checkout = await gateway.createCheckout({ amountRwf: payCommand.amountRwf, idempotencyKey: newIdempotencyKey() });
-        for (const line of renderCheckout(checkout)) out.write(`  ${line}\n`);
-        out.write(style.dim("  waiting for confirmation — Ctrl+C stops waiting; the payment itself continues\n"));
-
-        // Same swap as /attach: Ctrl+C here must end the wait, not the session — and stopping the
-        // wait must never be reported as a failed payment, because the money may already be moving.
-        const stopped = { aborted: false };
-        const onPaySigint = () => { stopped.aborted = true; };
-        unbindSigint();
-        process.on("SIGINT", onPaySigint);
-        readline.on("SIGINT", onPaySigint);
-        let outcome;
-        try {
-          outcome = await waitForPayment(gateway, checkout.reference, { signal: stopped });
-        } finally {
-          process.off("SIGINT", onPaySigint);
-          readline.off("SIGINT", onPaySigint);
-          bindSigint();
-        }
-        const after = outcome.payment.status === "paid" ? await gateway.getBalance().catch(() => undefined) : undefined;
-        if (after) lastConfirmedBalance = { balance: after, readAt: Date.now() };
-        if (after) balanceWatch.observe(after, { sessionSpendRwf: currentSessionSpendRwf, sessionTurns: ledger.history.length, silent: true });
-        for (const line of renderPaymentOutcome(outcome.payment, { timedOut: outcome.timedOut, balance: after })) {
-          out.write(`  ${outcome.payment.status === "paid" ? style.green(line) : line}\n`);
-        }
-      } catch (error) {
-        out.write(style.red(`  ${error instanceof BillingError ? error.message : `Payment failed: ${error instanceof Error ? error.message : String(error)}`}\n`));
-      }
-      continue;
-    }
     if (input === "/scan" || input.startsWith("/scan ")) {
       const include = input.slice("/scan".length).trim() || undefined;
       out.write(style.dim("  scanning for likely hardcoded secrets…\n"));

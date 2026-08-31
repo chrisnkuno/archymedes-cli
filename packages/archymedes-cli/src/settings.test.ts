@@ -32,18 +32,13 @@ describe("Archymedes settings", () => {
     expect(maskSetting("sk-123456789")).toBe("sk-…789");
   });
 
-  it("accepts only a whole non-negative low-balance threshold", () => {
-    expect(validateSetting("ARCHYMEDES_LOW_BALANCE_RWF", "5000")).toBe("5000");
-    expect(validateSetting("ARCHYMEDES_LOW_BALANCE_RWF", "0")).toBe("0");
-    expect(() => validateSetting("ARCHYMEDES_LOW_BALANCE_RWF", "-1")).toThrow("non-negative whole number");
-    expect(() => validateSetting("ARCHYMEDES_LOW_BALANCE_RWF", "20.5")).toThrow("non-negative whole number");
-  });
-
-  it("accepts only a safe whole non-negative account balance", () => {
-    expect(validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_RWF", "12500")).toBe("12500");
-    expect(validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_RWF", "0")).toBe("0");
-    expect(() => validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_RWF", "-1")).toThrow("Account balance");
-    expect(() => validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_RWF", "20.5")).toThrow("Account balance");
+  it("accepts only a non-negative balance and threshold, in any currency", () => {
+    expect(validateSetting("ARCHYMEDES_LOW_BALANCE", "5000")).toBe("5000");
+    expect(validateSetting("ARCHYMEDES_ACCOUNT_BALANCE", "12.5")).toBe("12.5");
+    expect(validateSetting("ARCHYMEDES_CRITICAL_BALANCE", "0")).toBe("0");
+    expect(() => validateSetting("ARCHYMEDES_ACCOUNT_BALANCE", "-1")).toThrow("non-negative");
+    expect(validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY", "eur")).toBe("eur");
+    expect(() => validateSetting("ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY", "euro")).toThrow("ISO");
   });
 
   it("takes a location as a country code and normalises it", () => {
@@ -204,7 +199,8 @@ describe("the first run someone actually sees", () => {
     const screen = written.join("");
     expect(screen).toContain("Anthropic API key");
     expect(screen).toContain("OpenAI API key");
-    expect(screen).toContain("CircuitNotion API key");
+    expect(screen).toContain("Google Gemini API key");
+    expect(screen).toContain("DeepSeek API key");
     // None of the things a first run has no opinion about.
     expect(screen).not.toContain("Cached input price");
     expect(screen).not.toContain("Microphone device");

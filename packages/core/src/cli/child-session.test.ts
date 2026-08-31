@@ -16,7 +16,7 @@ import {
   removeChildWorktree,
 } from "./child-session";
 
-const prices = { inputRwfPerMillionTokens: 2_000, outputRwfPerMillionTokens: 8_000 };
+const prices = { inputRatePerMillion: 2_000, outputRatePerMillion: 8_000 };
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 
 function scriptedModel(turns: Array<Partial<AgentModelTurn>>): AgentTurnProvider {

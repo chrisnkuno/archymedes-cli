@@ -49,10 +49,26 @@ export function modelsEndpoint(provider: ProviderId, environment: Record<string,
       const base = trimmed(environment.OPENAI_BASE_URL) ?? "https://api.openai.com";
       return { url: modelsUrl(base), headers: { authorization: `Bearer ${key}` } };
     }
-    case "circuitnotion": {
-      const key = trimmed(environment.CIRCUITNOTION_API_KEY);
+    // Every other provider Archymedes drives speaks the OpenAI-compatible `/v1/models` shape with
+    // `Bearer` auth; only the default host and the env-var prefix differ.
+    case "google":
+    case "xai":
+    case "deepseek":
+    case "mistral":
+    case "groq":
+    case "openai-compatible": {
+      const prefix = provider.toUpperCase().replace(/-/g, "_");
+      const key = trimmed(environment[`${prefix}_API_KEY`]);
       if (!key) return undefined;
-      const base = trimmed(environment.CIRCUITNOTION_BASE_URL) ?? "https://api.circuitnotion.com";
+      const defaults: Record<string, string> = {
+        google: "https://generativelanguage.googleapis.com/v1beta/openai",
+        xai: "https://api.x.ai/v1",
+        deepseek: "https://api.deepseek.com/v1",
+        mistral: "https://api.mistral.ai/v1",
+        groq: "https://api.groq.com/openai/v1",
+      };
+      const base = trimmed(environment[`${prefix}_BASE_URL`]) ?? defaults[provider];
+      if (!base) return undefined;
       return { url: modelsUrl(base), headers: { authorization: `Bearer ${key}` } };
     }
     case "ollama": {

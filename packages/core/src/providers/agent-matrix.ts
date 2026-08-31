@@ -3,7 +3,6 @@ import { PROVIDER_IDS, PROVIDER_INFO, catalogPrices, isProviderId, type Provider
 import { tokenPrices, type Currency, type TokenPrices } from "../money";
 import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
-import { CircuitNotionAgentTurnProvider } from "./circuitnotion-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 
 /**
@@ -34,6 +33,44 @@ export type ProviderSpec = ProviderInfo & {
 };
 
 /**
+ * The default OpenAI-compatible endpoint for each non-Anthropic provider.
+ *
+ * Every one of these vendors publishes a Chat Completions-shaped API, so they all run through
+ * `OpenAIAgentTurnProvider` with nothing changed but the base URL and the key. A
+ * `<PROVIDER>_BASE_URL` variable overrides the default — for a regional endpoint, a proxy, or a
+ * self-hosted gateway.
+ */
+const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "openai-compatible">, string> = {
+  google: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  xai: "https://api.x.ai/v1",
+  deepseek: "https://api.deepseek.com/v1",
+  mistral: "https://api.mistral.ai/v1",
+  groq: "https://api.groq.com/openai/v1",
+  ollama: "http://localhost:11434/v1",
+};
+
+/** `ollama` -> `OLLAMA`, `openai-compatible` -> `OPENAI_COMPATIBLE`. */
+export function providerEnvPrefix(id: ProviderId): string {
+  return id.toUpperCase().replace(/-/g, "_");
+}
+
+/** One spec for a provider reached over an OpenAI-compatible endpoint. */
+function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai">): ProviderSpec {
+  const prefix = providerEnvPrefix(id);
+  const fallbackBase = id === "openai-compatible" ? undefined : OPENAI_COMPATIBLE_BASE_URL[id];
+  return {
+    ...PROVIDER_INFO[id],
+    create: (environment, model) =>
+      new OpenAIAgentTurnProvider({
+        // Ollama accepts anything; the others reject a blank key at call time with their own error.
+        apiKey: environment[`${prefix}_API_KEY`]?.trim() || "local",
+        model,
+        baseURL: environment[`${prefix}_BASE_URL`]?.trim() || fallbackBase,
+      }),
+  };
+}
+
+/**
  * Every provider, ready to construct.
  *
  * Spread from `PROVIDER_INFO` rather than restated, so a label or a default model has exactly one
@@ -58,25 +95,13 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
         baseURL: environment.OPENAI_BASE_URL?.trim() || undefined,
       }),
   },
-  circuitnotion: {
-    ...PROVIDER_INFO.circuitnotion,
-    create: (environment, model) =>
-      new CircuitNotionAgentTurnProvider({
-        apiKey: environment.CIRCUITNOTION_API_KEY!.trim(),
-        model,
-        baseURL: environment.CIRCUITNOTION_BASE_URL?.trim() || undefined,
-        relaySecret: environment.CIRCUITNOTION_RELAY_SECRET?.trim() || undefined,
-      }),
-  },
-  ollama: {
-    ...PROVIDER_INFO.ollama,
-    create: (environment, model) =>
-      new OpenAIAgentTurnProvider({
-        apiKey: "ollama",
-        model,
-        baseURL: environment.OLLAMA_BASE_URL?.trim() || "http://localhost:11434/v1",
-      }),
-  },
+  google: openAiCompatibleSpec("google"),
+  xai: openAiCompatibleSpec("xai"),
+  deepseek: openAiCompatibleSpec("deepseek"),
+  mistral: openAiCompatibleSpec("mistral"),
+  groq: openAiCompatibleSpec("groq"),
+  ollama: openAiCompatibleSpec("ollama"),
+  "openai-compatible": openAiCompatibleSpec("openai-compatible"),
 };
 
 /** Providers whose credentials are actually present, so the CLI can offer only what will work. */
@@ -145,7 +170,7 @@ export function resolveProvider(
   const missing = spec.requires.filter((name) => !environment[name]?.trim());
   if (missing.length > 0) return { error: `${spec.label} needs ${missing.join(" and ")}.` };
 
-  const model = options.model?.trim() || environment[`${spec.id.toUpperCase()}_MODEL`]?.trim() || spec.defaultModel;
+  const model = options.model?.trim() || environment[`${providerEnvPrefix(spec.id)}_MODEL`]?.trim() || spec.defaultModel;
   return { spec, model, provider: spec.create(environment, model), prices: resolvePrices(spec, model, environment) };
 }
 
@@ -167,7 +192,7 @@ function overrideApplies(spec: ProviderSpec, model: string, environment: Provide
   const aliases = priceAliases(model);
   const named = environment.MODEL_PRICE_MODEL?.trim();
   if (named) return aliases.includes(named);
-  return aliases.includes(environment[`${spec.id.toUpperCase()}_MODEL`]?.trim() || spec.defaultModel);
+  return aliases.includes(environment[`${providerEnvPrefix(spec.id)}_MODEL`]?.trim() || spec.defaultModel);
 }
 
 /**
@@ -209,7 +234,7 @@ export function describeProviders(environment: ProviderEnvironment): ProviderSta
   return PROVIDER_IDS.map((id) => {
     const spec = PROVIDERS[id];
     const missing = spec.requires.filter((name) => !environment[name]?.trim());
-    const model = environment[`${id.toUpperCase()}_MODEL`]?.trim() || spec.defaultModel;
+    const model = environment[`${providerEnvPrefix(id)}_MODEL`]?.trim() || spec.defaultModel;
     const overridden = Number(environment.MODEL_INPUT_PER_MILLION) > 0
       && Number(environment.MODEL_OUTPUT_PER_MILLION) > 0
       && overrideApplies(spec, model, environment);

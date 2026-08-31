@@ -26,14 +26,16 @@ describe("where a model list lives", () => {
     expect(anthropic?.url).toContain("/v1/models");
 
     expect(modelsEndpoint("openai", { OPENAI_API_KEY: "sk-oai" })?.headers.authorization).toBe("Bearer sk-oai");
-    expect(modelsEndpoint("circuitnotion", { CIRCUITNOTION_API_KEY: "sk-cn" })?.headers.authorization).toBe("Bearer sk-cn");
+    expect(modelsEndpoint("deepseek", { DEEPSEEK_API_KEY: "sk-ds" })?.headers.authorization).toBe("Bearer sk-ds");
+    expect(modelsEndpoint("groq", { GROQ_API_KEY: "sk-gq" })?.url).toContain("api.groq.com");
   });
 
   it("says a provider cannot be asked rather than asking it without credentials", () => {
     // An unauthenticated request would come back 401, which reads as a bad key rather than none.
     expect(modelsEndpoint("anthropic", {})).toBeUndefined();
     expect(modelsEndpoint("openai", { OPENAI_API_KEY: "   " })).toBeUndefined();
-    expect(modelsEndpoint("circuitnotion", {})).toBeUndefined();
+    expect(modelsEndpoint("deepseek", {})).toBeUndefined();
+    expect(modelsEndpoint("openai-compatible", { OPENAI_COMPATIBLE_API_KEY: "k" })).toBeUndefined();
   });
 
   it("honours a base-URL override, so a gateway or a relay is asked instead of the vendor", () => {

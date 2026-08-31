@@ -18,7 +18,7 @@ import type { ProviderId } from "@archymedes/core/providers/agent-matrix";
 
 export type DoctorEndpoint = {
   id: string;
-  /** What the endpoint is for, e.g. "model API · CircuitNotion". */
+  /** What the endpoint is for, e.g. "model API · Anthropic". */
   purpose: string;
   url: string;
   /** False when Archymedes can run without it (FX rates, update checks, unconfigured providers). */

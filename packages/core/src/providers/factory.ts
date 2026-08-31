@@ -2,9 +2,6 @@ import { E2BSandboxProvider } from "./e2b";
 import { DockerSandboxProvider } from "./docker";
 import { OpenAICodingModelProvider } from "./openai";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
-import { CircuitNotionCodingModelProvider } from "./circuitnotion";
-import { CircuitNotionAgentTurnProvider } from "./circuitnotion-agent";
-import { CircuitNotionPresetsProvider } from "./circuitnotion-presets";
 import type { CodingModelProvider } from "./model";
 import type { AgentTurnProvider } from "../agent-runtime";
 import type { InteractiveCodingSandboxProvider } from "./contracts";
@@ -21,16 +18,12 @@ export type ProviderEnvironment = {
   CODING_SANDBOX_PROVIDER?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
-  CIRCUITNOTION_API_KEY?: string;
-  CIRCUITNOTION_MODEL?: string;
-  CIRCUITNOTION_BASE_URL?: string;
-  CIRCUITNOTION_RELAY_SECRET?: string;
-  CIRCUITNOTION_PRESETS_MODEL?: string;
+  OPENAI_BASE_URL?: string;
   CODING_MODEL_PROVIDER?: string;
-  MODEL_INPUT_RWF_PER_MILLION?: string;
+  MODEL_INPUT_PER_MILLION?: string;
   /** Optional: the provider's discounted rate for cache-served input tokens. */
-  MODEL_CACHED_INPUT_RWF_PER_MILLION?: string;
-  MODEL_OUTPUT_RWF_PER_MILLION?: string;
+  MODEL_CACHED_INPUT_PER_MILLION?: string;
+  MODEL_OUTPUT_PER_MILLION?: string;
 };
 
 /**
@@ -79,48 +72,23 @@ export function createOpenAIProvider(environment: ProviderEnvironment): OpenAICo
   return new OpenAICodingModelProvider({ apiKey, model });
 }
 
-export function createCircuitNotionProvider(environment: ProviderEnvironment): CircuitNotionCodingModelProvider | undefined {
-  const apiKey = environment.CIRCUITNOTION_API_KEY?.trim();
-  const model = environment.CIRCUITNOTION_MODEL?.trim();
-  if (!apiKey || !model) return undefined;
-  return new CircuitNotionCodingModelProvider({ apiKey, model, baseURL: environment.CIRCUITNOTION_BASE_URL?.trim() || undefined, relaySecret: environment.CIRCUITNOTION_RELAY_SECRET?.trim() || undefined });
-}
-
-export function createCircuitNotionAgentProvider(environment: ProviderEnvironment): CircuitNotionAgentTurnProvider | undefined {
-  const apiKey = environment.CIRCUITNOTION_API_KEY?.trim();
-  const model = environment.CIRCUITNOTION_MODEL?.trim();
-  if (!apiKey || !model) return undefined;
-  return new CircuitNotionAgentTurnProvider({ apiKey, model, baseURL: environment.CIRCUITNOTION_BASE_URL?.trim() || undefined, relaySecret: environment.CIRCUITNOTION_RELAY_SECRET?.trim() || undefined });
-}
-
-/** Uses the same explicit provider selection as coding, but exposes a tool-free conversational turn. */
-export function createAgentTurnProvider(environment: ProviderEnvironment, providerOverride?: "openai" | "circuitnotion", modelOverride?: string): AgentTurnProvider | undefined {
+/**
+ * Uses the same explicit provider selection as coding, but exposes a tool-free conversational turn.
+ *
+ * Only the OpenAI path is wired here; every other provider Archymedes drives is OpenAI-compatible
+ * and reached through the same client, so a caller wanting a different endpoint sets
+ * `OPENAI_BASE_URL`.
+ */
+export function createAgentTurnProvider(environment: ProviderEnvironment, providerOverride?: "openai", modelOverride?: string): AgentTurnProvider | undefined {
   const selection = providerOverride ?? environment.CODING_MODEL_PROVIDER?.trim();
   if (selection === "openai") {
     const apiKey = environment.OPENAI_API_KEY?.trim();
     const model = modelOverride?.trim() || environment.OPENAI_MODEL?.trim();
-    return apiKey && model ? new OpenAIAgentTurnProvider({ apiKey, model }) : undefined;
-  }
-  if (selection === "circuitnotion") {
-    const apiKey = environment.CIRCUITNOTION_API_KEY?.trim();
-    const model = modelOverride?.trim() || environment.CIRCUITNOTION_MODEL?.trim();
-    return apiKey && model ? new CircuitNotionAgentTurnProvider({ apiKey, model, baseURL: environment.CIRCUITNOTION_BASE_URL?.trim() || undefined, relaySecret: environment.CIRCUITNOTION_RELAY_SECRET?.trim() || undefined }) : undefined;
+    return apiKey && model
+      ? new OpenAIAgentTurnProvider({ apiKey, model, baseURL: environment.OPENAI_BASE_URL?.trim() || undefined })
+      : undefined;
   }
   return undefined;
-}
-
-/**
- * Deliberately a separate, unbilled model slot from the coding model above: dynamic terminal
- * presets are a cheap suggestion call, not agent work performed on the user's behalf, so they
- * default to a lighter model via their own explicit env var rather than reusing the (possibly
- * much more expensive) coding model. Reuses the same API key/base URL/relay secret — the
- * Cloudflare relay fix applies to every CircuitNotion call from Convex, not just coding ones.
- */
-export function createDynamicPresetsProvider(environment: ProviderEnvironment): CircuitNotionPresetsProvider | undefined {
-  const apiKey = environment.CIRCUITNOTION_API_KEY?.trim();
-  const model = environment.CIRCUITNOTION_PRESETS_MODEL?.trim();
-  if (!apiKey || !model) return undefined;
-  return new CircuitNotionPresetsProvider({ apiKey, model, baseURL: environment.CIRCUITNOTION_BASE_URL?.trim() || undefined, relaySecret: environment.CIRCUITNOTION_RELAY_SECRET?.trim() || undefined });
 }
 
 /**
@@ -131,7 +99,6 @@ export function createDynamicPresetsProvider(environment: ProviderEnvironment): 
 export function createCodingModelProvider(environment: ProviderEnvironment): CodingModelProvider | undefined {
   const selection = environment.CODING_MODEL_PROVIDER?.trim();
   if (selection === "openai") return createOpenAIProvider(environment);
-  if (selection === "circuitnotion") return createCircuitNotionProvider(environment);
   return undefined;
 }
 

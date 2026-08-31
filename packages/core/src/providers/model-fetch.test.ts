@@ -65,7 +65,9 @@ describe("where a provider's list lives", () => {
     // configured" forever, which reads like the user's mistake rather than a missing branch.
     const withKeys = {
       ...environment,
-      ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", CIRCUITNOTION_API_KEY: "k",
+      ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", GOOGLE_API_KEY: "k", XAI_API_KEY: "k",
+      DEEPSEEK_API_KEY: "k", MISTRAL_API_KEY: "k", GROQ_API_KEY: "k",
+      OPENAI_COMPATIBLE_API_KEY: "k", OPENAI_COMPATIBLE_BASE_URL: "https://gw.example/v1",
     };
     for (const provider of PROVIDER_IDS) {
       expect(modelsEndpoint(provider, withKeys), `no models endpoint for ${provider}`).toBeDefined();

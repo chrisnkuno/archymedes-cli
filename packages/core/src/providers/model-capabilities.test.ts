@@ -14,18 +14,18 @@ describe("what a model can hold and produce", () => {
     expect(capabilitiesFor("claude-haiku-4-5")).toEqual({ contextWindow: 200_000, maxOutputTokens: 64_000, supportsEffort: false });
   });
 
-  it("uses CircuitNotion's published limits for the default alias", () => {
-    const capabilities = capabilitiesFor("circuit-2-turbo");
-    expect(capabilities).toEqual({ contextWindow: 1_000_000, maxOutputTokens: 384_000, supportsEffort: false });
-    expect(capabilities).not.toBe(CONSERVATIVE_CAPABILITIES);
+  it("uses each OpenAI-compatible provider's published limits for its default model", () => {
+    const gemini = capabilitiesFor("gemini-2.5-pro");
+    expect(gemini).toEqual({ contextWindow: 1_048_576, maxOutputTokens: 65_536, supportsEffort: true });
+    expect(gemini).not.toBe(CONSERVATIVE_CAPABILITIES);
+    expect(capabilitiesFor("grok-4")).toEqual({ contextWindow: 256_000, maxOutputTokens: 64_000, supportsEffort: false });
   });
 
-  it("covers the other CircuitNotion and Moonshot routes", () => {
-    for (const id of ["auto", "circuit-1", "circuit-1-mini", "circuit-2", "circuit-3", "deepseek-v4-flash", "deepseek-v4-pro"]) {
-      expect(capabilitiesFor(id), id).toEqual({ contextWindow: 1_000_000, maxOutputTokens: 384_000, supportsEffort: false });
+  it("covers the DeepSeek, Mistral and Groq default models", () => {
+    for (const id of ["deepseek-chat", "deepseek-reasoner", "mistral-large-latest", "mistral-small-latest", "llama-3.3-70b-versatile"]) {
+      expect(capabilitiesFor(id).contextWindow, id).toBe(131_072);
+      expect(capabilitiesFor(id), id).not.toBe(CONSERVATIVE_CAPABILITIES);
     }
-    expect(capabilitiesFor("kimi-k3")).toEqual({ contextWindow: 1_048_576, maxOutputTokens: 1_048_576, supportsEffort: false });
-    expect(capabilitiesFor("kimi-k2.7-code")).toEqual({ contextWindow: 262_144, maxOutputTokens: 32_768, supportsEffort: false });
   });
 
   it("treats an unknown model exactly as Archymedes did before this table existed", () => {

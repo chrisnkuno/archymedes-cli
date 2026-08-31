@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addPart, affordableOutputTokens, affordableOutputTokensFor, approximateInputTokens, estimateModelCost, estimateTextTokens, newPartTotals, priceActualModelUsage, priceUsageWithCache, tokenEstimateFrom } from "./model-cost";
 
-const prices = { inputRwfPerMillionTokens: 2_000, outputRwfPerMillionTokens: 8_000 };
+const prices = { inputRatePerMillion: 2_000, outputRatePerMillion: 8_000 };
 
 describe("model cost estimation", () => {
   it("keeps a conservative token cap above the expected estimate", () => {
@@ -20,13 +20,13 @@ describe("model cost estimation", () => {
 
   it("quotes an expected cost and a hard reservation in integer RWF", () => {
     const estimate = estimateModelCost(["Inspect and update the repository"], 2_000, prices);
-    expect(estimate.maximumRwf).toBeGreaterThanOrEqual(estimate.expectedRwf);
-    expect(Number.isInteger(estimate.maximumRwf)).toBe(true);
+    expect(estimate.maximumCost).toBeGreaterThanOrEqual(estimate.expectedCost);
+    expect(Number.isInteger(estimate.maximumCost)).toBe(true);
   });
 
   it("prices actual provider usage and rejects unusable catalogs", () => {
     expect(priceActualModelUsage(1_000, 500, prices)).toBe(6);
-    expect(() => priceActualModelUsage(1, 1, { ...prices, inputRwfPerMillionTokens: 0 })).toThrow("positive");
+    expect(() => priceActualModelUsage(1, 1, { ...prices, inputRatePerMillion: 0 })).toThrow("positive");
   });
 
   it("reserves the long-context tier for the whole request once its threshold is crossed", () => {
@@ -81,7 +81,7 @@ describe("cached-token pricing", () => {
   });
 
   it("charges the discounted rate only for the cached share of input tokens", () => {
-    const cached = { ...prices, cachedInputRwfPerMillionTokens: 200 };
+    const cached = { ...prices, cachedInputRatePerMillion: 200 };
     // Round numbers throughout, so the expected value isn't itself a rounding judgment call.
     const usage = { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 800_000 };
     // 200,000 uncached tokens at 2,000/M (= 400) + 800,000 cached tokens at 200/M (= 160).
@@ -91,13 +91,13 @@ describe("cached-token pricing", () => {
   it("never charges more cached tokens than were actually reported as input", () => {
     // Providers report cached tokens as a subset of input, not additional to it — a catalog that
     // somehow reports more cached than total input must not go negative on the uncached share.
-    const cached = { ...prices, cachedInputRwfPerMillionTokens: 200 };
+    const cached = { ...prices, cachedInputRatePerMillion: 200 };
     const usage = { inputTokens: 500_000, outputTokens: 0, cachedInputTokens: 800_000 };
     expect(priceUsageWithCache(usage, cached)).toBe(160); // 800,000 cached tokens at 200/M, uncached share floors at 0.
   });
 
   it("rejects an unusable cached rate the same way the uncached path does", () => {
-    const cached = { ...prices, cachedInputRwfPerMillionTokens: 0 };
+    const cached = { ...prices, cachedInputRatePerMillion: 0 };
     expect(() => priceUsageWithCache({ inputTokens: 100, outputTokens: 0, cachedInputTokens: 50 }, cached)).toThrow("positive");
   });
 });

@@ -20,9 +20,33 @@ import { tokenPrices, type TokenPrices } from "../money";
 import { selectPrice, tokenPricesFor } from "../pricing";
 import { PRICE_CATALOG } from "./price-catalog";
 
-export type ProviderId = "anthropic" | "openai" | "circuitnotion" | "ollama";
+export type ProviderId =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "xai"
+  | "deepseek"
+  | "mistral"
+  | "groq"
+  | "ollama"
+  | "openai-compatible";
 
-export const PROVIDER_IDS: readonly ProviderId[] = ["anthropic", "openai", "circuitnotion", "ollama"];
+/**
+ * Catalog order, and it is load-bearing: `resolveProvider` picks the first configured provider in
+ * this order when nothing is chosen explicitly, so the frontier labs come before the aggregators
+ * and the local/generic escape hatches come last.
+ */
+export const PROVIDER_IDS: readonly ProviderId[] = [
+  "anthropic",
+  "openai",
+  "google",
+  "xai",
+  "deepseek",
+  "mistral",
+  "groq",
+  "ollama",
+  "openai-compatible",
+];
 
 export function isProviderId(value: string): value is ProviderId {
   return (PROVIDER_IDS as readonly string[]).includes(value);
@@ -52,12 +76,30 @@ export function catalogPrices(provider: ProviderId, model: string, asOf?: string
   return record && record.billingUnit === "tokens" ? tokenPricesFor(record) : undefined;
 }
 
+/**
+ * Every provider's identity.
+ *
+ * `defaultModel` values are conservative, recorded once, and meant to be overridden with
+ * `<PROVIDER>_MODEL` — this build does not chase each vendor's newest release. Everything except
+ * Anthropic speaks an OpenAI-compatible endpoint (see `agent-matrix.ts`); Ollama needs no key and
+ * `openai-compatible` is the generic escape hatch for any other endpoint that does.
+ */
 export const PROVIDER_INFO: Record<ProviderId, ProviderInfo> = {
   anthropic: { id: "anthropic", label: "Anthropic", requires: ["ANTHROPIC_API_KEY"], defaultModel: "claude-sonnet-5" },
   openai: { id: "openai", label: "OpenAI", requires: ["OPENAI_API_KEY"], defaultModel: "gpt-5.6-terra" },
-  circuitnotion: { id: "circuitnotion", label: "CircuitNotion", requires: ["CIRCUITNOTION_API_KEY"], defaultModel: "circuit-2-turbo" },
+  google: { id: "google", label: "Google Gemini", requires: ["GOOGLE_API_KEY"], defaultModel: "gemini-2.5-pro" },
+  xai: { id: "xai", label: "xAI Grok", requires: ["XAI_API_KEY"], defaultModel: "grok-4" },
+  deepseek: { id: "deepseek", label: "DeepSeek", requires: ["DEEPSEEK_API_KEY"], defaultModel: "deepseek-chat" },
+  mistral: { id: "mistral", label: "Mistral", requires: ["MISTRAL_API_KEY"], defaultModel: "mistral-large-latest" },
+  groq: { id: "groq", label: "Groq", requires: ["GROQ_API_KEY"], defaultModel: "llama-3.3-70b-versatile" },
   // No key required — an Ollama daemon accepts anything in the Authorization header — so this
   // provider is always "configured" and only fails at call time if nothing is listening on the
   // base URL, the same way a bad OPENAI_BASE_URL override would.
   ollama: { id: "ollama", label: "Ollama (local)", requires: [], defaultModel: "llama3.1" },
+  "openai-compatible": {
+    id: "openai-compatible",
+    label: "OpenAI-compatible",
+    requires: ["OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"],
+    defaultModel: "gpt-4o-mini",
+  },
 };

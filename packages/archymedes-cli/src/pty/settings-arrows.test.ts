@@ -29,7 +29,7 @@ async function boot() {
   const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-arrowscfg-"));
   const p = spawnArchymedes({ cwd, args: [], env: {
     ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
-    ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_RWF_PER_USD: "1300",
+    ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "RWF", ARCHYMEDES_FX_RATE: "1300",
   }});
   await p.waitFor(/›/, { timeoutMs: 30_000 });
   return { p, configDir };

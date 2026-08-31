@@ -133,10 +133,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
  * is only the runaway ceiling, and a catalog of 1/1 would make that ceiling meaningless.
  */
 function priceCatalogFor(prices: { inputPerMillion: number; outputPerMillion: number; largeContext?: { aboveInputTokens: number; inputMultiplier: number; outputMultiplier: number } } | undefined) {
-  if (!prices) return { inputRwfPerMillionTokens: 1, outputRwfPerMillionTokens: 1 };
+  if (!prices) return { inputRatePerMillion: 1, outputRatePerMillion: 1 };
   return {
-    inputRwfPerMillionTokens: Math.max(1, Math.round(prices.inputPerMillion / 1_000_000)),
-    outputRwfPerMillionTokens: Math.max(1, Math.round(prices.outputPerMillion / 1_000_000)),
+    inputRatePerMillion: Math.max(1, Math.round(prices.inputPerMillion / 1_000_000)),
+    outputRatePerMillion: Math.max(1, Math.round(prices.outputPerMillion / 1_000_000)),
     ...(prices.largeContext ? { largeContext: prices.largeContext } : {}),
   };
 }

@@ -32,7 +32,7 @@ async function boot(extraEnv: Record<string, string> = {}) {
     ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
     ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC",
     // A manual rate, so the conversion is exercised without reaching the network.
-    ARCHYMEDES_FX_RWF_PER_USD: "1300",
+    ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "RWF", ARCHYMEDES_FX_RATE: "1300",
     ...extraEnv,
   }});
   await p.waitFor(/›/, { timeoutMs: 30_000 });
@@ -80,7 +80,7 @@ describe("choosing a location under a real pty", () => {
 
     const second = spawnArchymedes({ cwd, args: [], env: {
       ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
-      ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_RWF_PER_USD: "1300",
+      ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "RWF", ARCHYMEDES_FX_RATE: "1300",
     }});
     const banner = await second.waitFor(/costs:/, { timeoutMs: 30_000 });
     expect(banner).toContain("RWF");
@@ -128,7 +128,7 @@ describe("choosing a location under a real pty", () => {
   it("keeps costs where they are when no rate is available to convert with", async () => {
     // Switching to a currency nothing can be converted into would leave the session running and
     // reporting nothing; staying put and saying so is the honest outcome.
-    const { p } = await boot({ ARCHYMEDES_FX_RWF_PER_USD: "" });
+    const { p } = await boot({ ARCHYMEDES_FX_RATE: "" });
     const mark = p.output().length;
     await setField(p, "ARCHYMEDES_COUNTRY", "rwanda");
     const seen = await p.waitFor(/No USD→RWF rate is available/, { timeoutMs: 20_000, since: mark });

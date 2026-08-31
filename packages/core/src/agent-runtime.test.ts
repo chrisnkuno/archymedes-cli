@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { agentMessagePromptParts, BoundedAgentRuntime, isRetryableProviderError, ProviderRequestError, providerFailureKind, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
-const prices = { inputRwfPerMillionTokens: 1_610, outputRwfPerMillionTokens: 9_660 };
+const prices = { inputRatePerMillion: 1_610, outputRatePerMillion: 9_660 };
 
 function harness(turns: AgentModelTurn[], tools: AgentTool[], approved = true, artifacts?: ToolResultArtifactStore) {
   const events: AgentRuntimeEvent[] = [];

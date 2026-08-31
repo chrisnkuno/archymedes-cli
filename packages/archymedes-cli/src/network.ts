@@ -4,7 +4,7 @@ import { hostOf } from "./endpoints";
  * Turns raw fetch/undici/SDK errors into one actionable sentence.
  *
  * The CLI used to print whatever the transport threw — `error fetch failed`, `getaddrinfo
- * ENOTFOUND api.circuitnotion.com`, `The operation was aborted` — which reads as "internet is
+ * ENOTFOUND api.example.com`, `The operation was aborted` — which reads as "internet is
  * broken" and tells the user nothing about which endpoint failed, why, or what to do about it.
  * This classifier owns that translation so every network surface (the turn loop, the FX lookup,
  * the update check, `archymedes --doctor`) reports the same way.
@@ -156,7 +156,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
       return {
         kind,
         message: `${purpose} returned 404 Not Found — the host is reachable, but the API route or selected model does not exist.`,
-        hint: "For CircuitNotion use a base URL ending in /v1, then choose a live model with `/model` or refresh `/models`. Run `archymedes --doctor` to verify the endpoint.",
+        hint: "For an OpenAI-compatible provider use a base URL ending in /v1, then choose a live model with `/model` or refresh `/models`. Run `archymedes --doctor` to verify the endpoint.",
       };
     case "authentication":
       return {

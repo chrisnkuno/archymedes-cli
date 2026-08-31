@@ -5,7 +5,7 @@ import type { KeypressEvent } from "./keybindings";
 import { visibleWidth } from "./markdown";
 
 const paint = { dim: (text: string) => text, cyan: (text: string) => text, green: (text: string) => text, yellow: (text: string) => text };
-const configured = { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", CIRCUITNOTION_API_KEY: "k" };
+const configured = { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", DEEPSEEK_API_KEY: "k" };
 const current = { provider: "anthropic" as const, model: "claude-sonnet-5" };
 const options = { current, price: () => "$2/$10 per Mtok", paint };
 
@@ -19,7 +19,7 @@ describe("the picker's rows", () => {
 
     expect(models.length).toBeGreaterThan(0);
     // Two unconfigured providers, plus the general settings row.
-    expect(settings).toHaveLength(3);
+    expect(settings).toHaveLength(8);
     expect(rows.at(-1)).toMatchObject({ kind: "settings" });
   });
 

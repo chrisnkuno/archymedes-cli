@@ -54,18 +54,18 @@ function utf8ByteLength(text: string): number {
 }
 
 export type ModelPriceCatalog = {
-  inputRwfPerMillionTokens: number;
-  outputRwfPerMillionTokens: number;
+  inputRatePerMillion: number;
+  outputRatePerMillion: number;
   /**
    * Rate for input tokens the provider served from its prompt cache, when it charges less for
    * them. Optional because it must be configured deliberately: assuming a discount that a provider
    * does not actually give would under-reserve every run and silently overspend the task cap.
    *
-   * Measured against CircuitNotion, a repeated prefix reports ~99% cached (2410 of 2424 tokens),
-   * so where a discount exists this is the difference between a roughly accurate cost and one that
-   * overstates by an order of magnitude on a long session.
+   * On a provider that caches, a repeated prompt prefix routinely reports ~99% cached, so where a
+   * discount exists this is the difference between a roughly accurate cost and one that overstates
+   * by an order of magnitude on a long session.
    */
-  cachedInputRwfPerMillionTokens?: number;
+  cachedInputRatePerMillion?: number;
   /** Whole-request surcharge used by models whose long-context tier starts at a fixed input size. */
   largeContext?: {
     aboveInputTokens: number;
@@ -75,31 +75,31 @@ export type ModelPriceCatalog = {
 };
 
 export type ModelCostEstimate = {
-  expectedRwf: number;
-  maximumRwf: number;
+  expectedCost: number;
+  maximumCost: number;
   expectedInputTokens: number;
   maximumInputTokens: number;
   maximumOutputTokens: number;
 };
 
 function assertRate(value: number, label: string): void {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer RWF rate`);
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer rate`);
 }
 
 function assertTokens(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`);
 }
 
-function costRwf(inputTokens: number, outputTokens: number, prices: ModelPriceCatalog): number {
+function computeCost(inputTokens: number, outputTokens: number, prices: ModelPriceCatalog): number {
   const tier = prices.largeContext && inputTokens > prices.largeContext.aboveInputTokens ? prices.largeContext : undefined;
   return Math.ceil((
-    inputTokens * prices.inputRwfPerMillionTokens * (tier?.inputMultiplier ?? 1)
-    + outputTokens * prices.outputRwfPerMillionTokens * (tier?.outputMultiplier ?? 1)
+    inputTokens * prices.inputRatePerMillion * (tier?.inputMultiplier ?? 1)
+    + outputTokens * prices.outputRatePerMillion * (tier?.outputMultiplier ?? 1)
   ) / 1_000_000);
 }
 
 function effectiveOutputRate(inputTokens: number, prices: ModelPriceCatalog): number {
-  return prices.outputRwfPerMillionTokens * (
+  return prices.outputRatePerMillion * (
     prices.largeContext && inputTokens > prices.largeContext.aboveInputTokens ? prices.largeContext.outputMultiplier : 1
   );
 }
@@ -151,26 +151,26 @@ export function tokenEstimateFrom(totals: PartTotals): TokenEstimate {
 }
 
 /** Largest affordable output allowance from an estimate that has already been measured. */
-export function affordableOutputTokensFor(estimate: TokenEstimate, requestedOutputTokens: number, approvedRwf: number, prices: ModelPriceCatalog): number {
-  assertRate(prices.inputRwfPerMillionTokens, "inputRwfPerMillionTokens");
-  assertRate(prices.outputRwfPerMillionTokens, "outputRwfPerMillionTokens");
+export function affordableOutputTokensFor(estimate: TokenEstimate, requestedOutputTokens: number, approvedCost: number, prices: ModelPriceCatalog): number {
+  assertRate(prices.inputRatePerMillion, "inputRatePerMillion");
+  assertRate(prices.outputRatePerMillion, "outputRatePerMillion");
   assertTokens(requestedOutputTokens, "requestedOutputTokens");
-  assertTokens(approvedRwf, "approvedRwf");
-  const availableForOutput = approvedRwf - costRwf(estimate.maximumInputTokens, 0, prices);
+  assertTokens(approvedCost, "approvedCost");
+  const availableForOutput = approvedCost - computeCost(estimate.maximumInputTokens, 0, prices);
   if (availableForOutput <= 0) return 0;
   const affordable = Math.floor((availableForOutput * 1_000_000) / effectiveOutputRate(estimate.maximumInputTokens, prices));
   return Math.max(0, Math.min(requestedOutputTokens, affordable));
 }
 
 export function estimateModelCost(parts: string[], maximumOutputTokens: number, prices: ModelPriceCatalog): ModelCostEstimate {
-  assertRate(prices.inputRwfPerMillionTokens, "inputRwfPerMillionTokens");
-  assertRate(prices.outputRwfPerMillionTokens, "outputRwfPerMillionTokens");
+  assertRate(prices.inputRatePerMillion, "inputRatePerMillion");
+  assertRate(prices.outputRatePerMillion, "outputRatePerMillion");
   assertTokens(maximumOutputTokens, "maximumOutputTokens");
   const tokens = approximateInputTokens(parts);
   const expectedOutputTokens = Math.ceil(maximumOutputTokens * 0.55);
   return {
-    expectedRwf: costRwf(tokens.expectedInputTokens, expectedOutputTokens, prices),
-    maximumRwf: costRwf(tokens.maximumInputTokens, maximumOutputTokens, prices),
+    expectedCost: computeCost(tokens.expectedInputTokens, expectedOutputTokens, prices),
+    maximumCost: computeCost(tokens.maximumInputTokens, maximumOutputTokens, prices),
     ...tokens,
     maximumOutputTokens,
   };
@@ -181,11 +181,11 @@ export function estimateModelCost(parts: string[], maximumOutputTokens: number, 
  * Returning zero means the caller must not contact the provider: discovering an overrun after the
  * response arrives is accounting, not enforcement.
  */
-export function affordableOutputTokens(parts: string[], requestedOutputTokens: number, approvedRwf: number, prices: ModelPriceCatalog): number {
+export function affordableOutputTokens(parts: string[], requestedOutputTokens: number, approvedCost: number, prices: ModelPriceCatalog): number {
   assertTokens(requestedOutputTokens, "requestedOutputTokens");
-  assertTokens(approvedRwf, "approvedRwf");
-  const inputCost = estimateModelCost(parts, 0, prices).maximumRwf;
-  const availableForOutput = approvedRwf - inputCost;
+  assertTokens(approvedCost, "approvedCost");
+  const inputCost = estimateModelCost(parts, 0, prices).maximumCost;
+  const availableForOutput = approvedCost - inputCost;
   if (availableForOutput <= 0) return 0;
   const estimate = approximateInputTokens(parts);
   const affordable = Math.floor((availableForOutput * 1_000_000) / effectiveOutputRate(estimate.maximumInputTokens, prices));
@@ -203,10 +203,10 @@ export function priceUsageWithCache(
   usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
   prices: ModelPriceCatalog,
 ): number {
-  if (prices.cachedInputRwfPerMillionTokens === undefined) {
+  if (prices.cachedInputRatePerMillion === undefined) {
     return priceActualModelUsage(usage.inputTokens, usage.outputTokens, prices);
   }
-  assertRate(prices.cachedInputRwfPerMillionTokens, "cachedInputRwfPerMillionTokens");
+  assertRate(prices.cachedInputRatePerMillion, "cachedInputRatePerMillion");
   assertTokens(usage.cachedInputTokens, "cachedInputTokens");
   // Providers report cached tokens as a subset of input tokens, not in addition to them.
   const uncached = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
@@ -214,18 +214,18 @@ export function priceUsageWithCache(
   const inputMultiplier = tier?.inputMultiplier ?? 1;
   const outputMultiplier = tier?.outputMultiplier ?? 1;
   const full = Math.ceil((
-    uncached * prices.inputRwfPerMillionTokens * inputMultiplier
-    + usage.outputTokens * prices.outputRwfPerMillionTokens * outputMultiplier
+    uncached * prices.inputRatePerMillion * inputMultiplier
+    + usage.outputTokens * prices.outputRatePerMillion * outputMultiplier
   ) / 1_000_000);
-  return full + Math.round((usage.cachedInputTokens * prices.cachedInputRwfPerMillionTokens * inputMultiplier) / 1_000_000);
+  return full + Math.round((usage.cachedInputTokens * prices.cachedInputRatePerMillion * inputMultiplier) / 1_000_000);
 }
 
 export function priceActualModelUsage(inputTokens: number, outputTokens: number, prices: ModelPriceCatalog): number {
-  assertRate(prices.inputRwfPerMillionTokens, "inputRwfPerMillionTokens");
-  assertRate(prices.outputRwfPerMillionTokens, "outputRwfPerMillionTokens");
+  assertRate(prices.inputRatePerMillion, "inputRatePerMillion");
+  assertRate(prices.outputRatePerMillion, "outputRatePerMillion");
   assertTokens(inputTokens, "inputTokens");
   assertTokens(outputTokens, "outputTokens");
-  return costRwf(inputTokens, outputTokens, prices);
+  return computeCost(inputTokens, outputTokens, prices);
 }
 
 /**
@@ -235,9 +235,9 @@ export function priceActualModelUsage(inputTokens: number, outputTokens: number,
  * cost ledger, for one — does not import every provider adapter in the project to get it.
  */
 export function modelPricesFromEnvironment(environment: {
-  MODEL_INPUT_RWF_PER_MILLION?: string;
-  MODEL_OUTPUT_RWF_PER_MILLION?: string;
-  MODEL_CACHED_INPUT_RWF_PER_MILLION?: string;
+  MODEL_INPUT_PER_MILLION?: string;
+  MODEL_OUTPUT_PER_MILLION?: string;
+  MODEL_CACHED_INPUT_PER_MILLION?: string;
 }): ModelPriceCatalog | undefined {
   const parse = (value: string | undefined) => {
     if (value === undefined || value.trim() === "") return undefined;
@@ -245,9 +245,9 @@ export function modelPricesFromEnvironment(environment: {
     if (!Number.isInteger(parsed) || parsed <= 0) throw new Error("Model price rates must be positive integers");
     return parsed;
   };
-  const inputRwfPerMillionTokens = parse(environment.MODEL_INPUT_RWF_PER_MILLION);
-  const outputRwfPerMillionTokens = parse(environment.MODEL_OUTPUT_RWF_PER_MILLION);
-  if (inputRwfPerMillionTokens === undefined || outputRwfPerMillionTokens === undefined) return undefined;
-  const cachedInputRwfPerMillionTokens = parse(environment.MODEL_CACHED_INPUT_RWF_PER_MILLION);
-  return { inputRwfPerMillionTokens, outputRwfPerMillionTokens, ...(cachedInputRwfPerMillionTokens !== undefined ? { cachedInputRwfPerMillionTokens } : {}) };
+  const inputRatePerMillion = parse(environment.MODEL_INPUT_PER_MILLION);
+  const outputRatePerMillion = parse(environment.MODEL_OUTPUT_PER_MILLION);
+  if (inputRatePerMillion === undefined || outputRatePerMillion === undefined) return undefined;
+  const cachedInputRatePerMillion = parse(environment.MODEL_CACHED_INPUT_PER_MILLION);
+  return { inputRatePerMillion, outputRatePerMillion, ...(cachedInputRatePerMillion !== undefined ? { cachedInputRatePerMillion } : {}) };
 }

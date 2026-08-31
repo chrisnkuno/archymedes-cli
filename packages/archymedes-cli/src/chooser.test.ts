@@ -336,7 +336,7 @@ describe("every menu obeys the same rules", () => {
   }));
 
   it("never draws a row wider than the terminal", () => {
-    const pickerRows = buildPickerRows(buildModelCatalog({ ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", CIRCUITNOTION_API_KEY: "k" }, "2026-08-10"));
+    const pickerRows = buildPickerRows(buildModelCatalog({ ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", DEEPSEEK_API_KEY: "k" }, "2026-08-10"));
     const paletteMatches = Array.from({ length: 30 }, (_unused, index) => ({
       command: `/option-${index}-with-a-fairly-long-command`,
       description: "a description long enough to run past the edge of a narrow terminal",

@@ -8,7 +8,7 @@ describe("provider matrix", () => {
   it("offers only providers whose credentials are actually present, plus Ollama which needs none", () => {
     expect(availableProviders({}).map((spec) => spec.id)).toEqual(["ollama"]);
     expect(availableProviders({ ANTHROPIC_API_KEY: "sk-ant" }).map((spec) => spec.id)).toEqual(["anthropic", "ollama"]);
-    expect(availableProviders({ ANTHROPIC_API_KEY: "k", CIRCUITNOTION_API_KEY: "k" }).map((spec) => spec.id)).toEqual(["anthropic", "circuitnotion", "ollama"]);
+    expect(availableProviders({ ANTHROPIC_API_KEY: "k", DEEPSEEK_API_KEY: "k" }).map((spec) => spec.id)).toEqual(["anthropic", "deepseek", "ollama"]);
   });
 
   it("names the provider the user asked for when its credentials are missing", () => {
@@ -60,20 +60,35 @@ describe("provider matrix", () => {
     expect(resolved.prices?.inputPerMillion).toBe(2_000_000);
   });
 
-  it("actually constructs OpenAI and CircuitNotion's own turn provider, not just Anthropic's", () => {
-    // Every other test in this file resolves against Anthropic; without this, the OpenAI and
-    // CircuitNotion entries in PROVIDERS could have a construction bug (a typo'd env var, a
-    // wrong default base URL) that nothing would ever catch.
+  it("constructs the OpenAI-compatible turn providers, not just Anthropic's", () => {
+    // Every other test in this file resolves against Anthropic; without this, the OpenAI-compatible
+    // entries in PROVIDERS could have a construction bug (a typo'd env var, a wrong default base
+    // URL) that nothing would ever catch.
     const openai = resolveProvider({ OPENAI_API_KEY: "sk-openai" }, { provider: "openai" });
     expect("error" in openai).toBe(false);
     if (!("error" in openai)) expect(typeof openai.provider.complete).toBe("function");
 
-    const circuitnotion = resolveProvider({ CIRCUITNOTION_API_KEY: "cn-key" }, { provider: "circuitnotion" });
-    expect("error" in circuitnotion).toBe(false);
-    if (!("error" in circuitnotion)) {
-      expect(circuitnotion.model).toBe("circuit-2-turbo");
-      expect(typeof circuitnotion.provider.complete).toBe("function");
+    for (const [provider, key, model] of [
+      ["google", "GOOGLE_API_KEY", "gemini-2.5-pro"],
+      ["xai", "XAI_API_KEY", "grok-4"],
+      ["deepseek", "DEEPSEEK_API_KEY", "deepseek-chat"],
+      ["mistral", "MISTRAL_API_KEY", "mistral-large-latest"],
+      ["groq", "GROQ_API_KEY", "llama-3.3-70b-versatile"],
+    ] as const) {
+      const resolved = resolveProvider({ [key]: "k" }, { provider });
+      expect("error" in resolved, provider).toBe(false);
+      if (!("error" in resolved)) {
+        expect(resolved.model).toBe(model);
+        expect(typeof resolved.provider.complete).toBe("function");
+      }
     }
+
+    const compatible = resolveProvider(
+      { OPENAI_COMPATIBLE_API_KEY: "k", OPENAI_COMPATIBLE_BASE_URL: "https://gw.example/v1", OPENAI_COMPATIBLE_MODEL: "house-model" },
+      { provider: "openai-compatible" },
+    );
+    expect("error" in compatible).toBe(false);
+    if (!("error" in compatible)) expect(compatible.model).toBe("house-model");
   });
 
   it("takes the model from an explicit flag, then the environment, then the default", () => {

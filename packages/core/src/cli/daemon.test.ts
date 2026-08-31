@@ -7,7 +7,7 @@ import { ArchymedesAgent } from "./agent";
 import { ArchymedesSessionDaemon, type DaemonAgentFactoryContext, type DaemonNotification } from "./daemon";
 import { loadSession } from "./session";
 
-const prices = { inputRwfPerMillionTokens: 2_000, outputRwfPerMillionTokens: 8_000 };
+const prices = { inputRatePerMillion: 2_000, outputRatePerMillion: 8_000 };
 const usage = { inputTokens: 10, outputTokens: 5, totalTokens: 15, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 let root: string;
 let daemon: ArchymedesSessionDaemon;

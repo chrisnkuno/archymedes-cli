@@ -1,5 +1,4 @@
-import type { ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { CIRCUITNOTION_DEFAULT_BASE_URL } from "@archymedes/core/providers/circuitnotion-http";
+import { PROVIDER_IDS, PROVIDER_INFO, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 
 /**
  * The network endpoints Archymedes depends on, in one place.
@@ -30,42 +29,40 @@ export type ProviderEndpoint = {
   configured: boolean;
 };
 
+/** The default API host for each provider, before any `<PROVIDER>_BASE_URL` override. */
+const DEFAULT_BASE_URL: Record<ProviderId, string> = {
+  anthropic: "https://api.anthropic.com",
+  openai: "https://api.openai.com/v1",
+  google: "https://generativelanguage.googleapis.com/v1beta/openai",
+  xai: "https://api.x.ai/v1",
+  deepseek: "https://api.deepseek.com/v1",
+  mistral: "https://api.mistral.ai/v1",
+  groq: "https://api.groq.com/openai/v1",
+  ollama: "http://localhost:11434/v1",
+  "openai-compatible": "",
+};
+
 export function providerBaseUrl(environment: ProviderEnvironment, provider: ProviderId): string {
-  switch (provider) {
-    case "circuitnotion":
-      return environment.CIRCUITNOTION_BASE_URL?.trim() || CIRCUITNOTION_DEFAULT_BASE_URL;
-    case "openai":
-      return environment.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1";
-    case "anthropic":
-      return environment.ANTHROPIC_BASE_URL?.trim() || "https://api.anthropic.com";
-    case "ollama":
-      return environment.OLLAMA_BASE_URL?.trim() || "http://localhost:11434/v1";
-  }
+  const override = environment[`${providerEnvPrefix(provider)}_BASE_URL`]?.trim();
+  return override || DEFAULT_BASE_URL[provider];
 }
 
-const PROVIDER_LABELS: Record<ProviderId, string> = {
-  circuitnotion: "CircuitNotion",
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  ollama: "Ollama (local)",
-};
-
-/** Empty for a provider that needs no key at all — `providerEndpoints` reads that as always configured. */
-const PROVIDER_KEYS: Record<ProviderId, string> = {
-  circuitnotion: "CIRCUITNOTION_API_KEY",
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-  ollama: "",
-};
+/** The single API-key variable a provider needs, or "" for one (Ollama) that needs none. */
+function providerKeyName(provider: ProviderId): string {
+  return PROVIDER_INFO[provider].requires.find((name) => name.endsWith("_API_KEY")) ?? "";
+}
 
 /** Every model provider's API endpoint, with the base-URL override applied when set. */
 export function providerEndpoints(environment: ProviderEnvironment): ProviderEndpoint[] {
-  return (["circuitnotion", "openai", "anthropic", "ollama"] as const).map((id) => ({
-    id,
-    label: PROVIDER_LABELS[id],
-    baseUrl: providerBaseUrl(environment, id),
-    configured: PROVIDER_KEYS[id] === "" ? true : Boolean(environment[PROVIDER_KEYS[id]]?.trim()),
-  }));
+  return PROVIDER_IDS.map((id) => {
+    const keyName = providerKeyName(id);
+    return {
+      id,
+      label: PROVIDER_INFO[id].label,
+      baseUrl: providerBaseUrl(environment, id),
+      configured: keyName === "" ? true : Boolean(environment[keyName]?.trim()),
+    };
+  });
 }
 
 /** The host part of a URL, for error messages that should name what failed. */

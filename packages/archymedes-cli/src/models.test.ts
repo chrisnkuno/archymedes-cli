@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildModelCatalog, describePrice, matchModelQuery, modelsForProvider, parseModelCommand } from "./models";
 
 const paint = { dim: (text: string) => text, cyan: (text: string) => text, green: (text: string) => text, yellow: (text: string) => text };
-const configured = { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", CIRCUITNOTION_API_KEY: "k" };
+const configured = { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", DEEPSEEK_API_KEY: "k" };
 
 describe("parsing the model command", () => {
   it("reads every form a user actually types", () => {
@@ -24,7 +24,7 @@ describe("parsing the model command", () => {
 
   it("keeps provider names reserved, so /model openai still means that provider's default", () => {
     expect(parseModelCommand("/model openai")).toEqual({ kind: "explicit", provider: "openai", model: undefined });
-    expect(parseModelCommand("/model circuitnotion")).toEqual({ kind: "explicit", provider: "circuitnotion", model: undefined });
+    expect(parseModelCommand("/model deepseek")).toEqual({ kind: "explicit", provider: "deepseek", model: undefined });
   });
 
   it("is not confused by commands that merely start the same way", () => {
@@ -66,14 +66,14 @@ describe("the model catalog", () => {
     // A menu whose entries fail on selection is worse than a shorter menu.
     const { choices, unconfigured } = buildModelCatalog({ ANTHROPIC_API_KEY: "k" });
     expect(choices.every((choice) => choice.provider === "anthropic" || choice.provider === "ollama")).toBe(true);
-    expect(unconfigured.map((entry) => entry.provider).sort()).toEqual(["circuitnotion", "openai"]);
+    expect(unconfigured.map((entry) => entry.provider).sort()).toEqual(["deepseek", "google", "groq", "mistral", "openai", "openai-compatible", "xai"]);
     expect(unconfigured.find((entry) => entry.provider === "openai")?.missing).toEqual(["OPENAI_API_KEY"]);
   });
 
   it("still offers Ollama's local model when nothing else is configured", () => {
     const catalog = buildModelCatalog({});
     expect(catalog.choices.map((choice) => choice.provider)).toEqual(["ollama"]);
-    expect(catalog.unconfigured).toHaveLength(3);
+    expect(catalog.unconfigured).toHaveLength(8);
   });
 
   it("carries the catalog price, and admits when there is none", () => {

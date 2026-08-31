@@ -1,10 +1,10 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { controlLabel, resolveControlLanguage } from "./i18n";
+import { CONTROL_LANGUAGES, controlLabel, resolveControlLanguage } from "./i18n";
 import { SUPPORTED_COUNTRIES, currencyForCountry, normalizeCountryCode } from "./local-currency";
 import { isCurrency } from "@archymedes/core/money";
-import type { ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { PROVIDER_IDS, PROVIDER_INFO, isProviderId, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 
 /**
  * A value that can be picked from a list, with the human name shown beside the stored code.
@@ -17,6 +17,7 @@ export type SettingChoice = { value: string; label: string; description?: string
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "English", zh: "中文", hi: "हिन्दी", es: "Español", fr: "Français",
   ar: "العربية", bn: "বাংলা", pt: "Português", ru: "Русский", ur: "اردو",
+  ja: "日本語", ko: "한국어", de: "Deutsch", id: "Bahasa Indonesia", vi: "Tiếng Việt", tr: "Türkçe",
 };
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -28,7 +29,8 @@ const COUNTRY_NAMES: Record<string, string> = {
   AU: "Australia", NZ: "New Zealand", BR: "Brazil", MX: "Mexico",
 };
 
-const LANGUAGE_CHOICES: readonly SettingChoice[] = Object.entries(LANGUAGE_NAMES).map(([value, label]) => ({ value, label }));
+const CONTROL_LANGUAGE_CODES = new Set(Object.keys(CONTROL_LANGUAGES));
+const LANGUAGE_CHOICES: readonly SettingChoice[] = Object.keys(CONTROL_LANGUAGES).map((value) => ({ value, label: LANGUAGE_NAMES[value] ?? value }));
 
 /**
  * Countries, named, each showing the currency choosing it produces.
@@ -54,12 +56,7 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
-const PROVIDER_CHOICES: readonly SettingChoice[] = [
-  { value: "anthropic", label: "Anthropic" },
-  { value: "openai", label: "OpenAI" },
-  { value: "circuitnotion", label: "CircuitNotion" },
-  { value: "ollama", label: "Ollama (local)" },
-];
+const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label }));
 
 /**
  * Settings Archymedes may persist. Unknown JSON keys are ignored on read.
@@ -81,10 +78,24 @@ export const SETTING_FIELDS = [
   { key: "OPENAI_API_KEY", label: "OpenAI API key", secret: true },
   { key: "OPENAI_BASE_URL", label: "OpenAI-compatible base URL", url: true },
   { key: "OPENAI_MODEL", label: "OpenAI model" },
-  { key: "CIRCUITNOTION_API_KEY", label: "CircuitNotion API key", secret: true },
-  { key: "CIRCUITNOTION_BASE_URL", label: "CircuitNotion base URL", url: true },
-  { key: "CIRCUITNOTION_RELAY_SECRET", label: "CircuitNotion relay secret", secret: true },
-  { key: "CIRCUITNOTION_MODEL", label: "CircuitNotion model" },
+  { key: "GOOGLE_API_KEY", label: "Google Gemini API key", secret: true },
+  { key: "GOOGLE_BASE_URL", label: "Google Gemini base URL", url: true },
+  { key: "GOOGLE_MODEL", label: "Google Gemini model" },
+  { key: "XAI_API_KEY", label: "xAI (Grok) API key", secret: true },
+  { key: "XAI_BASE_URL", label: "xAI base URL", url: true },
+  { key: "XAI_MODEL", label: "xAI (Grok) model" },
+  { key: "DEEPSEEK_API_KEY", label: "DeepSeek API key", secret: true },
+  { key: "DEEPSEEK_BASE_URL", label: "DeepSeek base URL", url: true },
+  { key: "DEEPSEEK_MODEL", label: "DeepSeek model" },
+  { key: "MISTRAL_API_KEY", label: "Mistral API key", secret: true },
+  { key: "MISTRAL_BASE_URL", label: "Mistral base URL", url: true },
+  { key: "MISTRAL_MODEL", label: "Mistral model" },
+  { key: "GROQ_API_KEY", label: "Groq API key", secret: true },
+  { key: "GROQ_BASE_URL", label: "Groq base URL", url: true },
+  { key: "GROQ_MODEL", label: "Groq model" },
+  { key: "OPENAI_COMPATIBLE_API_KEY", label: "OpenAI-compatible API key", secret: true },
+  { key: "OPENAI_COMPATIBLE_BASE_URL", label: "OpenAI-compatible base URL", url: true },
+  { key: "OPENAI_COMPATIBLE_MODEL", label: "OpenAI-compatible model" },
   { key: "OLLAMA_BASE_URL", label: "Ollama base URL (default http://localhost:11434/v1)", url: true },
   { key: "OLLAMA_MODEL", label: "Ollama model" },
   { key: "E2B_API_KEY", label: "E2B API key", secret: true },
@@ -99,15 +110,13 @@ export const SETTING_FIELDS = [
   { key: "MODEL_CACHED_INPUT_PER_MILLION", label: "Cached input price per million tokens" },
   { key: "MODEL_PRICE_CURRENCY", label: "Model price currency" },
   { key: "MODEL_PRICE_MODEL", label: "Model the price override applies to" },
-  // Both or neither: `/pay` refuses to run half-configured rather than failing at the moment a
-  // person is trying to hand over money.
   // Three states rather than a switch: looking and installing are different decisions, and the one
   // people want to make separately is whether Archymedes may replace itself without being asked.
   { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
-  { key: "ARCHYMEDES_BILLING_URL", label: "Billing service URL (enables /pay)", url: true },
-  { key: "ARCHYMEDES_BILLING_KEY", label: "Billing service key", secret: true },
-  { key: "ARCHYMEDES_ACCOUNT_BALANCE_RWF", label: "Account balance in RWF — track locally from token costs instead of the balance endpoint" },
-  { key: "ARCHYMEDES_LOW_BALANCE_RWF", label: "Low-balance alert threshold in RWF (default 2000)" },
+  { key: "ARCHYMEDES_ACCOUNT_BALANCE", label: "Tracked spend balance — drawn down by each turn's measured cost" },
+  { key: "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY", label: "Currency of the tracked balance (defaults to the display currency)" },
+  { key: "ARCHYMEDES_LOW_BALANCE", label: "Low-balance alert threshold, in the balance currency" },
+  { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
   // Off by default, and the label says what it costs: the deterministic suggestions are free and
   // instant, and this buys two extra project-specific ones for a small model call per turn. A
@@ -189,20 +198,20 @@ export function validateSetting(key: SettingKey, raw: string): string {
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount < 0) throw new Error("Price must be a non-negative number.");
   }
-  if (key === "ARCHYMEDES_LOW_BALANCE_RWF" || key === "ARCHYMEDES_ACCOUNT_BALANCE_RWF") {
+  if (key === "ARCHYMEDES_LOW_BALANCE" || key === "ARCHYMEDES_CRITICAL_BALANCE" || key === "ARCHYMEDES_ACCOUNT_BALANCE") {
     const amount = Number(value);
-    if (!Number.isSafeInteger(amount) || amount < 0) {
-      throw new Error(key === "ARCHYMEDES_LOW_BALANCE_RWF"
-        ? "Low-balance threshold must be a non-negative whole number of RWF."
-        : "Account balance must be a non-negative whole number of RWF.");
-    }
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Must be a non-negative number.");
   }
+  if (key === "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
   if (key === "MODEL_PRICE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
-  if (key === "ARCHYMEDES_LANGUAGE" && !/^(en|zh|hi|es|fr|ar|bn|pt|ru|ur)$/i.test(value)) throw new Error("Choose en, zh, hi, es, fr, ar, bn, pt, ru, or ur.");
-  if (key === "ARCHYMEDES_PROVIDER" && !/^(anthropic|openai|circuitnotion)$/i.test(value)) throw new Error("Choose anthropic, openai, or circuitnotion.");
+  if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
+  if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase())) throw new Error(`Choose one of: ${PROVIDER_IDS.join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
-  if (key === "ARCHYMEDES_FALLBACK_MODEL" && value.toLowerCase() !== "ask" && !/^(anthropic|openai|circuitnotion|ollama)[:/][^\s]+$/i.test(value)) {
-    throw new Error("Choose ask, or enter an explicit provider:model such as openai:gpt-5.4-mini.");
+  if (key === "ARCHYMEDES_FALLBACK_MODEL" && value.toLowerCase() !== "ask") {
+    const match = /^([a-z-]+)[:/]\S+$/i.exec(value);
+    if (!match || !isProviderId(match[1].toLowerCase())) {
+      throw new Error("Choose ask, or enter an explicit provider:model such as openai:gpt-5.4-mini.");
+    }
   }
   if (key === "ARCHYMEDES_COUNTRY") {
     const country = normalizeCountryCode(value);
@@ -250,8 +259,10 @@ export type SettingsPrompts = {
  * position 2 of 24, between a control-language selector and a CircuitNotion relay secret. Every
  * other setting has a sensible default and can be changed later from `/settings`.
  */
-const PROVIDER_KEY_FIELDS = SETTING_FIELDS.filter((field) =>
-  field.key === "ANTHROPIC_API_KEY" || field.key === "OPENAI_API_KEY" || field.key === "CIRCUITNOTION_API_KEY");
+const PROVIDER_API_KEY_NAMES = new Set(
+  PROVIDER_IDS.flatMap((id) => PROVIDER_INFO[id].requires).filter((name) => name.endsWith("_API_KEY")),
+);
+const PROVIDER_KEY_FIELDS = SETTING_FIELDS.filter((field) => PROVIDER_API_KEY_NAMES.has(field.key));
 
 export type SettingsMenuOptions = {
   /**
@@ -286,7 +297,12 @@ export type SettingsMenuOptions = {
 export const MODEL_FIELD_PROVIDER: Partial<Record<SettingKey, ProviderId>> = {
   ANTHROPIC_MODEL: "anthropic",
   OPENAI_MODEL: "openai",
-  CIRCUITNOTION_MODEL: "circuitnotion",
+  GOOGLE_MODEL: "google",
+  XAI_MODEL: "xai",
+  DEEPSEEK_MODEL: "deepseek",
+  MISTRAL_MODEL: "mistral",
+  GROQ_MODEL: "groq",
+  OPENAI_COMPATIBLE_MODEL: "openai-compatible",
   OLLAMA_MODEL: "ollama",
 };
 
