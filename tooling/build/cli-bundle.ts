@@ -13,23 +13,23 @@ import path from "node:path";
 /**
  * Both files are `.mjs`, and that is not cosmetic.
  *
- * `packages/nova-cli/package.json` declares `"type": "module"` while the repository root does not,
+ * `packages/archymedes-cli/package.json` declares `"type": "module"` while the repository root does not,
  * so a `.js` file means ES modules in one output directory and CommonJS in the other — and this
  * launcher is emitted to both. A CommonJS launcher ran fine from the root build and died in the
  * published one with `require is not defined in ES module scope`, which is the shipped artifact and
  * the only one that matters. `.mjs` is ESM wherever it lands, so the two builds cannot disagree.
  */
-const LAUNCHER_NAME = "nova.mjs";
-const MAIN_NAME = "nova-main.mjs";
+const LAUNCHER_NAME = "archymedes.mjs";
+const MAIN_NAME = "archymedes-main.mjs";
 /** The bundler writes here first; the launcher then replaces it. */
-const BUNDLE_NAME = "nova.js";
+const BUNDLE_NAME = "archymedes.js";
 
 /**
  * The published entry point, kept deliberately tiny.
  *
- * V8 spends roughly a third of Nova's startup compiling the ~3 MB bundle, and repeats that work on
+ * V8 spends roughly a third of Archymedes's startup compiling the ~3 MB bundle, and repeats that work on
  * every invocation. `enableCompileCache()` makes it write the compiled bytecode once and reuse it —
- * measured at about 14% off `nova --version` and 18% off a whole turn.
+ * measured at about 14% off `archymedes --version` and 18% off a whole turn.
  *
  * It must live in a separate file because the call only affects modules loaded *after* it: a line
  * at the top of the bundle would be compiled as part of the very bundle it was meant to cache. So
@@ -45,10 +45,10 @@ import { enableCompileCache } from "node:module";
 import path from "node:path";
 
 try {
-  enableCompileCache(process.env.NOVA_COMPILE_CACHE_DIR || undefined);
+  enableCompileCache(process.env.ARCHYMEDES_COMPILE_CACHE_DIR || undefined);
 } catch {}
 
-// argv[1] must name the module that is really executing. nova.ts decides whether to run main() by
+// argv[1] must name the module that is really executing. archymedes.ts decides whether to run main() by
 // comparing its own import.meta.url against it, so leaving argv[1] pointing at this launcher makes
 // the CLI import cleanly, run nothing, and exit 0 — the exact silent no-op its own comment warns
 // about for symlinked installs. Rewriting it keeps that check true rather than adding a second way
@@ -61,7 +61,7 @@ await import("./${MAIN_NAME}");
 `;
 
 /**
- * Rewrites a freshly bundled `nova.js` into the launcher plus `nova-main.mjs`.
+ * Rewrites a freshly bundled `archymedes.js` into the launcher plus `archymedes-main.mjs`.
  *
  * The `.mjs` extension is load-bearing: the bundle is ES modules, and without it Node has to guess
  * from a package.json that is not there, warns about it, and reparses the whole file — a real cost

@@ -19,9 +19,9 @@ import { fileURLToPath } from "node:url";
 // Resolved from this file rather than the working directory: npm runs lifecycle scripts with the
 // package as cwd, so anything relative breaks the moment `prepublishOnly` invokes it.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CORE = path.join(ROOT, "packages/agent-core");
-const CLI = path.join(ROOT, "packages/nova-cli");
-const DEFENDER_KNOWLEDGE = path.join(ROOT, "packages", "nova-state", "defender-knowledge");
+const CORE = path.join(ROOT, "packages/core");
+const CLI = path.join(ROOT, "packages/archymedes-cli");
+const DEFENDER_KNOWLEDGE = path.join(ROOT, "packages", "archymedes-state", "defender-knowledge");
 const TSC = path.join(ROOT, "node_modules", "typescript", "bin", "tsc");
 
 declare const Bun: {
@@ -71,18 +71,18 @@ if (!coreOnly) await fs.rm(path.join(CLI, "dist"), { recursive: true, force: tru
 // `.bin/tsc` POSIX shim used previously does not.
 await run([process.execPath, TSC, "-p", "tsconfig.build.json"], CORE);
 const rewritten = await addExtensions(path.join(CORE, "dist"));
-await fs.cp(DEFENDER_KNOWLEDGE, path.join(CORE, "dist", "nova-cli", "defender-knowledge"), { recursive: true });
-console.log(`agent-core: emitted modules and types, rewrote ${rewritten} import specifiers`);
+await fs.cp(DEFENDER_KNOWLEDGE, path.join(CORE, "dist", "cli", "defender-knowledge"), { recursive: true });
+console.log(`core: emitted modules and types, rewrote ${rewritten} import specifiers`);
 
 // 2. CLI: one self-contained executable.
 if (coreOnly) process.exit(0);
 const built = await Bun.build({
-  entrypoints: [path.join(CLI, "src", "nova.ts")],
+  entrypoints: [path.join(CLI, "src", "archymedes.ts")],
   target: "node",
   outdir: path.join(CLI, "dist"),
   // Code splitting, and it is not cosmetic. Without it Bun hoists every dynamically imported
   // subtree into the entry file, so `await import("./providers/factory")` bought nothing: the
-  // OpenAI, Anthropic and zod runtimes all executed on `nova --help`. Measured on the instrumented
+  // OpenAI, Anthropic and zod runtimes all executed on `archymedes --help`. Measured on the instrumented
   // bundle, 510 of 755 module sections ran before the prompt could be drawn. Splitting moves the
   // provider subtree into its own chunk that is loaded only when a model is actually constructed —
   // entry 3.90 MB -> 0.94 MB, and `--help` from 205ms to 110ms with the compile cache still on.
@@ -91,9 +91,9 @@ const built = await Bun.build({
   // `.js` chunk would be read as CommonJS by Node and fail the moment the ESM entry imported it.
   // The same trap the launcher's own comment describes, one level down.
   splitting: true,
-  naming: { entry: "nova.js", chunk: "[name]-[hash].mjs" },
+  naming: { entry: "archymedes.js", chunk: "[name]-[hash].mjs" },
   // TermUI stays outside the bundle on purpose. The workspace screen is reached through a dynamic
-  // import, and inlining a 5 MB framework would put its parse cost back on every `nova --version`
+  // import, and inlining a 5 MB framework would put its parse cost back on every `archymedes --version`
   // — the startup path that has no screen and never will. Declared in `dependencies`, so npm has
   // installed it beside the bundle by the time anyone opens the workspace.
   external: ["@termuijs/core", "@termuijs/jsx", "@termuijs/widgets"],
@@ -106,4 +106,4 @@ if (!built.success) {
 // replaced, and indexed without putting the full corpus in every model request.
 await fs.cp(DEFENDER_KNOWLEDGE, path.join(CLI, "dist", "defender-knowledge"), { recursive: true });
 const { launcher, main, bytes } = await emitCliBundle(path.join(CLI, "dist"));
-console.log(`nova-cli: built ${launcher} + ${path.basename(main)} (${(bytes / 1_000_000).toFixed(2)} MB)`);
+console.log(`archymedes-cli: built ${launcher} + ${path.basename(main)} (${(bytes / 1_000_000).toFixed(2)} MB)`);

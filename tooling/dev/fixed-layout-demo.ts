@@ -7,7 +7,7 @@
  * still while output arrives, or whether the wheel overshoots. Those are the questions this answers,
  * and it answers them in the terminal the user actually has.
  *
- * Deliberately not part of the CLI. Nova's prompt still uses the flow layout, and wiring this in
+ * Deliberately not part of the CLI. Archymedes's prompt still uses the flow layout, and wiring this in
  * means replacing readline with raw-mode input for the composer — a change worth making only after
  * someone has decided they want this. Until then, a script that borrows the same modules proves the
  * behaviour without touching the thing people rely on.
@@ -28,8 +28,8 @@ import {
   stepSearch,
   transcriptText,
   type FixedLayoutState,
-} from "../../packages/nova-cli/src/fixed-layout";
-import { FixedScreen, decodeFixedKey, fixedStatusLine, openInPager } from "../../packages/nova-cli/src/fixed-screen";
+} from "../../packages/archymedes-cli/src/fixed-layout";
+import { FixedScreen, decodeFixedKey, fixedStatusLine, openInPager } from "../../packages/archymedes-cli/src/fixed-screen";
 
 const argument = (name: string): string | undefined => {
   const index = process.argv.indexOf(name);
@@ -47,7 +47,7 @@ const quiet = process.argv.includes("--quiet");
 /** Content with enough shape that scrolling and searching have something to land on. */
 async function initialLines(): Promise<string[]> {
   if (file) return (await fs.readFile(file, "utf8")).split("\n");
-  const lines: string[] = ["Nova fixed-layout demo", ""];
+  const lines: string[] = ["Archymedes fixed-layout demo", ""];
   for (let index = 1; index <= 300; index += 1) {
     if (index % 25 === 0) lines.push(`\u001b[31mTypeError: something went wrong at step ${index}\u001b[0m`);
     else if (index % 10 === 0) lines.push("");
@@ -70,7 +70,7 @@ let searching: string | null = null;
 function paint(): void {
   const frame = renderFrame(state);
   const columns = state.columns;
-  const header = ` Nova — fixed layout demo${" ".repeat(Math.max(0, columns - 40))}q to quit `.slice(0, columns);
+  const header = ` Archymedes — fixed layout demo${" ".repeat(Math.max(0, columns - 40))}q to quit `.slice(0, columns);
   const status = searching === null
     ? fixedStatusLine({ position: frame.position, following: frame.following, truncated: frame.truncated, columns })
     : `find: ${searching}`;

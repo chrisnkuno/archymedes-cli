@@ -2,7 +2,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 /** The suites that drive a real terminal, kept out of the parallel pool. See `projects` below. */
-const PTY_TESTS = "packages/nova-cli/src/pty/**/*.test.ts";
+const PTY_TESTS = "packages/archymedes-cli/src/pty/**/*.test.ts";
 
 /**
  * Tests resolve the core package to its source, not its build output.
@@ -16,15 +16,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@archymedes\/nova-core$/,
+        find: /^@archymedes\/core$/,
         replacement: path.resolve(
           __dirname,
-          "packages/agent-core/src/index.ts",
+          "packages/core/src/index.ts",
         ),
       },
       {
-        find: /^@archymedes\/nova-core\/(.*)$/,
-        replacement: path.resolve(__dirname, "packages/agent-core/src/$1.ts"),
+        find: /^@archymedes\/core\/(.*)$/,
+        replacement: path.resolve(__dirname, "packages/core/src/$1.ts"),
       },
     ],
   },
@@ -40,7 +40,7 @@ export default defineConfig({
     /**
      * Terminal tests get the machine to themselves.
      *
-     * The pty suites spawn a real `bun run nova.ts` per case — a 32,000-line transpile and a full
+     * The pty suites spawn a real `bun run archymedes.ts` per case — a 32,000-line transpile and a full
      * agent boot behind a pseudo-terminal — and they assert by *waiting* for a prompt to be
      * painted. Run alongside every other worker they lose the CPU race and time out, which reads
      * as a broken feature when it is only a busy machine: the same case passes on its own every
@@ -97,8 +97,8 @@ export default defineConfig({
         "packages/*/dist/**",
         // Pure type/interface declarations with no runtime statements — 0% is meaningless there,
         // not a gap a test could close.
-        "packages/agent-core/src/providers/contracts.ts",
-        "packages/agent-core/src/providers/model.ts",
+        "packages/core/src/providers/contracts.ts",
+        "packages/core/src/providers/model.ts",
       ],
     },
   },

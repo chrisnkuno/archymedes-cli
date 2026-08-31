@@ -13,17 +13,17 @@
     "packages/*"
   ],
   "scripts": {
-    "archymedes": "bun run packages/nova-cli/src/nova.ts",
+    "archymedes": "bun run packages/archymedes-cli/src/archymedes.ts",
     "check": "bun run test && bun run typecheck && bun run build:packages",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "build:cli": "bun run tooling/build/build-cli.ts",
     "build:packages": "bun run tooling/build/build-packages.ts",
-    "build:state": "cargo build --release --manifest-path packages/nova-state/Cargo.toml --bin nova-state",
-    "test:state": "cargo test --manifest-path packages/nova-state/Cargo.toml",
-    "bench:state": "cargo run --release --features benchmark --manifest-path packages/nova-state/Cargo.toml --bin nova-state-bench -- --sessions 500 --messages 40 --queries 200",
-    "bench:defender": "cargo run --release --features benchmark --manifest-path packages/nova-state/Cargo.toml --bin nova-defender-brain-bench -- --records 10000 --queries 2000"
+    "build:state": "cargo build --release --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state",
+    "test:state": "cargo test --manifest-path packages/archymedes-state/Cargo.toml",
+    "bench:state": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state-bench -- --sessions 500 --messages 40 --queries 200",
+    "bench:defender": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-defender-brain-bench -- --records 10000 --queries 2000"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

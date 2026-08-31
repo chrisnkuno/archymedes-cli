@@ -5,8 +5,8 @@
     "lib": ["dom", "dom.iterable", "es2022"],
     "jsx": "react-jsx",
     "paths": {
-      "@archymedes/nova-core": ["./packages/agent-core/src/index.ts"],
-      "@archymedes/nova-core/*": ["./packages/agent-core/src/*"]
+      "@archymedes/core": ["./packages/core/src/index.ts"],
+      "@archymedes/core/*": ["./packages/core/src/*"]
     }
   },
   "include": [
@@ -19,6 +19,6 @@
     "node_modules",
     "**/node_modules",
     "**/dist",
-    "packages/nova-state/target"
+    "packages/archymedes-state/target"
   ]
 }

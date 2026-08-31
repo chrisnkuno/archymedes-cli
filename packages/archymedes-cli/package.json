@@ -1,0 +1,60 @@
+{
+  "name": "archymedes-cli",
+  "version": "1.9.1",
+  "description": "Archymedes CLI \u2014 a coding agent in your terminal. Runs against your working tree or an isolated remote sandbox, with guarded approvals, git checkpoints, and real cost accounting.",
+  "keywords": [
+    "cli",
+    "coding-agent",
+    "ai",
+    "terminal",
+    "agent",
+    "archymedes",
+    "anthropic",
+    "openai"
+  ],
+  "license": "MIT",
+  "author": "chrisnkuno",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrisnkuno/archymedes-cli.git",
+    "directory": "packages/archymedes-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/chrisnkuno/archymedes-cli/issues"
+  },
+  "homepage": "https://github.com/chrisnkuno/archymedes-cli/tree/main/packages/archymedes-cli#readme",
+  "type": "module",
+  "bin": {
+    "archymedes": "dist/archymedes.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun run ../../tooling/build/build-packages.ts",
+    "prepublishOnly": "bun run ../../tooling/build/build-packages.ts"
+  },
+  "dependencies": {
+    "@termuijs/core": "0.1.7",
+    "@termuijs/jsx": "0.1.7",
+    "@termuijs/widgets": "0.1.7"
+  },
+  "optionalDependencies": {
+    "@archymedes/state-darwin-arm64": "0.4.0",
+    "@archymedes/state-darwin-x64": "0.4.0",
+    "@archymedes/state-linux-arm64-gnu": "0.4.0",
+    "@archymedes/state-linux-arm64-musl": "0.4.0",
+    "@archymedes/state-linux-x64-gnu": "0.4.0",
+    "@archymedes/state-linux-x64-musl": "0.4.0",
+    "@archymedes/state-win32-arm64": "0.4.0",
+    "@archymedes/state-win32-x64": "0.4.0"
+  }
+}
