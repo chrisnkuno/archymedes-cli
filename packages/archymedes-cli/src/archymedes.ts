@@ -85,7 +85,7 @@ import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
 import { renderTools } from "./tools-command";
 import { removeRecording, startRecording, transcribeAudio } from "./voice";
-import { controlLabel, resolveControlLanguage, type ControlLanguage } from "./i18n";
+import { controlLabel, resolveControlLanguage, t, type ControlLanguage } from "./i18n";
 import { UNICODE_GLYPHS, resolveGlyphs, type GlyphSet } from "./glyphs";
 import { GUTTER, heading, note, panel, rule, type SectionStyle } from "./sections";
 import { describeChange, diffLines, diffStat, renderFileChange } from "./code-view";
@@ -383,17 +383,17 @@ function helpText(language: ControlLanguage = "en", shortcuts: ReadonlyMap<strin
   // rows have to stay where they were; what changes is that a few of them are now findable.
   const mark = (command: string) => (isEssential(command) ? `${star} ` : "  ");
   return `
-${style.bold("archymedes")} — a coding agent in your terminal
+${style.bold("archymedes")} — ${t(language, "tagline")}
 
-${style.bold("Start here")}
+${style.bold(t(language, "help.startHere"))}
   ${star} archymedes settings           Paste an API key. Nothing runs until one is saved.
   ${star} archymedes                    Start a session, then just describe what you want
   ${star} archymedes --resume           Pick up the last session where it stopped
   ${star} /help                   Inside a session: everything you can do
   ${star} /undo                   Inside a session: take back the last turn's changes
-  ${style.dim(`Everything below is here when you need it — these five are the ones you need first.`)}
+  ${style.dim(t(language, "help.footnote"))}
 
-${style.bold("Running it")}
+${style.bold(t(language, "help.running"))}
   archymedes                      Start an interactive session
   archymedes "add a health check" Run one request and exit
   archymedes --plan               Plan mode: read and reason, never write
@@ -412,7 +412,7 @@ ${style.bold("Running it")}
   archymedes update --yes         Update without an interactive confirmation
   archymedes --version            Print the installed CLI version
 
-${style.bold("Where the files go")}
+${style.bold(t(language, "help.files"))}
   archymedes acp                  Speak the Agent Client Protocol on stdio (for editors)
   archymedes gallery              Draw every UI component once, to see how this terminal renders it
   archymedes --sandbox            Work in a remote E2B sandbox, not on this machine
@@ -422,7 +422,7 @@ ${style.bold("Where the files go")}
   archymedes --image <preset>     Sandbox image to use (default: general)
   archymedes --sandbox-minutes N  Sandbox lifetime (default 30)
 
-${style.bold("Model")}
+${style.bold(t(language, "help.model"))}
   archymedes --provider <name>    ${PROVIDER_IDS.join(" | ")}
   archymedes --model <id>         Model to run (defaults to the provider's)
   /model                    Pick a model from a list, with prices, keeping the transcript
@@ -433,7 +433,7 @@ ${style.bold("Model")}
   archymedes --doctor             Alias for archymedes doctor
   archymedes settings             Configure keys, URLs, models, pricing and voice input
 
-${style.bold("Cost")}
+${style.bold(t(language, "help.cost"))}
   archymedes --location EG        Select a country (auto-detected from your locale by default)
   archymedes --currency EGP       Select any supported ISO display currency
   archymedes --budget N           Approve and enforce a cap in the display currency
@@ -443,7 +443,7 @@ ${style.bold("Cost")}
   archymedes --estimate "task"    Show a token/cost forecast without calling the model
   /cost                     Token and cost breakdown for this session
 
-${style.bold("Memory and history")}
+${style.bold(t(language, "help.memory"))}
   # we use bun, not npm     Remember a fact for every future session in this project
   /memory                   Everything remembered, project and personal, with numbers
   /memory add --user <fact> Remember something about you rather than about this project
@@ -454,7 +454,7 @@ ${style.bold("Memory and history")}
   /history resume           Pick one up where it stopped
   /history status           Show whether native indexed history or JSON fallback is active
 
-${style.bold("Reading the transcript")}
+${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
   archymedes --theme nebula       Start in a named theme (/theme list shows them all)
@@ -463,13 +463,13 @@ ${style.bold("Reading the transcript")}
                             never saved, so this is off unless you ask for it.
                             (or set ARCHYMEDES_GLYPHS=ascii)
 
-${style.bold("Headless output")}
+${style.bold(t(language, "help.headless"))}
   With --json, stdout carries one JSON object per line and nothing else; everything
   a person would read goes to stderr. Exit codes are stable:
     0 completed   1 failed    2 usage         3 blocked
     4 unverified  5 approval  6 limit hit     7 cancelled
 
-${style.bold("In a session")}  ${style.dim(`(${star} marks the ones to learn first)`)}
+${style.bold(t(language, "help.inSession"))}  ${style.dim(`(${star} ${t(language, "help.sessionHint")})`)}
 ${renderCommandHelp(language, shortcuts, { mark })}
 `;
 }
@@ -1379,7 +1379,7 @@ async function main(): Promise<number> {
         ...(history ? { history: { mode: history.mode, ...(history.mode === "native" ? { indexed: history.indexed } : {}), ...(history.reason ? { reason: history.reason } : {}) } } : {}),
       }), null, 2)}\n`);
     } else {
-      process.stdout.write(`${renderDoctor(probes, depth)}\n`);
+      process.stdout.write(`${renderDoctor(probes, depth, language)}\n`);
     }
     await stateHistory.close();
     return doctorExitCode(probes);
@@ -1503,7 +1503,7 @@ async function main(): Promise<number> {
   // the message-and-exit path, because a prompt no one can answer is a hang.
   // Never in headless mode: an interactive menu has nobody to answer it when a program is driving.
   if ("error" in resolved && !args.json && !args.provider && !args.model && process.stdin.isTTY && process.stdout.isTTY) {
-    out.write(`${style.yellow("Archymedes is not configured yet.")} Add a provider key below — it is saved for next time, so you never need to export it.\n`);
+    out.write(`${style.yellow(t(language, "firstRun.notConfigured"))} ${style.dim("It is saved for next time, so you never need to export it.")}\n`);
     const setupReadline = createInterface({ input: process.stdin, output: process.stdout });
     try {
       savedSettings = await runSettingsMenu(savedSettings, {
@@ -3392,7 +3392,8 @@ async function main(): Promise<number> {
       // part of the prompt and the box keeps its side through every edit. Without one there is no
       // box to have a side of, and the old inline label is still the right thing — with the leading
       // blank line it has always had on a session with no screen of any kind to separate it from.
-      const label = `${style.cyan(mode === "plan" ? "plan" : mode === "auto" ? "auto" : mode === "defender" ? "defender" : "archymedes")}${style.dim(` ${glyphs.caret} `)}`;
+      const modeLabel = mode === "plan" ? t(language, "mode.plan") : mode === "auto" ? t(language, "mode.auto") : mode === "defender" ? t(language, "mode.defender") : "archymedes";
+      const label = `${style.cyan(modeLabel)}${style.dim(` ${glyphs.caret} `)}`;
       const promptLabel = screen?.pinned
         ? promptFrame(idleStatusLine()).prefix
         : inlineBar()

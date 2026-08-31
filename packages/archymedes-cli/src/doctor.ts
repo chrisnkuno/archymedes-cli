@@ -1,4 +1,5 @@
 import { DEFAULT_UPDATE_REGISTRY, FX_ENDPOINTS, hostOf, providerEndpoints, type ProviderEnvironment } from "./endpoints";
+import { t, type ControlLanguage } from "./i18n";
 import { classifyNetworkError, type NetworkDiagnosis } from "./network";
 import type { ColorDepth } from "./banner";
 import { modelsEndpoint } from "@archymedes/core/providers/model-list";
@@ -133,7 +134,7 @@ export function doctorExitCode(probes: readonly DoctorProbe[]): number {
 const RESET = "\u001b[0m";
 
 /** Renders probe results with the colour depth the terminal actually reports. */
-export function renderDoctor(probes: readonly DoctorProbe[], depth: ColorDepth): string {
+export function renderDoctor(probes: readonly DoctorProbe[], depth: ColorDepth, language: ControlLanguage = "en"): string {
   const paint = (code: string) => (text: string) => (depth === "none" ? text : `${code}${text}${RESET}`);
   const green = paint("\u001b[32m");
   const red = paint("\u001b[31m");
@@ -160,18 +161,18 @@ export function renderDoctor(probes: readonly DoctorProbe[], depth: ColorDepth):
   const configuredRequired = probes.filter((probe) => probe.id.startsWith("provider:") && probe.required);
   const verdict: string[] = [];
   if (failures.length > 0) {
-    verdict.push(red(`  Archymedes cannot reach its model provider: ${failures.map((probe) => hostOf(probe.url)).join(", ")}.`));
-    verdict.push(dim("  Fix the connection or the base URL (CIRCUITNOTION_BASE_URL / OPENAI_BASE_URL / ANTHROPIC_BASE_URL), then retry."));
+    verdict.push(red(`  ${t(language, "doctor.cannotReach")} ${failures.map((probe) => hostOf(probe.url)).join(", ")}.`));
+    verdict.push(dim("  Fix the connection or the base URL (<PROVIDER>_BASE_URL), then retry."));
   } else if (configuredRequired.length === 0) {
-    verdict.push(yellow("  No provider is configured — set an API key to use Archymedes."));
+    verdict.push(yellow(`  ${t(language, "doctor.noProvider")}`));
   } else {
-    verdict.push(green("  All required endpoints are reachable."));
+    verdict.push(green(`  ${t(language, "doctor.allReachable")}`));
   }
   if (optionalFailures.length > 0) {
     verdict.push(dim(`  Optional: ${optionalFailures.map((probe) => `${hostOf(probe.url)} (${probe.diagnosis?.kind ?? "failed"})`).join(", ")} — Archymedes still runs; FX costs may fall back to the provider currency.`));
   }
 
-  return ["Archymedes connectivity check", "", ...rows, "", ...verdict, ""].join("\n");
+  return [t(language, "doctor.header"), "", ...rows, "", ...verdict, ""].join("\n");
 }
 
 export type DoctorReportContext = {

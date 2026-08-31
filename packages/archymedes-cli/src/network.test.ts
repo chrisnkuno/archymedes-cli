@@ -16,7 +16,7 @@ describe("network error classification", () => {
 
   it("turns a provider 404 into a base-route and model diagnosis", () => {
     const error = Object.assign(new Error("404 Not Found"), { status: 404, name: "NotFoundError" });
-    const diagnosis = classifyNetworkError(error, { host: "api.circuitnotion.com", purpose: "the model API (CircuitNotion)" });
+    const diagnosis = classifyNetworkError(error, { host: "api.deepseek.com", purpose: "the model API (DeepSeek)" });
     expect(diagnosis?.kind).toBe("not_found");
     expect(diagnosis?.message).toContain("API route or selected model");
     expect(diagnosis?.hint).toContain("/v1");
@@ -49,11 +49,11 @@ describe("network error classification", () => {
 
   it("names the host and purpose for a DNS failure", () => {
     const diagnosis = classifyNetworkError(
-      transportError("getaddrinfo ENOTFOUND api.circuitnotion.com", "ENOTFOUND"),
-      { host: "api.circuitnotion.com", purpose: "the model API (CircuitNotion)" },
+      transportError("getaddrinfo ENOTFOUND api.deepseek.com", "ENOTFOUND"),
+      { host: "api.deepseek.com", purpose: "the model API (DeepSeek)" },
     );
     expect(diagnosis?.kind).toBe("dns");
-    expect(diagnosis?.message).toContain("api.circuitnotion.com");
+    expect(diagnosis?.message).toContain("api.deepseek.com");
     expect(diagnosis?.message).toContain("the model API");
     expect(diagnosis?.hint).toContain("--doctor");
   });
@@ -67,7 +67,7 @@ describe("network error classification", () => {
   });
 
   it("classifies timeouts, including undici's connect timeout and AbortSignal.timeout", () => {
-    expect(classifyNetworkError(transportError("connect ETIMEDOUT 10.0.0.1:443", "ETIMEDOUT"), { host: "api.circuitnotion.com" })?.kind).toBe("timeout");
+    expect(classifyNetworkError(transportError("connect ETIMEDOUT 10.0.0.1:443", "ETIMEDOUT"), { host: "api.deepseek.com" })?.kind).toBe("timeout");
     expect(classifyNetworkError(transportError("connect timeout", "UND_ERR_CONNECT_TIMEOUT"), { host: "cdn.jsdelivr.net" })?.kind).toBe("timeout");
     const aborted = new DOMException("The operation was aborted due to timeout", "TimeoutError");
     expect(classifyNetworkError(aborted, { host: "api.openai.com" })?.kind).toBe("timeout");
@@ -80,7 +80,7 @@ describe("network error classification", () => {
   });
 
   it("names a TLS interception for certificate errors", () => {
-    const diagnosis = classifyNetworkError(transportError("self signed certificate in certificate chain", "DEPTH_ZERO_SELF_SIGNED_CERT"), { host: "api.circuitnotion.com" });
+    const diagnosis = classifyNetworkError(transportError("self signed certificate in certificate chain", "DEPTH_ZERO_SELF_SIGNED_CERT"), { host: "api.deepseek.com" });
     expect(diagnosis?.kind).toBe("tls");
     expect(diagnosis?.message).toContain("TLS certificate");
     expect(diagnosis?.hint).toContain("proxy");

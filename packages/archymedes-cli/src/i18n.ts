@@ -100,3 +100,219 @@ export const TRANSLATED_KEYBOARD_IDS: Partial<Record<ControlLanguage, Record<str
 export function keyboardDescription(language: ControlLanguage, id: string, fallback: string): string {
   return TRANSLATED_KEYBOARD_IDS[language]?.[id] ?? fallback;
 }
+
+/**
+ * The message catalog for the surfaces a new user reads first: the `--help` page's structure,
+ * the mode labels, the first-run prompt, the connectivity doctor's verdicts, and the balance
+ * command's replies.
+ *
+ * `en` is the source and is always present; a language that has not translated a key falls back
+ * to it, so a new string is untranslated rather than missing. The dense flag-reference rows in
+ * `--help` are deliberately not here — see I18N.md.
+ */
+type MessageKey =
+  | "tagline"
+  | "help.startHere" | "help.running" | "help.files" | "help.model" | "help.cost"
+  | "help.memory" | "help.transcript" | "help.headless" | "help.inSession"
+  | "help.footnote" | "help.sessionHint"
+  | "mode.plan" | "mode.auto" | "mode.build" | "mode.defender"
+  | "firstRun.notConfigured"
+  | "doctor.header" | "doctor.allReachable" | "doctor.noProvider" | "doctor.cannotReach"
+  | "balance.tracking";
+
+const MESSAGES: Record<MessageKey, Partial<Record<ControlLanguage, string>> & { en: string }> = {
+  "tagline": {
+    en: "a coding agent in your terminal",
+    zh: "终端里的编码代理", hi: "आपके टर्मिनल में एक कोडिंग एजेंट", es: "un agente de programación en tu terminal",
+    fr: "un agent de codage dans votre terminal", ar: "وكيل برمجة في طرفيتك", bn: "আপনার টার্মিনালে একটি কোডিং এজেন্ট",
+    pt: "um agente de programação no seu terminal", ru: "агент-программист в вашем терминале", ur: "آپ کے ٹرمینل میں ایک کوڈنگ ایجنٹ",
+    ja: "ターミナルで動くコーディングエージェント", ko: "터미널에서 동작하는 코딩 에이전트", de: "ein Coding-Agent in deinem Terminal",
+    id: "agen pemrograman di terminal Anda", vi: "một tác nhân lập trình trong terminal của bạn", tr: "terminalinizde bir kodlama aracı",
+  },
+  "help.startHere": {
+    en: "Start here",
+    zh: "从这里开始", hi: "यहाँ से शुरू करें", es: "Empieza aquí", fr: "Commencez ici", ar: "ابدأ من هنا", bn: "এখান থেকে শুরু করুন",
+    pt: "Comece aqui", ru: "Начните здесь", ur: "یہاں سے شروع کریں", ja: "ここから始める", ko: "여기서 시작", de: "Hier anfangen",
+    id: "Mulai di sini", vi: "Bắt đầu tại đây", tr: "Buradan başlayın",
+  },
+  "help.running": {
+    en: "Running it",
+    zh: "运行方式", hi: "इसे चलाना", es: "Cómo ejecutarlo", fr: "L'exécuter", ar: "طريقة التشغيل", bn: "এটি চালানো",
+    pt: "Como executar", ru: "Как запускать", ur: "اسے چلانا", ja: "実行する", ko: "실행하기", de: "Ausführen",
+    id: "Menjalankannya", vi: "Chạy nó", tr: "Çalıştırma",
+  },
+  "help.files": {
+    en: "Where the files go",
+    zh: "文件位置", hi: "फ़ाइलें कहाँ जाती हैं", es: "Dónde van los archivos", fr: "Où vont les fichiers", ar: "أين تذهب الملفات",
+    bn: "ফাইল কোথায় যায়", pt: "Para onde vão os arquivos", ru: "Где находятся файлы", ur: "فائلیں کہاں جاتی ہیں",
+    ja: "ファイルの場所", ko: "파일이 저장되는 곳", de: "Wohin die Dateien gehen", id: "Ke mana berkas disimpan",
+    vi: "Tệp được lưu ở đâu", tr: "Dosyalar nereye gider",
+  },
+  "help.model": {
+    en: "Model",
+    zh: "模型", hi: "मॉडल", es: "Modelo", fr: "Modèle", ar: "النموذج", bn: "মডেল", pt: "Modelo", ru: "Модель", ur: "ماڈل",
+    ja: "モデル", ko: "모델", de: "Modell", id: "Model", vi: "Mô hình", tr: "Model",
+  },
+  "help.cost": {
+    en: "Cost",
+    zh: "费用", hi: "लागत", es: "Coste", fr: "Coût", ar: "التكلفة", bn: "খরচ", pt: "Custo", ru: "Стоимость", ur: "لاگت",
+    ja: "コスト", ko: "비용", de: "Kosten", id: "Biaya", vi: "Chi phí", tr: "Maliyet",
+  },
+  "help.memory": {
+    en: "Memory and history",
+    zh: "记忆与历史", hi: "मेमोरी और इतिहास", es: "Memoria e historial", fr: "Mémoire et historique", ar: "الذاكرة والسجل",
+    bn: "মেমরি ও ইতিহাস", pt: "Memória e histórico", ru: "Память и история", ur: "میموری اور تاریخ",
+    ja: "メモリと履歴", ko: "메모리와 기록", de: "Speicher und Verlauf", id: "Memori dan riwayat",
+    vi: "Bộ nhớ và lịch sử", tr: "Bellek ve geçmiş",
+  },
+  "help.transcript": {
+    en: "Reading the transcript",
+    zh: "阅读记录", hi: "ट्रांसक्रिप्ट पढ़ना", es: "Leer la transcripción", fr: "Lire la transcription", ar: "قراءة النص",
+    bn: "ট্রান্সক্রিপ্ট পড়া", pt: "Ler a transcrição", ru: "Чтение стенограммы", ur: "ٹرانسکرپٹ پڑھنا",
+    ja: "記録を読む", ko: "대화 기록 읽기", de: "Das Transkript lesen", id: "Membaca transkrip",
+    vi: "Đọc bản ghi", tr: "Dökümü okuma",
+  },
+  "help.headless": {
+    en: "Headless output",
+    zh: "无界面输出", hi: "हेडलेस आउटपुट", es: "Salida sin interfaz", fr: "Sortie sans interface", ar: "المخرجات بدون واجهة",
+    bn: "হেডলেস আউটপুট", pt: "Saída headless", ru: "Вывод без интерфейса", ur: "ہیڈ لیس آؤٹ پٹ",
+    ja: "ヘッドレス出力", ko: "헤드리스 출력", de: "Headless-Ausgabe", id: "Keluaran tanpa antarmuka",
+    vi: "Đầu ra không giao diện", tr: "Arayüzsüz çıktı",
+  },
+  "help.inSession": {
+    en: "In a session",
+    zh: "会话中", hi: "सत्र में", es: "En una sesión", fr: "Dans une session", ar: "داخل الجلسة", bn: "একটি সেশনে",
+    pt: "Em uma sessão", ru: "В сессии", ur: "سیشن میں", ja: "セッション中", ko: "세션 안에서", de: "In einer Sitzung",
+    id: "Dalam sesi", vi: "Trong một phiên", tr: "Bir oturumda",
+  },
+  "help.footnote": {
+    en: "Everything below is here when you need it — these five are the ones you need first.",
+    zh: "下面的内容备你所需——这五个是你首先要用的。",
+    hi: "नीचे सब कुछ ज़रूरत पड़ने पर है — ये पाँच पहले चाहिए।",
+    es: "Todo lo de abajo está aquí cuando lo necesites; estos cinco son los primeros.",
+    fr: "Tout ce qui suit est là au besoin — ces cinq-là sont les premiers.",
+    ar: "كل ما بالأسفل موجود عند الحاجة — وهذه الخمسة هي ما تحتاجه أولاً.",
+    bn: "নিচের সব কিছু প্রয়োজনে আছে — এই পাঁচটি প্রথমে দরকার।",
+    pt: "Tudo abaixo está aqui quando precisar — estes cinco vêm primeiro.",
+    ru: "Всё, что ниже, — на случай необходимости; эти пять нужны в первую очередь.",
+    ur: "نیچے سب کچھ ضرورت پر موجود ہے — یہ پانچ پہلے درکار ہیں۔",
+    ja: "以下は必要になったときのために。まずはこの5つ。",
+    ko: "아래는 필요할 때를 위한 것 — 이 다섯 개가 먼저 필요합니다.",
+    de: "Alles Weitere steht bereit, wenn du es brauchst — diese fünf zuerst.",
+    id: "Semua di bawah tersedia saat dibutuhkan — lima ini yang pertama.",
+    vi: "Mọi thứ bên dưới có sẵn khi bạn cần — năm mục này cần trước.",
+    tr: "Aşağıdakiler gerektiğinde burada — önce bu beşi.",
+  },
+  "help.sessionHint": {
+    en: "marks the ones to learn first",
+    zh: "标记先学的项目", hi: "पहले सीखने वाले चिह्नित", es: "marca los que aprender primero", fr: "marque ceux à apprendre d'abord",
+    ar: "يشير إلى ما يُتعلَّم أولاً", bn: "প্রথমে শেখারগুলো চিহ্নিত", pt: "marca os que aprender primeiro",
+    ru: "отмечает то, что изучить в первую очередь", ur: "پہلے سیکھنے والوں کی نشاندہی",
+    ja: "最初に覚えるものを示す", ko: "먼저 익힐 것을 표시", de: "markiert, was zuerst zu lernen ist",
+    id: "menandai yang dipelajari lebih dulu", vi: "đánh dấu những mục nên học trước", tr: "önce öğrenilecekleri işaretler",
+  },
+  "mode.plan": {
+    en: "plan", zh: "规划", hi: "योजना", es: "plan", fr: "plan", ar: "تخطيط", bn: "পরিকল্পনা", pt: "plano", ru: "план",
+    ur: "منصوبہ", ja: "計画", ko: "계획", de: "Plan", id: "rencana", vi: "kế hoạch", tr: "plan",
+  },
+  "mode.auto": {
+    en: "auto", zh: "自动", hi: "स्वतः", es: "auto", fr: "auto", ar: "تلقائي", bn: "স্বয়ংক্রিয়", pt: "auto", ru: "авто",
+    ur: "خودکار", ja: "自動", ko: "자동", de: "auto", id: "otomatis", vi: "tự động", tr: "otomatik",
+  },
+  "mode.build": {
+    en: "build", zh: "构建", hi: "बिल्ड", es: "construir", fr: "construire", ar: "بناء", bn: "বিল্ড", pt: "construir",
+    ru: "сборка", ur: "بلڈ", ja: "ビルド", ko: "빌드", de: "Build", id: "bangun", vi: "xây dựng", tr: "derleme",
+  },
+  "mode.defender": {
+    en: "defender", zh: "防御", hi: "डिफेंडर", es: "defensor", fr: "défenseur", ar: "مدافع", bn: "ডিফেন্ডার", pt: "defensor",
+    ru: "защита", ur: "محافظ", ja: "ディフェンダー", ko: "디펜더", de: "Verteidiger", id: "penjaga", vi: "phòng thủ", tr: "savunucu",
+  },
+  "firstRun.notConfigured": {
+    en: "Archymedes is not configured yet. Add a provider key below to start.",
+    zh: "Archymedes 尚未配置。请在下方添加一个提供商密钥以开始。",
+    hi: "Archymedes अभी कॉन्फ़िगर नहीं है। शुरू करने के लिए नीचे एक प्रदाता कुंजी जोड़ें।",
+    es: "Archymedes aún no está configurado. Añade una clave de proveedor abajo para empezar.",
+    fr: "Archymedes n'est pas encore configuré. Ajoutez une clé de fournisseur ci-dessous pour commencer.",
+    ar: "لم يتم إعداد Archymedes بعد. أضف مفتاح مزوّد بالأسفل للبدء.",
+    bn: "Archymedes এখনও কনফিগার করা হয়নি। শুরু করতে নিচে একটি প্রোভাইডার কী যোগ করুন।",
+    pt: "O Archymedes ainda não está configurado. Adicione uma chave de provedor abaixo para começar.",
+    ru: "Archymedes ещё не настроен. Добавьте ключ провайдера ниже, чтобы начать.",
+    ur: "Archymedes ابھی ترتیب نہیں دیا گیا۔ شروع کرنے کے لیے نیچے ایک پرووائیڈر کلید شامل کریں۔",
+    ja: "Archymedes はまだ設定されていません。開始するには下でプロバイダーのキーを追加してください。",
+    ko: "Archymedes가 아직 설정되지 않았습니다. 시작하려면 아래에 공급자 키를 추가하세요.",
+    de: "Archymedes ist noch nicht konfiguriert. Füge unten einen Anbieter-Schlüssel hinzu, um zu starten.",
+    id: "Archymedes belum dikonfigurasi. Tambahkan kunci penyedia di bawah untuk memulai.",
+    vi: "Archymedes chưa được cấu hình. Thêm khóa nhà cung cấp bên dưới để bắt đầu.",
+    tr: "Archymedes henüz yapılandırılmadı. Başlamak için aşağıya bir sağlayıcı anahtarı ekleyin.",
+  },
+  "doctor.header": {
+    en: "Archymedes connectivity check",
+    zh: "Archymedes 连接检查", hi: "Archymedes कनेक्टिविटी जाँच", es: "Comprobación de conectividad de Archymedes",
+    fr: "Vérification de connectivité d'Archymedes", ar: "فحص اتصال Archymedes", bn: "Archymedes সংযোগ পরীক্ষা",
+    pt: "Verificação de conectividade do Archymedes", ru: "Проверка соединения Archymedes", ur: "Archymedes کنیکٹیویٹی جانچ",
+    ja: "Archymedes 接続チェック", ko: "Archymedes 연결 점검", de: "Archymedes-Verbindungsprüfung",
+    id: "Pemeriksaan konektivitas Archymedes", vi: "Kiểm tra kết nối Archymedes", tr: "Archymedes bağlantı kontrolü",
+  },
+  "doctor.allReachable": {
+    en: "All required endpoints are reachable.",
+    zh: "所有必需的端点均可访问。", hi: "सभी आवश्यक एंडपॉइंट पहुँच योग्य हैं।", es: "Todos los puntos finales necesarios son accesibles.",
+    fr: "Tous les points de terminaison requis sont accessibles.", ar: "جميع نقاط النهاية المطلوبة قابلة للوصول.",
+    bn: "সব প্রয়োজনীয় এন্ডপয়েন্টে পৌঁছানো যাচ্ছে।", pt: "Todos os endpoints necessários estão acessíveis.",
+    ru: "Все необходимые адреса доступны.", ur: "تمام مطلوبہ اینڈ پوائنٹس قابل رسائی ہیں۔",
+    ja: "必要なエンドポイントはすべて到達可能です。", ko: "필요한 모든 엔드포인트에 연결할 수 있습니다.",
+    de: "Alle erforderlichen Endpunkte sind erreichbar.", id: "Semua endpoint yang diperlukan dapat dijangkau.",
+    vi: "Tất cả các endpoint cần thiết đều truy cập được.", tr: "Gerekli tüm uç noktalara erişilebiliyor.",
+  },
+  "doctor.noProvider": {
+    en: "No provider is configured — set an API key to use Archymedes.",
+    zh: "未配置任何提供商——设置一个 API 密钥以使用 Archymedes。",
+    hi: "कोई प्रदाता कॉन्फ़िगर नहीं है — Archymedes उपयोग करने के लिए एक API कुंजी सेट करें।",
+    es: "No hay ningún proveedor configurado: establece una clave de API para usar Archymedes.",
+    fr: "Aucun fournisseur configuré — définissez une clé API pour utiliser Archymedes.",
+    ar: "لا يوجد مزوّد مُهيّأ — عيّن مفتاح API لاستخدام Archymedes.",
+    bn: "কোনো প্রোভাইডার কনফিগার করা নেই — Archymedes ব্যবহার করতে একটি API কী সেট করুন।",
+    pt: "Nenhum provedor configurado — defina uma chave de API para usar o Archymedes.",
+    ru: "Провайдер не настроен — задайте ключ API, чтобы использовать Archymedes.",
+    ur: "کوئی پرووائیڈر ترتیب نہیں — Archymedes استعمال کرنے کے لیے ایک API کلید سیٹ کریں۔",
+    ja: "プロバイダーが未設定です。Archymedes を使うには API キーを設定してください。",
+    ko: "설정된 공급자가 없습니다 — Archymedes를 사용하려면 API 키를 설정하세요.",
+    de: "Kein Anbieter konfiguriert — lege einen API-Schlüssel fest, um Archymedes zu nutzen.",
+    id: "Tidak ada penyedia yang dikonfigurasi — atur kunci API untuk memakai Archymedes.",
+    vi: "Chưa cấu hình nhà cung cấp — đặt khóa API để dùng Archymedes.",
+    tr: "Yapılandırılmış sağlayıcı yok — Archymedes'i kullanmak için bir API anahtarı ayarlayın.",
+  },
+  "doctor.cannotReach": {
+    en: "Archymedes cannot reach its model provider:",
+    zh: "Archymedes 无法连接其模型提供商：", hi: "Archymedes अपने मॉडल प्रदाता तक नहीं पहुँच सकता:",
+    es: "Archymedes no puede acceder a su proveedor de modelos:", fr: "Archymedes ne peut pas joindre son fournisseur de modèles :",
+    ar: "لا يستطيع Archymedes الوصول إلى مزوّد النموذج:", bn: "Archymedes তার মডেল প্রোভাইডারে পৌঁছাতে পারছে না:",
+    pt: "O Archymedes não consegue acessar seu provedor de modelos:", ru: "Archymedes не может связаться с провайдером модели:",
+    ur: "Archymedes اپنے ماڈل پرووائیڈر تک نہیں پہنچ سکتا:", ja: "Archymedes はモデルプロバイダーに接続できません:",
+    ko: "Archymedes가 모델 공급자에 연결할 수 없습니다:", de: "Archymedes kann seinen Modellanbieter nicht erreichen:",
+    id: "Archymedes tidak dapat menjangkau penyedia modelnya:", vi: "Archymedes không thể kết nối tới nhà cung cấp mô hình:",
+    tr: "Archymedes model sağlayıcısına ulaşamıyor:",
+  },
+  "balance.tracking": {
+    en: "Archymedes will subtract each turn's measured cost from it.",
+    zh: "Archymedes 将从中扣除每轮的实测费用。",
+    hi: "Archymedes हर टर्न की मापी गई लागत इसमें से घटाएगा।",
+    es: "Archymedes restará de él el coste medido de cada turno.",
+    fr: "Archymedes en soustraira le coût mesuré de chaque tour.",
+    ar: "سيخصم Archymedes منه التكلفة المقاسة لكل جولة.",
+    bn: "Archymedes প্রতিটি টার্নের পরিমাপকৃত খরচ এটি থেকে বাদ দেবে।",
+    pt: "O Archymedes subtrairá dele o custo medido de cada turno.",
+    ru: "Archymedes будет вычитать из него измеренную стоимость каждого хода.",
+    ur: "Archymedes ہر باری کی ماپی گئی لاگت اس میں سے منہا کرے گا۔",
+    ja: "Archymedes は各ターンの実測コストをここから差し引きます。",
+    ko: "Archymedes가 매 턴의 측정된 비용을 여기서 차감합니다.",
+    de: "Archymedes zieht die gemessenen Kosten jeder Runde davon ab.",
+    id: "Archymedes akan mengurangi biaya terukur setiap giliran dari saldo ini.",
+    vi: "Archymedes sẽ trừ chi phí đo được của mỗi lượt khỏi số dư này.",
+    tr: "Archymedes her turun ölçülen maliyetini bundan düşecek.",
+  },
+};
+
+/** A message on a core surface, in `language`, falling back to English per key. */
+export function t(language: ControlLanguage, key: MessageKey): string {
+  return MESSAGES[key][language] ?? MESSAGES[key].en;
+}
