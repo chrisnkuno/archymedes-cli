@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Archymedes CLI monorepo: the Archymedes coding agent, its provider-neutral core, the local state index, and the tooling that builds and releases them.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chrisnkuno/archymedes-cli.git"

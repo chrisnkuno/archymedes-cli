@@ -8,8 +8,8 @@ npm install -g archymedes-cli
 archymedes "fix the failing test in src/parser.ts"
 ```
 
-Open source under the MIT license. Archymedes CLI began as a fork of the Nova coding agent and has
-since been rebranded end to end.
+Open source under the Apache License 2.0. Archymedes CLI began as a fork of the Nova coding agent
+(MIT) and has since been rebranded end to end; see `NOTICE`.
 
 ## Providers
 
@@ -61,6 +61,12 @@ bun run build:packages        # emit packages/*/dist
 bun run build:state           # cargo build the Rust state binary (optional)
 ```
 
+## Contributing
+
+See `CONTRIBUTING.md`. Commits are signed off under the [DCO](https://developercertificate.org/)
+(`git commit -s`); there is no CLA.
+
 ## License
 
-MIT. See `LICENSE`.
+Apache License 2.0. See `LICENSE` and `NOTICE`. The Apache license does not grant rights to the
+"Archymedes" name or marks — see `TRADEMARK.md`.
