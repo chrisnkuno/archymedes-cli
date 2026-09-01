@@ -209,6 +209,7 @@ export function buildArchymedesSystemPrompt(
         "and a skipped suite proves nothing.",
       ].join(" "),
       "- A passing typecheck or build is not a test; it proves the code compiles, not that it is correct.",
+      "- Any number that will appear in your answer — a percentage change, a ratio, a total, a standard deviation, a unit conversion — goes through the compute tool, not your head. Model arithmetic is unreliable, and \"the cost fell 34%\" is only worth saying if it is measured.",
       [
         "- When you have built or substantially changed a web app, offer to deploy it. Call deploy_app with action='check'",
         "— it only reads the manifest and reports what is possible — then tell the user what it found and ask whether they",

@@ -56,8 +56,8 @@ describe("provider matrix", () => {
     expect(resolved.spec.id).toBe("anthropic");
     expect(resolved.model).toBe("claude-sonnet-5");
     expect(resolved.prices?.currency).toBe("USD");
-    // $2 per million input tokens (introductory rate), held in micros.
-    expect(resolved.prices?.inputPerMillion).toBe(2_000_000);
+    // $3 per million input tokens (standard rate, the introductory period ended 2026-08-31), held in micros.
+    expect(resolved.prices?.inputPerMillion).toBe(3_000_000);
   });
 
   it("constructs the OpenAI-compatible turn providers, not just Anthropic's", () => {
@@ -121,8 +121,8 @@ describe("provider matrix", () => {
   it("lets an override name the model it prices", () => {
     const environment = { MODEL_PRICE_MODEL: "claude-haiku-4-5", MODEL_INPUT_PER_MILLION: "2", MODEL_OUTPUT_PER_MILLION: "8" };
     expect(resolvePrices(PROVIDERS.anthropic, "claude-haiku-4-5", environment)?.inputPerMillion).toBe(2_000_000);
-    // ...and only that model: the default model falls back to the catalog's introductory $2/M.
-    expect(resolvePrices(PROVIDERS.anthropic, "claude-sonnet-5", environment)?.inputPerMillion).toBe(2_000_000);
+    // ...and only that model: the default model falls back to the catalog's current $3/M standard rate.
+    expect(resolvePrices(PROVIDERS.anthropic, "claude-sonnet-5", environment)?.inputPerMillion).toBe(3_000_000);
   });
 
   it("prices a dated model at the rate in force on the day asked about", () => {

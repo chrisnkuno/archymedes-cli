@@ -166,6 +166,7 @@ const GOLDEN_CONTRACT = [
   { name: "read_playbook", effect: "none", capabilityId: "security.playbooks", requiresApproval: false, parallelSafe: true, required: ["id"], properties: ["id"] },
   { name: "todo_write", effect: "none", capabilityId: "reasoning.plan", requiresApproval: false, parallelSafe: false, required: [], properties: ["items", "complete", "start"] },
   { name: "todo_read", effect: "none", capabilityId: "reasoning.plan", requiresApproval: false, parallelSafe: true, required: [], properties: [] },
+  { name: "compute", effect: "none", capabilityId: "reasoning.plan", requiresApproval: false, parallelSafe: true, required: ["expr"], properties: ["expr", "precision", "radix"] },
   { name: "web_fetch", effect: "none", capabilityId: "web.research", requiresApproval: false, parallelSafe: true, required: ["url"], properties: ["url"] },
   // `external` is the strongest effect in the vocabulary and the runtime refuses to construct an
   // external tool that does not require approval — which is what makes a deploy physically unable

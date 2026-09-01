@@ -15,6 +15,7 @@ import type { ToolProvider } from "./tool-providers";
 import { collectExternalTools } from "./tool-providers";
 import { credentialRequest, deployOffer, deployPlan, detectWebApp, DEPLOY_PROVIDERS, type DeployTarget } from "./deploy";
 import { addMemory, type MemoryKind, type MemoryScope } from "./memory";
+import { compute, ComputeError } from "./compute";
 
 /**
  * Archymedes CLI's tool set.
@@ -596,6 +597,49 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       parallelSafe: true,
       async execute() {
         return { content: renderTodos(todos.list()), data: { items: todos.list() } };
+      },
+    },
+    {
+      name: "compute",
+      description:
+        "Evaluate an arithmetic or statistical expression exactly, instead of working it out in your head. Use it for any number that ends up in an answer: a percentage change, a ratio, a total, a standard deviation, a unit conversion. Supports + - * / // % ^ !, parentheses, hex/binary/octal literals (0xFF, 0b1010), constants (pi, e, tau, phi), and functions: sqrt cbrt abs round(x, digits?) floor ceil log(x, base?) ln exp min max gcd lcm hypot clamp(x, lo, hi) mod(a, n); pct_change(from, to), pct(part, whole), ratio(a, b), delta(a, b); sum mean median mode stdev pstdev variance range percentile(list, p) p50 p90 p95 p99 (each takes a [list] or several numbers); convert(n, \"from\", \"to\") for data sizes (B KB MB GB KiB MiB GiB) and durations (ms s min h d). Returns the value, whether it is exact, and any caveat.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          expr: { type: "string", description: "The expression, e.g. pct_change(1240, 870) or stdev([12,15,11,14])/mean([12,15,11,14])*100 or convert(5, \"GiB\", \"MB\")." },
+          precision: { type: "integer", description: "Significant digits to render, 1-15. Default 12." },
+          radix: { type: "integer", enum: [2, 8, 16], description: "Also render an integer result in this base." },
+        },
+        required: ["expr"],
+        additionalProperties: false,
+      },
+      capabilityId: ARCHYMEDES_CAPABILITIES.planning,
+      effect: "none",
+      requiresApproval: false,
+      parallelSafe: true,
+      async execute(args) {
+        const expr = requiredString(args.expr, "expr");
+        const precision = optionalInteger(args.precision, "precision");
+        const radix = optionalInteger(args.radix, "radix");
+        if (radix !== undefined && radix !== 2 && radix !== 8 && radix !== 16) {
+          throw new Error("radix must be 2, 8, or 16.");
+        }
+        try {
+          const result = compute(expr, {
+            ...(precision === undefined ? {} : { precision }),
+            ...(radix === undefined ? {} : { radix: radix as 2 | 8 | 16 }),
+          });
+          const parts = [`${expr.trim()} = ${result.rendered}`];
+          if (result.radixRendered) parts.push(`  (${result.radixRendered})`);
+          for (const warning of result.warnings) parts.push(`  ! ${warning}`);
+          return {
+            content: parts.join("\n"),
+            data: { value: result.value, exact: result.exact, rendered: result.rendered, radix: result.radixRendered, warnings: result.warnings },
+          };
+        } catch (error) {
+          if (error instanceof ComputeError) return { content: `compute error: ${error.message}`, data: { error: error.message } };
+          throw error;
+        }
       },
     },
   ];
