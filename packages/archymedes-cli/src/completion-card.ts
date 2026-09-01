@@ -3,6 +3,7 @@ import { panel, type SectionStyle } from "./sections";
 export type CompletionCardInput = {
   status: string;
   files: readonly string[];
+  lineDelta?: { added: number; removed: number };
   checks: readonly { kind: string; passed: boolean }[];
   toolCalls: number;
   iterations: number;
@@ -22,7 +23,7 @@ export function renderCompletionCard(input: CompletionCardInput, style: SectionS
   const mark = input.status === "completed" ? "completed" : input.status.replaceAll("_", " ");
   const files = input.files.length === 0
     ? "no files changed"
-    : `${input.files.length} file${input.files.length === 1 ? "" : "s"} changed`;
+    : `${input.files.length} file${input.files.length === 1 ? "" : "s"} changed${input.lineDelta ? ` · +${input.lineDelta.added} −${input.lineDelta.removed}` : ""}`;
   const checks = input.checks.length === 0
     ? "not run"
     : input.checks.map((check) => `${CHECK_LABELS[check.kind] ?? check.kind} ${check.passed ? "passed" : "failed"}`).join(" · ");

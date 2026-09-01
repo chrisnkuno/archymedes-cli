@@ -31,7 +31,7 @@ describe("connectivity doctor", () => {
     const fetchImpl = okFetch();
     const probes = await runDoctor({ DEEPSEEK_API_KEY: "sk-test" }, { fetchImpl });
     expect(probes.every((probe) => probe.ok || probe.skipped)).toBe(true);
-    expect(probes.filter((probe) => probe.skipped)).toHaveLength(7); // unconfigured providers
+    expect(probes.filter((probe) => probe.skipped)).toHaveLength(8); // unconfigured providers
     expect(doctorExitCode(probes)).toBe(0);
     expect(fetchImpl).toHaveBeenCalledTimes(5); // 1 configured provider + Ollama + 2 FX + 1 registry
   });

@@ -78,6 +78,14 @@ export const SETTING_FIELDS = [
   { key: "OPENAI_API_KEY", label: "OpenAI API key", secret: true },
   { key: "OPENAI_BASE_URL", label: "OpenAI-compatible base URL", url: true },
   { key: "OPENAI_MODEL", label: "OpenAI model" },
+  { key: "ARCHYMEDES_CLOUD_TOKEN", label: "Archymedes Cloud access token", secret: true },
+  { key: "ARCHYMEDES_CLOUD_BASE_URL", label: "Archymedes Cloud base URL", url: true },
+  { key: "ARCHYMEDES_CLOUD_MODEL", label: "Archymedes Cloud route (default auto)" },
+  { key: "ARCHYMEDES_CLOUD_MAXIMUM_MICROS", label: "Maximum cloud credits reserved per model call, in micros" },
+  { key: "ARCHYMEDES_CLOUD_CURRENCY", label: "Cloud credit currency" },
+  { key: "ARCHYMEDES_CLOUD_REGION", label: "Cloud routing region" },
+  { key: "ARCHYMEDES_CLOUD_DATA_POLICY", label: "Cloud data policy" },
+  { key: "ARCHYMEDES_CLOUD_QUALITY_FLOOR", label: "Cloud routing quality floor (0 to 1)" },
   { key: "GOOGLE_API_KEY", label: "Google Gemini API key", secret: true },
   { key: "GOOGLE_BASE_URL", label: "Google Gemini base URL", url: true },
   { key: "GOOGLE_MODEL", label: "Google Gemini model" },
@@ -203,6 +211,9 @@ export function validateSetting(key: SettingKey, raw: string): string {
     if (!Number.isFinite(amount) || amount < 0) throw new Error("Must be a non-negative number.");
   }
   if (key === "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
+  if (key === "ARCHYMEDES_CLOUD_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
+  if (key === "ARCHYMEDES_CLOUD_MAXIMUM_MICROS" && (!Number.isSafeInteger(Number(value)) || Number(value) <= 0)) throw new Error("Maximum must be a positive integer number of micros.");
+  if (key === "ARCHYMEDES_CLOUD_QUALITY_FLOOR" && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1)) throw new Error("Quality floor must be between 0 and 1.");
   if (key === "MODEL_PRICE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase())) throw new Error(`Choose one of: ${PROVIDER_IDS.join(", ")}.`);
@@ -252,17 +263,16 @@ export type SettingsPrompts = {
 
 /** Numbered, screen-reader-friendly settings menu. Secrets are never printed back to the terminal. */
 /**
- * The keys that decide whether Archymedes can run at all. One of these is the entire requirement.
+ * The settings that decide whether Archymedes can run at all. Most providers need one key; a
+ * generic or Archymedes Cloud endpoint also needs its base URL.
  *
  * Kept as its own list so the first-run menu can ask for exactly that and nothing else: someone who
  * has just installed Archymedes and wants to use Claude should not have to find "Anthropic API key" at
- * position 2 of 24, between a control-language selector and a CircuitNotion relay secret. Every
+ * position 2 of a long settings list, between unrelated controls. Every
  * other setting has a sensible default and can be changed later from `/settings`.
  */
-const PROVIDER_API_KEY_NAMES = new Set(
-  PROVIDER_IDS.flatMap((id) => PROVIDER_INFO[id].requires).filter((name) => name.endsWith("_API_KEY")),
-);
-const PROVIDER_KEY_FIELDS = SETTING_FIELDS.filter((field) => PROVIDER_API_KEY_NAMES.has(field.key));
+const PROVIDER_REQUIRED_NAMES = new Set(PROVIDER_IDS.flatMap((id) => PROVIDER_INFO[id].requires));
+const PROVIDER_KEY_FIELDS = SETTING_FIELDS.filter((field) => PROVIDER_REQUIRED_NAMES.has(field.key));
 
 export type SettingsMenuOptions = {
   /**
@@ -297,6 +307,7 @@ export type SettingsMenuOptions = {
 export const MODEL_FIELD_PROVIDER: Partial<Record<SettingKey, ProviderId>> = {
   ANTHROPIC_MODEL: "anthropic",
   OPENAI_MODEL: "openai",
+  ARCHYMEDES_CLOUD_MODEL: "archymedes-cloud",
   GOOGLE_MODEL: "google",
   XAI_MODEL: "xai",
   DEEPSEEK_MODEL: "deepseek",

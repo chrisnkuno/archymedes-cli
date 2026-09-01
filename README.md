@@ -13,13 +13,14 @@ Open source under the Apache License 2.0. Archymedes CLI began as a fork of the 
 
 ## Providers
 
-One OpenAI-compatible client drives every provider except Anthropic, each with a default host you
-can override with `<PROVIDER>_BASE_URL`:
+Direct providers use their native or OpenAI-compatible APIs. Archymedes Cloud instead sends a
+capped request to the execution exchange, which selects the provider and returns a routing receipt:
 
 | Provider | Key | Default model |
 | --- | --- | --- |
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.6-terra` |
+| Archymedes Cloud | `ARCHYMEDES_CLOUD_TOKEN` + `ARCHYMEDES_CLOUD_BASE_URL` | `auto` (policy routed) |
 | Google Gemini | `GOOGLE_API_KEY` | `gemini-2.5-pro` |
 | xAI Grok | `XAI_API_KEY` | `grok-4` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
@@ -32,9 +33,11 @@ Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and record
 
 ## Cost and balance
 
-Costs are shown in your local currency (`--location`, `--currency`, or auto-detected). `/balance`
-tracks a spend figure you set — in that currency or an explicit one (`/balance 50 usd`) — and
-subtracts each turn's measured cost from it, warning as it runs low. There is no hosted wallet.
+For direct/BYOK providers, costs are shown in your local currency and `/balance` tracks a local
+spend figure. When `archymedes-cloud` is selected, every model call reserves a configurable hard cap
+(`ARCHYMEDES_CLOUD_MAXIMUM_MICROS`, default 5,000,000 USD micros); the exchange settles measured
+usage and releases the remainder. Billing and hosted execution are operated from isolated private
+services; this public repository contains only their client contract.
 
 ## Languages
 
@@ -60,6 +63,10 @@ bun run typecheck             # tsc --noEmit
 bun run build:packages        # emit packages/*/dist
 bun run build:state           # cargo build the Rust state binary (optional)
 ```
+
+See [`docs/PLATFORM_STATUS.md`](docs/PLATFORM_STATUS.md) for repository ownership and integration
+status. The authenticated hosted boundary is documented
+in [`docs/EXCHANGE_API.md`](docs/EXCHANGE_API.md).
 
 ## Contributing
 

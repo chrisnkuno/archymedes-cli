@@ -112,4 +112,4 @@ export const PRICE_CATALOG: readonly PriceRecord[] = definePrices([...ANTHROPIC,
  * rate is configured through the price-override environment variables. Ollama is priced at zero in
  * `catalogPrices` rather than listed here, because local inference is metered by nobody.
  */
-export const UNPRICED_PROVIDERS: readonly string[] = ["openai", "openai-compatible"];
+export const UNPRICED_PROVIDERS: readonly string[] = ["openai", "archymedes-cloud", "openai-compatible"];

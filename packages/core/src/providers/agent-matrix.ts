@@ -4,6 +4,7 @@ import { tokenPrices, type Currency, type TokenPrices } from "../money";
 import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
+import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
 
 /**
  * Which model providers Archymedes can drive, and what their tokens cost.
@@ -40,7 +41,7 @@ export type ProviderSpec = ProviderInfo & {
  * `<PROVIDER>_BASE_URL` variable overrides the default — for a regional endpoint, a proxy, or a
  * self-hosted gateway.
  */
-const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "openai-compatible">, string> = {
+const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openai-compatible">, string> = {
   google: "https://generativelanguage.googleapis.com/v1beta/openai/",
   xai: "https://api.x.ai/v1",
   deepseek: "https://api.deepseek.com/v1",
@@ -55,7 +56,7 @@ export function providerEnvPrefix(id: ProviderId): string {
 }
 
 /** One spec for a provider reached over an OpenAI-compatible endpoint. */
-function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai">): ProviderSpec {
+function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud">): ProviderSpec {
   const prefix = providerEnvPrefix(id);
   const fallbackBase = id === "openai-compatible" ? undefined : OPENAI_COMPATIBLE_BASE_URL[id];
   return {
@@ -95,6 +96,19 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
         baseURL: environment.OPENAI_BASE_URL?.trim() || undefined,
       }),
   },
+  "archymedes-cloud": {
+    ...PROVIDER_INFO["archymedes-cloud"],
+    create: (environment, model) => new ArchymedesCloudTurnProvider({
+      token: environment.ARCHYMEDES_CLOUD_TOKEN!.trim(),
+      baseURL: environment.ARCHYMEDES_CLOUD_BASE_URL!.trim(),
+      model,
+      maximumMicros: optionalPositiveInteger(environment.ARCHYMEDES_CLOUD_MAXIMUM_MICROS, 5_000_000),
+      currency: environment.ARCHYMEDES_CLOUD_CURRENCY?.trim().toUpperCase() || "USD",
+      region: environment.ARCHYMEDES_CLOUD_REGION?.trim() || "global",
+      dataPolicy: environment.ARCHYMEDES_CLOUD_DATA_POLICY?.trim() || "standard",
+      qualityFloor: optionalUnitInterval(environment.ARCHYMEDES_CLOUD_QUALITY_FLOOR, 0),
+    }),
+  },
   google: openAiCompatibleSpec("google"),
   xai: openAiCompatibleSpec("xai"),
   deepseek: openAiCompatibleSpec("deepseek"),
@@ -103,6 +117,20 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   ollama: openAiCompatibleSpec("ollama"),
   "openai-compatible": openAiCompatibleSpec("openai-compatible"),
 };
+
+function optionalPositiveInteger(value: string | undefined, fallback: number): number {
+  if (!value?.trim()) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("ARCHYMEDES_CLOUD_MAXIMUM_MICROS must be a positive integer");
+  return parsed;
+}
+
+function optionalUnitInterval(value: string | undefined, fallback: number): number {
+  if (!value?.trim()) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) throw new Error("ARCHYMEDES_CLOUD_QUALITY_FLOOR must be between zero and one");
+  return parsed;
+}
 
 /** Providers whose credentials are actually present, so the CLI can offer only what will work. */
 export function availableProviders(environment: ProviderEnvironment): ProviderSpec[] {

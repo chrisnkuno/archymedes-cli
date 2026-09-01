@@ -9,6 +9,7 @@ describe("completion card", () => {
     const rendered = renderCompletionCard({
       status: "completed",
       files: ["src/a.ts", "src/b.ts"],
+      lineDelta: { added: 17, removed: 3 },
       checks: [{ kind: "tests", passed: true }, { kind: "typecheck", passed: true }],
       toolCalls: 4,
       iterations: 2,
@@ -17,6 +18,7 @@ describe("completion card", () => {
     }, style);
     expect(rendered).toContain("turn complete");
     expect(rendered).toContain("2 files changed");
+    expect(rendered).toContain("+17 −3");
     expect(rendered).toContain("tests passed · typecheck passed");
     expect(rendered).toContain("2 model turns · 4 tools");
     expect(rendered).toContain("4.2s · RWF 3");

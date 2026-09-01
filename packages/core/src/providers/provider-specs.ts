@@ -23,6 +23,7 @@ import { PRICE_CATALOG } from "./price-catalog";
 export type ProviderId =
   | "anthropic"
   | "openai"
+  | "archymedes-cloud"
   | "google"
   | "xai"
   | "deepseek"
@@ -39,6 +40,7 @@ export type ProviderId =
 export const PROVIDER_IDS: readonly ProviderId[] = [
   "anthropic",
   "openai",
+  "archymedes-cloud",
   "google",
   "xai",
   "deepseek",
@@ -87,6 +89,13 @@ export function catalogPrices(provider: ProviderId, model: string, asOf?: string
 export const PROVIDER_INFO: Record<ProviderId, ProviderInfo> = {
   anthropic: { id: "anthropic", label: "Anthropic", requires: ["ANTHROPIC_API_KEY"], defaultModel: "claude-sonnet-5" },
   openai: { id: "openai", label: "OpenAI", requires: ["OPENAI_API_KEY"], defaultModel: "gpt-5.6-terra" },
+  "archymedes-cloud": {
+    id: "archymedes-cloud",
+    label: "Archymedes Cloud",
+    requires: ["ARCHYMEDES_CLOUD_TOKEN", "ARCHYMEDES_CLOUD_BASE_URL"],
+    // `auto` is intentional: the exchange, rather than this client, selects the concrete model.
+    defaultModel: "auto",
+  },
   google: { id: "google", label: "Google Gemini", requires: ["GOOGLE_API_KEY"], defaultModel: "gemini-2.5-pro" },
   xai: { id: "xai", label: "xAI Grok", requires: ["XAI_API_KEY"], defaultModel: "grok-4" },
   deepseek: { id: "deepseek", label: "DeepSeek", requires: ["DEEPSEEK_API_KEY"], defaultModel: "deepseek-chat" },

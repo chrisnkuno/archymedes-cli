@@ -66,14 +66,14 @@ describe("the model catalog", () => {
     // A menu whose entries fail on selection is worse than a shorter menu.
     const { choices, unconfigured } = buildModelCatalog({ ANTHROPIC_API_KEY: "k" });
     expect(choices.every((choice) => choice.provider === "anthropic" || choice.provider === "ollama")).toBe(true);
-    expect(unconfigured.map((entry) => entry.provider).sort()).toEqual(["deepseek", "google", "groq", "mistral", "openai", "openai-compatible", "xai"]);
+    expect(unconfigured.map((entry) => entry.provider).sort()).toEqual(["archymedes-cloud", "deepseek", "google", "groq", "mistral", "openai", "openai-compatible", "xai"]);
     expect(unconfigured.find((entry) => entry.provider === "openai")?.missing).toEqual(["OPENAI_API_KEY"]);
   });
 
   it("still offers Ollama's local model when nothing else is configured", () => {
     const catalog = buildModelCatalog({});
     expect(catalog.choices.map((choice) => choice.provider)).toEqual(["ollama"]);
-    expect(catalog.unconfigured).toHaveLength(8);
+    expect(catalog.unconfigured).toHaveLength(9);
   });
 
   it("carries the catalog price, and admits when there is none", () => {

@@ -9,6 +9,7 @@ describe("provider matrix", () => {
     expect(availableProviders({}).map((spec) => spec.id)).toEqual(["ollama"]);
     expect(availableProviders({ ANTHROPIC_API_KEY: "sk-ant" }).map((spec) => spec.id)).toEqual(["anthropic", "ollama"]);
     expect(availableProviders({ ANTHROPIC_API_KEY: "k", DEEPSEEK_API_KEY: "k" }).map((spec) => spec.id)).toEqual(["anthropic", "deepseek", "ollama"]);
+    expect(availableProviders({ ARCHYMEDES_CLOUD_TOKEN: "token", ARCHYMEDES_CLOUD_BASE_URL: "https://cloud.example" }).map((spec) => spec.id)).toEqual(["archymedes-cloud", "ollama"]);
   });
 
   it("names the provider the user asked for when its credentials are missing", () => {
@@ -89,6 +90,13 @@ describe("provider matrix", () => {
     );
     expect("error" in compatible).toBe(false);
     if (!("error" in compatible)) expect(compatible.model).toBe("house-model");
+
+    const cloud = resolveProvider(
+      { ARCHYMEDES_CLOUD_TOKEN: "token", ARCHYMEDES_CLOUD_BASE_URL: "https://cloud.example" },
+      { provider: "archymedes-cloud" },
+    );
+    expect("error" in cloud).toBe(false);
+    if (!("error" in cloud)) expect(cloud.model).toBe("auto");
   });
 
   it("takes the model from an explicit flag, then the environment, then the default", () => {

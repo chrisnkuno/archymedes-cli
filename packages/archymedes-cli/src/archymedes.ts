@@ -549,6 +549,8 @@ const pendingCalls = new Map<string, {
 }>();
 /** Paths successfully written or edited this turn, for the "files modified" footer. */
 let touchedFiles = new Set<string>();
+/** Exact line delta across this turn's edits and writes, for the completion card scoreboard. */
+let turnLineDelta = { added: 0, removed: 0 };
 /** Latest outcome for each verification class observed in this turn. */
 let verificationChecks = new Map<string, boolean>();
 /** One labelled tool section per turn, so operational logs do not blend into the answer. */
@@ -575,6 +577,7 @@ export function configureRendering(
   activity.operation = undefined;
   activity.steps = undefined;
   touchedFiles = new Set();
+  turnLineDelta = { added: 0, removed: 0 };
   forgetToolLines();
 }
 
@@ -872,9 +875,19 @@ export function renderEvent(event: ArchymedesEvent): void {
       if (runtime.toolName === "write_file" || runtime.toolName === "edit_file") {
         toolLines.forget();
         renderWrittenCode(runtime.toolName, pending.arguments);
-        // Feeds the end-of-turn "files modified" footer.
+        // Feeds the end-of-turn "files modified" footer and the scoreboard's line delta.
         const path = typeof pending.arguments.path === "string" ? pending.arguments.path : undefined;
         if (path) touchedFiles.add(path);
+        if (runtime.toolName === "write_file") {
+          const content = typeof pending.arguments.content === "string" ? pending.arguments.content : "";
+          if (content) turnLineDelta.added += content.split("\n").length;
+        } else {
+          const before = typeof pending.arguments.oldText === "string" ? pending.arguments.oldText : "";
+          const after = typeof pending.arguments.newText === "string" ? pending.arguments.newText : "";
+          const stat = diffStat(diffLines(before, after));
+          turnLineDelta.added += stat.added;
+          turnLineDelta.removed += stat.removed;
+        }
       } else if (runtime.toolName === "run_command") {
         toolLines.forget();
         renderCommandOutput(runtime.content);
@@ -1363,10 +1376,9 @@ async function main(): Promise<number> {
     const probes = await runDoctor(environment);
     if (args.doctorReport) {
       const selectedProvider = environment.ARCHYMEDES_PROVIDER?.trim();
-      const selectedModel = selectedProvider === "anthropic" ? environment.ANTHROPIC_MODEL
-        : selectedProvider === "openai" ? environment.OPENAI_MODEL
-        : selectedProvider === "ollama" ? environment.OLLAMA_MODEL
-        : environment.CIRCUITNOTION_MODEL;
+      const selectedModel = selectedProvider && PROVIDER_IDS.includes(selectedProvider as ProviderId)
+        ? environment[`${providerEnvPrefix(selectedProvider as ProviderId)}_MODEL`]
+        : undefined;
       const history = await stateHistory.status().catch(() => undefined);
       process.stdout.write(`${JSON.stringify(doctorReport(probes, {
         cliVersion: ARCHYMEDES_CLI_VERSION,
@@ -2653,6 +2665,7 @@ async function main(): Promise<number> {
     activity.operation = undefined;
     activity.steps = undefined;
     touchedFiles = new Set();
+    turnLineDelta = { added: 0, removed: 0 };
     verificationChecks = new Map();
     toolSectionAnnounced = false;
     forgetToolLines();
@@ -2758,15 +2771,21 @@ async function main(): Promise<number> {
         toolCalls: result.toolCallsExecuted,
         elapsedMs: Date.now() - started,
       });
-      out.write(`${renderCompletionCard({
-        status: result.status,
-        files: [...touchedFiles].sort(),
-        checks: [...verificationChecks].map(([kind, passed]) => ({ kind, passed })),
-        toolCalls: result.toolCallsExecuted,
-        iterations: result.iterations,
-        elapsed: `${(turn.elapsedMs / 1_000).toFixed(1)}s`,
-        cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
-      }, sectionStyle())}\n`);
+      // Skipped for a pure question-and-answer turn: with nothing changed, nothing verified and
+      // no tool run, the card is five lines of "no" and the closing rule already carries the cost.
+      const turnDidWork = touchedFiles.size > 0 || verificationChecks.size > 0 || result.toolCallsExecuted > 0;
+      if (turnDidWork) {
+        out.write(`${renderCompletionCard({
+          status: result.status,
+          files: [...touchedFiles].sort(),
+          lineDelta: turnLineDelta.added > 0 || turnLineDelta.removed > 0 ? { ...turnLineDelta } : undefined,
+          checks: [...verificationChecks].map(([kind, passed]) => ({ kind, passed })),
+          toolCalls: result.toolCallsExecuted,
+          iterations: result.iterations,
+          elapsed: `${(turn.elapsedMs / 1_000).toFixed(1)}s`,
+          cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
+        }, sectionStyle())}\n`);
+      }
       if (manualBalance !== undefined) {
         const turnSpend = Math.max(0, (sessionSpend() ?? spendBeforeTurn) - spendBeforeTurn);
         if (turnSpend > 0) {

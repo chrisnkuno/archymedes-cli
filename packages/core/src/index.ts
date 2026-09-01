@@ -132,3 +132,6 @@ export type {
   SuggestionSurface,
   SuggestOptions,
 } from "./cli/suggestions";
+
+// Public, auditable reference primitives for the hosted execution exchange. Production storage,
+// credentials, learned weights and multi-tenant operations remain behind these interfaces.

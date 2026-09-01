@@ -4,7 +4,7 @@ import { emitCliBundle } from "./cli-bundle";
 import { fileURLToPath } from "node:url";
 
 /**
- * Builds both packages into something npm can actually install.
+ * Builds the core and CLI packages into artifacts npm can actually install.
  *
  * The core ships as mirrored ES modules plus declarations rather than one bundle, so a consumer can
  * import a single adapter without pulling the whole runtime. That shape has one sharp edge: Node's
@@ -61,7 +61,8 @@ async function addExtensions(directory: string): Promise<number> {
 
 // The hosted control plane imports the core package but never the CLI, and its deploy upload
 // deliberately omits the CLI's data inputs. `core` builds just what that deploy needs.
-const coreOnly = process.argv.slice(2).includes("core");
+const targets = new Set(process.argv.slice(2));
+const coreOnly = targets.has("core");
 
 await fs.rm(path.join(CORE, "dist"), { recursive: true, force: true });
 if (!coreOnly) await fs.rm(path.join(CLI, "dist"), { recursive: true, force: true });

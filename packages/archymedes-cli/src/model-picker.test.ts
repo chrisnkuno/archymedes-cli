@@ -18,8 +18,8 @@ describe("the picker's rows", () => {
     const settings = rows.filter((row) => row.kind === "settings");
 
     expect(models.length).toBeGreaterThan(0);
-    // Two unconfigured providers, plus the general settings row.
-    expect(settings).toHaveLength(8);
+    // One row for every unconfigured provider, plus the general settings row.
+    expect(settings).toHaveLength(9);
     expect(rows.at(-1)).toMatchObject({ kind: "settings" });
   });
 

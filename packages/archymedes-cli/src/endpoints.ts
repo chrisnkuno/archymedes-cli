@@ -33,6 +33,7 @@ export type ProviderEndpoint = {
 const DEFAULT_BASE_URL: Record<ProviderId, string> = {
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com/v1",
+  "archymedes-cloud": "",
   google: "https://generativelanguage.googleapis.com/v1beta/openai",
   xai: "https://api.x.ai/v1",
   deepseek: "https://api.deepseek.com/v1",
@@ -47,20 +48,14 @@ export function providerBaseUrl(environment: ProviderEnvironment, provider: Prov
   return override || DEFAULT_BASE_URL[provider];
 }
 
-/** The single API-key variable a provider needs, or "" for one (Ollama) that needs none. */
-function providerKeyName(provider: ProviderId): string {
-  return PROVIDER_INFO[provider].requires.find((name) => name.endsWith("_API_KEY")) ?? "";
-}
-
 /** Every model provider's API endpoint, with the base-URL override applied when set. */
 export function providerEndpoints(environment: ProviderEnvironment): ProviderEndpoint[] {
   return PROVIDER_IDS.map((id) => {
-    const keyName = providerKeyName(id);
     return {
       id,
       label: PROVIDER_INFO[id].label,
       baseUrl: providerBaseUrl(environment, id),
-      configured: keyName === "" ? true : Boolean(environment[keyName]?.trim()),
+      configured: PROVIDER_INFO[id].requires.every((name) => Boolean(environment[name]?.trim())),
     };
   });
 }
