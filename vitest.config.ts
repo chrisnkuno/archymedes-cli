@@ -3,6 +3,7 @@ import path from "node:path";
 
 /** The suites that drive a real terminal, kept out of the parallel pool. See `projects` below. */
 const PTY_TESTS = "packages/archymedes-cli/src/pty/**/*.test.ts";
+const PRIVATE_CHECKOUTS = ".private/**";
 
 /**
  * Tests resolve the core package to its source, not its build output.
@@ -36,6 +37,7 @@ export default defineConfig({
     exclude: [
       ...configDefaults.exclude,
       ".claude/worktrees/**",
+      PRIVATE_CHECKOUTS,
     ],
     /**
      * Terminal tests get the machine to themselves.
@@ -73,6 +75,7 @@ export default defineConfig({
           exclude: [
             ...configDefaults.exclude,
             ".claude/worktrees/**",
+            PRIVATE_CHECKOUTS,
             PTY_TESTS,
           ],
         },

@@ -28,6 +28,7 @@ describe("ArchymedesCloudTurnProvider", () => {
     expect(fetchImpl).toHaveBeenCalledOnce();
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://cloud.example/api/v1/chat/completions");
+    expect(init?.headers).toMatchObject({ "idempotency-key": expect.stringMatching(/^cli_/) });
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer cloud-secret");
     const body = JSON.parse(init.body as string);
     expect(body).toMatchObject({

@@ -81,6 +81,7 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
       headers: {
         authorization: `Bearer ${this.options.token}`,
         "content-type": "application/json",
+        "idempotency-key": taskId,
         "x-request-id": taskId,
       },
       body: JSON.stringify({

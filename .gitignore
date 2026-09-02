@@ -21,3 +21,7 @@ test-results/
 # Scratch output
 tmp/
 *.log
+
+# Private service checkouts used to develop the hosted platform without
+# crossing the public repository boundary.
+.private/
