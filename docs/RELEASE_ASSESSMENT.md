@@ -32,6 +32,7 @@ pseudo-terminal coverage. Keep these foundations.
 | The only journey evidence was a stale single-model reliability report | `bench:journeys` times five installed journeys under a real pty against a deterministic stub, small and large repos, into `benchmarks/journeys/latest.json`; a lean pass guards against regressions in the suite | A dependability claim needs a repeatable measurement of the product, not just of a model's answers |
 | No acceptance coverage past node-pty, and no failure-recovery measurement | `pty/acceptance.test.ts` (tmux turn + clean exit, CJK/emoji to the model verbatim, bracketed-paste stripping) and `pty/recovery.test.ts` (mid-stream disconnect, SIGKILL with a tool applied, double Ctrl+C); stub gained a `disconnect` turn | Establishes what holds under a multiplexer and under an unclean failure — and surfaced two gaps: newline pastes split, and resuming an interrupted turn is best-effort (turn-atomic checkpoints) |
 | No single view of where a task stands — request, plan, changes and verification were four separate commands | `/task` (`task-view.ts`) assembles all four plus the blockers, each row naming the command that acts on it | Review, not the last streamed paragraph, is where a turn is judged done |
+| The REPL loop's ~40 command handlers all close over `main()`'s locals, so none can be moved or tested in isolation | `session-inspect.ts` lifts `/task` and `/todos` out behind an explicit snapshot; `pty/orchestration.test.ts` pins their read-only-ness | Opens the seam every later handler extraction hangs off, starting with the two that cannot have side effects |
 
 ## What would make it best in class
 
@@ -46,10 +47,15 @@ pseudo-terminal coverage. Keep these foundations.
    stub numbers are an Archymedes-only regression signal, not a comparison against other tools;
    the bundled 91/100 `reliability/latest.json` is a dated single-model six-case report and names
    a provider (`circuitnotion`) this build no longer ships.
-2. **Unify task state across surfaces.** `archymedes.ts` is roughly 4,800 lines and coordinates
-   command dispatch, lifecycle, rendering and recovery. Extract command handlers around explicit
-   session actions and a shared view model in follow-up releases. Preserve approval, cost and
-   checkpoint invariants with integration tests before changing the orchestration.
+2. **Unify task state across surfaces.** _Started._ The seam is open: `session-inspect.ts` holds
+   the first two handlers lifted out of the REPL loop (`/task`, `/todos`) as pure functions over an
+   explicit `InspectContext` snapshot — no closure state, no output, no side effects. The two
+   chosen first are read-only by construction, and `pty/orchestration.test.ts` pins that (no model
+   call, no file write, idempotent, session still takes the next turn) so a later extraction that
+   introduces a side effect fails. Next: lift the read-only commands that touch the ledger
+   (`/cost`, `/diff`) behind the same context, then the mutating ones (`/undo`, `/retry`,
+   `/model`) once integration tests pin the approval, cost and checkpoint invariants they depend
+   on. `archymedes.ts` is still ~4,800 lines; this is a multi-release path, not a single change.
 3. **Make review the center of the workspace.** _Started._ `/task` (`task-view.ts`) is a pure
    renderer that assembles the session's request, the agent's plan (`/todos`), every file changed
    with its line delta, every verification outcome, and the blockers between here and a finished

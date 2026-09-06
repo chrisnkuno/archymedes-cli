@@ -42,7 +42,7 @@ import { installShortcuts, openChooser, openDefenderTriage, openModelPicker, ope
 import { runChooser, type ChooserItem } from "./chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
 import { renderCompletionCard } from "./completion-card";
-import { renderTaskView } from "./task-view";
+import { renderTask, renderTodos, type InspectContext } from "./session-inspect";
 import { fallbackSetting, parseFallbackPreference } from "./fallback";
 import { exportSession, type ExportFormat } from "./session-export";
 import { hostOf, providerBaseUrl } from "./endpoints";
@@ -4133,24 +4133,27 @@ async function main(): Promise<number> {
       continue;
     }
 
-    if (input === "/todos") {
-      const todos = agent.todos;
-      if (todos.length === 0) { out.write(style.dim("  no plan yet\n")); writeHint(); continue; }
-      const mark = { pending: glyphs.circleEmpty, in_progress: glyphs.circleHalf, done: glyphs.circleFull } as const;
-      out.write(`${box(todos.map((todo) => `${mark[todo.status]} ${todo.text}`), { depth, title: "todos", glyphs })}\n`);
-      continue;
-    }
-    if (input === "/task") {
-      // The whole-session view: request, plan, everything changed, everything verified, and what
-      // is still in the way — each row naming the command that acts on it. Assembled from the same
-      // state `/todos`, `/diff` and the completion card already read.
-      out.write(`${renderTaskView({
+    if (input === "/todos" || input === "/task") {
+      // The two read-only "where do things stand" commands, rendered by `session-inspect.ts` from
+      // an explicit snapshot rather than from this loop's locals — the first handler extraction.
+      const inspect: InspectContext = {
+        style: sectionStyle(),
+        glyphs,
+        depth,
+        plan: agent.todos,
         request: sessionRequest,
-        plan: agent.todos.map((todo) => ({ text: todo.text, status: todo.status })),
-        files: [...sessionFiles].sort(([a], [b]) => a.localeCompare(b)).map(([path, delta]) => ({ path, ...delta })),
-        checks: [...sessionChecks].map(([kind, passed]) => ({ kind, passed })),
-        lastTurnStatus: sessionRequest ? lastTurnStatus : undefined,
-      }, sectionStyle())}\n`);
+        files: [...sessionFiles],
+        checks: [...sessionChecks],
+        lastTurnStatus,
+        turnsTaken: sessionRequest !== undefined,
+      };
+      if (input === "/todos") {
+        const todos = renderTodos(inspect);
+        if (todos === null) { out.write(style.dim("  no plan yet\n")); writeHint(); continue; }
+        out.write(`${todos}\n`);
+        continue;
+      }
+      out.write(`${renderTask(inspect)}\n`);
       writeHint();
       continue;
     }
