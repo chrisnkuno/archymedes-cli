@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderCompletionCard } from "./completion-card";
 import type { SectionStyle } from "./sections";
+import { buildPalette, findBuiltinTheme } from "./theme";
 
 const style: SectionStyle = { width: 80, depth: "none" };
 
@@ -38,5 +39,15 @@ describe("completion card", () => {
     expect(rendered).toContain("needs verification");
     expect(rendered).toContain("no files changed");
     expect(rendered).toContain("verification not run");
+    expect(rendered).not.toContain("turn complete");
+  });
+
+  it("does not show a success color when a completed turn has failed checks", () => {
+    const palette = buildPalette(findBuiltinTheme("archymedes")!, "truecolor");
+    const rendered = renderCompletionCard({ status: "completed", files: ["src/a.ts"], checks: [{ kind: "tests", passed: false }], toolCalls: 2, iterations: 1, elapsed: "2s", cost: "$0.01" }, { ...style, depth: "truecolor", palette });
+    expect(rendered).toContain("needs attention");
+    expect(rendered).toContain("/diff · /undo");
+    expect(rendered).toContain(palette.error);
+    expect(rendered).not.toContain(palette.success);
   });
 });

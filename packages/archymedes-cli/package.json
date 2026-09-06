@@ -30,7 +30,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE",
+    "I18N.md"
   ],
   "engines": {
     "node": ">=22.5"

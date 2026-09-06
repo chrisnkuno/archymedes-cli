@@ -5,6 +5,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 packages/nova-state/target/
+packages/archymedes-state/target/
 
 # Test and coverage output
 coverage/
@@ -17,6 +18,7 @@ test-results/
 
 # Nova CLI local state (sessions, checkpoint index, security brain)
 .nova/
+.archymedes/
 
 # Scratch output
 tmp/
@@ -25,3 +27,6 @@ tmp/
 # Private service checkouts used to develop the hosted platform without
 # crossing the public repository boundary.
 .private/
+
+# Reviewed release artifacts
+artifacts/

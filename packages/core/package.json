@@ -35,7 +35,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "!dist/**/*.tsbuildinfo"
+    "!dist/**/*.tsbuildinfo",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=22.5"

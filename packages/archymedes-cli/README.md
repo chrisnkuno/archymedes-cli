@@ -285,4 +285,25 @@ On Windows, hook scripts need an extension `cmd.exe` can execute (`.cmd` or `.ba
 
 Node 22.5 or newer on Windows, macOS, or Linux. `git` enables checkpoints (Archymedes degrades to no-undo without it). `ffmpeg` is optional and needed only for direct microphone recording; existing audio files can still be transcribed without it.
 
-MIT licensed.
+Apache-2.0 licensed.
+
+
+## The Archymedes terminal
+
+The default `archymedes` theme uses bronze instruments, limestone text and olive accents.
+The opening instrument, composer, turn status line, result cards and workspace share the active palette. Startup is
+static and uses a compact identity on short or narrow terminals, leaving room for the conversation.
+Light terminals automatically use `parchment`; `blueprint`, `chalkboard` and `high-contrast` remain
+available through `/theme list`. Use `archymedes --theme blueprint` to keep the previous palette.
+`NO_COLOR` and `--ascii` retain plain output and compatible glyphs.
+
+Result cards distinguish failed checks, interrupted work and verification still needed. Changed
+files include `/diff` and `/undo` as the next review actions. A green result requires completed work
+and passing checks recorded by the runtime.
+
+## Release validation
+
+From the repository root, run `bun run release:check`. This tests and builds the packages, inspects
+the CLI archive, installs that exact archive in a temporary consumer, and verifies Node startup and
+TUI dependency resolution. The reviewed archive and SHA256 checksum are written to `artifacts/`.
+See [the release assessment](https://github.com/chrisnkuno/archymedes-cli/blob/main/docs/RELEASE_ASSESSMENT.md) for scope and remaining release proof.

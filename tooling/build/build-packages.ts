@@ -64,6 +64,11 @@ async function addExtensions(directory: string): Promise<number> {
 const targets = new Set(process.argv.slice(2));
 const coreOnly = targets.has("core");
 
+// Keep the existing attribution with each independently distributed package.
+for (const directory of coreOnly ? [CORE] : [CORE, CLI]) {
+  await fs.copyFile(path.join(ROOT, "NOTICE"), path.join(directory, "NOTICE"));
+}
+
 await fs.rm(path.join(CORE, "dist"), { recursive: true, force: true });
 if (!coreOnly) await fs.rm(path.join(CLI, "dist"), { recursive: true, force: true });
 

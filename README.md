@@ -77,3 +77,19 @@ See `CONTRIBUTING.md`. Commits are signed off under the [DCO](https://developerc
 
 Apache License 2.0. See `LICENSE` and `NOTICE`. The Apache license does not grant rights to the
 "Archymedes" name or marks — see `TRADEMARK.md`.
+
+
+## Terminal identity and release checks
+
+Archymedes now opens with a graduated-ring instrument and a bronze, limestone and olive palette. The input
+composer and workspace follow the selected theme; light terminals retain parchment. Preview the
+interface without credentials or model requests:
+
+```bash
+bun run preview:tui
+bun run preview:tui parchment
+bun run release:check
+```
+
+The release check validates the packed CLI in a separate consumer project. See the
+[release assessment](docs/RELEASE_ASSESSMENT.md) for findings, priorities and publishing requirements.

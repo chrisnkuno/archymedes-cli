@@ -27,7 +27,8 @@ import { buildPickerRows, type PickerResult } from "./model-picker";
 import { INITIAL_TABLE_STATE, renderTable } from "./table";
 import { buildCostTable, buildJobsTable, buildModelTable } from "./tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
-import { detectColorDepth, renderBanner, renderTagline } from "./banner";
+import { detectColorDepth } from "./banner";
+import { renderIdentity } from "./identity";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
 import { visibleWidth } from "./markdown";
@@ -2248,7 +2249,7 @@ async function main(): Promise<number> {
   const promptWidth = () => screen?.current.columns ?? process.stdout.columns ?? 80;
 
   const promptFrame = (status: string) =>
-    renderPromptBox({ mode, workspace: where, depth, width: promptWidth(), status, glyphs, borderStyle: palette.borderStyle });
+    renderPromptBox({ mode, workspace: where, depth, width: promptWidth(), status, glyphs, palette });
 
   /**
    * The inline input bar, for the sessions that do not pin a footer — which is almost all of them,
@@ -2261,7 +2262,7 @@ async function main(): Promise<number> {
   const promptBox = new PromptBox(out, {
     depth,
     glyphs,
-    borderStyle: palette.borderStyle,
+    palette: () => palette,
     columns: promptWidth,
   });
   /** True when the inline bar owns the bottom rows: a real TTY that is not holding a region. */
@@ -2696,8 +2697,8 @@ async function main(): Promise<number> {
       // drops segments to fit what it is given, and handing it the full width would have it fit a
       // row that the corners and title have already spent part of.
       spinner = new Spinner(() => screen?.pinned
-        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs))
-        : statusBar.render(fields(), depth, glyphs), 120, glyphs, SPINNER_START_DELAY_MS);
+        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs, palette.primary))
+        : statusBar.render(fields(), depth, glyphs, palette.primary), 120, glyphs, SPINNER_START_DELAY_MS);
       spinner.start();
     }
     turnActive = true;
@@ -2963,43 +2964,26 @@ async function main(): Promise<number> {
   }
 
   const where = workspace.kind === "e2b" ? `sandbox ${workspace.label.split(":")[1]}` : path.basename(args.root);
-  const bannerOptions = {
+  out.write(`${renderIdentity({
     width: process.stdout.columns ?? 80,
-    depth,
+    rows: process.stdout.rows ?? 24,
+    version: ARCHYMEDES_CLI_VERSION,
+    workspace: where,
+    model: `${spec.label} ${resolvedModelId}`,
+    mode,
+    palette,
     glyphs,
-    subtitle: `${mode} ${glyphs.middot} ${spec.label} ${resolvedModelId} ${glyphs.middot} ${where}`,
-    // Seeded per session, so the sky is stable while you are looking at it.
-    seed: Date.now() & 0xffff,
-  };
-  if (depth === "none") {
-    out.write(`${renderBanner(bannerOptions)}\n`);
-  } else {
-    // The sky settles in rather than arriving lit — the wordmark itself never dims (see
-    // `banner.ts`), so the one thing a person needs to read first is legible from the very first
-    // frame, and only the stars around it are what spring up to full brightness.
-    //
-    // Safe where the dropdown's row animation was not, and for a reason worth stating: every frame
-    // here occupies the *same* rows. `renderBanner` returns a fixed number of lines whose widths do
-    // not depend on `intensity` — it changes colour, never geometry — so the redraw erases exactly
-    // the rows it reprints and nothing scrolls. Animating a fixed frame is repainting; animating a
-    // frame's size is scrolling, and only one of those is reversible.
-    const bannerBlock = new ReplaceableBlock(out);
-    for (const line of renderBanner({ ...bannerOptions, intensity: 0 }).split("\n")) bannerBlock.append(line);
-    await new Promise<void>((resolve) => {
-      const animator: SpringAnimator = new SpringAnimator(0, (value) => {
-        bannerBlock.updateAll(renderBanner({ ...bannerOptions, intensity: value }).split("\n"));
-        if (animator.settled) resolve();
-      }, { intervalMs: 50 });
-      animator.retarget(1);
-    });
-    bannerBlock.forget(); // committed to scrollback; nothing may rewrite it again
-  }
-  // `/guide` sits on the opening line beside `/help`, because the two answer different questions —
-  // one lists what you can type, the other explains what any of it is for — and a manual nobody is
-  // told about is a manual nobody reads.
-  out.write(`${renderTagline(`  /help ${controlLabel(language, "help")} ${glyphs.middot} /guide ${controlLabel(language, "guide")} ${glyphs.middot} /exit ${controlLabel(language, "exit")} ${glyphs.middot} # ${controlLabel(language, "remember")}`, depth)}\n`);
-  out.write(`${style.green(`  ${renderReliabilityStatus(process.stdout.columns ?? 80, glyphs.middot)}`)}\n`);
-  out.write(style.dim(`  costs: ${display}${preference.countryCode ? ` ${glyphs.middot} location ${preference.countryCode}` : ""} ${glyphs.middot} ${preference.source === "location" ? "auto-detected" : preference.source}\n`));
+  })}\n`);
+  // One dim context line under the identity rather than a stack of them: the benchmark, the
+  // currency costs are shown in, and any standing session modifiers (pace, remembered facts). The
+  // yellow lines below are the ones that ask for a decision, so those keep their own rows.
+  const context = [
+    renderReliabilityStatus(999, glyphs.middot),
+    `costs ${display}${preference.countryCode ? ` ${glyphs.middot} location ${preference.countryCode}` : ""} (${preference.source === "location" ? "auto-detected" : preference.source})`,
+  ];
+  if (pace !== "off") context.push(`${paceBadge(pace, glyphs)} ${glyphs.middot} /slow off to lift`);
+  if (memories.length > 0) context.push(`${memories.length} remembered fact${memories.length === 1 ? "" : "s"} ${glyphs.middot} /memory`);
+  out.write(`${style.dim(`  ${context.join(`  ${glyphs.middot}  `)}`)}\n`);
   if (localCurrencyWarning) out.write(`${style.yellow(`  ${localCurrencyWarning}`)}\n`);
   if (!args.budget) {
     out.write(`${style.yellow(`  No session spend cap set ${glyphs.middot} use --budget N to approve and enforce one.`)}\n`);
@@ -3007,8 +2991,6 @@ async function main(): Promise<number> {
     // this is the other half of the answer.
     if (pace === "off") out.write(style.dim(`  ${glyphs.middot} /slow paces spending without capping it\n`));
   }
-  if (pace !== "off") out.write(style.dim(`  ${paceBadge(pace, glyphs)} ${glyphs.middot} fewer model rounds per turn; /slow off to lift it\n`));
-  if (memories.length > 0) out.write(style.dim(`  ${glyphs.middot} ${memories.length} remembered fact${memories.length === 1 ? "" : "s"} in play ${glyphs.middot} /memory to see them\n`));
   if (!prices) {
     out.write(`${style.yellow(`  No price configured for ${resolvedModelId} ${glyphs.middot} costs will show as unknown.`)}\n`);
     out.write(`${style.dim(`  Set ${PRICE_ENVIRONMENT_HINT}, or run archymedes --providers.`)}\n`);

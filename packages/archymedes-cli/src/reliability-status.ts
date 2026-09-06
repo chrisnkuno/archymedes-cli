@@ -1,4 +1,5 @@
 import bundledEvidence from "../../../reliability/latest.json";
+import { clipTo } from "./chooser";
 
 export type ReliabilitySnapshot = {
   score: number;
@@ -16,8 +17,11 @@ export function renderReliabilityStatus(
 ): string {
   const date =
     /^\d{4}-\d{2}-\d{2}/.exec(snapshot.generatedAt)?.[0] ?? "unknown date";
-  const score = Math.max(0, Math.min(100, Math.round(snapshot.score)));
-  if (width < 48)
-    return `reliability ${score}/100 ${separator} improving daily`;
-  return `reliability ${score}/100 ${separator} ${snapshot.grade} ${separator} measured ${date} ${separator} improving toward best-in-class`;
+  const score = Number.isFinite(snapshot.score)
+    ? `${Math.max(0, Math.min(100, Math.round(snapshot.score)))}/100` : "unavailable";
+  // Bundled evidence is a historical benchmark, not a live service-health measurement.
+  const text = width < 48
+    ? `benchmark ${score} ${separator} ${date}`
+    : `bundled benchmark ${score} ${separator} measured ${date}`;
+  return clipTo(text, Math.max(0, width));
 }

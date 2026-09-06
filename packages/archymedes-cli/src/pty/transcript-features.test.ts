@@ -65,8 +65,8 @@ describe("what the transcript shows, under a real pty", () => {
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
     const output = plain(p.output());
-    expect(output).toMatch(/reliability \d+\/100/);
-    expect(output).toContain("improving toward best-in-class");
+    expect(output).toMatch(/bundled benchmark \d+\/100/);
+    expect(output).toMatch(/measured \d{4}-\d{2}-\d{2}/);
   }, 60_000);
 
   it("shows the code a write actually contained, not only that a write happened", async () => {

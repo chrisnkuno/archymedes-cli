@@ -8,15 +8,15 @@ const snapshot = {
 };
 
 describe("the startup reliability signal", () => {
-  it("names the measured score, evidence date, and direction", () => {
+  it("labels bundled measurements without an unsupported improvement claim", () => {
     expect(renderReliabilityStatus(100, "·", snapshot)).toBe(
-      "reliability 98/100 · excellent · measured 2026-08-23 · improving toward best-in-class",
+      "bundled benchmark 98/100 · measured 2026-08-23",
     );
   });
 
   it("keeps the useful signal in a narrow terminal", () => {
     const rendered = renderReliabilityStatus(40, ".", snapshot);
-    expect(rendered).toBe("reliability 98/100 . improving daily");
+    expect(rendered).toBe("benchmark 98/100 . 2026-08-23");
     expect(rendered.length).toBeLessThanOrEqual(40);
   });
 
@@ -27,5 +27,6 @@ describe("the startup reliability signal", () => {
     expect(
       renderReliabilityStatus(40, "·", { ...snapshot, score: -2 }),
     ).toContain("0/100");
+    expect(renderReliabilityStatus(80, "·", { ...snapshot, score: NaN })).toContain("unavailable");
   });
 });

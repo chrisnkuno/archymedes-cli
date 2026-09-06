@@ -1,0 +1,12 @@
+Archymedes CLI
+Copyright 2026 Archymedes CLI contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Portions of this software are derived from the Nova CLI ("Circuit-Nova"),
+Copyright 2026 Circuit-Nova, originally licensed under the MIT License. Those
+portions remain available from their origin under the MIT License; the combined
+work and all subsequent changes are distributed under the Apache License, 2.0.
+
+Bundled and dependent third-party components retain their own licenses; see each
+package's metadata for details.
