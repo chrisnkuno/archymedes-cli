@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-09-06T07:33:21.860Z",
+  "harness": "pty + anthropic-stub",
+  "deterministic": true,
+  "node": "v22.22.0",
+  "platform": "linux",
+  "arch": "x64",
+  "model": "stub",
+  "repos": {
+    "small": {
+      "files": 6
+    },
+    "large": {
+      "files": 602
+    }
+  },
+  "samplesPerJourney": 5,
+  "journeys": [
+    {
+      "journey": "first-prompt",
+      "repo": "small",
+      "samples": 5,
+      "minMs": 260,
+      "p50Ms": 292,
+      "p95Ms": 317,
+      "budgetMs": 6000,
+      "status": "pass"
+    },
+    {
+      "journey": "first-edit",
+      "repo": "small",
+      "samples": 5,
+      "minMs": 296,
+      "p50Ms": 311,
+      "p95Ms": 359,
+      "budgetMs": 7000,
+      "status": "pass"
+    },
+    {
+      "journey": "verified-turn",
+      "repo": "small",
+      "samples": 5,
+      "minMs": 365,
+      "p50Ms": 405,
+      "p95Ms": 426,
+      "budgetMs": 9000,
+      "status": "pass"
+    },
+    {
+      "journey": "cancel",
+      "repo": "small",
+      "samples": 5,
+      "minMs": 44,
+      "p50Ms": 48,
+      "p95Ms": 53,
+      "budgetMs": 2500,
+      "status": "pass"
+    },
+    {
+      "journey": "resume",
+      "repo": "small",
+      "samples": 5,
+      "minMs": 279,
+      "p50Ms": 301,
+      "p95Ms": 313,
+      "budgetMs": 8000,
+      "status": "pass"
+    },
+    {
+      "journey": "first-prompt",
+      "repo": "large",
+      "samples": 5,
+      "minMs": 271,
+      "p50Ms": 280,
+      "p95Ms": 306,
+      "budgetMs": 7000,
+      "status": "pass"
+    },
+    {
+      "journey": "first-edit",
+      "repo": "large",
+      "samples": 5,
+      "minMs": 305,
+      "p50Ms": 322,
+      "p95Ms": 336,
+      "budgetMs": 8000,
+      "status": "pass"
+    },
+    {
+      "journey": "verified-turn",
+      "repo": "large",
+      "samples": 5,
+      "minMs": 379,
+      "p50Ms": 422,
+      "p95Ms": 519,
+      "budgetMs": 10000,
+      "status": "pass"
+    },
+    {
+      "journey": "cancel",
+      "repo": "large",
+      "samples": 5,
+      "minMs": 39,
+      "p50Ms": 43,
+      "p95Ms": 56,
+      "budgetMs": 2500,
+      "status": "pass"
+    },
+    {
+      "journey": "resume",
+      "repo": "large",
+      "samples": 5,
+      "minMs": 276,
+      "p50Ms": 308,
+      "p95Ms": 332,
+      "budgetMs": 9000,
+      "status": "pass"
+    }
+  ]
+}

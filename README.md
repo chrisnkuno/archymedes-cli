@@ -89,7 +89,11 @@ interface without credentials or model requests:
 bun run preview:tui
 bun run preview:tui parchment
 bun run release:check
+bun run bench:journeys
 ```
 
-The release check validates the packed CLI in a separate consumer project. See the
+The release check validates the packed CLI in a separate consumer project. `bench:journeys`
+drives the real terminal binary against a deterministic stub and times five installed journeys
+(first prompt, first edit, verified turn, cancel, resume) on a small and a large repository,
+writing `benchmarks/journeys/latest.json`. See the
 [release assessment](docs/RELEASE_ASSESSMENT.md) for findings, priorities and publishing requirements.

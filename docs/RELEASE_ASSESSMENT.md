@@ -29,14 +29,21 @@ pseudo-terminal coverage. Keep these foundations.
 | No checked-in CI workflow | Linux tests plus Linux/macOS/Windows build and package-smoke jobs | Repeatable checks for future releases; remote execution still needs proof |
 | Package README contradicted its Apache license; attribution and language docs were omitted from the CLI archive | README corrected; existing NOTICE copied to distributable packages; CLI includes I18N.md | Package metadata and included documentation agree |
 | Ignore rules still named Nova state paths only | Ignore Archymedes local session state, Rust target, release artifacts | Local state and build products stay outside source changes |
+| The only journey evidence was a stale single-model reliability report | `bench:journeys` times five installed journeys under a real pty against a deterministic stub, small and large repos, into `benchmarks/journeys/latest.json`; a lean pass guards against regressions in the suite | A dependability claim needs a repeatable measurement of the product, not just of a model's answers |
 
 ## What would make it best in class
 
-1. **Measure installed user journeys.** Track time to first usable prompt, approval latency, first
-   successful edit, verified completion rate, cancellation latency, and successful cross-process
-   resume. Measure representative small and large repositories and publish sample size and model.
-   The bundled 91/100 report is dated August 23, uses one provider/model, and has six cases. It is
-   useful regression evidence, not a comparative industry benchmark.
+1. **Measure installed user journeys.** _Started._ `bun run bench:journeys` drives the real
+   terminal binary under a pseudo-terminal against a deterministic SSE stub and times five
+   journeys — time to first usable prompt, first edit applied, verified turn complete, cancel to
+   usable prompt, cross-process resume — on a small (6-file) and a large (600-file) repository,
+   writing `benchmarks/journeys/latest.json` with Node version, platform, sample count and a
+   `model: "stub"` marker. A lean two-sample pass runs in the suite as a structural-regression
+   guard (`packages/archymedes-cli/src/pty/journeys.test.ts`). Still to do: run it against a live
+   provider for real latency, add an approval-latency journey, and record it per CI platform. The
+   stub numbers are an Archymedes-only regression signal, not a comparison against other tools;
+   the bundled 91/100 `reliability/latest.json` is a dated single-model six-case report and names
+   a provider (`circuitnotion`) this build no longer ships.
 2. **Unify task state across surfaces.** `archymedes.ts` is roughly 4,800 lines and coordinates
    command dispatch, lifecycle, rendering and recovery. Extract command handlers around explicit
    session actions and a shared view model in follow-up releases. Preserve approval, cost and
