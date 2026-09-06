@@ -157,8 +157,9 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       { input: "/retry", effect: "repeat a failed request when nothing had run or changed" },
       { input: "/continue", effect: "finish an interrupted task without repeating completed work" },
       { input: "/todos", effect: "the agent's current plan" },
+      { input: "/task", effect: "the whole task at a glance: request, plan, changes, verification, blockers" },
     ],
-    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos"],
+    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos", "/task"],
   },
   {
     id: "memory",

@@ -42,6 +42,7 @@ import { installShortcuts, openChooser, openDefenderTriage, openModelPicker, ope
 import { runChooser, type ChooserItem } from "./chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
 import { renderCompletionCard } from "./completion-card";
+import { renderTaskView } from "./task-view";
 import { fallbackSetting, parseFallbackPreference } from "./fallback";
 import { exportSession, type ExportFormat } from "./session-export";
 import { hostOf, providerBaseUrl } from "./endpoints";
@@ -554,6 +555,13 @@ let touchedFiles = new Set<string>();
 let turnLineDelta = { added: 0, removed: 0 };
 /** Latest outcome for each verification class observed in this turn. */
 let verificationChecks = new Map<string, boolean>();
+/**
+ * Session-cumulative view for `/task` — per-file line deltas and the latest outcome per check
+ * class, across every turn. Mutated in place and never reassigned, so the per-turn reset above
+ * leaves them alone; they run for the life of one `main()`.
+ */
+const sessionFiles = new Map<string, { added: number; removed: number }>();
+const sessionChecks = new Map<string, boolean>();
 /** One labelled tool section per turn, so operational logs do not blend into the answer. */
 let toolSectionAnnounced = false;
 
@@ -838,7 +846,10 @@ export function renderEvent(event: ArchymedesEvent): void {
   if (runtime.type === "tool_result") {
     activity.toolCalls += 1;
     const verificationKind = typeof runtime.data?.verificationKind === "string" ? runtime.data.verificationKind : undefined;
-    if (verificationKind) verificationChecks.set(verificationKind, !runtime.isError);
+    if (verificationKind) {
+      verificationChecks.set(verificationKind, !runtime.isError);
+      sessionChecks.set(verificationKind, !runtime.isError);
+    }
     // Read from the structured result rather than from the rendered checklist: the counter must
     // not depend on how the list happens to be printed.
     const items = Array.isArray(runtime.data?.items) ? runtime.data.items as Array<{ status?: string }> : undefined;
@@ -879,15 +890,23 @@ export function renderEvent(event: ArchymedesEvent): void {
         // Feeds the end-of-turn "files modified" footer and the scoreboard's line delta.
         const path = typeof pending.arguments.path === "string" ? pending.arguments.path : undefined;
         if (path) touchedFiles.add(path);
+        let addedDelta = 0;
+        let removedDelta = 0;
         if (runtime.toolName === "write_file") {
           const content = typeof pending.arguments.content === "string" ? pending.arguments.content : "";
-          if (content) turnLineDelta.added += content.split("\n").length;
+          if (content) addedDelta = content.split("\n").length;
         } else {
           const before = typeof pending.arguments.oldText === "string" ? pending.arguments.oldText : "";
           const after = typeof pending.arguments.newText === "string" ? pending.arguments.newText : "";
           const stat = diffStat(diffLines(before, after));
-          turnLineDelta.added += stat.added;
-          turnLineDelta.removed += stat.removed;
+          addedDelta = stat.added;
+          removedDelta = stat.removed;
+        }
+        turnLineDelta.added += addedDelta;
+        turnLineDelta.removed += removedDelta;
+        if (path) {
+          const prior = sessionFiles.get(path) ?? { added: 0, removed: 0 };
+          sessionFiles.set(path, { added: prior.added + addedDelta, removed: prior.removed + removedDelta });
         }
       } else if (runtime.toolName === "run_command") {
         toolLines.forget();
@@ -2545,6 +2564,8 @@ async function main(): Promise<number> {
   let streamedAnswer = false;
   /** The last turn's terminal status, which headless mode turns into the process exit code. */
   let lastTurnStatus: AgentRuntimeResult["status"] = "failed";
+  /** The first thing this session was asked to do — the top line of `/task`. */
+  let sessionRequest: string | undefined;
   type RecoverableTurn = {
     request: string;
     status: AgentRuntimeResult["status"];
@@ -2558,6 +2579,7 @@ async function main(): Promise<number> {
   let lastTurnEndedAt: number | undefined;
   const runTurn = async (request: string): Promise<boolean> => {
     headless?.turnStart(request);
+    sessionRequest ??= request; // the opening ask, kept for `/task`
     streamedAnswer = false;
     if (screen) {
       screen.parkInTranscript();
@@ -4116,6 +4138,20 @@ async function main(): Promise<number> {
       if (todos.length === 0) { out.write(style.dim("  no plan yet\n")); writeHint(); continue; }
       const mark = { pending: glyphs.circleEmpty, in_progress: glyphs.circleHalf, done: glyphs.circleFull } as const;
       out.write(`${box(todos.map((todo) => `${mark[todo.status]} ${todo.text}`), { depth, title: "todos", glyphs })}\n`);
+      continue;
+    }
+    if (input === "/task") {
+      // The whole-session view: request, plan, everything changed, everything verified, and what
+      // is still in the way — each row naming the command that acts on it. Assembled from the same
+      // state `/todos`, `/diff` and the completion card already read.
+      out.write(`${renderTaskView({
+        request: sessionRequest,
+        plan: agent.todos.map((todo) => ({ text: todo.text, status: todo.status })),
+        files: [...sessionFiles].sort(([a], [b]) => a.localeCompare(b)).map(([path, delta]) => ({ path, ...delta })),
+        checks: [...sessionChecks].map(([kind, passed]) => ({ kind, passed })),
+        lastTurnStatus: sessionRequest ? lastTurnStatus : undefined,
+      }, sectionStyle())}\n`);
+      writeHint();
       continue;
     }
     if (input === "/diff" || input === "/diff stat") {

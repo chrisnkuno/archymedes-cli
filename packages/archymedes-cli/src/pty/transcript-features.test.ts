@@ -133,6 +133,26 @@ describe("what the transcript shows, under a real pty", () => {
     await p.waitFor(/value59/, { timeoutMs: 20_000, since: before });
   }, 60_000);
 
+  it("shows the whole task — request, changed file, and its command handles — on /task", async () => {
+    const p = boot();
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    stub.enqueue({ kind: "tool_call", toolName: "write_file", input: { path: "slug.ts", content: "export const slug = (s: string) => s;\n" } });
+    stub.enqueue({ kind: "text", text: "Added the slug helper." });
+    const turnStarted = p.output().length;
+    p.writeLine("add a slug helper");
+    await p.waitFor(/turn complete|needs attention|verification (needed|not run)/, { timeoutMs: 30_000, since: turnStarted });
+    await p.waitFor(PROMPT, { timeoutMs: 20_000, since: turnStarted });
+
+    const before = p.output().length;
+    p.writeLine("/task");
+    await p.waitFor(/changed .* \/diff/, { timeoutMs: 20_000, since: before });
+    const view = plain(p.output().slice(before));
+    expect(view).toContain("add a slug helper");
+    expect(view).toContain("slug.ts");
+    expect(view).toMatch(/changed .* \/diff .* \/undo/);
+  }, 60_000);
+
   it("remembers a fact typed with # and keeps it in a file the user can read", async () => {
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });

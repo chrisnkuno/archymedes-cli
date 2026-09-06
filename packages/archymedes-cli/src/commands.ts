@@ -35,6 +35,7 @@ export const COMMANDS = defineCommands({
   "/continue": { description: "Resume an interrupted or incomplete task from its current workspace state" },
   "/diff": { description: "What changed since the last checkpoint" },
   "/todos": { description: "The agent's current plan" },
+  "/task": { description: "Where the whole task stands: request, plan, changes, verification, blockers" },
   "/clear": { description: "Start a fresh thread" },
   "/memory": { args: "[add|replace|recall|forget]", description: "Bounded, relevant memory across sessions — # <fact> remembers for this project" },
   "/history": { args: "[<id> | search <text> | resume | status]", description: "Browse, search or pick up durable conversation history" },

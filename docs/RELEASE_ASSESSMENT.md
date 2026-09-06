@@ -30,7 +30,8 @@ pseudo-terminal coverage. Keep these foundations.
 | Package README contradicted its Apache license; attribution and language docs were omitted from the CLI archive | README corrected; existing NOTICE copied to distributable packages; CLI includes I18N.md | Package metadata and included documentation agree |
 | Ignore rules still named Nova state paths only | Ignore Archymedes local session state, Rust target, release artifacts | Local state and build products stay outside source changes |
 | The only journey evidence was a stale single-model reliability report | `bench:journeys` times five installed journeys under a real pty against a deterministic stub, small and large repos, into `benchmarks/journeys/latest.json`; a lean pass guards against regressions in the suite | A dependability claim needs a repeatable measurement of the product, not just of a model's answers |
-| No acceptance coverage past node-pty, and no failure-recovery measurement | `pty/acceptance.test.ts` (tmux turn + clean exit, CJK/emoji to the model verbatim, bracketed-paste stripping) and `pty/recovery.test.ts` (mid-stream disconnect, SIGKILL with a tool applied, double Ctrl+C); stub gained a `disconnect` turn | Establishes what holds under a multiplexer and under an unclean failure — and surfaced two gaps: newline pastes split, interrupted turns are not resumable |
+| No acceptance coverage past node-pty, and no failure-recovery measurement | `pty/acceptance.test.ts` (tmux turn + clean exit, CJK/emoji to the model verbatim, bracketed-paste stripping) and `pty/recovery.test.ts` (mid-stream disconnect, SIGKILL with a tool applied, double Ctrl+C); stub gained a `disconnect` turn | Establishes what holds under a multiplexer and under an unclean failure — and surfaced two gaps: newline pastes split, and resuming an interrupted turn is best-effort (turn-atomic checkpoints) |
+| No single view of where a task stands — request, plan, changes and verification were four separate commands | `/task` (`task-view.ts`) assembles all four plus the blockers, each row naming the command that acts on it | Review, not the last streamed paragraph, is where a turn is judged done |
 
 ## What would make it best in class
 
@@ -49,10 +50,13 @@ pseudo-terminal coverage. Keep these foundations.
    command dispatch, lifecycle, rendering and recovery. Extract command handlers around explicit
    session actions and a shared view model in follow-up releases. Preserve approval, cost and
    checkpoint invariants with integration tests before changing the orchestration.
-3. **Make review the center of the workspace.** Extend the existing panes with a single task view
-   connecting the request, plan, changed files, verification records and unresolved blockers. Reuse
-   the current diff, completion and job models. Every displayed result should link to its source
-   command or artifact; provider prose should not substitute for verification.
+3. **Make review the center of the workspace.** _Started._ `/task` (`task-view.ts`) is a pure
+   renderer that assembles the session's request, the agent's plan (`/todos`), every file changed
+   with its line delta, every verification outcome, and the blockers between here and a finished
+   task — each row naming the command that produced it or acts on it (`/diff`, `/undo`, `/retry`).
+   It reads session-cumulative state accumulated alongside the per-turn completion-card state.
+   Still to do: surface it as a pane in `/workspace` rather than only as a transcript command, and
+   pull plan/verification straight from structured runtime events rather than the CLI's own tallies.
 4. **Expand terminal acceptance testing.** _Started._ `pty/acceptance.test.ts` runs the installed
    binary through tmux for a whole turn and a clean exit, sends CJK/emoji input and asserts it
    reaches the model byte-for-byte, and checks bracketed-paste markers are stripped before the
@@ -63,10 +67,11 @@ pseudo-terminal coverage. Keep these foundations.
 5. **Prove recovery under failure.** _Started._ `pty/recovery.test.ts` measures three unclean
    failures against the local stub: a mid-stream connection drop (bounded in-turn retry, partial
    answer not doubled, session usable after), a SIGKILL with a tool call already applied (the file
-   write lands exactly once), and a double Ctrl+C mid-turn (no hang). Finding: session records are
-   turn-atomic, so a process killed mid-turn leaves a durable tool effect but nothing for
-   `--resume` to attach to — conversation state for an interrupted turn is lost. Deciding whether
-   to checkpoint mid-turn is the open design question. Interrupted-payment belongs with the hosted
+   write lands exactly once, always), and a double Ctrl+C mid-turn (no hang). Finding: the tool
+   effect is exactly-once and durable, but conversation-state recovery is not — session records
+   are turn-atomic, so whether `--resume` finds the interrupted session depends on whether the
+   turn had been checkpointed at the instant the process died. Deciding whether to checkpoint
+   mid-turn is the open design question. Interrupted-payment belongs with the hosted
    service (item 6), not the local CLI. Still to do: run these against a production-like remote
    deployment rather than a stub.
 6. **Keep hosted promises precise.** A public exchange client is not proof of live credits,
