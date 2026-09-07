@@ -36,6 +36,7 @@ export const COMMANDS = defineCommands({
   "/diff": { description: "What changed since the last checkpoint" },
   "/todos": { description: "The agent's current plan" },
   "/task": { description: "Where the whole task stands: request, plan, changes, verification, blockers" },
+  "/route": { args: "[all]", description: "The hosted exchange's routing decision: chosen model, alternatives, policy, est vs actual cost" },
   "/clear": { description: "Start a fresh thread" },
   "/memory": { args: "[add|replace|recall|forget]", description: "Bounded, relevant memory across sessions — # <fact> remembers for this project" },
   "/history": { args: "[<id> | search <text> | resume | status]", description: "Browse, search or pick up durable conversation history" },

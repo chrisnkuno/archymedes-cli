@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { toWireMessages, turnFromChatResponse, type ChatResponse } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
+import { buildTaskProfile, TASK_KINDS, type TaskKind } from "./routing-receipt";
 
 export type ArchymedesCloudDataPolicy = "standard" | "no-training" | "zero-retention" | "local-only";
 
@@ -14,6 +15,8 @@ export type ArchymedesCloudAgentOptions = {
   region?: string;
   dataPolicy?: string;
   qualityFloor?: number;
+  /** The unit of work the exchange is routing — steers model selection. Defaults to "coding". */
+  taskKind?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 };
@@ -43,6 +46,7 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
   private readonly currency: string;
   private readonly dataPolicy: ArchymedesCloudDataPolicy;
   private readonly qualityFloor: number;
+  private readonly taskKind: TaskKind;
 
   constructor(private readonly options: ArchymedesCloudAgentOptions) {
     if (!options.token.trim()) throw new Error("ARCHYMEDES_CLOUD_TOKEN is required");
@@ -61,6 +65,8 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
     this.currency = currency;
     this.dataPolicy = dataPolicy as ArchymedesCloudDataPolicy;
     this.qualityFloor = qualityFloor;
+    const requestedKind = options.taskKind?.trim().toLowerCase();
+    this.taskKind = (TASK_KINDS as readonly string[]).includes(requestedKind ?? "") ? requestedKind as TaskKind : "coding";
     this.fetchImpl = options.fetchImpl ?? fetch;
     const base = options.baseURL.replace(/\/+$/, "");
     this.completionUrl = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
@@ -100,13 +106,16 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
         archymedes: {
           task_id: taskId,
           maximum: { currency: this.currency, micros: this.maximumMicros },
-          profile: {
-            kind: "coding",
-            requiredCapabilities: request.tools.length > 0 ? ["tools"] : [],
+          profile: buildTaskProfile({
+            kind: this.taskKind,
+            requiredCapabilities: [
+              ...(request.tools.length > 0 ? ["tools"] : []),
+              ...(request.effort ? ["reasoning"] : []),
+            ],
             dataPolicy: this.dataPolicy,
-            ...(this.options.region?.trim() ? { region: this.options.region.trim() } : {}),
+            region: this.options.region,
             qualityFloor: this.qualityFloor,
-          },
+          }),
         },
       }),
       signal,

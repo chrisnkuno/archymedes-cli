@@ -69,14 +69,37 @@ The response retains the provider’s OpenAI-compatible body and adds:
 {
   "archymedes": {
     "reservation_id": "rsv_...",
-    "routing_receipt": {},
+    "routing_receipt": {
+      "task_id": "cli_...",
+      "chosen": { "model": "claude-sonnet-5", "provider": "anthropic" },
+      "considered": [
+        { "model": "claude-sonnet-5", "provider": "anthropic", "eligible": true,
+          "reason": "highest predicted outcome within budget", "estimatedMicros": 12000, "score": 0.86 },
+        { "model": "gpt-5.6-terra", "provider": "openai", "eligible": true,
+          "reason": "cheaper, below the quality floor", "estimatedMicros": 9000, "score": 0.81 },
+        { "model": "gemini-2.5-pro", "provider": "google", "eligible": false,
+          "reason": "data-residency policy: not available in region us" }
+      ],
+      "policy": { "dataPolicy": "zero-retention", "region": "us", "qualityFloor": 0.8, "maximumMicros": 5000000 },
+      "currency": "USD",
+      "estimatedMicros": 12000,
+      "actualMicros": 9800,
+      "retries": 1,
+      "latencyMs": 1420,
+      "outcomeScore": 0.9
+    },
     "usage_event": {}
   }
 }
 ```
 
-The routing receipt includes every considered route, eligibility reason, bounded attempt, estimated
-cost, and actual charged cost. It never contains the raw prompt.
+The routing receipt records every route the exchange weighed (`considered`), why each was chosen or
+passed over (`reason`, `eligible`), the policy the choice was held to (`policy`), the estimate
+against the actual charge (`estimatedMicros` / `actualMicros`), bounded provider retries
+(`retries`), wall latency (`latencyMs`), and — when scored — Archymedes' evaluation of the
+completed outcome (`outcomeScore`). It never contains the raw prompt. Every field except `chosen`
+is optional; a client tolerates `snake_case` on the wire-level fields and a thinned receipt. The
+CLI renders it after a hosted turn and keeps the session's receipts for `/route`.
 
 Streaming is currently rejected by the hosted boundary until reservation-safe streaming can
 guarantee a final usage event and release or settle credits after client disconnects.
@@ -86,5 +109,6 @@ guarantee a final usage event and release or settle credits after client disconn
 Select the hosted path with `ARCHYMEDES_PROVIDER=archymedes-cloud` and configure
 `ARCHYMEDES_CLOUD_TOKEN` plus `ARCHYMEDES_CLOUD_BASE_URL`. Optional controls are
 `ARCHYMEDES_CLOUD_MAXIMUM_MICROS`, `ARCHYMEDES_CLOUD_CURRENCY`, `ARCHYMEDES_CLOUD_REGION`,
-`ARCHYMEDES_CLOUD_DATA_POLICY`, and `ARCHYMEDES_CLOUD_QUALITY_FLOOR`. Direct provider configuration
-continues to be the BYOK/offline path.
+`ARCHYMEDES_CLOUD_DATA_POLICY`, `ARCHYMEDES_CLOUD_QUALITY_FLOOR`, and `ARCHYMEDES_CLOUD_TASK_KIND`
+(one of `coding`, `design`, `architecture`, `security`, `research`, `deployment`; default
+`coding`). Direct provider configuration continues to be the BYOK/offline path.

@@ -107,6 +107,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
       region: environment.ARCHYMEDES_CLOUD_REGION?.trim() || "global",
       dataPolicy: environment.ARCHYMEDES_CLOUD_DATA_POLICY?.trim() || "standard",
       qualityFloor: optionalUnitInterval(environment.ARCHYMEDES_CLOUD_QUALITY_FLOOR, 0),
+      taskKind: environment.ARCHYMEDES_CLOUD_TASK_KIND?.trim() || undefined,
     }),
   },
   google: openAiCompatibleSpec("google"),

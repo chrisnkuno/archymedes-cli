@@ -41,6 +41,37 @@ describe("ArchymedesCloudTurnProvider", () => {
     expect(body.tools[0].function.name).toBe("read_file");
   });
 
+  it("declares the task kind and required capabilities, and returns the routing receipt", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      id: "chat_cloud_2",
+      model: "anthropic/claude-sonnet-5",
+      choices: [{ finish_reason: "stop", message: { content: "reviewed" } }],
+      usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 },
+      archymedes: {
+        reservation_id: "rsv_2",
+        routing_receipt: {
+          chosen: { model: "claude-sonnet-5", provider: "anthropic" },
+          considered: [{ model: "claude-sonnet-5", provider: "anthropic", eligible: true, reason: "highest score in budget", score: 0.88 }],
+          actual_micros: 8_400,
+          retries: 0,
+        },
+      },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const provider = new ArchymedesCloudTurnProvider({
+      token: "cloud-secret", baseURL: "https://cloud.example", model: "auto",
+      taskKind: "security", fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const turn = await provider.complete({ ...request, effort: "high" });
+    expect(turn.routingReceipt).toMatchObject({
+      chosen: { model: "claude-sonnet-5", provider: "anthropic" },
+      actualMicros: 8_400,
+      retries: 0,
+    });
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.archymedes.profile).toEqual({ kind: "security", requiredCapabilities: ["tools", "reasoning"] });
+  });
+
   it("preserves a failure status for retry classification without leaking the token", async () => {
     const provider = new ArchymedesCloudTurnProvider({
       token: "never-show-this-token", baseURL: "https://cloud.example",

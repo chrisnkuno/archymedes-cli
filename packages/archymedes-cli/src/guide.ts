@@ -158,8 +158,9 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       { input: "/continue", effect: "finish an interrupted task without repeating completed work" },
       { input: "/todos", effect: "the agent's current plan" },
       { input: "/task", effect: "the whole task at a glance: request, plan, changes, verification, blockers" },
+      { input: "/route", effect: "the hosted exchange's routing decision for the last turn — chosen model, alternatives, cost vs estimate" },
     ],
-    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos", "/task"],
+    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos", "/task", "/route"],
   },
   {
     id: "memory",

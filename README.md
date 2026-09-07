@@ -36,8 +36,12 @@ Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and record
 For direct/BYOK providers, costs are shown in your local currency and `/balance` tracks a local
 spend figure. When `archymedes-cloud` is selected, every model call reserves a configurable hard cap
 (`ARCHYMEDES_CLOUD_MAXIMUM_MICROS`, default 5,000,000 USD micros); the exchange settles measured
-usage and releases the remainder. Billing and hosted execution are operated from isolated private
-services; this public repository contains only their client contract.
+usage and releases the remainder. Each hosted turn prints a routing receipt — the chosen model, the
+alternatives weighed and why each was passed over, the policy it was held to, and the estimate
+against the actual charge — and `/route` recalls them. `ARCHYMEDES_CLOUD_TASK_KIND` (coding,
+design, architecture, security, research, deployment) tells the exchange what kind of work it is
+routing. Billing and hosted execution are operated from isolated private services; this public
+repository contains only their client contract.
 
 ## Languages
 

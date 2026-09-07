@@ -43,6 +43,8 @@ import { runChooser, type ChooserItem } from "./chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
 import { renderCompletionCard } from "./completion-card";
 import { renderTask, renderTodos, type InspectContext } from "./session-inspect";
+import { renderRoutingReceipt } from "./routing-receipt";
+import type { RoutingReceipt } from "@archymedes/core/providers/routing-receipt";
 import { fallbackSetting, parseFallbackPreference } from "./fallback";
 import { exportSession, type ExportFormat } from "./session-export";
 import { hostOf, providerBaseUrl } from "./endpoints";
@@ -562,6 +564,8 @@ let verificationChecks = new Map<string, boolean>();
  */
 const sessionFiles = new Map<string, { added: number; removed: number }>();
 const sessionChecks = new Map<string, boolean>();
+/** Every hosted routing decision this session, newest last — shown by `/route`. */
+const sessionReceipts: RoutingReceipt[] = [];
 /** One labelled tool section per turn, so operational logs do not blend into the answer. */
 let toolSectionAnnounced = false;
 
@@ -2809,6 +2813,12 @@ async function main(): Promise<number> {
           cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
         }, sectionStyle())}\n`);
       }
+      // The hosted exchange returns one routing decision per model call. Keep them for `/route` and
+      // show the turn's final one right under the card — the choice this answer was actually run on.
+      if (result.routingReceipts && result.routingReceipts.length > 0) {
+        sessionReceipts.push(...result.routingReceipts);
+        out.write(`${renderRoutingReceipt(result.routingReceipts[result.routingReceipts.length - 1], sectionStyle())}\n`);
+      }
       if (manualBalance !== undefined) {
         const turnSpend = Math.max(0, (sessionSpend() ?? spendBeforeTurn) - spendBeforeTurn);
         if (turnSpend > 0) {
@@ -4154,6 +4164,20 @@ async function main(): Promise<number> {
         continue;
       }
       out.write(`${renderTask(inspect)}\n`);
+      writeHint();
+      continue;
+    }
+    if (input === "/route" || input === "/route all") {
+      if (sessionReceipts.length === 0) {
+        out.write(style.dim("  no hosted routing this session — /route needs the archymedes-cloud provider\n"));
+        writeHint();
+        continue;
+      }
+      const shown = input === "/route all" ? sessionReceipts : sessionReceipts.slice(-1);
+      for (const [index, receipt] of shown.entries()) {
+        out.write(`${renderRoutingReceipt(receipt, sectionStyle())}\n`);
+        if (index < shown.length - 1) out.write("\n");
+      }
       writeHint();
       continue;
     }

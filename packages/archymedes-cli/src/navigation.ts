@@ -88,7 +88,7 @@ export function isEssential(command: string): boolean {
 export const COMMAND_GROUP: Readonly<Record<string, NavGroupId>> = {
   "/mode": "steer", "/plan": "steer", "/build": "steer", "/auto": "steer", "/defender": "steer",
   "/model": "steer", "/models": "steer", "/fallback": "steer", "/slow": "steer", "/clear": "steer", "/memory": "steer",
-  "/todos": "review", "/task": "review", "/diff": "review", "/undo": "work", "/retry": "work", "/continue": "work", "/cost": "review", "/expand": "review",
+  "/todos": "review", "/task": "review", "/route": "review", "/diff": "review", "/undo": "work", "/retry": "work", "/continue": "work", "/cost": "review", "/expand": "review",
   "/history": "review", "/sessions": "review", "/export": "review", "/balance": "review", "/pay": "review", "/scan": "work", "/wander": "work", "/voice": "work",
   "/files": "work", "/pull": "work", "/where": "review",
   "/jobs": "parallel", "/detach": "parallel", "/attach": "parallel", "/watch": "parallel",

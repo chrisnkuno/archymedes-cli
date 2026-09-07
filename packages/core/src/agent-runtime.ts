@@ -5,6 +5,7 @@
 import { addPart, affordableOutputTokensFor, newPartTotals, priceActualModelUsage, tokenEstimateFrom, type ModelPriceCatalog } from "./model-cost";
 import type { ModelUsage } from "./providers/model";
 import type { ModelCapabilities } from "./providers/model-capabilities";
+import type { RoutingReceipt } from "./providers/routing-receipt";
 import { createHash } from "node:crypto";
 
 export type AgentMessage =
@@ -43,6 +44,8 @@ export type AgentModelTurn = {
   refusal?: string;
   toolCalls: AgentToolCall[];
   usage: ModelUsage;
+  /** Set only by the hosted exchange: which model it routed this model call to, and why. */
+  routingReceipt?: RoutingReceipt;
 };
 
 /** How hard the model should think, where the provider's model supports being told. */
@@ -233,6 +236,8 @@ export type AgentRuntimeResult = {
   actualModelRwf: number;
   iterations: number;
   toolCallsExecuted: number;
+  /** One per hosted model call that returned a routing decision — empty for direct/BYOK turns. */
+  routingReceipts?: RoutingReceipt[];
 };
 
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
@@ -608,6 +613,8 @@ export class BoundedAgentRuntime {
     // model that answers "this change has nothing to assert" must be able to finish.
     let strongestEvidence = 0;
     let askedForTestEvidence = false;
+    // One per model call the hosted exchange routed; stays empty for direct/BYOK providers.
+    const routingReceipts: RoutingReceipt[] = [];
     // Measured once per part, not once per iteration: `messages` only ever grows inside this loop,
     // so a message already measured cannot change. The tool definitions are constant for the run
     // and are folded in first, which is why `measured` starts at zero rather than tracking them.
@@ -616,7 +623,10 @@ export class BoundedAgentRuntime {
 
     const stop = async (status: AgentRuntimeResult["status"], summary: string, iterations: number): Promise<AgentRuntimeResult> => {
       await this.dependencies.control.persistEvent({ type: "runtime_stop", status, summary });
-      return { status, summary, messages, usage, actualModelRwf, iterations, toolCallsExecuted };
+      return {
+        status, summary, messages, usage, actualModelRwf, iterations, toolCallsExecuted,
+        ...(routingReceipts.length > 0 ? { routingReceipts: [...routingReceipts] } : {}),
+      };
     };
 
     for (let iteration = 1; iteration <= request.maxIterations; iteration += 1) {
@@ -686,6 +696,7 @@ export class BoundedAgentRuntime {
       }
       // The loop either returned a turn or rethrew the final provider error.
       if (!turn) throw new Error("Model provider retry loop ended without a response");
+      if (turn.routingReceipt) routingReceipts.push(turn.routingReceipt);
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");

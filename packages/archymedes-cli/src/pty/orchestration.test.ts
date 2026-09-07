@@ -75,6 +75,12 @@ describe("read-only inspection commands do not disturb the session", () => {
     const requestsAfterTurn = stub.requestCount();
     const fileAfterTurn = await readFile(path.join(cwd, "slug.ts"), "utf8");
 
+    // The task-view body, without the input echo or the prompt frame the pty redraws around it.
+    const taskBody = (slice: string) => plain(slice)
+      .split(/\r?\n/)
+      .filter((line) => /^\s{2}(task|request|plan|changed|verified|blockers|done|wip|todo|src\/|\d+ files|! |─)/.test(line) || /^\s{4}/.test(line))
+      .join("\n");
+
     // Run the inspection commands several times.
     let firstTaskView = "";
     for (let round = 0; round < 3; round += 1) {
@@ -82,8 +88,7 @@ describe("read-only inspection commands do not disturb the session", () => {
       p.writeLine("/task");
       await p.waitFor(/changed .* \/diff/, { timeoutMs: 15_000, since: mark });
       await p.waitFor(PROMPT, { timeoutMs: 10_000, since: mark });
-      const view = plain(p.output().slice(mark));
-      if (round === 0) firstTaskView = view;
+      if (round === 0) firstTaskView = taskBody(p.output().slice(mark));
 
       mark = p.output().length;
       p.writeLine("/todos");
@@ -94,12 +99,13 @@ describe("read-only inspection commands do not disturb the session", () => {
     expect(stub.requestCount(), "inspection commands must not call the model").toBe(requestsAfterTurn);
     expect(await readFile(path.join(cwd, "slug.ts"), "utf8"), "inspection commands must not write").toBe(fileAfterTurn);
 
-    // Idempotent: the same snapshot renders the same way.
+    // Idempotent: the same snapshot renders the same body.
     mark = p.output().length;
     p.writeLine("/task");
     await p.waitFor(/changed .* \/diff/, { timeoutMs: 15_000, since: mark });
     await p.waitFor(PROMPT, { timeoutMs: 10_000, since: mark });
-    expect(plain(p.output().slice(mark))).toBe(firstTaskView);
+    expect(taskBody(p.output().slice(mark))).toBe(firstTaskView);
+    expect(firstTaskView).toContain("changed");
 
     // The session is not wedged: the next real turn still runs.
     stub.enqueue({ kind: "text", text: "still working" });
@@ -108,4 +114,20 @@ describe("read-only inspection commands do not disturb the session", () => {
     await p.waitFor(/still working/, { timeoutMs: 30_000, since: mark });
     expect(stub.requestCount()).toBe(requestsAfterTurn + 1);
   }, 120_000);
+
+  it("/route says there is no hosted routing on a direct-provider session, without disturbing it", async () => {
+    const p = boot();
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    const mark = p.output().length;
+    p.writeLine("/route");
+    await p.waitFor(/no hosted routing this session/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(PROMPT, { timeoutMs: 10_000, since: mark });
+    expect(stub.requestCount()).toBe(0);
+
+    stub.enqueue({ kind: "text", text: "direct answer" });
+    const turnMark = p.output().length;
+    p.writeLine("hello");
+    await p.waitFor(/direct answer/, { timeoutMs: 30_000, since: turnMark });
+  }, 90_000);
 });

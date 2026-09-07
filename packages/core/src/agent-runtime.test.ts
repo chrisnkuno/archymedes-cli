@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { agentMessagePromptParts, BoundedAgentRuntime, isRetryableProviderError, ProviderRequestError, providerFailureKind, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import type { RoutingReceipt } from "./providers/routing-receipt";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 const prices = { inputRatePerMillion: 1_610, outputRatePerMillion: 9_660 };
@@ -803,6 +804,30 @@ describe("effort", () => {
     // Absent, not "high": the provider's own default is the right answer and second-guessing it
     // would cost quality on exactly the requests that need it.
     expect(ordinary.requests.every((request) => request.effort === undefined)).toBe(true);
+  });
+});
+
+describe("hosted routing receipts", () => {
+  const receiptOne: RoutingReceipt = { chosen: { model: "claude-sonnet-5" }, considered: [], policy: {}, retries: 0 };
+  const receiptTwo: RoutingReceipt = { chosen: { model: "gpt-5.6-terra" }, considered: [], policy: {}, retries: 1 };
+
+  it("carries every model call's routing receipt into the run result, in order", async () => {
+    const readFile: AgentTool = {
+      name: "read_file", description: "read", capabilityId: "workspace.files", inputSchema: { type: "object" },
+      effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "ok" }; },
+    };
+    const value = harness([
+      turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: {} }], routingReceipt: { ...receiptOne } }),
+      turn({ finishReason: "stop", content: "Done.", routingReceipt: { ...receiptTwo } }),
+    ], [readFile]);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.routingReceipts).toEqual([receiptOne, receiptTwo]);
+  });
+
+  it("leaves routingReceipts unset for a direct-provider run that returns none", async () => {
+    const value = harness([turn({ content: "done" })], []);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.routingReceipts).toBeUndefined();
   });
 });
 

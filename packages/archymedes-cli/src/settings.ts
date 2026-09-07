@@ -86,6 +86,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_CLOUD_REGION", label: "Cloud routing region" },
   { key: "ARCHYMEDES_CLOUD_DATA_POLICY", label: "Cloud data policy" },
   { key: "ARCHYMEDES_CLOUD_QUALITY_FLOOR", label: "Cloud routing quality floor (0 to 1)" },
+  { key: "ARCHYMEDES_CLOUD_TASK_KIND", label: "Cloud task kind (coding, design, architecture, security, research, deployment)" },
   { key: "GOOGLE_API_KEY", label: "Google Gemini API key", secret: true },
   { key: "GOOGLE_BASE_URL", label: "Google Gemini base URL", url: true },
   { key: "GOOGLE_MODEL", label: "Google Gemini model" },
