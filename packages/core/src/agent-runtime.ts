@@ -6,7 +6,7 @@ import { addPart, affordableOutputTokensFor, newPartTotals, priceActualModelUsag
 import type { ModelUsage } from "./providers/model";
 import type { ModelCapabilities } from "./providers/model-capabilities";
 import type { RoutingReceipt } from "./providers/routing-receipt";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export type AgentMessage =
   | { role: "system" | "user" | "assistant"; content: string; internal?: boolean }
@@ -52,6 +52,8 @@ export type AgentModelTurn = {
 export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export type AgentModelRequest = {
+  /** One logical model call: reused across transport retries, replaced for the next iteration. */
+  requestId?: string;
   messages: AgentMessage[];
   tools: AgentToolDefinition[];
   maxOutputTokens: number;
@@ -343,6 +345,8 @@ export function isRetryableProviderError(error: unknown): boolean {
     else if (typeof current === "string") messages.push(current);
     if (!record) break;
 
+    // Adapters can distinguish terminal application errors from a retryable HTTP status.
+    if (typeof record.retryable === "boolean") return record.retryable;
     const status = Number(record.status ?? record.statusCode);
     if (Number.isInteger(status)) {
       if (status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504) return true;
@@ -382,7 +386,14 @@ export function providerFailureKind(error: unknown): ProviderFailureKind {
   return "unknown";
 }
 
-function providerRetryDelay(attempt: number, signal?: AbortSignal): Promise<boolean> {
+export function providerRetryDelayMs(error: unknown, attempt: number): number {
+  const retryAfter = errorRecord(error)?.retryAfterMs;
+  const backoff = 100 * 2 ** Math.min(6, Math.max(0, attempt));
+  return typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0
+    ? Math.max(backoff, Math.min(10_000, retryAfter)) : backoff;
+}
+
+function providerRetryDelay(delayMs: number, signal?: AbortSignal): Promise<boolean> {
   // Deterministic exponential backoff keeps tests and logs reproducible. The abort listener is
   // what makes Ctrl+C immediate while Archymedes is between attempts instead of waiting for a timer.
   if (signal?.aborted) return Promise.resolve(false);
@@ -393,7 +404,7 @@ function providerRetryDelay(attempt: number, signal?: AbortSignal): Promise<bool
       signal?.removeEventListener("abort", abort);
       resolve(elapsed);
     };
-    const timer = setTimeout(() => finish(true), 100 * 2 ** attempt);
+    const timer = setTimeout(() => finish(true), delayMs);
     signal?.addEventListener("abort", abort, { once: true });
   });
 }
@@ -646,6 +657,7 @@ export class BoundedAgentRuntime {
       if (maximumOutputTokens < 1) return stop("iteration_limit", "Run reached its approved model budget before another provider call.", iteration - 1);
 
       const modelRequest: AgentModelRequest = {
+        requestId: `cli_${randomUUID()}`,
         ...(request.effort ? { effort: request.effort } : {}),
         messages: [...messages],
         tools: definitions,
@@ -677,7 +689,7 @@ export class BoundedAgentRuntime {
           if (emittedOutput) throw new ProviderRequestError(error, { attempts: attempt + 1, retrySuppressed: "output_started" });
           if (!isRetryableProviderError(error)) throw error;
           if (attempt >= MAX_PROVIDER_RETRIES) throw new ProviderRequestError(error, { attempts: attempt + 1 });
-          const delayMs = 100 * 2 ** attempt;
+          const delayMs = providerRetryDelayMs(error, attempt);
           await this.dependencies.control.persistEvent({
             type: "provider_retry",
             iteration,
@@ -686,7 +698,7 @@ export class BoundedAgentRuntime {
             delayMs,
             reason: providerFailureKind(error),
           });
-          if (!await providerRetryDelay(attempt, request.signal)) {
+          if (!await providerRetryDelay(delayMs, request.signal)) {
             return stop("cancelled", "Run cancelled while waiting to retry the model provider.", iteration - 1);
           }
           if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) {
@@ -696,7 +708,7 @@ export class BoundedAgentRuntime {
       }
       // The loop either returned a turn or rethrew the final provider error.
       if (!turn) throw new Error("Model provider retry loop ended without a response");
-      if (turn.routingReceipt) routingReceipts.push(turn.routingReceipt);
+      if (turn.routingReceipt) routingReceipts.push({ ...turn.routingReceipt, taskId: turn.routingReceipt.taskId ?? modelRequest.requestId });
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");

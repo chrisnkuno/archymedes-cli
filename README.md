@@ -34,11 +34,19 @@ Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and record
 ## Cost and balance
 
 For direct/BYOK providers, costs are shown in your local currency and `/balance` tracks a local
-spend figure. When `archymedes-cloud` is selected, every model call reserves a configurable hard cap
+spend figure you set yourself. On `archymedes-cloud`, `/balance` instead reads the account's real
+credit ledger: what is available now, what is reserved against work in flight, and what has settled.
+The two are never combined — one is a pacing limit you chose, the other is money. Archymedes credits
+are closed-loop: usable for Archymedes services, not transferable and not withdrawable.
+
+When `archymedes-cloud` is selected, every model call reserves a configurable hard cap
 (`ARCHYMEDES_CLOUD_MAXIMUM_MICROS`, default 5,000,000 USD micros); the exchange settles measured
 usage and releases the remainder. Each hosted turn prints a routing receipt — the chosen model, the
 alternatives weighed and why each was passed over, the policy it was held to, and the estimate
-against the actual charge — and `/route` recalls them. `ARCHYMEDES_CLOUD_TASK_KIND` (coding,
+against the actual charge — and `/route` recalls them. `/route plan` asks the same question in
+advance: what the next turn would be routed to and what the whole task would be expected to cost,
+before any of it is spent. It calls no model and reserves nothing. `/route summary` shows session totals by currency, retries, route switches,
+and calls without settlement data. `ARCHYMEDES_CLOUD_TASK_KIND` (coding,
 design, architecture, security, research, deployment) tells the exchange what kind of work it is
 routing. Billing and hosted execution are operated from isolated private services; this public
 repository contains only their client contract.
@@ -101,3 +109,7 @@ drives the real terminal binary against a deterministic stub and times five inst
 (first prompt, first edit, verified turn, cancel, resume) on a small and a large repository,
 writing `benchmarks/journeys/latest.json`. See the
 [release assessment](docs/RELEASE_ASSESSMENT.md) for findings, priorities and publishing requirements.
+
+## Continuing development
+
+See the [agent handoff](docs/continuation/START_HERE.md), [architecture map](docs/continuation/ARCHITECTURE.md), and [prioritized roadmap](docs/continuation/PRIORITIES.md) for current work, validation status, and concrete follow-up tasks.

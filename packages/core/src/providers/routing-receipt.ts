@@ -13,7 +13,11 @@
  */
 
 /** Every task-kind the profile may declare — matches the exchange's `profile.kind` vocabulary. */
-export const TASK_KINDS = ["coding", "design", "architecture", "security", "research", "deployment"] as const;
+export const TASK_KINDS = [
+  "coding", "design", "architecture", "security", "research", "deployment",
+  "general", "code", "reasoning", "vision", "agentic", "extraction", "summarization",
+  "translation", "classification", "creative",
+] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 export type TaskProfileInput = {
@@ -50,12 +54,15 @@ export type ConsideredRoute = {
   /** Why it was chosen, or why it was passed over. */
   reason: string;
   estimatedMicros?: number;
-  /** Predicted outcome quality for this route, 0..1. */
+  /** Ranking utility; its scale is defined by the routing policy. */
   score?: number;
 };
 
 export type RoutingReceipt = {
   taskId?: string;
+  policyId?: string;
+  policyVersion?: number;
+  attempts?: Array<{ provider?: string; model: string; outcome: string; latencyMs?: number }>;
   chosen: { model: string; provider?: string };
   considered: ConsideredRoute[];
   policy: {
@@ -66,6 +73,11 @@ export type RoutingReceipt = {
   };
   currency?: string;
   estimatedMicros?: number;
+  /** Expected whole-task spend, distinct from the single-call estimate and settled charge. */
+  expectedTotalMicros?: number;
+  /** A prediction, never presented as measured evaluation evidence. */
+  predictedOutcomeScore?: number;
+  costFactors?: { retryMicros?: number; contextTransferMicros?: number; cacheSavingMicros?: number; verificationMicros?: number; nonModelMicros?: number };
   actualMicros?: number;
   /** Provider attempts beyond the first, from the exchange's bounded retry. */
   retries: number;
@@ -112,7 +124,7 @@ function parseConsideredRoute(value: unknown): ConsideredRoute | null {
     ...(nonNegativeInt(value.estimatedMicros ?? value.estimated_micros) !== undefined
       ? { estimatedMicros: nonNegativeInt(value.estimatedMicros ?? value.estimated_micros) }
       : {}),
-    ...(score(value.score) !== undefined ? { score: score(value.score) } : {}),
+    ...(finiteNumber(value.score) !== undefined ? { score: finiteNumber(value.score) } : {}),
   };
 }
 
@@ -125,7 +137,7 @@ function parseConsideredRoute(value: unknown): ConsideredRoute | null {
 export function parseRoutingReceipt(value: unknown): RoutingReceipt | null {
   if (!isRecord(value)) return null;
   const chosenRaw = isRecord(value.chosen) ? value.chosen : value;
-  const chosenModel = trimmedString(chosenRaw.model) ?? trimmedString((value as Record<string, unknown>).chosen_model);
+  const chosenModel = trimmedString(chosenRaw.model) ?? trimmedString(value.chosen_model) ?? trimmedString(value.selectedModel);
   if (!chosenModel) return null;
 
   const consideredRaw = Array.isArray(value.considered)
@@ -137,6 +149,29 @@ export function parseRoutingReceipt(value: unknown): RoutingReceipt | null {
     .map(parseConsideredRoute)
     .filter((route): route is ConsideredRoute => route !== null);
 
+  const attempts = Array.isArray(value.attempts) ? value.attempts.flatMap((attempt) => {
+    if (!isRecord(attempt) || !trimmedString(attempt.model) || !trimmedString(attempt.outcome)) return [];
+    const started = typeof attempt.startedAt === "string" ? Date.parse(attempt.startedAt) : NaN;
+    const completed = typeof attempt.completedAt === "string" ? Date.parse(attempt.completedAt) : NaN;
+    const latencyMs = nonNegativeInt(attempt.latencyMs ?? (completed - started));
+    return [{ model: trimmedString(attempt.model)!, outcome: trimmedString(attempt.outcome)!,
+      ...(trimmedString(attempt.provider) ? { provider: trimmedString(attempt.provider) } : {}),
+      ...(latencyMs !== undefined ? { latencyMs } : {}),
+    }];
+  }) : undefined;
+  const latencyMs = nonNegativeInt(value.latencyMs ?? value.latency_ms ?? value.totalLatencyMs ?? (attempts?.length && attempts.every((attempt) => attempt.latencyMs !== undefined) ? attempts.reduce((sum, attempt) => sum + attempt.latencyMs!, 0) : undefined));
+  const estimated = isRecord(value.estimated) ? value.estimated : {};
+  const actual = isRecord(value.actual) ? value.actual : {};
+  // Never label settlement in a different currency as the estimate's currency.
+  const currency = trimmedString(value.currency ?? estimated.currency ?? actual.currency)?.toUpperCase();
+  const actualMicros = actual.currency && trimmedString(actual.currency)?.toUpperCase() !== currency
+    ? undefined : nonNegativeInt(value.actualMicros ?? value.actual_micros ?? actual.micros);
+  const factorsRaw = isRecord(value.costFactors) ? value.costFactors : isRecord(value.factors) ? value.factors : {};
+  const costFactors: NonNullable<RoutingReceipt["costFactors"]> = {};
+  for (const [camel, snake] of [["retryMicros", "retry_micros"], ["contextTransferMicros", "context_transfer_micros"], ["cacheSavingMicros", "cache_saving_micros"], ["verificationMicros", "verification_micros"], ["nonModelMicros", "non_model_micros"]] as const) {
+    const amount = nonNegativeInt(factorsRaw[camel] ?? factorsRaw[snake]);
+    if (amount !== undefined) costFactors[camel] = amount;
+  }
   const policyRaw = isRecord(value.policy) ? value.policy : {};
   const policy: RoutingReceipt["policy"] = {};
   if (trimmedString(policyRaw.dataPolicy ?? policyRaw.data_policy)) policy.dataPolicy = trimmedString(policyRaw.dataPolicy ?? policyRaw.data_policy);
@@ -145,26 +180,60 @@ export function parseRoutingReceipt(value: unknown): RoutingReceipt | null {
   if (nonNegativeInt(policyRaw.maximumMicros ?? policyRaw.maximum_micros) !== undefined) policy.maximumMicros = nonNegativeInt(policyRaw.maximumMicros ?? policyRaw.maximum_micros);
 
   return {
-    ...(trimmedString(value.taskId ?? value.task_id) ? { taskId: trimmedString(value.taskId ?? value.task_id) } : {}),
+    ...(trimmedString(value.taskId ?? value.task_id ?? value.requestId) ? { taskId: trimmedString(value.taskId ?? value.task_id ?? value.requestId) } : {}),
+    ...(trimmedString(value.policyId) ? { policyId: trimmedString(value.policyId) } : {}),
+    ...(nonNegativeInt(value.policyVersion) !== undefined ? { policyVersion: nonNegativeInt(value.policyVersion) } : {}),
+    ...(attempts ? { attempts } : {}),
     chosen: {
       model: chosenModel,
-      ...(trimmedString(chosenRaw.provider) ? { provider: trimmedString(chosenRaw.provider) } : {}),
+      ...(trimmedString(chosenRaw.provider ?? value.selectedProvider) ? { provider: trimmedString(chosenRaw.provider ?? value.selectedProvider) } : {}),
     },
     considered,
     policy,
-    ...(trimmedString(value.currency) ? { currency: trimmedString(value.currency)!.toUpperCase() } : {}),
-    ...(nonNegativeInt(value.estimatedMicros ?? value.estimated_micros) !== undefined
-      ? { estimatedMicros: nonNegativeInt(value.estimatedMicros ?? value.estimated_micros) }
+    ...(currency ? { currency } : {}),
+    ...(nonNegativeInt(value.estimatedMicros ?? value.estimated_micros ?? estimated.micros) !== undefined
+      ? { estimatedMicros: nonNegativeInt(value.estimatedMicros ?? value.estimated_micros ?? estimated.micros) }
       : {}),
-    ...(nonNegativeInt(value.actualMicros ?? value.actual_micros) !== undefined
-      ? { actualMicros: nonNegativeInt(value.actualMicros ?? value.actual_micros) }
+    ...(nonNegativeInt(value.expectedTotalMicros ?? value.expected_total_micros) !== undefined
+      ? { expectedTotalMicros: nonNegativeInt(value.expectedTotalMicros ?? value.expected_total_micros) } : {}),
+    ...(score(value.predictedOutcomeScore ?? value.predicted_outcome_score) !== undefined
+      ? { predictedOutcomeScore: score(value.predictedOutcomeScore ?? value.predicted_outcome_score) } : {}),
+    ...(Object.keys(costFactors).length ? { costFactors } : {}),
+    ...(nonNegativeInt(actualMicros) !== undefined
+      ? { actualMicros }
       : {}),
-    retries: nonNegativeInt(value.retries) ?? 0,
-    ...(nonNegativeInt(value.latencyMs ?? value.latency_ms) !== undefined
-      ? { latencyMs: nonNegativeInt(value.latencyMs ?? value.latency_ms) }
+    retries: nonNegativeInt(value.retries) ?? Math.max(0, (attempts?.length ?? 0) - 1),
+    ...(latencyMs !== undefined
+      ? { latencyMs }
       : {}),
-    ...(score(value.outcomeScore ?? value.outcome_score) !== undefined
-      ? { outcomeScore: score(value.outcomeScore ?? value.outcome_score) }
+    ...(score(value.outcomeScore ?? value.outcome_score ?? value.finalOutcomeScore) !== undefined
+      ? { outcomeScore: score(value.outcomeScore ?? value.outcome_score ?? value.finalOutcomeScore) }
       : {}),
   };
+}
+
+/** Normalize stored receipts and replace replayed calls without counting a settlement twice.
+ * Unidentified legacy calls remain distinct: equal prices/models do not establish identity.
+ */
+export function mergeRoutingReceipts(...batches: unknown[]): RoutingReceipt[] {
+  const receipts: RoutingReceipt[] = [];
+  const positions = new Map<string, number>();
+  for (const batch of batches) {
+    if (!Array.isArray(batch)) continue;
+    for (const value of batch) {
+      const receipt = parseRoutingReceipt(value);
+      if (!receipt) continue;
+      const index = receipt.taskId ? positions.get(receipt.taskId) : undefined;
+      if (index === undefined) {
+        if (receipt.taskId) positions.set(receipt.taskId, receipts.length);
+        receipts.push(receipt);
+      } else {
+        const previous = receipts[index];
+        // Never carry a charge into a different currency when a newer record changes units.
+        receipts[index] = previous.currency === receipt.currency
+          ? { ...previous, ...receipt } : receipt;
+      }
+    }
+  }
+  return receipts;
 }

@@ -43,8 +43,8 @@ import { runChooser, type ChooserItem } from "./chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
 import { renderCompletionCard } from "./completion-card";
 import { renderTask, renderTodos, type InspectContext } from "./session-inspect";
-import { renderRoutingReceipt } from "./routing-receipt";
-import type { RoutingReceipt } from "@archymedes/core/providers/routing-receipt";
+import { renderRoutingReceipt, renderRoutingSummary } from "./routing-receipt";
+import { renderRoutingPlan } from "./routing-plan";
 import { fallbackSetting, parseFallbackPreference } from "./fallback";
 import { exportSession, type ExportFormat } from "./session-export";
 import { hostOf, providerBaseUrl } from "./endpoints";
@@ -84,7 +84,8 @@ import {
 } from "@archymedes/core";
 import { runJobWorkerForever, workerId } from "./job-worker";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./jobs-command";
-import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance } from "./balance";
+import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./balance";
+import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
 import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
 import { renderTools } from "./tools-command";
@@ -564,8 +565,6 @@ let verificationChecks = new Map<string, boolean>();
  */
 const sessionFiles = new Map<string, { added: number; removed: number }>();
 const sessionChecks = new Map<string, boolean>();
-/** Every hosted routing decision this session, newest last — shown by `/route`. */
-const sessionReceipts: RoutingReceipt[] = [];
 /** One labelled tool section per turn, so operational logs do not blend into the answer. */
 let toolSectionAnnounced = false;
 
@@ -1936,6 +1935,14 @@ async function main(): Promise<number> {
   // `AbortSignal` is single-use) but the prompt function itself is built once per agent and must
   // keep seeing whichever turn is currently running.
   let currentTurnAbort: AbortController | undefined;
+  /**
+   * A read-only command that is waiting on the network — currently only `/route plan`.
+   *
+   * These run outside a turn, so `turnActive` is false and Ctrl+C would otherwise fall through to
+   * the prompt's line-clearing branch and leave the request running unattended. Holding the
+   * controller here lets the same keystroke stop the wait without touching the session.
+   */
+  let pendingReadAbort: AbortController | undefined;
   const approvalPrompt = createApprovalPrompt(readline, interactive, () => currentTurnAbort?.signal);
   const handleDaemonNotification = (notification: DaemonNotification) => {
     // `turn_started`/`turn_finished`/`session_opened` exist for a client with no other way to know
@@ -2436,6 +2443,11 @@ async function main(): Promise<number> {
       out.write(style.yellow(`\n  interrupted — ${stopping}\n`));
       return;
     }
+    if (pendingReadAbort) {
+      pendingReadAbort.abort();
+      pendingReadAbort = undefined;
+      return;
+    }
     // Nothing is running, so this is the prompt. A half-typed message must survive a stray
     // Ctrl+C: every other REPL (bash, python, node) clears the line here rather than quitting,
     // and losing a paragraph you were still composing to one keystroke is the worst possible
@@ -2816,7 +2828,6 @@ async function main(): Promise<number> {
       // The hosted exchange returns one routing decision per model call. Keep them for `/route` and
       // show the turn's final one right under the card — the choice this answer was actually run on.
       if (result.routingReceipts && result.routingReceipts.length > 0) {
-        sessionReceipts.push(...result.routingReceipts);
         out.write(`${renderRoutingReceipt(result.routingReceipts[result.routingReceipts.length - 1], sectionStyle())}\n`);
       }
       if (manualBalance !== undefined) {
@@ -4167,9 +4178,40 @@ async function main(): Promise<number> {
       writeHint();
       continue;
     }
-    if (input === "/route" || input === "/route all") {
+    if (input === "/route plan") {
+      // A preflight, not a turn: it calls no model, reserves nothing, and leaves the conversation
+      // exactly as it was — so it stays interruptible and never becomes a way to spend money.
+      const planning = new AbortController();
+      pendingReadAbort = planning;
+      let plan: Awaited<ReturnType<typeof agent.planRoute>>;
+      try {
+        plan = await agent.planRoute("", planning.signal);
+      } catch (error) {
+        if (planning.signal.aborted) { out.write(style.dim("  routing plan cancelled\n")); writeHint(); continue; }
+        out.write(style.dim(`  routing plan unavailable — ${error instanceof Error ? error.message : String(error)}\n`));
+        writeHint();
+        continue;
+      } finally {
+        pendingReadAbort = undefined;
+      }
+      if (plan === null) {
+        out.write(style.dim("  /route plan needs the archymedes-cloud provider — a direct provider has one route\n"));
+        writeHint();
+        continue;
+      }
+      out.write(`${renderRoutingPlan(plan, sectionStyle())}\n`);
+      writeHint();
+      continue;
+    }
+    if (input === "/route" || input === "/route all" || input === "/route summary") {
+      const sessionReceipts = agent.routingReceipts;
       if (sessionReceipts.length === 0) {
         out.write(style.dim("  no hosted routing this session — /route needs the archymedes-cloud provider\n"));
+        writeHint();
+        continue;
+      }
+      if (input === "/route summary") {
+        out.write(`${renderRoutingSummary(sessionReceipts, sectionStyle())}\n`);
         writeHint();
         continue;
       }
@@ -4729,6 +4771,33 @@ async function main(): Promise<number> {
       if (manualBalanceCommand.kind === "clear") {
         await persistManualBalance(undefined);
         out.write(style.dim("  Balance tracking cleared. Set a new figure any time with /balance <amount>.\n"));
+        continue;
+      }
+      // On the exchange the account has a real ledger, and that — not a figure someone typed — is
+      // what the next turn reserves against. Read it first, and say plainly when it cannot be read
+      // rather than falling back to the local number as though it were the same thing.
+      const hosted = model as typeof model & { creditBalance?: (signal?: AbortSignal) => Promise<HostedCreditBalance | null> };
+      if (typeof hosted.creditBalance === "function") {
+        const reading = new AbortController();
+        pendingReadAbort = reading;
+        try {
+          const credits = await hosted.creditBalance(reading.signal);
+          if (credits) {
+            for (const line of renderHostedBalance(credits, { localCurrency: display })) out.write(`  ${line}\n`);
+          } else {
+            out.write(style.yellow("  The exchange did not return a readable balance.\n"));
+          }
+        } catch (error) {
+          if (reading.signal.aborted) out.write(style.dim("  balance check cancelled\n"));
+          else out.write(style.yellow(`  Could not read the hosted balance — ${error instanceof Error ? error.message : String(error)}\n`));
+        } finally {
+          pendingReadAbort = undefined;
+        }
+        const localTracked = currentBalance();
+        if (localTracked) {
+          // Both exist, so both are shown — labelled, never summed.
+          out.write(style.dim(`  Separately, you are tracking ${formatBalance(localTracked.amount, localTracked.currency)} locally as a pacing limit.\n`));
+        }
         continue;
       }
       const balance = currentBalance();

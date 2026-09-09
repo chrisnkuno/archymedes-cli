@@ -41,6 +41,90 @@ describe("ArchymedesCloudTurnProvider", () => {
     expect(body.tools[0].function.name).toBe("read_file");
   });
 
+  it("reads the credit balance in the currency it reserves in, and commits nothing to read it", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      account_id: "acct_7",
+      balance: { currency: "USD", micros: 4_250_000, purchasedMicros: 4_000_000, promotionalMicros: 250_000, reservedMicros: 5_000_000, spentMicros: 1_750_000 },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const provider = new ArchymedesCloudTurnProvider({
+      token: "cloud-secret", baseURL: "https://cloud.example/api/", currency: "USD", fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const balance = await provider.creditBalance();
+    expect(balance).toMatchObject({ accountId: "acct_7", currency: "USD", availableMicros: 4_250_000, reservedMicros: 5_000_000 });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://cloud.example/api/v1/credits/balance?currency=USD");
+    expect(init.method).toBe("GET");
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer cloud-secret");
+    // A read moves no money, so it carries no idempotency key.
+    expect(new Headers(init.headers).get("idempotency-key")).toBeNull();
+  });
+
+  it("asks for the balance in the currency its reservations are denominated in", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ balance: { currency: "EUR", micros: 1 } }), { status: 200 }));
+    const provider = new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", currency: "eur", fetchImpl: fetchImpl as typeof fetch });
+    await provider.creditBalance();
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toContain("currency=EUR");
+  });
+
+  it("surfaces a balance failure rather than reporting an empty account", async () => {
+    // Reporting "0 available" for a 401 would tell the user they are out of money when they are
+    // only out of a working token.
+    const failing = vi.fn(async () => new Response(JSON.stringify({ error: { code: "unauthorized", message: "A valid bearer token is required." } }), { status: 401 }));
+    const provider = new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", fetchImpl: failing as typeof fetch });
+    await expect(provider.creditBalance()).rejects.toThrow(ArchymedesCloudError);
+  });
+
+  it("plans against the planning endpoint with a token count, never the conversation", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      object: "routing_plan",
+      policy: { id: "outcome-per-dollar", version: 3 },
+      ranked: [{ candidate: { provider: "anthropic", model: "claude-sonnet-5" }, eligible: true, reason: "best", score: 0.9,
+        estimated_charged: { currency: "USD", micros: 12_000 }, expected_total_micros: 31_000 }],
+      excluded: [],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const provider = new ArchymedesCloudTurnProvider({
+      token: "cloud-secret", baseURL: "https://cloud.example/api/", model: "auto",
+      maximumMicros: 2_500_000, currency: "USD", region: "us", dataPolicy: "zero-retention",
+      qualityFloor: 0.8, fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const plan = await provider.plan({ estimatedInputTokens: 8_421, maxOutputTokens: 4_000, usesTools: true });
+    expect(plan?.ranked[0]).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5", expectedTotalMicros: 31_000 });
+    expect(plan?.policyId).toBe("outcome-per-dollar");
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://cloud.example/api/v1/routes/plan");
+    const body = JSON.parse(init.body as string);
+    // The whole point of a preflight endpoint: it asks what a turn would cost without uploading it,
+    // and it carries no idempotency key because it commits nothing.
+    expect(body.messages).toBeUndefined();
+    expect(body.archymedes.estimated_input_tokens).toBe(8_421);
+    expect(body.archymedes.task_id).toBeUndefined();
+    expect(new Headers(init.headers).get("idempotency-key")).toBeNull();
+    // The profile a plan is ranked under must be the profile the turn would actually send.
+    expect(body.archymedes.profile).toEqual({
+      kind: "coding", requiredCapabilities: ["tools"], dataPolicy: "zero-retention", region: "us", qualityFloor: 0.8,
+    });
+  });
+
+  it("refuses to plan against a size it was never given", async () => {
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+    const provider = new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", fetchImpl: fetchImpl as typeof fetch });
+    await expect(provider.plan({ estimatedInputTokens: 0, maxOutputTokens: 100 })).rejects.toThrow(/positive integer/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a planning failure as an exchange error and a non-plan body as no plan", async () => {
+    const failing = vi.fn(async () => new Response(JSON.stringify({ error: { code: "no_routes", message: "No provider models are enabled." } }), { status: 503 }));
+    const provider = new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", fetchImpl: failing as typeof fetch });
+    await expect(provider.plan({ estimatedInputTokens: 10, maxOutputTokens: 100 })).rejects.toThrow(ArchymedesCloudError);
+
+    const odd = vi.fn(async () => new Response(JSON.stringify({ object: "routing_plan" }), { status: 200 }));
+    const lenient = new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", fetchImpl: odd as typeof fetch });
+    expect(await lenient.plan({ estimatedInputTokens: 10, maxOutputTokens: 100 })).toBeNull();
+  });
+
   it("declares the task kind and required capabilities, and returns the routing receipt", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       id: "chat_cloud_2",
@@ -88,4 +172,30 @@ describe("ArchymedesCloudTurnProvider", () => {
     expect(() => new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", dataPolicy: "anything" })).toThrow(/data policy/);
     expect(() => new ArchymedesCloudTurnProvider({ token: "t", baseURL: "https://cloud.example", qualityFloor: 2 })).toThrow(/quality floor/);
   });
+});
+
+
+it("reuses the exact wire request across transport retries", async () => {
+  const calls: RequestInit[] = [];
+  const provider = new ArchymedesCloudTurnProvider({ token: "secret", baseURL: "https://cloud.example", fetchImpl: (async (_url, init) => {
+    calls.push(init!);
+    if (calls.length === 1) throw new TypeError("fetch failed");
+    return Response.json({ id: "replayed", model: "m", usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }, choices: [{ message: { content: "done" }, finish_reason: "stop" }] });
+  }) as typeof fetch });
+  const logical = { ...request, requestId: "cli_stable" };
+  await expect(provider.complete(logical)).rejects.toThrow(/fetch failed/);
+  await provider.complete(logical);
+  expect(calls[0]?.body).toBe(calls[1]?.body);
+  expect(new Headers(calls[1]?.headers).get("idempotency-key")).toBe("cli_stable");
+});
+
+it.each(["request_previously_failed", "idempotency_conflict", "spend_limit_exceeded"])("does not retry terminal hosted code %s", async (code) => {
+  const provider = new ArchymedesCloudTurnProvider({ token: "secret", baseURL: "https://cloud.example", fetchImpl: (async () => Response.json({ error: { code, message: "stop" } }, { status: 409 })) as typeof fetch });
+  await expect(provider.complete(request)).rejects.toMatchObject({ retryable: false });
+});
+
+it("retains the processing retry delay and rejects a mistyped task kind locally", async () => {
+  const provider = new ArchymedesCloudTurnProvider({ token: "secret", baseURL: "https://cloud.example", fetchImpl: (async () => Response.json({ error: { code: "request_in_progress" } }, { status: 409, headers: { "retry-after": "2" } })) as typeof fetch });
+  await expect(provider.complete(request)).rejects.toMatchObject({ retryable: true, retryAfterMs: 2000 });
+  expect(() => new ArchymedesCloudTurnProvider({ token: "secret", baseURL: "https://cloud.example", taskKind: "codign" })).toThrow(/task kind/);
 });

@@ -1,3 +1,5 @@
+import { mergeRoutingReceipts } from "../providers/routing-receipt";
+import type { RoutingPlan } from "../providers/routing-plan";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { agentMessagePromptParts, BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider } from "../agent-runtime";
@@ -252,6 +254,9 @@ export class ArchymedesAgent {
     return this.session.id;
   }
 
+  /** A detached view of this session's completed hosted calls. */
+  get routingReceipts() { return mergeRoutingReceipts(this.session.routingReceipts); }
+
   /**
    * A self-contained handoff record for rebuilding this session around another model or mode.
    *
@@ -266,7 +271,7 @@ export class ArchymedesAgent {
 
   /** Restores a previous session's transcript and standing approvals. */
   resume(record: SessionRecord): void {
-    this.session = { ...record, mode: this.options.mode };
+    this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode };
     this.messages = [...record.messages];
     this.recalledMemoryKeys.clear();
     for (const key of record.recalledMemoryKeys ?? []) this.recalledMemoryKeys.add(key);
@@ -425,6 +430,34 @@ export class ArchymedesAgent {
 
   /** Token-based preflight using the actual system prompt, history and tool schemas for this mode. */
   async estimateNextTurn(objective: string): Promise<AgentCostPrediction> {
+    const { initialInputTokens } = await this.prospectiveRequest(objective);
+    return predictAgentUsage({ initialInputTokens, objective, mode: this.options.mode });
+  }
+
+  /**
+   * Asks the provider where the next turn would be routed, without running it.
+   *
+   * Only the hosted exchange can answer this, so a direct-provider session returns null rather than
+   * inventing a local ranking. The size it plans against is the same figure `estimateNextTurn`
+   * predicts cost from — one assembly, so the preflight and the turn cannot drift apart — and the
+   * conversation itself never leaves the machine for a question this cheap.
+   */
+  async planNextTurn(objective: string, signal?: AbortSignal): Promise<RoutingPlan | null> {
+    const provider = this.options.model as AgentTurnProvider & {
+      plan?: (input: { estimatedInputTokens: number; maxOutputTokens: number; usesTools?: boolean; signal?: AbortSignal }) => Promise<RoutingPlan | null>;
+    };
+    if (typeof provider.plan !== "function") return null;
+    const { initialInputTokens, toolCount } = await this.prospectiveRequest(objective);
+    return await provider.plan({
+      estimatedInputTokens: Math.max(1, initialInputTokens),
+      maxOutputTokens: this.budgets.maxOutputTokens,
+      usesTools: toolCount > 0,
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  /** What the next turn would send: its assembled size and how many tools it would carry. */
+  private async prospectiveRequest(objective: string): Promise<{ initialInputTokens: number; toolCount: number }> {
     const context = await collectProjectContext(this.options.root);
     const externalTooling = await this.loadExternalTooling();
     const delegate = this.createDelegateRunner(context, () => this.budgets.maxRwf);
@@ -456,7 +489,7 @@ export class ArchymedesAgent {
       objective,
       toolSchemas,
     ]).expectedInputTokens;
-    return predictAgentUsage({ initialInputTokens, objective, mode: this.options.mode });
+    return { initialInputTokens, toolCount: scoped.length };
   }
 
   /**
@@ -713,6 +746,7 @@ export class ArchymedesAgent {
         recalledMemoryKeys: [...this.recalledMemoryKeys],
         approvals: this.permissions.snapshot(),
         totalRwf: this.session.totalRwf + combinedRwf,
+        routingReceipts: mergeRoutingReceipts(this.session.routingReceipts, result.routingReceipts),
         updatedAt: Date.now(),
       };
       const terminalStatus = runtimeStatusToTurnStatus(result.status);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RoutingReceipt } from "@archymedes/core/providers/routing-receipt";
-import { formatMicros, renderRoutingReceipt } from "./routing-receipt";
+import { formatMicros, renderRoutingReceipt, renderRoutingSummary } from "./routing-receipt";
 import { ASCII_GLYPHS, UNICODE_GLYPHS } from "./glyphs";
 import { visibleWidth } from "./markdown";
 import { buildPalette, builtinThemes, findBuiltinTheme } from "./theme";
@@ -82,4 +82,33 @@ describe("renderRoutingReceipt", () => {
       }
     }
   });
+});
+
+
+it("summarizes currencies independently and discloses missing settlements", () => {
+  const rendered = renderRoutingSummary([receipt, { ...receipt, currency: "EUR", actualMicros: 200 }, { ...receipt, actualMicros: undefined, chosen: { provider: "other", model: "m" } }], style);
+  expect(rendered).toContain("3 calls · 3 retries · 1 route switches");
+  expect(rendered).toContain("actual USD 0.0098 (1 settled)");
+  expect(rendered).toContain("actual EUR 0.0002 (1 settled)");
+  expect(rendered).toContain("1 calls without settlement data");
+  for (const line of renderRoutingSummary([receipt], { ...style, width: 24 }).split("\n")) expect(visibleWidth(line)).toBeLessThanOrEqual(24);
+});
+
+it("marks only the selected provider when multiple providers host the same model", () => {
+  const rendered = renderRoutingReceipt({ ...receipt, chosen: { provider: "a", model: "shared" }, considered: [
+    { provider: "a", model: "shared", eligible: true, reason: "" },
+    { provider: "b", model: "shared", eligible: true, reason: "" },
+  ], attempts: [{ provider: "b", model: "shared", outcome: "rate_limited", latencyMs: 500 }] }, style);
+  expect(rendered).toContain("✓ a/shared");
+  expect(rendered).not.toContain("✓ b/shared");
+  expect(rendered).toContain("rate_limited");
+});
+
+it("labels cost and quality forecasts without inventing a measured outcome", () => {
+  const rendered = renderRoutingReceipt({ chosen: { model: "m" }, policy: {}, considered: [], retries: 0,
+    expectedTotalMicros: 200, predictedOutcomeScore: 0.85, costFactors: { retryMicros: 25, cacheSavingMicros: 10 } }, style);
+  expect(rendered).toContain("expected task cost USD 0.0002");
+  expect(rendered).toContain("predicted quality 0.85");
+  expect(rendered).toContain("cache savings USD 0.00001");
+  expect(rendered).not.toContain("outcome 0.85");
 });

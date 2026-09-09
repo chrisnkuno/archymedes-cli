@@ -43,6 +43,7 @@ export function renderRoutingReceipt(receipt: RoutingReceipt, style: SectionStyl
   out.push(row(receipt.chosen.provider ? `${receipt.chosen.provider}/${receipt.chosen.model}` : receipt.chosen.model));
 
   const policyBits: string[] = [];
+  if (receipt.policyId) policyBits.push(`${receipt.policyId}${receipt.policyVersion !== undefined ? ` v${receipt.policyVersion}` : ""}`);
   if (receipt.policy.dataPolicy) policyBits.push(receipt.policy.dataPolicy);
   if (receipt.policy.region) policyBits.push(`region ${receipt.policy.region}`);
   if (receipt.policy.qualityFloor !== undefined) policyBits.push(`floor ${receipt.policy.qualityFloor.toFixed(2)}`);
@@ -63,12 +64,29 @@ export function renderRoutingReceipt(receipt: RoutingReceipt, style: SectionStyl
     out.push(row(costBits.join(` ${middot} `), overrun ? "warn" : "neutral"));
   }
 
+  if (receipt.expectedTotalMicros !== undefined || receipt.predictedOutcomeScore !== undefined || receipt.costFactors) {
+    out.push(head("forecast", 3));
+    if (receipt.expectedTotalMicros !== undefined) out.push(row(`expected task cost ${formatMicros(receipt.expectedTotalMicros, currency)}`));
+    if (receipt.predictedOutcomeScore !== undefined) out.push(row(`predicted quality ${receipt.predictedOutcomeScore.toFixed(2)}`));
+    for (const [key, label] of [["retryMicros", "retries"], ["contextTransferMicros", "context transfer"], ["cacheSavingMicros", "cache savings"], ["verificationMicros", "verification"], ["nonModelMicros", "other work"]] as const) {
+      const amount = receipt.costFactors?.[key];
+      if (amount !== undefined && amount > 0) out.push(row(`${label} ${formatMicros(amount, currency)}`));
+    }
+  }
+
+  if (receipt.attempts?.length) {
+    out.push(head("attempts", 3));
+    for (const [index, attempt] of receipt.attempts.entries()) {
+      out.push(row(`${index + 1}. ${attempt.provider ? `${attempt.provider}/` : ""}${attempt.model} ${middot} ${attempt.outcome}${attempt.latencyMs !== undefined ? ` ${middot} ${(attempt.latencyMs / 1000).toFixed(1)}s` : ""}`, attempt.outcome === "succeeded" ? "good" : "warn"));
+    }
+  }
+
   if (receipt.considered.length > 0) {
     out.push(head("considered", 3));
     const chosenKey = `${receipt.chosen.provider ?? ""}/${receipt.chosen.model}`;
     for (const route of receipt.considered.slice(0, 6)) {
       const name = route.provider ? `${route.provider}/${route.model}` : route.model;
-      const chosen = `${route.provider ?? ""}/${route.model}` === chosenKey || route.model === receipt.chosen.model;
+      const chosen = `${route.provider ?? ""}/${route.model}` === chosenKey || (!receipt.chosen.provider && route.model === receipt.chosen.model);
       const score = route.score !== undefined ? `score ${route.score.toFixed(2)}` : "";
       const est = route.estimatedMicros !== undefined ? formatMicros(route.estimatedMicros, currency) : "";
       const meta = [score, est].filter(Boolean).join(" ");
@@ -81,4 +99,32 @@ export function renderRoutingReceipt(receipt: RoutingReceipt, style: SectionStyl
   }
 
   return badge ? `${out.join("\n")}\n${rule(cell, { label: badge })}` : out.join("\n");
+}
+
+/** Currency buckets keep a mixed-currency session from presenting a fictitious total. */
+export function renderRoutingSummary(receipts: readonly RoutingReceipt[], style: SectionStyle): string {
+  const glyphs = style.glyphs ?? UNICODE_GLYPHS;
+  const cell = { ...style, width: Math.max(24, style.width) };
+  const row = (text: string) => note(clip(text, cell.width - 4, glyphs), cell);
+  const buckets = new Map<string, { actual: number; estimated: number; settled: number; estimates: number }>();
+  let switches = 0;
+  let retries = 0;
+  for (const [index, receipt] of receipts.entries()) {
+    const currency = receipt.currency ?? "USD";
+    const bucket = buckets.get(currency) ?? { actual: 0, estimated: 0, settled: 0, estimates: 0 };
+    if (receipt.actualMicros !== undefined) { bucket.actual += receipt.actualMicros; bucket.settled++; }
+    if (receipt.estimatedMicros !== undefined) { bucket.estimated += receipt.estimatedMicros; bucket.estimates++; }
+    buckets.set(currency, bucket);
+    retries += receipt.retries;
+    const previous = receipts[index - 1];
+    if (previous && (previous.chosen.provider !== receipt.chosen.provider || previous.chosen.model !== receipt.chosen.model)) switches++;
+  }
+  const out = [heading("routing summary", 1, cell, "accent"), row(`${receipts.length} calls · ${retries} retries · ${switches} route switches`)];
+  for (const [currency, bucket] of buckets) {
+    out.push(row(`actual ${formatMicros(bucket.actual, currency)} (${bucket.settled} settled)`));
+    if (bucket.estimates) out.push(row(`estimated ${formatMicros(bucket.estimated, currency)} (${bucket.estimates} estimates)`));
+  }
+  const missing = receipts.filter((receipt) => receipt.actualMicros === undefined).length;
+  if (missing) out.push(row(`${missing} calls without settlement data`));
+  return out.join("\n");
 }

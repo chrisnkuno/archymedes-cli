@@ -1,3 +1,4 @@
+import { saveSession, newSessionId } from "@archymedes/core/cli/session";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
@@ -113,6 +114,54 @@ describe("read-only inspection commands do not disturb the session", () => {
     p.writeLine("anything else?");
     await p.waitFor(/still working/, { timeoutMs: 30_000, since: mark });
     expect(stub.requestCount()).toBe(requestsAfterTurn + 1);
+  }, 120_000);
+
+  it("/route plan says a direct provider has one route, and spends nothing asking", async () => {
+    const p = boot();
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    const requestsAfterTurn = stub.requestCount();
+
+    // A preflight has nothing to weigh without the exchange, and it must say that rather than
+    // quietly ranking the one provider the session already has.
+    let mark = p.output().length;
+    p.writeLine("/route plan");
+    await p.waitFor(/needs the archymedes-cloud provider/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(PROMPT, { timeoutMs: 10_000, since: mark });
+    expect(stub.requestCount(), "a routing preflight must not call the model").toBe(requestsAfterTurn);
+
+    // And the session still takes the next turn.
+    stub.enqueue({ kind: "text", text: "still working" });
+    mark = p.output().length;
+    p.writeLine("anything else?");
+    await p.waitFor(/still working/, { timeoutMs: 30_000, since: mark });
+    expect(stub.requestCount()).toBe(requestsAfterTurn + 1);
+  }, 120_000);
+
+  it("/route follows tabs, clear and resumed receipt history without spending", async () => {
+    const id = newSessionId();
+    await saveSession({ schemaVersion: 2, revision: 0, id, root: cwd,
+      createdAt: Date.now(), updatedAt: Date.now(), title: "Hosted history", messages: [], approvals: {}, totalRwf: 0,
+      routingReceipts: [{ taskId: "paid_call", chosen: { model: "receipt-test-model" }, considered: [], policy: {}, retries: 0, currency: "USD", actualMicros: 100 }],
+    });
+    const p = boot({ args: ["--resume", id] });
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+    const command = async (input: string, expected: RegExp) => {
+      const mark = p.output().length;
+      p.writeLine(input);
+      await p.waitFor(expected, { timeoutMs: 15_000, since: mark });
+      await p.waitFor(PROMPT, { timeoutMs: 10_000, since: mark });
+    };
+    await command("/route summary", /1 calls/);
+    await command("/tab new empty", /running/);
+    await command("/route", /no hosted routing this session/);
+    await command("/tab 1", /Hosted history|tab|receipt-test-model|calls/);
+    await command("/route summary", /1 calls/);
+    await command("/clear", /new thread/);
+    await command("/route", /no hosted routing this session/);
+    await command(`/history resume ${id}`, /resumed/);
+    await command("/route summary", /1 calls/);
+    expect(stub.requestCount()).toBe(0);
   }, 120_000);
 
   it("/route says there is no hosted routing on a direct-provider session, without disturbing it", async () => {

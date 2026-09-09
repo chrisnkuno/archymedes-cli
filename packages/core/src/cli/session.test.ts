@@ -48,6 +48,19 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe("session storage", () => {
+  it("loads malformed optional receipt history without losing the session", async () => {
+    const saved = record();
+    await saveSession(saved);
+    expect((await loadSession(root, saved.id))?.routingReceipts).toEqual([]);
+    const legacy = { ...record({ id: "legacy" }), routingReceipts: [null, {}, { chosen: { model: "old" } }] };
+    await fs.writeFile(path.join(root, ".archymedes", "sessions", "legacy.json"), JSON.stringify(legacy));
+    const loaded = await loadSession(root, "legacy");
+    expect(loaded?.messages).toEqual(legacy.messages);
+    expect(loaded?.routingReceipts).toHaveLength(1);
+    await saveSession(loaded!);
+    expect((await loadSession(root, "legacy"))?.routingReceipts).toEqual(loaded!.routingReceipts);
+  });
+
   it("round-trips a session, including its standing approvals", async () => {
     const saved = record({ mode: "plan" });
     await saveSession(saved);

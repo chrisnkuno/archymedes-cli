@@ -1,5 +1,6 @@
 import { fromUnits, formatMoney, type Currency } from "@archymedes/core/money";
 import { BalanceError, CRITICAL_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
+import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
 
 /**
  * `/balance` — the command grammar and everything it prints.
@@ -9,8 +10,10 @@ import { BalanceError, CRITICAL_BALANCE_USD, type Balance } from "@archymedes/co
  * rather than eyeballed once: an amount must be shown the same way in a warning and in the
  * running header, because a user comparing the two is checking whether the number moved.
  *
- * There is no gateway and no top-up. A balance is a figure the user sets, tracked locally in the
- * session's display currency and drawn down by the measured cost of each turn.
+ * Two different balances live here and must not be confused. The manual one is a figure the user
+ * sets, tracked locally in the session's display currency and drawn down by the measured cost of
+ * each turn. The hosted one is the exchange's credit ledger, read over the network, and it is the
+ * only one a hosted turn actually spends against.
  */
 
 export type ManualBalanceCommand =
@@ -228,4 +231,48 @@ export function renderBalance(balance: Balance, criticalBalance: number, options
     lines.push("That is less than this session has already used — consider /balance before starting more work.");
   }
   return lines;
+}
+
+/**
+ * The hosted credit balance, when the session runs on the exchange.
+ *
+ * Deliberately not merged with `renderBalance`. That figure is a pacing aid the user typed; this
+ * one is a ledger reporting real money, and printing them as one number would be a lie about which
+ * of the two the next turn actually draws against.
+ *
+ * Reserved credit gets its own line because it is the figure people misread: it is not spent, and
+ * it is not spendable either — it is held against work already in flight, and what that work does
+ * not use comes back.
+ */
+export function renderHostedBalance(
+  balance: HostedCreditBalance,
+  options: { localCurrency?: Currency } = {},
+): string[] {
+  const money = (micros: number) => formatMicros(micros, balance.currency);
+  const lines = [`Archymedes credits ${money(balance.availableMicros)} available`];
+
+  if (balance.promotionalMicros !== undefined && balance.promotionalMicros > 0) {
+    lines.push(`Includes ${money(balance.promotionalMicros)} in promotional credit.`);
+  }
+  if (balance.reservedMicros !== undefined && balance.reservedMicros > 0) {
+    lines.push(`${money(balance.reservedMicros)} is reserved against work in flight — held, not spent. Unused reservation returns.`);
+  }
+  if (balance.spentMicros !== undefined && balance.spentMicros > 0) {
+    lines.push(`${money(balance.spentMicros)} settled so far on this account.`);
+  }
+  if (balance.availableMicros === 0) {
+    lines.push("No credit is available, so a hosted turn cannot reserve its cap and will not start.");
+  }
+  // Closed-loop by design, and the user should be told so rather than discovering it at a refund.
+  lines.push("Credits are for Archymedes services; they are not transferable or withdrawable.");
+  if (options.localCurrency && options.localCurrency !== balance.currency) {
+    lines.push(`Shown in ${balance.currency}, the currency the exchange reserves in, not your ${options.localCurrency} display currency.`);
+  }
+  return lines;
+}
+
+/** Micros as a trimmed amount in the ledger's own currency — never converted. */
+function formatMicros(micros: number, currency: string): string {
+  const text = (micros / 1_000_000).toFixed(6).replace(/\.?0+$/, "");
+  return `${currency} ${text === "" || text === "-" ? "0" : text}`;
 }

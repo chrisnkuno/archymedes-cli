@@ -3,6 +3,8 @@ import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../ag
 import { toWireMessages, turnFromChatResponse, type ChatResponse } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { buildTaskProfile, TASK_KINDS, type TaskKind } from "./routing-receipt";
+import { parseRoutingPlan, type RoutingPlan } from "./routing-plan";
+import { parseCreditBalance, type CreditBalance } from "./credit-balance";
 
 export type ArchymedesCloudDataPolicy = "standard" | "no-training" | "zero-retention" | "local-only";
 
@@ -23,9 +25,12 @@ export type ArchymedesCloudAgentOptions = {
 
 /** An HTTP failure whose status remains visible to the runtime's bounded retry policy. */
 export class ArchymedesCloudError extends Error {
-  constructor(readonly status: number, message: string, readonly code?: string) {
+  readonly retryable?: boolean;
+  constructor(readonly status: number, message: string, readonly code?: string, readonly retryAfterMs?: number) {
     super(message);
     this.name = "ArchymedesCloudError";
+    if (["request_previously_failed", "idempotency_conflict", "spend_limit_exceeded"].includes(code ?? "")) this.retryable = false;
+    else if (code === "request_in_progress") this.retryable = true;
   }
 }
 
@@ -41,6 +46,8 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
   readonly capabilities: ModelCapabilities;
   private readonly fetchImpl: typeof fetch;
   private readonly completionUrl: string;
+  private readonly planUrl: string;
+  private readonly balanceUrl: string;
   private readonly model: string;
   private readonly maximumMicros: number;
   private readonly currency: string;
@@ -66,18 +73,106 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
     this.dataPolicy = dataPolicy as ArchymedesCloudDataPolicy;
     this.qualityFloor = qualityFloor;
     const requestedKind = options.taskKind?.trim().toLowerCase();
-    this.taskKind = (TASK_KINDS as readonly string[]).includes(requestedKind ?? "") ? requestedKind as TaskKind : "coding";
+    if (requestedKind !== undefined && !(TASK_KINDS as readonly string[]).includes(requestedKind)) throw new Error(`Archymedes Cloud task kind must be one of: ${TASK_KINDS.join(", ")}`);
+    this.taskKind = requestedKind as TaskKind | undefined ?? "coding";
     this.fetchImpl = options.fetchImpl ?? fetch;
     const base = options.baseURL.replace(/\/+$/, "");
     this.completionUrl = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+    this.planUrl = base.endsWith("/v1") ? `${base}/routes/plan` : `${base}/v1/routes/plan`;
+    this.balanceUrl = base.endsWith("/v1") ? `${base}/credits/balance` : `${base}/v1/credits/balance`;
     // `auto` has no concrete limits before routing. The conservative fallback prevents the client
     // from constructing a request that an eligible provider cannot hold.
     this.capabilities = capabilitiesFor(this.model);
   }
 
+  /**
+   * Asks what the next turn would be routed to, without running it.
+   *
+   * This is deliberately not a completion against a throwaway budget: planning must not reserve
+   * credit, call a provider or touch the conversation, so it goes to the exchange's read-only
+   * planning endpoint and sends the *size* of the prospective request rather than its content. The
+   * profile is built by the same `buildTaskProfile` call the real turn uses, because a preflight
+   * that quietly plans a different request than it would send is worse than no preflight.
+   *
+   * Returns null when the exchange answers with something that is not a plan; the caller shows
+   * that as "no plan available", never as "no routes".
+   */
+  async plan(input: { estimatedInputTokens: number; maxOutputTokens: number; usesTools?: boolean; effort?: string; signal?: AbortSignal }): Promise<RoutingPlan | null> {
+    if (!Number.isSafeInteger(input.estimatedInputTokens) || input.estimatedInputTokens < 1) {
+      throw new Error("estimatedInputTokens must be a positive integer");
+    }
+    input.signal?.throwIfAborted();
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(this.options.timeoutMs ?? 30_000),
+      ...(input.signal ? [input.signal] : []),
+    ]);
+    const response = await this.fetchImpl(this.planUrl, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.options.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: this.model,
+        max_completion_tokens: input.maxOutputTokens,
+        archymedes: {
+          estimated_input_tokens: input.estimatedInputTokens,
+          maximum: { currency: this.currency, micros: this.maximumMicros },
+          profile: buildTaskProfile({
+            kind: this.taskKind,
+            requiredCapabilities: [
+              ...(input.usesTools ? ["tools"] : []),
+              ...(input.effort ? ["reasoning"] : []),
+            ],
+            dataPolicy: this.dataPolicy,
+            region: this.options.region,
+            qualityFloor: this.qualityFloor,
+          }),
+        },
+      }),
+      signal,
+    });
+    const body = await readBody(response);
+    if (!response.ok) {
+      const problem = body as { error?: { code?: unknown; message?: unknown } };
+      const code = typeof problem?.error?.code === "string" ? problem.error.code : undefined;
+      const detail = typeof problem?.error?.message === "string" ? problem.error.message : `Exchange returned HTTP ${response.status}`;
+      throw new ArchymedesCloudError(response.status, detail.slice(0, 500), code);
+    }
+    return parseRoutingPlan(body);
+  }
+
+  /**
+   * Reads the account's hosted credit balance.
+   *
+   * A plain read: it moves no money and reserves nothing, so it carries no idempotency key. The
+   * currency asked for is the one this provider reserves in, so the figure the user sees is the
+   * figure their next turn will actually draw against — converting it here would put a number on
+   * screen that no reservation is denominated in.
+   */
+  async creditBalance(signal?: AbortSignal): Promise<CreditBalance | null> {
+    signal?.throwIfAborted();
+    const merged = AbortSignal.any([
+      AbortSignal.timeout(this.options.timeoutMs ?? 15_000),
+      ...(signal ? [signal] : []),
+    ]);
+    const response = await this.fetchImpl(`${this.balanceUrl}?currency=${encodeURIComponent(this.currency)}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${this.options.token}`, accept: "application/json" },
+      signal: merged,
+    });
+    const body = await readBody(response);
+    if (!response.ok) {
+      const problem = body as { error?: { code?: unknown; message?: unknown } };
+      const code = typeof problem?.error?.code === "string" ? problem.error.code : undefined;
+      const detail = typeof problem?.error?.message === "string" ? problem.error.message : `Exchange returned HTTP ${response.status}`;
+      throw new ArchymedesCloudError(response.status, detail.slice(0, 500), code);
+    }
+    return parseCreditBalance(body);
+  }
+
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
     if (!request.safetyIdentifier.trim()) throw new Error("safetyIdentifier is required");
-    const taskId = `cli_${randomUUID()}`;
+    const taskId = request.requestId ?? `cli_${randomUUID()}`;
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(taskId)) throw new Error("requestId must contain 1 to 160 letters, numbers, underscores or hyphens");
+    request.signal?.throwIfAborted();
     const signal = AbortSignal.any([
       AbortSignal.timeout(this.options.timeoutMs ?? 180_000),
       ...(request.signal ? [request.signal] : []),
@@ -126,7 +221,11 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
       const problem = body as { error?: { code?: unknown; message?: unknown } };
       const code = typeof problem?.error?.code === "string" ? problem.error.code : undefined;
       const detail = typeof problem?.error?.message === "string" ? problem.error.message : `Exchange returned HTTP ${response.status}`;
-      throw new ArchymedesCloudError(response.status, detail.slice(0, 500), code);
+      const retryAfter = response.headers.get("retry-after");
+      const retryAfterMs = retryAfter === null ? undefined : /^\d+(?:\.\d+)?$/.test(retryAfter.trim())
+        ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now());
+      throw new ArchymedesCloudError(response.status, detail.slice(0, 500), code,
+        retryAfterMs !== undefined && Number.isFinite(retryAfterMs) ? retryAfterMs : undefined);
     }
     return turnFromChatResponse(body as ChatResponse);
   }

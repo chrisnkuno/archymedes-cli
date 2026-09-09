@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskProfile, parseRoutingReceipt } from "./routing-receipt";
+import { buildTaskProfile, parseRoutingReceipt, mergeRoutingReceipts } from "./routing-receipt";
 
 describe("buildTaskProfile", () => {
   it("emits only the fields that carry a decision", () => {
@@ -82,7 +82,7 @@ describe("parseRoutingReceipt", () => {
     expect(parseRoutingReceipt({ chosen: { model: "  " } })).toBeNull();
   });
 
-  it("clamps scores, floors negatives, and defaults a missing retry count to zero", () => {
+  it("preserves utility scores, clamps outcome quality, and defaults invalid retries", () => {
     const receipt = parseRoutingReceipt({
       chosen: { model: "m" },
       considered: [{ model: "m", score: 5 }, { model: "n", score: -1 }, { bogus: true }],
@@ -91,11 +91,52 @@ describe("parseRoutingReceipt", () => {
       latency_ms: -10,
     });
     expect(receipt?.considered).toEqual([
-      { model: "m", eligible: true, reason: "", score: 1 },
-      { model: "n", eligible: true, reason: "", score: 0 },
+      { model: "m", eligible: true, reason: "", score: 5 },
+      { model: "n", eligible: true, reason: "", score: -1 },
     ]);
     expect(receipt?.outcomeScore).toBe(1);
     expect(receipt?.retries).toBe(0);
     expect(receipt?.latencyMs).toBeUndefined();
+  });
+});
+
+
+it("reads the private gateway protocol receipt including fallback evidence", () => {
+  const receipt = parseRoutingReceipt({
+    requestId: "cli_1", selectedProvider: "p", selectedModel: "m", policyId: "balanced", policyVersion: 2,
+    considered: [{ provider: "p", model: "m", eligible: true, score: 25.4, reason: "best outcome" }],
+    estimated: { currency: "USD", micros: 100 }, actual: { currency: "USD", micros: 80 },
+    attempts: [
+      { provider: "q", model: "n", outcome: "rate_limited", startedAt: "2026-01-01T00:00:00Z", completedAt: "2026-01-01T00:00:01Z" },
+      { provider: "p", model: "m", outcome: "succeeded", startedAt: "2026-01-01T00:00:01Z", completedAt: "2026-01-01T00:00:03Z" },
+    ],
+  });
+  expect(receipt).toMatchObject({ taskId: "cli_1", chosen: { provider: "p", model: "m" }, policyId: "balanced", policyVersion: 2, currency: "USD", estimatedMicros: 100, actualMicros: 80, retries: 1, latencyMs: 3000 });
+  expect(receipt?.considered[0].score).toBe(25.4);
+  expect(receipt?.attempts?.map((attempt) => attempt.outcome)).toEqual(["rate_limited", "succeeded"]);
+});
+
+it("keeps hosted forecasts distinct from evaluated results and uses total latency", () => {
+  const receipt = parseRoutingReceipt({ selectedProvider: "p", selectedModel: "m", expectedTotalMicros: 200, predictedOutcomeScore: 0.85,
+    finalOutcomeScore: null, totalLatencyMs: 1500, factors: { retry_micros: 25, cache_saving_micros: 10, non_model_micros: -1 } });
+  expect(receipt).toMatchObject({ expectedTotalMicros: 200, predictedOutcomeScore: 0.85, latencyMs: 1500, costFactors: { retryMicros: 25, cacheSavingMicros: 10 } });
+  expect(receipt?.outcomeScore).toBeUndefined();
+  expect(parseRoutingReceipt({ selectedModel: "m", finalOutcomeScore: 0.7 })?.outcomeScore).toBe(0.7);
+});
+
+describe("stored routing receipts", () => {
+  const receipt = { taskId: "call_1", chosen: { model: "test" }, considered: [], policy: {}, currency: "USD", retries: 1, latencyMs: 42,
+    attempts: [{ model: "test", outcome: "success", latencyMs: 42 }], costFactors: { retryMicros: 10 }, actualMicros: 100 };
+  it("round-trips all normalized fields", () => {
+    expect(parseRoutingReceipt(JSON.parse(JSON.stringify(receipt)))).toEqual(receipt);
+  });
+  it("deduplicates identified calls and preserves settlement on partial replay", () => {
+    expect(mergeRoutingReceipts([receipt], [{ ...receipt, actualMicros: undefined }])).toEqual([receipt]);
+    expect(mergeRoutingReceipts([receipt], [{ ...receipt, actualMicros: 120 }])[0].actualMicros).toBe(120);
+    expect(mergeRoutingReceipts([receipt], [{ ...receipt, currency: "EUR", actualMicros: undefined }])[0].actualMicros).toBeUndefined();
+  });
+  it("ignores malformed records without collapsing unidentified legacy calls", () => {
+    const legacy = { ...receipt, taskId: undefined };
+    expect(mergeRoutingReceipts(null, {}, [null, {}, { chosen: {} }, legacy, legacy])).toHaveLength(2);
   });
 });

@@ -527,6 +527,54 @@ describe("ArchymedesAgent", () => {
   });
 });
 
+describe("routing preflight", () => {
+  it("has no plan to offer for a direct provider, rather than inventing a ranking", async () => {
+    const agent = new ArchymedesAgent({
+      root, model: scriptedModel([{}]), prices, mode: "build",
+      approve: async () => "allow",
+      workspace: new LocalWorkspace(root, undefined, async () => ({ exitCode: 0, stdout: "", stderr: "" })),
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
+    });
+    expect(await agent.planNextTurn("change the port")).toBeNull();
+  });
+
+  it("plans against the size of the turn it would send, and calls no model doing it", async () => {
+    const model = scriptedModel([{}]);
+    const plan = vi.fn(async () => ({ currency: "USD", ranked: [], excluded: [] }));
+    const agent = new ArchymedesAgent({
+      root, model: Object.assign(model, { plan }), prices, mode: "build",
+      approve: async () => "allow",
+      workspace: new LocalWorkspace(root, undefined, async () => ({ exitCode: 0, stdout: "", stderr: "" })),
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
+    });
+
+    const result = await agent.planNextTurn("change the port to 8080");
+    expect(result).toEqual({ currency: "USD", ranked: [], excluded: [] });
+    expect(model.requests).toHaveLength(0);
+    const [input] = plan.mock.calls[0] as unknown as [{ estimatedInputTokens: number; usesTools: boolean; maxOutputTokens: number }];
+    // The assembled turn carries a system prompt and tool schemas, so its size is never trivial —
+    // and the preflight must be ranked against that size, not against the objective alone.
+    expect(input.estimatedInputTokens).toBeGreaterThan(100);
+    expect(input.usesTools).toBe(true);
+    expect(input.maxOutputTokens).toBeGreaterThan(0);
+  });
+
+  it("measures the objective it was given, not a fixed placeholder", async () => {
+    const plan = vi.fn(async () => null);
+    const agent = new ArchymedesAgent({
+      root, model: Object.assign(scriptedModel([{}]), { plan }), prices, mode: "build",
+      approve: async () => "allow",
+      workspace: new LocalWorkspace(root, undefined, async () => ({ exitCode: 0, stdout: "", stderr: "" })),
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
+    });
+    await agent.planNextTurn("change the port");
+    await agent.planNextTurn("change the port".padEnd(20_000, " and then also fix the tests"));
+    const [short] = plan.mock.calls[0] as unknown as [{ estimatedInputTokens: number }];
+    const [long] = plan.mock.calls[1] as unknown as [{ estimatedInputTokens: number }];
+    expect(long.estimatedInputTokens).toBeGreaterThan(short.estimatedInputTokens);
+  });
+});
+
 describe("the budgets a session runs with", () => {
   /** A provider that reports what its model can do, like the real ones now do. */
   function providerWith(capabilities: { contextWindow: number; maxOutputTokens: number; supportsEffort: boolean } | undefined) {
