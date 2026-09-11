@@ -41,6 +41,28 @@ describe("local command executor", () => {
     expect(result).toMatchObject({ exitCode: 0, stdout: "firstsecond" });
   });
 
+  it("expands quoted variables, globs, assignments and multiline commands", async () => {
+    await fs.writeFile(path.join(root, "one.audit"), "");
+    await fs.writeFile(path.join(root, "two.audit"), "");
+    for (const [command, stdout] of [
+      ['printf "%s" "$PWD"', root],
+      ['printf "%s " *.audit', 'one.audit two.audit '],
+      ['AUDIT_VALUE=ready sh -c \'printf "$AUDIT_VALUE"\'', 'ready'],
+      ['printf first\nprintf second', 'firstsecond'],
+      ['printf %s done # ignored', 'done'],
+    ]) {
+      expect(await runLocalCommand(command, { cwd: root, timeoutMs: 5_000 })).toMatchObject({ exitCode: 0, stdout });
+    }
+    expect(hasShellSyntax("printf '%s' '$PWD'")).toBe(false);
+    expect(tokenizeCommand(String.raw`printf '%s' "a\qb"`)).toEqual(["printf", "%s", String.raw`a\qb`]);
+  });
+
+  it("reports a process killed by a signal as failure", async () => {
+    await fs.writeFile(path.join(root, "signal.cjs"), 'process.kill(process.pid, "SIGTERM");');
+    const result = await runLocalCommand("node signal.cjs", { cwd: root, timeoutMs: 5_000, containProcessTree: false });
+    expect(result.exitCode).toBe(143);
+  });
+
   it("terminates a timed-out process with a classified exit code", async () => {
     const result = await runLocalCommand('node -e "setTimeout(() => {}, 10000)"', { cwd: root, timeoutMs: 20 });
     expect(result.exitCode).toBe(124);
@@ -165,7 +187,8 @@ describe("OS-level process-tree containment", () => {
         \`], { detached: true, stdio: 'ignore' }).unref();
         setTimeout(() => {}, 30000);
       `;
-      const result = await runLocalCommand(`node -e "${script.replace(/"/g, '\\"')}"`, { cwd: root, timeoutMs: 300 });
+      await fs.writeFile(path.join(root, "detaching-child.cjs"), script);
+      const result = await runLocalCommand("node detaching-child.cjs", { cwd: root, timeoutMs: 300 });
       expect(result.exitCode).toBe(124);
 
       const heartbeatAtTimeout = await fs.readFile(marker, "utf8").catch(() => null);

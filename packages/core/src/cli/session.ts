@@ -36,6 +36,8 @@ export type SessionRecord = {
   routingReceipts?: RoutingReceipt[];
   /** SHA-256 over the canonical record without this field. */
   integrity?: string;
+  /** Recovery batch already incorporated atomically into this snapshot. */
+  hostedRecoveryBatchId?: string;
 };
 
 export const SESSION_SCHEMA_VERSION = 2 as const;

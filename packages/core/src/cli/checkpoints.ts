@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -57,7 +58,7 @@ export const runGit: GitRunner = (args, options) =>
     child.stdout.on("data", (chunk) => { stdout += String(chunk); });
     child.stderr.on("data", (chunk) => { stderr += String(chunk); });
     child.on("error", (error) => resolve({ exitCode: 127, stdout, stderr: error.message }));
-    child.on("close", (code) => resolve({ exitCode: code ?? 0, stdout, stderr }));
+    child.on("close", (code) => resolve({ exitCode: code ?? 1, stdout, stderr }));
   });
 
 export class CheckpointStore {
@@ -132,23 +133,28 @@ export class CheckpointStore {
    * opening the file, and costs one line per hunk.
    */
   async diffPatch(): Promise<string> {
-    const checkpoint = this.latest();
-    if (!checkpoint) return "";
-    const result = await this.git(
-      ["diff", "--unified=3", "--no-color", checkpoint.tree, "--", ...EXCLUDE_ARCHYMEDES],
-      { cwd: this.root },
-    );
-    return result.exitCode === 0 ? result.stdout : "";
+    return this.diff(["--unified=3", "--no-color"]);
   }
 
   /** A stat summary of what changed since the last checkpoint, for `/diff`. Empty before any turn. */
   async diffStat(): Promise<string> {
+    return (await this.diff(["--stat"])).trim();
+  }
+
+  private async diff(format: string[]): Promise<string> {
     const checkpoint = this.latest();
     if (!checkpoint) return "";
-    // Compared against the real working tree and the real index (no GIT_INDEX_FILE override) — this
-    // is read-only, so there is nothing to protect it from the way capture()/restore() protect
-    // themselves from touching the user's own staged changes.
-    const result = await this.git(["diff", "--stat", checkpoint.tree, "--", ...EXCLUDE_ARCHYMEDES], { cwd: this.root });
-    return result.exitCode === 0 ? result.stdout.trim() : "";
+    // Include newly created files without changing the user's staging area or racing the
+    // checkpoint index. Seed from the snapshot so tracked files remain tracked if now ignored.
+    const index = `${this.indexFile}.diff-${randomUUID()}`;
+    const options = { cwd: this.root, env: { GIT_INDEX_FILE: index } };
+    try {
+      if ((await this.git(["read-tree", checkpoint.tree], options)).exitCode !== 0) return "";
+      if ((await this.git(["add", "--all", "--", ...EXCLUDE_ARCHYMEDES], options)).exitCode !== 0) return "";
+      const result = await this.git(["diff", "--cached", ...format, checkpoint.tree, "--", ...EXCLUDE_ARCHYMEDES], options);
+      return result.exitCode === 0 ? result.stdout : "";
+    } finally {
+      await fs.unlink(index).catch(() => undefined);
+    }
   }
 }

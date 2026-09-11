@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { toWireMessages, turnFromChatResponse, type ChatResponse } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
@@ -44,6 +44,7 @@ export class ArchymedesCloudError extends Error {
  */
 export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
   readonly capabilities: ModelCapabilities;
+  readonly recoveryScope: string;
   private readonly fetchImpl: typeof fetch;
   private readonly completionUrl: string;
   private readonly planUrl: string;
@@ -83,6 +84,12 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
     // `auto` has no concrete limits before routing. The conservative fallback prevents the client
     // from constructing a request that an eligible provider cannot hold.
     this.capabilities = capabilitiesFor(this.model);
+    // Bind recovery to the effective request configuration and credential, never persist the token.
+    this.recoveryScope = createHash("sha256").update(JSON.stringify({
+      version: 1, endpoint: this.completionUrl, token: options.token, model: this.model,
+      maximum: this.maximumMicros, currency: this.currency, policy: this.dataPolicy,
+      quality: this.qualityFloor, kind: this.taskKind, region: options.region,
+    })).digest("hex");
   }
 
   /**
@@ -169,6 +176,14 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
   }
 
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
+    return this.exchange(request, false);
+  }
+
+  async recoverComplete(request: AgentModelRequest): Promise<AgentModelTurn> {
+    return this.exchange(request, true);
+  }
+
+  private async exchange(request: AgentModelRequest, recoveryOnly: boolean): Promise<AgentModelTurn> {
     if (!request.safetyIdentifier.trim()) throw new Error("safetyIdentifier is required");
     const taskId = request.requestId ?? `cli_${randomUUID()}`;
     if (!/^[A-Za-z0-9_-]{1,160}$/.test(taskId)) throw new Error("requestId must contain 1 to 160 letters, numbers, underscores or hyphens");
@@ -177,7 +192,7 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
       AbortSignal.timeout(this.options.timeoutMs ?? 180_000),
       ...(request.signal ? [request.signal] : []),
     ]);
-    const response = await this.fetchImpl(this.completionUrl, {
+    const response = await this.fetchImpl(recoveryOnly ? `${this.completionUrl}/recover` : this.completionUrl, {
       method: "POST",
       headers: {
         authorization: `Bearer ${this.options.token}`,

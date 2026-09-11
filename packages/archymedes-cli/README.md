@@ -291,7 +291,7 @@ Apache-2.0 licensed.
 ## The Archymedes terminal
 
 The default `archymedes` theme uses bronze instruments, limestone text and olive accents.
-The opening instrument, composer, turn status line, result cards and workspace share the active palette. Startup is
+The opening nested tetrahedron geometry, composer, turn status line, result cards and workspace share the active palette. Startup is
 static and uses a compact identity on short or narrow terminals, leaving room for the conversation.
 Light terminals automatically use `parchment`; `blueprint`, `chalkboard` and `high-contrast` remain
 available through `/theme list`. Use `archymedes --theme blueprint` to keep the previous palette.
@@ -307,3 +307,5 @@ From the repository root, run `bun run release:check`. This tests and builds the
 the CLI archive, installs that exact archive in a temporary consumer, and verifies Node startup and
 TUI dependency resolution. The reviewed archive and SHA256 checksum are written to `artifacts/`.
 See [the release assessment](https://github.com/chrisnkuno/archymedes-cli/blob/main/docs/RELEASE_ASSESSMENT.md) for scope and remaining release proof.
+
+The startup geometry makes a brief rotation on roomy interactive terminals. Set `ARCHYMEDES_NO_MOTION=1` to keep it still. Preview it with `bun run preview:tui archymedes --animate`.

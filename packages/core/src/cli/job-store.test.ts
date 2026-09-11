@@ -50,6 +50,15 @@ describe("persisting across separate calls", () => {
     expect(raw.jobs).toHaveLength(1);
   });
 
+  it("preserves a malformed queue instead of overwriting it on enqueue", async () => {
+    await fs.mkdir(path.dirname(jobStoreFile(root)), { recursive: true });
+    const malformed = '{"jobs":"invalid"}';
+    await fs.writeFile(jobStoreFile(root), malformed);
+    await expect(listJobs(root)).rejects.toThrow("corrupt");
+    await expect(enqueueJob(root, { id: newJobId(), objective: "keep queue", logPath: "unused" })).rejects.toThrow("corrupt");
+    expect(await fs.readFile(jobStoreFile(root), "utf8")).toBe(malformed);
+  });
+
   it("surfaces a corrupt store instead of quietly treating it as empty", async () => {
     await fs.mkdir(path.dirname(jobStoreFile(root)), { recursive: true });
     await fs.writeFile(jobStoreFile(root), "{ not json", "utf8");

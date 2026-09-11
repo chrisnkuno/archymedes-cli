@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { acquireFileOwnership } from "./file-ownership";
 import type { AgentRuntimeEvent, ToolEffect } from "../agent-runtime";
 import type { ApprovalRequest, PermissionDecision } from "./permissions";
 
@@ -159,6 +160,8 @@ async function readJournalFile(root: string, sessionId: string): Promise<{ event
  */
 export class EventJournal {
   private handle: FileHandle | null = null;
+  private releaseOwnership: (() => Promise<void>) | undefined;
+  private closed = false;
   private sequence = 0;
   private previousHash = JOURNAL_GENESIS_HASH;
   private initialized: Promise<void> | null = null;
@@ -167,22 +170,35 @@ export class EventJournal {
   constructor(private readonly root: string, private readonly sessionId: string) {}
 
   private async initialize(): Promise<void> {
-    const { events, text, completeText } = await readJournalFile(this.root, this.sessionId);
-    this.sequence = events.length;
-    this.previousHash = events.at(-1)?.hash ?? JOURNAL_GENESIS_HASH;
-    const file = eventJournalPath(this.root, this.sessionId);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    // A file that does not end in a newline was torn by a crash mid-write. The complete prefix is
-    // already computed by the read above, so this costs a `truncate` and not a second full read.
-    if (text.length !== completeText.length) await fs.truncate(file, Buffer.byteLength(completeText, "utf8"));
-    this.handle = await fs.open(file, "a", 0o600);
+    this.releaseOwnership = await acquireFileOwnership(`${eventJournalPath(this.root, this.sessionId)}.owner`);
+    try {
+      const { events, text, completeText } = await readJournalFile(this.root, this.sessionId);
+      this.sequence = events.length;
+      this.previousHash = events.at(-1)?.hash ?? JOURNAL_GENESIS_HASH;
+      const file = eventJournalPath(this.root, this.sessionId);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      // A file that does not end in a newline was torn by a crash mid-write. The complete prefix is
+      // already computed by the read above, so this costs a `truncate` and not a second full read.
+      if (text.length !== completeText.length) await fs.truncate(file, Buffer.byteLength(completeText, "utf8"));
+      this.handle = await fs.open(file, "a", 0o600);
+    } catch (error) {
+      await this.releaseOwnership();
+      this.releaseOwnership = undefined;
+      throw error;
+    }
+  }
+
+  async open(): Promise<void> {
+    if (this.closed) throw new Error("Session journal is closed");
+    this.initialized ??= this.initialize();
+    await this.initialized;
   }
 
   append(payload: ArchymedesProtocolPayload, options: { durable?: boolean } = {}): Promise<ArchymedesEventEnvelope> {
+    if (this.closed) return Promise.reject(new Error("Session journal is closed"));
     let written!: ArchymedesEventEnvelope;
     const operation = this.tail.then(async () => {
-      this.initialized ??= this.initialize();
-      await this.initialized;
+      await this.open();
       const withoutHash: Omit<ArchymedesEventEnvelope, "hash"> = {
         protocolVersion: ARCHYMEDES_PROTOCOL_VERSION,
         sequence: this.sequence + 1,
@@ -207,8 +223,17 @@ export class EventJournal {
   }
 
   async close(): Promise<void> {
-    await this.flush();
-    await this.handle?.close();
-    this.handle = null;
+    try {
+      await this.initialized;
+      await this.flush();
+    } finally {
+      this.closed = true;
+      try { await this.handle?.close(); }
+      finally {
+        this.handle = null;
+        await this.releaseOwnership?.();
+        this.releaseOwnership = undefined;
+      }
+    }
   }
 }

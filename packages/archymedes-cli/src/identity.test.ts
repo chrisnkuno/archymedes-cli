@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { renderIdentity } from "./identity";
+import { describe, expect, it, vi } from "vitest";
+import { renderGeometry, renderIdentity, writeIdentity } from "./identity";
 import { ASCII_GLYPHS, UNICODE_GLYPHS } from "./glyphs";
 import { visibleWidth } from "./markdown";
 import { buildPalette, builtinThemes } from "./theme";
@@ -35,6 +35,53 @@ describe("Archymedes identity", () => {
       expect(frame.prefix).toContain(palette.warning);
       const plain = renderPromptBox({ mode: "plan", workspace: "repo", width: 80, depth: "none", palette });
       expect(Object.values(plain).join("")).not.toContain("\x1b");
+    }
+  });
+});
+
+
+describe("identity motion", () => {
+  it("keeps every rotation within the same ASCII canvas", () => {
+    for (let angle = 0; angle < Math.PI * 2; angle += 0.1) {
+      const rows = renderGeometry(angle, true);
+      expect(rows).toHaveLength(11);
+      for (const row of rows) {
+        expect(row).toHaveLength(23);
+        expect(row).toMatch(/^[\x20-\x7e]+$/);
+      }
+    }
+    expect(renderGeometry(0)).not.toEqual(renderGeometry(0.6));
+  });
+
+  it("settles on the original frame and stops redrawing after a resize", async () => {
+    vi.useFakeTimers();
+    try {
+      const options = { width: 80, rows: 30, version: "test", workspace: "repo", model: "model", mode: "build", palette: buildPalette(builtinThemes()[0], "none") };
+      const writes: string[] = [];
+      const output = { write: (text: string) => writes.push(text) };
+      const running = writeIdentity(options, output, { enabled: true, size: () => options });
+      await vi.runAllTimersAsync();
+      await running;
+      expect(writes).toHaveLength(13);
+      expect(writes.at(-1)?.replace(/\x1b\[11F|\x1b\[2K/g, "")).toBe(writes[0]);
+      writes.length = 0;
+      const resized = writeIdentity(options, output, { enabled: true, size: () => ({ width: 40, rows: 30 }) });
+      await vi.runAllTimersAsync();
+      await resized;
+      expect(writes).toHaveLength(1);
+      writes.length = 0;
+      const controller = new AbortController();
+      const interrupted = writeIdentity(options, output, { enabled: true, size: () => options, signal: controller.signal });
+      controller.abort();
+      await vi.runAllTimersAsync();
+      await interrupted;
+      expect(writes).toHaveLength(1);
+      writes.length = 0;
+      await writeIdentity(options, output, { enabled: false, size: () => options });
+      expect(writes).toHaveLength(1);
+      expect(writes[0]).not.toContain("\x1b");
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

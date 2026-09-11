@@ -385,9 +385,15 @@ describe("checkpoints against a real repository", () => {
       await fs.mkdir(path.join(repo, ".archymedes"), { recursive: true });
       await fs.writeFile(path.join(repo, ".archymedes", "session.json"), "{}");
 
+      const stagedBefore = await runGit(["diff", "--cached", "--binary"], { cwd: repo });
       const patch = await store.diffPatch();
       expect(patch).toContain("diff --git a/app.ts b/app.ts");
       expect(patch).toContain("+// destroyed");
+      expect(patch).toContain("diff --git a/stray.ts b/stray.ts");
+      expect(patch).toContain("+agent wrote this");
+      expect(await store.diffStat()).toContain("stray.ts");
+      expect(patch).not.toContain("session.json");
+      expect(await runGit(["diff", "--cached", "--binary"], { cwd: repo })).toEqual(stagedBefore);
 
       expect(await store.restore(checkpoint!.tree)).toBe(true);
       // Modified files revert, files the agent created are removed, and Archymedes's own state survives.

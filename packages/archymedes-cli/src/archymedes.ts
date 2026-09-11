@@ -28,7 +28,7 @@ import { INITIAL_TABLE_STATE, renderTable } from "./table";
 import { buildCostTable, buildJobsTable, buildModelTable } from "./tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./banner";
-import { renderIdentity } from "./identity";
+import { writeIdentity } from "./identity";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
 import { visibleWidth } from "./markdown";
@@ -2400,7 +2400,7 @@ async function main(): Promise<number> {
       await agent.relinquish();
       if (record.mode && !args.modeExplicit) mode = record.mode;
       agent = await openClient(record);
-      await carryResumedSpend(record);
+      await carryResumedSpend(agent.snapshot());
       out.write(style.dim(`Resumed ${record.id} — ${record.title}\n`));
       // Where the conversation actually got to, not just its id. A resumed session that opens on
       // an empty screen asks the user to trust that a transcript they cannot see is loaded, and
@@ -2409,7 +2409,7 @@ async function main(): Promise<number> {
       // Only when this run will actually stop at a prompt. A replay is orientation for someone
       // about to type; in front of a one-shot answer it is preamble nobody is waiting for, and
       // `archymedes --resume "…"` from a terminal is still a one-shot even though the terminal is real.
-      if (interactive && !args.prompt) out.write(`${renderReplay(record, sectionStyle(), { turns: 2 })}\n`);
+      if (interactive && !args.prompt) out.write(`${renderReplay(agent.snapshot(), sectionStyle(), { turns: 2 })}\n`);
     } else if (args.resume === "latest") {
       out.write(style.yellow("No matching session; starting a new one.\n"));
     } else {
@@ -3007,16 +3007,27 @@ async function main(): Promise<number> {
   }
 
   const where = workspace.kind === "e2b" ? `sandbox ${workspace.label.split(":")[1]}` : path.basename(args.root);
-  out.write(`${renderIdentity({
-    width: process.stdout.columns ?? 80,
-    rows: process.stdout.rows ?? 24,
-    version: ARCHYMEDES_CLI_VERSION,
-    workspace: where,
-    model: `${spec.label} ${resolvedModelId}`,
-    mode,
-    palette,
-    glyphs,
-  })}\n`);
+  const identityMotion = new AbortController();
+  const stopIdentityMotion = () => identityMotion.abort();
+  if (ttyMode) process.stdin.on("data", stopIdentityMotion);
+  try {
+    await writeIdentity({
+      width: process.stdout.columns ?? 80,
+      rows: process.stdout.rows ?? 24,
+      version: ARCHYMEDES_CLI_VERSION,
+      workspace: where,
+      model: `${spec.label} ${resolvedModelId}`,
+      mode,
+      palette,
+      glyphs,
+    }, out, {
+      enabled: ttyMode && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
+      signal: identityMotion.signal,
+      size: () => ({ width: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }),
+    });
+  } finally {
+    if (ttyMode) process.stdin.off("data", stopIdentityMotion);
+  }
   // One dim context line under the identity rather than a stack of them: the benchmark, the
   // currency costs are shown in, and any standing session modifiers (pace, remembered facts). The
   // yellow lines below are the ones that ask for a decision, so those keep their own rows.
@@ -4144,7 +4155,7 @@ async function main(): Promise<number> {
           await agent.relinquish();
           if (record.mode) mode = record.mode;
           agent = await openClient(record);
-          await carryResumedSpend(record);
+          await carryResumedSpend(agent.snapshot());
           expandables.clear();
           out.write(`${renderReplay(record, style_, { turns: 2 })}\n`);
           out.write(style.green(`  resumed ${record.id}\n`));

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { constants } from "node:os";
 
 export type CommandRunner = (
   command: string,
@@ -74,11 +75,23 @@ export function tokenizeCommand(command: string, platform: NodeJS.Platform = pro
   let escaped = false;
   let hasToken = false;
 
-  for (const character of command) {
+  for (let index = 0; index < command.length; index++) {
+    const character = command[index];
     if (escaped) { current += character; escaped = false; hasToken = true; continue; }
     // A Windows backslash is normally a path separator, not a Unix escape. Shell syntax takes the
     // platform shell path below; direct argv execution must preserve `C:\\Users\\...` exactly.
-    if (character === "\\" && quote !== "'" && platform !== "win32") { escaped = true; hasToken = true; continue; }
+    if (character === "\\" && quote !== "'" && platform !== "win32") {
+      // Inside double quotes, POSIX only removes a backslash before these characters.
+      if (quote === '"' && !['$', '`', '"', "\\", "\n"].includes(command[index + 1])) {
+        current += character;
+      } else if (command[index + 1] === "\n") {
+        index++;
+      } else {
+        escaped = true;
+        hasToken = true;
+      }
+      continue;
+    }
     if (quote) {
       if (character === quote) quote = null;
       else current += character;
@@ -167,17 +180,24 @@ export function isFindDelete(command: string): boolean {
 const SHELL_METACHARACTERS = /[|&;><`$()]|\|\||&&/;
 
 export function hasShellSyntax(command: string): boolean {
+  // Assignments and shell builtins cannot be spawned as executables.
+  if (/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=|(?:cd|export|unset|set|source|\.|umask|alias|unalias|read|eval|exec|exit|return)\s)/.test(command)) return true;
   let quote: '"' | "'" | null = null;
   let escaped = false;
+  let tokenStart = true;
   for (const character of command) {
-    if (escaped) { escaped = false; continue; }
+    if (escaped) { escaped = false; tokenStart = false; continue; }
     if (character === "\\" && quote !== "'") { escaped = true; continue; }
     if (quote) {
       if (character === quote) quote = null;
+      else if (quote === '"' && (character === "$" || character === "`")) return true;
       continue;
     }
-    if (character === '"' || character === "'") { quote = character; continue; }
+    if (character === '"' || character === "'") { quote = character; tokenStart = false; continue; }
+    if (character === "\n" || /[*?\[]/.test(character)) return true;
+    if (tokenStart && (character === "~" || character === "#")) return true;
     if (SHELL_METACHARACTERS.test(character)) return true;
+    tokenStart = /\s/.test(character);
   }
   return false;
 }
@@ -310,6 +330,7 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
     argv = [...CONTAINMENT_ARGS, ...inner];
     throughShell = false;
   }
+  if (options.signal?.aborted) return { exitCode: 130, stdout: "", stderr: "Command cancelled before start." };
 
   return new Promise((resolve) => {
     const child = spawn(program, argv, {
@@ -379,7 +400,10 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
       stderr += error.message;
       finish(127);
     });
-    child.on("close", (code) => { closedCode = code; finishWhenDrained(); });
+    child.on("close", (code, signal) => {
+      closedCode = code ?? (signal ? 128 + (constants.signals[signal] ?? 1) : 1);
+      finishWhenDrained();
+    });
 
     abort = () => {
       if (settled || forcedExitCode === 130) return;

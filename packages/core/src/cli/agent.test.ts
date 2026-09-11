@@ -287,6 +287,7 @@ describe("ArchymedesAgent", () => {
     expect(saved?.messages.length).toBeGreaterThan(0);
 
     const second = scriptedModel([{ finishReason: "stop", content: "Continuing." }]);
+    await agent.relinquish();
     const resumed = new ArchymedesAgent({ root, model: second, prices, mode: "plan", approve: async () => "allow" });
     resumed.resume(saved!);
     await resumed.send("now do the same for the tests");

@@ -82,6 +82,10 @@ export type AgentModelRequest = {
 };
 
 export interface AgentTurnProvider {
+  /** Opt-in only for providers that replay the same logical request without executing it twice. */
+  readonly recoveryScope?: string;
+  /** Reconcile existing work only; must never create a new reservation or provider invocation. */
+  recoverComplete?(request: AgentModelRequest): Promise<AgentModelTurn>;
   complete(request: AgentModelRequest): Promise<AgentModelTurn>;
   /**
    * What this provider's model can hold and produce, when it knows.
@@ -182,7 +186,7 @@ export type AgentRuntimeEvent =
   | { type: "provider_retry"; iteration: number; nextAttempt: number; maxAttempts: number; delayMs: number; reason: ProviderFailureKind }
   // Usage rides along so a front end can show spend accruing during the turn. Waiting for the
   // final result means the number only appears once the money is already gone.
-  | { type: "model_turn"; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage }
+  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage }
   // Emitted immediately before a tool runs, so a front end can say what is happening while it
   // happens rather than only what happened. The result alone cannot carry this: by the time it
   // arrives the interesting part — which file, which command — is already over.
@@ -712,7 +716,7 @@ export class BoundedAgentRuntime {
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");
-      await this.dependencies.control.persistEvent({ type: "model_turn", iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage });
+      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage });
 
       if (turn.finishReason === "refusal") return stop("blocked", turn.refusal?.trim() || "Model refused the task.", iteration);
       if (turn.finishReason === "length") {
