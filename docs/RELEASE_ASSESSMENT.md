@@ -101,11 +101,10 @@ bun run release:check
 bun publish ./artifacts/archymedes-cli-2.1.0.tgz --access public
 ```
 
-`verify:package` installs the archive with Bun. A user follows the README and installs with npm, so
-that path was checked separately for 2.1.0: `npm install` of the tarball resolves, skips the three
-`@archymedes/state-*` optional sidecars that are not on the registry, and the installed binary
-starts and reports its version — the native index is optional and the TypeScript projection covers
-its absence. Publishing those sidecar packages is a separate release with its own artifacts.
+`verify:package` installs the archive with Bun. The 2.0.0 archive was also installed with npm; it
+resolved while skipping the unavailable optional `@archymedes/state-*` sidecars, and the installed
+binary started normally. Repeat that npm-client check for 2.1.0 before announcing availability.
+Publishing those sidecar packages is a separate release with its own artifacts.
 
 The archive path follows the CLI package version. Update it if the manifest version changes.
 The root package stays private. Publishing a reviewed archive avoids rerunning a build between
