@@ -87,22 +87,22 @@ pseudo-terminal coverage. Keep these foundations.
 
 ## Release procedure
 
-Validation for 2.0.0 passed on 2026-09-09: 175 test files / 2,850 tests (including PTY scenarios),
+Validation for 2.1.0 passed on 2026-09-12: 177 test files / 2,867 passing tests and one skipped (including PTY scenarios),
 TypeScript checking, core and CLI package builds, and `git diff --check`. The final 27-entry CLI
 archive passed isolated installation under Node 22.22.0, version/help/provider-listing checks,
 and external TUI dependency imports. This did not call a live model provider. The archive checksum
-is stored beside it in `artifacts/archymedes-cli-2.0.0.tgz.sha256`
-(`497a1ddea87f9d84a6971665405724792ddcf6a5c81d682097728f3cab833e07`).
+is stored beside it in `artifacts/archymedes-cli-2.1.0.tgz.sha256`
+(`324774fbb9485c62dcf954c823d85ab7134ed052faf74dd8bcc5f6f4e01cd6a8`).
 
 ```sh
 bun install --frozen-lockfile
 bun run release:check
 # Publish the same archive that the isolated consumer test inspected:
-bun publish ./artifacts/archymedes-cli-2.0.0.tgz --access public
+bun publish ./artifacts/archymedes-cli-2.1.0.tgz --access public
 ```
 
 `verify:package` installs the archive with Bun. A user follows the README and installs with npm, so
-that path was checked separately for 2.0.0: `npm install` of the tarball resolves, skips the three
+that path was checked separately for 2.1.0: `npm install` of the tarball resolves, skips the three
 `@archymedes/state-*` optional sidecars that are not on the registry, and the installed binary
 starts and reports its version — the native index is optional and the TypeScript projection covers
 its absence. Publishing those sidecar packages is a separate release with its own artifacts.
