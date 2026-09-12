@@ -62,8 +62,8 @@ describe("identity motion", () => {
       const running = writeIdentity(options, output, { enabled: true, size: () => options });
       await vi.runAllTimersAsync();
       await running;
-      expect(writes).toHaveLength(13);
-      expect(writes.at(-1)?.replace(/\x1b\[11F|\x1b\[2K/g, "")).toBe(writes[0]);
+      expect(writes).toHaveLength(29);
+      expect(writes.at(-1)?.replace(/\x1b\[11F|\x1b\[2K|\x1b\[\?2026[hl]/g, "")).toBe(writes[0]);
       writes.length = 0;
       const resized = writeIdentity(options, output, { enabled: true, size: () => ({ width: 40, rows: 30 }) });
       await vi.runAllTimersAsync();

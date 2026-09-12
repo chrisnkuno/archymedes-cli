@@ -29,6 +29,8 @@ import { buildCostTable, buildJobsTable, buildModelTable } from "./tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./banner";
 import { writeIdentity } from "./identity";
+import { WorkspaceFrame } from "./workspace-frame";
+import { setWorkspaceMenu } from "./shortcuts";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
 import { visibleWidth } from "./markdown";
@@ -272,6 +274,7 @@ type ParsedArgs = {
    * reported. The footer is worth having, but not at that price, so it is now something you ask for.
    */
   pin: boolean;
+  layout?: "fixed" | "scrollback";
   /**
    * Machine-readable output: JSONL on stdout, human text on stderr, a stable exit code.
    *
@@ -324,6 +327,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--ascii" || argument === "--no-unicode") parsed.ascii = true;
     else if (argument === "--pin") parsed.pin = true;
     else if (argument === "--no-pin") parsed.pin = false;
+    else if (argument === "--layout") {
+      const value = argv[++index];
+      if (value !== "fixed" && value !== "scrollback") throw new Error("--layout expects fixed or scrollback");
+      parsed.layout = value;
+    }
     else if (argument === "--theme") {
       // A bare --theme takes the next word only when it looks like a theme name rather than the
       // start of the request, the same rule --sandbox and --slow already follow.
@@ -463,6 +471,8 @@ ${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
   archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
+  archymedes --layout fixed       Fixed workspace, mode rail and anchored composer
+  /layout [fixed|scrollback]  Switch layouts mid-session; PgUp/PgDn read history
   archymedes --pin                Pin the status line to the bottom row. Costs the terminal's
                             scrollback: a reserved footer means scrolled-off lines are
                             never saved, so this is off unless you ask for it.
@@ -514,6 +524,11 @@ const toolLines = new ReplaceableBlock(out);
 let markdown = new MarkdownStream(out, "none");
 let spinner: Spinner | undefined;
 let screen: PinnedScreen | undefined;
+const sessionStream = {
+  write: (text: string) => screen instanceof WorkspaceFrame ? screen.write(text) : terminalStream.write(text),
+  get columns() { return process.stdout.columns; },
+  get rows() { return process.stdout.rows; },
+};
 /**
  * The characters and the colour depth this terminal was found to support.
  *
@@ -1686,6 +1701,8 @@ async function main(): Promise<number> {
   configureRendering(depth, !args.json && Boolean(process.stdout.isTTY), sessionGlyphs,
     activeTheme ? buildPalette(activeTheme, depth) : NO_COLOR_PALETTE);
   let mode = args.mode;
+  let bindFixedNavigation = () => {};
+  let unbindFixedNavigation = () => {};
   /** The spending pace, changeable mid-session with `/slow`. */
   let pace: PaceLevel = args.pace;
   /**
@@ -1700,7 +1717,7 @@ async function main(): Promise<number> {
    * one. A scroll region left set when the process exits is inherited by the user's own shell
    * afterward, which reads as the terminal being broken until they notice and reset it themselves.
    */
-  let exitCleanly = () => { screen?.exit(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  let exitCleanly = () => { screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
 
   /**
    * Ends the `await readline.question(...)` that the REPL is parked on when the session is closing.
@@ -2087,7 +2104,8 @@ async function main(): Promise<number> {
     resolvedModelId = tab.payload.modelId;
     tab.payload.sink.setLive(true);
     out.route(tab.payload.sink);
-    if (options.replay) replayTab(tab);
+    if (screen instanceof WorkspaceFrame) screen.navigate("live");
+    else if (options.replay) replayTab(tab);
   };
 
   /**
@@ -2109,7 +2127,7 @@ async function main(): Promise<number> {
     for (const line of replay.lines) out.write(`${line}\n`);
   }
 
-  const firstSink = new TabSink(terminalStream, { live: true });
+  const firstSink = new TabSink(sessionStream, { live: true });
   tabs.adopt(path.basename(args.root) || "archymedes", {
     agent, ledger, mode, sink: firstSink,
     provider: model, spec, prices, modelId: resolvedModelId,
@@ -2176,12 +2194,12 @@ async function main(): Promise<number> {
    */
   const terminalControls = (): TerminalControls => ({
     clearStatus: () => statusBar.clear(),
-    releaseScreen: () => screen?.exit(),
+    releaseScreen: () => { screen?.exit(); setWorkspaceMenu(undefined); },
     uninstallShortcuts: () => uninstallShortcuts(),
     installShortcuts: () => installShortcutsAgain(),
     pauseInput: () => readline.pause(),
     resumeInput: () => readline.resume(),
-    restoreScreen: () => { screen?.enter(); showIdleStatus(); },
+    restoreScreen: () => { screen?.enter(); if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu); bindFixedNavigation(); showIdleStatus(); },
   });
 
   const screenCapabilities = (): ScreenCapabilities => ({
@@ -2334,7 +2352,7 @@ async function main(): Promise<number> {
 
   const startWatching = async (id: string, objective: string): Promise<void> => {
     if (watched.has(id)) { out.write(style.dim(`  already watching ${id}\n`)); return; }
-    const sink = new TabSink(terminalStream);
+    const sink = new TabSink(sessionStream);
     const stream = new JobStream({
       root: args.root,
       id,
@@ -2472,7 +2490,7 @@ async function main(): Promise<number> {
   const bindSigint = () => { process.on("SIGINT", handleSigint); readline.on("SIGINT", handleSigint); };
   const unbindSigint = () => { process.off("SIGINT", handleSigint); readline.off("SIGINT", handleSigint); };
   bindSigint();
-  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
 
   /** Set when the turn about to run is a wander lab, so its results chart is printed once, after it. */
   let wanderRunning = false;
@@ -3021,7 +3039,7 @@ async function main(): Promise<number> {
       palette,
       glyphs,
     }, out, {
-      enabled: ttyMode && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
+      enabled: ttyMode && (args.layout ?? environment.ARCHYMEDES_LAYOUT) !== "fixed" && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
       signal: identityMotion.signal,
       size: () => ({ width: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }),
     });
@@ -3069,15 +3087,40 @@ async function main(): Promise<number> {
    */
   // `ARCHYMEDES_PIN` exists so the choice can live in a shell profile rather than in every invocation.
   const pinFooter = args.pin || (environment.ARCHYMEDES_PIN ?? "") !== "" && environment.ARCHYMEDES_PIN !== "0";
+  const setLayout = (fixed: boolean) => {
+    screen?.exit();
+    setWorkspaceMenu(undefined);
+    screen = fixed ? new WorkspaceFrame(process.stdout,
+      () => ({ version: ARCHYMEDES_CLI_VERSION, workspace: path.basename(args.root), model: `${spec.label} / ${resolvedModelId}`, mode, palette, glyphs, busy: turnActive }),
+      () => tabs.active.payload.sink.log,
+      environment.ARCHYMEDES_NO_MOTION !== "1" && environment.NO_COLOR === undefined && environment.TERM !== "dumb")
+      : new PinnedScreen(process.stdout, { holdRegion: pinFooter });
+    screen.enter();
+    if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu);
+    showIdleStatus();
+  };
   if (ttyMode) {
     // Always constructed, because the suggestion dropdown needs its geometry either way; only the
     // *holding* of the scroll region — the part that costs scrollback — is what `--pin` buys.
-    screen = new PinnedScreen(process.stdout, { holdRegion: pinFooter });
-    screen.enter();
-    showIdleStatus();
+    setLayout((args.layout ?? environment.ARCHYMEDES_LAYOUT) === "fixed");
+    const fixedNavigation = (_str: string, key: { name?: string }) => {
+      if (!(screen instanceof WorkspaceFrame)) return;
+      screen.stopIntroMotion();
+      if (key?.name === "pageup") screen.navigate("up");
+      else if (key?.name === "pagedown") screen.navigate("down");
+      else if (screen.browsing && key?.name === "escape") screen.navigate("live");
+    };
+    unbindFixedNavigation = () => { process.stdin.off("keypress", fixedNavigation); };
+    bindFixedNavigation = () => { unbindFixedNavigation(); process.stdin.on("keypress", fixedNavigation); };
+    bindFixedNavigation();
     process.stdout.on("resize", () => {
       screen?.resize();
       showIdleStatus();
+      if (screen instanceof WorkspaceFrame && !turnActive) {
+        screen.positionInput();
+        readline.prompt(true);
+        showIdleStatus();
+      }
     });
 
     /**
@@ -3459,6 +3502,7 @@ async function main(): Promise<number> {
         : inlineBar()
           ? promptBox.draw(mode, where, idleStatusLine())
           : screen ? label : `\n${label}`;
+      if (queued === undefined && screen instanceof WorkspaceFrame) queueMicrotask(() => showIdleStatus());
       rawInput = queued ?? await askForInput(promptLabel);
     } catch (error) {
       if (isReadlineExit(error) || exitRequested) break;
@@ -3470,9 +3514,22 @@ async function main(): Promise<number> {
     promptBox.erase(rawInput);
     // Before parking, so the transcript region is whole again before anything is written into it.
     screen?.clearSuggestions();
+    if (screen instanceof WorkspaceFrame && screen.browsing) screen.navigate("live");
     screen?.parkInTranscript();
     let input = rawInput.trim();
     if (!input) continue;
+
+    if (input === "/layout" || input.startsWith("/layout ")) {
+      const choice = input.slice(7).trim();
+      if (!ttyMode) { out.write("  Fixed layout requires an interactive terminal.\n"); continue; }
+      if (choice && choice !== "fixed" && choice !== "scrollback") { out.write("  Use /layout fixed or /layout scrollback.\n"); continue; }
+      const fixed = choice ? choice === "fixed" : !(screen instanceof WorkspaceFrame);
+      setLayout(fixed);
+      out.write(style.dim(fixed
+        ? "  Fixed workspace — mode rail and composer stay put. /layout scrollback returns to the log.\n"
+        : "  Scrollback layout — the terminal keeps a normal log. /layout fixed restores the workspace.\n"));
+      continue;
+    }
 
     usage.record(input);
 
@@ -3583,6 +3640,15 @@ async function main(): Promise<number> {
         out.write(style.yellow(`  Could not export the session: ${error instanceof Error ? error.message : String(error)}\n`));
       }
       continue;
+    }
+    if (input === "/mode" && screen instanceof WorkspaceFrame) {
+      const modes = ["plan", "build", "auto", "defender"] as const;
+      const descriptions = ["Read and reason; no changes", "Edit with your approval", "Apply ordinary changes automatically", "Security review; fixes require approval"];
+      const chosen = await openChooser({ readline, input: process.stdin, output: process.stdout },
+        modes.map((value, i) => ({ value, label: value, description: descriptions[i], hint: value === mode ? "current" : undefined })),
+        { title: "Choose how Archymedes works", initialIndex: modes.indexOf(mode), paint: surfacePaint, glyphs });
+      if (!chosen) continue;
+      input = `/mode ${chosen}`;
     }
     const modeCommand = parseModeCommand(input);
     if (modeCommand?.type === "show") {
@@ -4310,7 +4376,7 @@ async function main(): Promise<number> {
               agent: newTabClient,
               ledger: new CostLedger({ prices: wanted.prices, display, rates, catalog: PRICE_CATALOG, ...(approvedBudget ? { budget: approvedBudget } : {}) }),
               mode,
-              sink: new TabSink(terminalStream),
+              sink: new TabSink(sessionStream),
               provider: wanted.provider,
               spec: wanted.spec,
               prices: wanted.prices,

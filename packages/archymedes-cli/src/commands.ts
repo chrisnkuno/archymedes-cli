@@ -22,6 +22,7 @@ export function defineCommands<T extends Record<string, Omit<Command, "name">>>(
 }
 
 export const COMMANDS = defineCommands({
+  "/layout": { args: "[fixed|scrollback]", description: "Toggle the fixed workspace or terminal scrollback layout" },
   "/mode": { args: "[plan|build|auto|defender]", description: "Show or switch the permission mode" },
   "/plan": { description: "Switch to plan mode — read and reason, no writes" },
   "/build": { description: "Switch to build mode — edits need approval" },

@@ -240,6 +240,8 @@ export type RenderChooserOptions = {
    * fading rather than vanishing, for the one frame before it settles to a single marker.
    */
   transitionFrom?: number;
+  /** Content animation only: frame dimensions and hit targets never move. */
+  focusProgress?: number;
 };
 
 export function renderChooser<T>(state: ChooserState, items: readonly ChooserItem<T>[], options: RenderChooserOptions): string {
@@ -301,7 +303,13 @@ export function renderChooser<T>(state: ChooserState, items: readonly ChooserIte
     const shownLabel = clip(item.label, labelBudget);
     const padded = shownLabel + " ".repeat(Math.max(0, labelBudget - visibleWidth(shownLabel)));
     const marker = active ? paint.green(glyphs.prompt) : fadingOut ? paint.dim(glyphs.prompt) : " ";
-    const head = `${marker} ${paint.dim(number)} ${padded}  `;
+    const focus = Math.max(0, Math.min(1, options.focusProgress ?? 1));
+    const graphemes = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(padded)].map((part) => part.segment);
+    const illuminated = Math.round(graphemes.length * focus);
+    const label = active
+      ? paint.cyan(graphemes.slice(0, illuminated).join("")) + graphemes.slice(illuminated).join("")
+      : padded;
+    const head = `${marker} ${paint.dim(number)} ${label}  `;
     const tail = `${item.hint ? ` ${item.hint}` : ""}${item.description ? `  ${item.description}` : ""}`;
     // The tail is cut *before* it is painted: clipping a coloured string mid-sequence bleeds that
     // colour down the rest of the page.
@@ -357,6 +365,7 @@ export type RunChooserOptions = RenderChooserOptions & {
   page?: number;
   /** Re-read before every frame so a live terminal resize cannot leave stale geometry behind. */
   getSize?: () => { width?: number; height?: number };
+  motion?: boolean;
 };
 
 /** Drives a chooser over a stream of keypresses, returning the chosen value. */
@@ -383,7 +392,7 @@ export async function runChooser<T>(
   let glide: SpringAnimator | undefined;
   const settleGlide = () => { glide?.stop(); glide = undefined; };
 
-  for await (const input of keys) {
+  try { for await (const input of keys) {
     // `height` is passed so a digit means the row the renderer numbered; without it the two
     // disagree the moment the list is longer than the screen.
     const current = liveOptions();
@@ -401,13 +410,17 @@ export async function runChooser<T>(
     }
     settleGlide();
     const isSingleStep = (input.key.name === "up" || input.key.name === "down") && Math.abs(state.selected - previousSelected) === 1;
-    if (!isSingleStep || previousSelected === state.selected) {
+    const motion = options.motion ?? (process.env.ARCHYMEDES_NO_MOTION !== "1" && process.env.NO_COLOR === undefined && process.env.TERM !== "dumb");
+    if (!motion || !isSingleStep || previousSelected === state.selected) {
       paint(renderChooser(state, items, liveOptions()));
       continue;
     }
-    paint(renderChooser(state, items, { ...liveOptions(), transitionFrom: previousSelected }));
+    paint(renderChooser(state, items, { ...liveOptions(), transitionFrom: previousSelected, focusProgress: 0 }));
     const animator: SpringAnimator = new SpringAnimator(0, (value) => {
-      if (value < 0.6) return;
+      if (value < 0.95) {
+        paint(renderChooser(state, items, { ...liveOptions(), transitionFrom: value < 0.5 ? previousSelected : undefined, focusProgress: value }));
+        return;
+      }
       animator.stop();
       glide = undefined;
       paint(renderChooser(state, items, liveOptions()));
@@ -415,6 +428,6 @@ export async function runChooser<T>(
     glide = animator;
     animator.retarget(1);
   }
-  settleGlide(); // the keyboard was returned mid-glide (dismissed some other way) — nothing left to finish
+  } finally { settleGlide(); }
   return undefined;
 }

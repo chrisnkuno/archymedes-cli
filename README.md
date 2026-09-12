@@ -93,6 +93,12 @@ Apache License 2.0. See `LICENSE` and `NOTICE`. The Apache license does not gran
 
 ## Terminal identity and release checks
 
+For the fixed workspace, run `archymedes --layout fixed` or switch with `/layout` mid-session.
+The mode bar and composer stay anchored while the transcript scrolls. `/mode` opens a permission
+picker, Ctrl+G opens the command menu, and Page Up / Page Down browse retained history.
+Set `ARCHYMEDES_LAYOUT=fixed` to use it on every launch and `ARCHYMEDES_NO_MOTION=1` for still frames.
+Try the actual interface offline with `bun run preview:workspace` (temporary project, local model fixture).
+
 Archymedes now opens with a graduated-ring instrument and a bronze, limestone and olive palette. The input
 composer and workspace follow the selected theme; light terminals retain parchment. Preview the
 interface without credentials or model requests:

@@ -3,6 +3,7 @@ import { clipTo } from "./chooser";
 import { ASCII_GLYPHS, type GlyphSet, UNICODE_GLYPHS } from "./glyphs";
 import { visibleWidth } from "./markdown";
 import type { Palette } from "./theme";
+import { BEGIN_SYNC, END_SYNC } from "./fixed-screen";
 
 export type IdentityOptions = {
   width: number;
@@ -28,8 +29,11 @@ export function renderGeometry(angle = 0, ascii = false): string[] {
     const yaw = angle + 0.25;
     const rx = (x * Math.cos(yaw) + z * Math.sin(yaw)) * scale;
     const rz = (-x * Math.sin(yaw) + z * Math.cos(yaw)) * scale;
-    const ry = y * scale;
-    return [Math.round(11 + rx * 9), Math.round(5 - (ry * 0.94 - rz * 0.34) * 4)];
+    const tilt = 0.3 + Math.sin(angle) * 0.18;
+    const ry = y * scale * Math.cos(tilt) - rz * Math.sin(tilt);
+    const depth = y * scale * Math.sin(tilt) + rz * Math.cos(tilt);
+    const perspective = 3.8 / (3.8 + depth);
+    return [Math.max(0, Math.min(22, Math.round(11 + rx * perspective * 8))), Math.max(0, Math.min(10, Math.round(5 - ry * perspective * 3.8)))];
   };
   const outer = vertices.map((point) => project(point, 1));
   const inner = vertices.map((point) => project(point, 0.43));
@@ -44,6 +48,7 @@ export function renderGeometry(angle = 0, ascii = false): string[] {
       if (cells[y]?.[x] !== undefined && (!faint || cells[y][x] === " ")) cells[y][x] = glyph;
     }
   };
+  // Draw hidden edges first, leaving the silhouette crisp as the solid turns.
   for (let i = 0; i < 4; i++) line(outer[i], inner[i], true);
   for (const points of [outer, inner]) {
     for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) line(points[i], points[j], j === 3);
@@ -60,14 +65,18 @@ export async function writeIdentity(
 ): Promise<void> {
   output.write(`${renderIdentity(options)}\n`);
   if (!motion.enabled || motion.signal?.aborted || options.width < 64 || options.rows < 24) return;
-  const frames = 12;
+  const frames = 28;
   for (let frame = 1; frame <= frames; frame++) {
-    await new Promise((resolve) => setTimeout(resolve, 45));
+    await new Promise((resolve) => setTimeout(resolve, 18));
     if (motion.signal?.aborted) return;
     const size = motion.size();
     if (size.width !== options.width || size.rows !== options.rows) return;
-    const rendered = renderIdentity({ ...options, angle: Math.sin(frame / frames * Math.PI) * 0.65 });
-    output.write(`\x1b[11F${rendered.split("\n").map((line) => `\x1b[2K${line}`).join("\n")}\n`);
+    const progress = frame / frames;
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    const rendered = renderIdentity({ ...options, angle: frame === frames ? 0 : eased * Math.PI * 2 });
+    output.write(`${BEGIN_SYNC}\x1b[11F${rendered.split("\n").map((line) => `\x1b[2K${line}`).join("\n")}\n${END_SYNC}`);
   }
 }
 

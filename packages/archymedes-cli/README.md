@@ -309,3 +309,18 @@ TUI dependency resolution. The reviewed archive and SHA256 checksum are written 
 See [the release assessment](https://github.com/chrisnkuno/archymedes-cli/blob/main/docs/RELEASE_ASSESSMENT.md) for scope and remaining release proof.
 
 The startup geometry makes a brief rotation on roomy interactive terminals. Set `ARCHYMEDES_NO_MOTION=1` to keep it still. Preview it with `bun run preview:tui archymedes --animate`.
+
+## Fixed workspace
+
+Start with `archymedes --layout fixed` for a persistent mode bar, an anchored composer, and menus
+that open inside the transcript area. `/layout` switches layouts during a session;
+`ARCHYMEDES_LAYOUT=fixed` makes the fixed workspace your launch preference.
+
+Use `/mode` to choose plan, build, auto, or defender with the arrow keys. Page Up / Page Down
+read retained transcript history; Escape returns to live output. Home and End still edit the
+composer. Each tab retains up to 5,000 output lines. Resize reflows the live transcript.
+
+The opening geometry rotates while the workspace is idle and settles as soon as you type.
+`ARCHYMEDES_NO_MOTION=1` disables this motion and menu focus animation. `--ascii`, `NO_COLOR`,
+and the existing themes remain supported. Try the real interface offline from the repository
+with `bun run preview:workspace`; the preview uses a temporary project and a local model fixture.
