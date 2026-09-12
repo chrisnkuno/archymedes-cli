@@ -22,6 +22,7 @@ export function defineCommands<T extends Record<string, Omit<Command, "name">>>(
 }
 
 export const COMMANDS = defineCommands({
+  "/layout": { args: "[fixed|scrollback]", description: "Toggle the fixed workspace or terminal scrollback layout" },
   "/mode": { args: "[plan|build|auto|defender]", description: "Show or switch the permission mode" },
   "/plan": { description: "Switch to plan mode — read and reason, no writes" },
   "/build": { description: "Switch to build mode — edits need approval" },
@@ -35,6 +36,8 @@ export const COMMANDS = defineCommands({
   "/continue": { description: "Resume an interrupted or incomplete task from its current workspace state" },
   "/diff": { description: "What changed since the last checkpoint" },
   "/todos": { description: "The agent's current plan" },
+  "/task": { description: "Where the whole task stands: request, plan, changes, verification, blockers" },
+  "/route": { args: "[all|summary|plan]", description: "The hosted exchange's routing decision: chosen model, alternatives, policy, est vs actual cost. `plan` forecasts the next turn before spending" },
   "/clear": { description: "Start a fresh thread" },
   "/memory": { args: "[add|replace|recall|forget]", description: "Bounded, relevant memory across sessions — # <fact> remembers for this project" },
   "/history": { args: "[<id> | search <text> | resume | status]", description: "Browse, search or pick up durable conversation history" },
@@ -57,7 +60,7 @@ export const COMMANDS = defineCommands({
   "/attach": { args: "<id>", description: "Watch a background job's log live" },
   "/detach": { args: "<task>", description: "Start work in the background; press Alt+B to send a running turn there" },
   "/cost": { description: "Token and cost breakdown for this session" },
-  "/balance": { args: "[amount] [currency] | clear", description: "Track a spend balance locally, drawn down by each turn's measured cost" },
+  "/balance": { args: "[amount] [currency] | clear", description: "Your Archymedes credit balance on the exchange, or a locally tracked spend limit on a direct provider" },
   "/scan": { args: "[glob]", description: "Deterministic secret scan of the workspace, worst severity first — no model turn needed" },
   "/sessions": { description: "List sessions in this project (an alias for /history)" },
   "/palette": { description: "Search every command by name or by what it does" },

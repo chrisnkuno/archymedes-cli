@@ -285,4 +285,42 @@ On Windows, hook scripts need an extension `cmd.exe` can execute (`.cmd` or `.ba
 
 Node 22.5 or newer on Windows, macOS, or Linux. `git` enables checkpoints (Archymedes degrades to no-undo without it). `ffmpeg` is optional and needed only for direct microphone recording; existing audio files can still be transcribed without it.
 
-MIT licensed.
+Apache-2.0 licensed.
+
+
+## The Archymedes terminal
+
+The default `archymedes` theme uses bronze instruments, limestone text and olive accents.
+The opening nested tetrahedron geometry, composer, turn status line, result cards and workspace share the active palette. Startup is
+static and uses a compact identity on short or narrow terminals, leaving room for the conversation.
+Light terminals automatically use `parchment`; `blueprint`, `chalkboard` and `high-contrast` remain
+available through `/theme list`. Use `archymedes --theme blueprint` to keep the previous palette.
+`NO_COLOR` and `--ascii` retain plain output and compatible glyphs.
+
+Result cards distinguish failed checks, interrupted work and verification still needed. Changed
+files include `/diff` and `/undo` as the next review actions. A green result requires completed work
+and passing checks recorded by the runtime.
+
+## Release validation
+
+From the repository root, run `bun run release:check`. This tests and builds the packages, inspects
+the CLI archive, installs that exact archive in a temporary consumer, and verifies Node startup and
+TUI dependency resolution. The reviewed archive and SHA256 checksum are written to `artifacts/`.
+See [the release assessment](https://github.com/chrisnkuno/archymedes-cli/blob/main/docs/RELEASE_ASSESSMENT.md) for scope and remaining release proof.
+
+The startup geometry makes a brief rotation on roomy interactive terminals. Set `ARCHYMEDES_NO_MOTION=1` to keep it still. Preview it with `bun run preview:tui archymedes --animate`.
+
+## Fixed workspace
+
+Start with `archymedes --layout fixed` for a persistent mode bar, an anchored composer, and menus
+that open inside the transcript area. `/layout` switches layouts during a session;
+`ARCHYMEDES_LAYOUT=fixed` makes the fixed workspace your launch preference.
+
+Use `/mode` to choose plan, build, auto, or defender with the arrow keys. Page Up / Page Down
+read retained transcript history; Escape returns to live output. Home and End still edit the
+composer. Each tab retains up to 5,000 output lines. Resize reflows the live transcript.
+
+The opening geometry rotates while the workspace is idle and settles as soon as you type.
+`ARCHYMEDES_NO_MOTION=1` disables this motion and menu focus animation. `--ascii`, `NO_COLOR`,
+and the existing themes remain supported. Try the real interface offline from the repository
+with `bun run preview:workspace`; the preview uses a temporary project and a local model fixture.

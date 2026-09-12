@@ -17,7 +17,7 @@
     },
     "packages/archymedes-cli": {
       "name": "archymedes-cli",
-      "version": "1.9.1",
+      "version": "2.1.0",
       "bin": {
         "archymedes": "dist/archymedes.mjs",
       },

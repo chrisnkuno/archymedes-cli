@@ -224,8 +224,9 @@ describe("driving a chooser end to end", () => {
 
     // Slow: real time passes before the next key, so the glide actually reaches its settle frame.
     const slow: string[] = [];
-    await runChooser(keysWithDelay([press("down"), 150, press("return")]), items, (frame) => slow.push(frame), { paint });
-    expect(slow).toHaveLength(3); // opening, transitional, and the settled repaint
+    await runChooser(keysWithDelay([press("down"), 150, press("return")]), items, (frame) => slow.push(frame), { paint, motion: true });
+    expect(slow.length).toBeGreaterThan(2); // focus sweeps within the same reserved rows
+    expect(new Set(slow.map((frame) => frame.split("\n").length)).size).toBe(1);
   });
 
   it("does not glide a jump — Home, End, paging, or a digit — only a single arrow-key step", async () => {

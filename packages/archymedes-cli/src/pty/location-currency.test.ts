@@ -82,7 +82,7 @@ describe("choosing a location under a real pty", () => {
       ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
       ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "RWF", ARCHYMEDES_FX_RATE: "1300",
     }});
-    const banner = await second.waitFor(/costs:/, { timeoutMs: 30_000 });
+    const banner = await second.waitFor(/costs \w/, { timeoutMs: 30_000 });
     expect(banner).toContain("RWF");
     expect(banner).toContain("location RW");
     second.kill();

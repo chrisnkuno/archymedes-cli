@@ -56,6 +56,25 @@ afterEach(async () => {
 });
 
 describe("McpConnection", () => {
+  it("drains verbose server diagnostics so requests cannot deadlock", async () => {
+    const noisy = path.join(root, "noisy.cjs");
+    await fs.writeFile(noisy, `process.stderr.write("x".repeat(2 * 1024 * 1024), () => { ${FAKE_SERVER_SCRIPT} });`);
+    const connection = new McpConnection({ id: "noisy", command: "node", args: [noisy] }, 1_000);
+    try {
+      expect(await connection.callTool("add", { a: 1, b: 2 })).toEqual({ content: "3", isError: undefined });
+    } finally {
+      connection.close();
+    }
+  });
+
+  it("rejects requests after close immediately instead of writing to a dead pipe", async () => {
+    const connection = new McpConnection({ id: "closed", command: "node", args: [serverPath] });
+    await connection.listTools();
+    connection.close();
+    await expect(connection.callTool("add", { a: 1, b: 2 })).rejects.toThrow(/connection closed/);
+    await expect(connection.listTools()).rejects.toThrow(/connection closed/);
+  });
+
   it("lists tools from the real server", async () => {
     const connection = new McpConnection({ id: "fake", command: "node", args: [serverPath] });
     try {

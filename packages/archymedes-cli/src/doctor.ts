@@ -55,11 +55,14 @@ const DEFAULT_PROBE_TIMEOUT_MS = 5_000;
 function modelEndpoints(environment: ProviderEnvironment): DoctorEndpoint[] {
   return providerEndpoints(environment).map((provider) => {
     const catalog = modelsEndpoint(provider.id, environment);
+    const cloudHealth = provider.id === "archymedes-cloud" && provider.baseUrl
+      ? `${provider.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")}/healthz`
+      : undefined;
     return {
       id: `provider:${provider.id}`,
       provider: provider.id,
       purpose: `model API · ${provider.label}`,
-      url: catalog?.url ?? provider.baseUrl,
+      url: catalog?.url ?? cloudHealth ?? provider.baseUrl,
       ...(catalog?.headers ? { headers: catalog.headers } : {}),
       // Ollama is always "configured" — it needs no key — but a local daemon most users have never
       // started is not something an unreachable-endpoint failure should be reported for.

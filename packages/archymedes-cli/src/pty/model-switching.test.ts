@@ -53,7 +53,7 @@ describe("switching models under a real pty", () => {
     p.writeLine("Remember that the codename is cobalt.");
     // The prompt glyphs are colour-escaped in the raw pty buffer, so they are never adjacent;
     // match the turn ending and the prompt returning, not the box drawing between them.
-    await p.waitFor(/I will remember cobalt.*turn complete.*›/s, { timeoutMs: 20_000, since: firstTurnAt });
+    await p.waitFor(/I will remember cobalt.*completed.*›/s, { timeoutMs: 20_000, since: firstTurnAt });
 
     const switchedAt = p.output().length;
     p.writeLine("/model haiku");

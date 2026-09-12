@@ -27,7 +27,10 @@ import { buildPickerRows, type PickerResult } from "./model-picker";
 import { INITIAL_TABLE_STATE, renderTable } from "./table";
 import { buildCostTable, buildJobsTable, buildModelTable } from "./tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
-import { detectColorDepth, renderBanner, renderTagline } from "./banner";
+import { detectColorDepth } from "./banner";
+import { writeIdentity } from "./identity";
+import { WorkspaceFrame } from "./workspace-frame";
+import { setWorkspaceMenu } from "./shortcuts";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
 import { visibleWidth } from "./markdown";
@@ -41,6 +44,9 @@ import { installShortcuts, openChooser, openDefenderTriage, openModelPicker, ope
 import { runChooser, type ChooserItem } from "./chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
 import { renderCompletionCard } from "./completion-card";
+import { renderTask, renderTodos, type InspectContext } from "./session-inspect";
+import { renderRoutingReceipt, renderRoutingSummary } from "./routing-receipt";
+import { renderRoutingPlan } from "./routing-plan";
 import { fallbackSetting, parseFallbackPreference } from "./fallback";
 import { exportSession, type ExportFormat } from "./session-export";
 import { hostOf, providerBaseUrl } from "./endpoints";
@@ -80,7 +86,8 @@ import {
 } from "@archymedes/core";
 import { runJobWorkerForever, workerId } from "./job-worker";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./jobs-command";
-import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance } from "./balance";
+import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./balance";
+import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
 import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
 import { renderTools } from "./tools-command";
@@ -267,6 +274,7 @@ type ParsedArgs = {
    * reported. The footer is worth having, but not at that price, so it is now something you ask for.
    */
   pin: boolean;
+  layout?: "fixed" | "scrollback";
   /**
    * Machine-readable output: JSONL on stdout, human text on stderr, a stable exit code.
    *
@@ -319,6 +327,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--ascii" || argument === "--no-unicode") parsed.ascii = true;
     else if (argument === "--pin") parsed.pin = true;
     else if (argument === "--no-pin") parsed.pin = false;
+    else if (argument === "--layout") {
+      const value = argv[++index];
+      if (value !== "fixed" && value !== "scrollback") throw new Error("--layout expects fixed or scrollback");
+      parsed.layout = value;
+    }
     else if (argument === "--theme") {
       // A bare --theme takes the next word only when it looks like a theme name rather than the
       // start of the request, the same rule --sandbox and --slow already follow.
@@ -458,6 +471,8 @@ ${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
   archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
+  archymedes --layout fixed       Fixed workspace, mode rail and anchored composer
+  /layout [fixed|scrollback]  Switch layouts mid-session; PgUp/PgDn read history
   archymedes --pin                Pin the status line to the bottom row. Costs the terminal's
                             scrollback: a reserved footer means scrolled-off lines are
                             never saved, so this is off unless you ask for it.
@@ -509,6 +524,11 @@ const toolLines = new ReplaceableBlock(out);
 let markdown = new MarkdownStream(out, "none");
 let spinner: Spinner | undefined;
 let screen: PinnedScreen | undefined;
+const sessionStream = {
+  write: (text: string) => screen instanceof WorkspaceFrame ? screen.write(text) : terminalStream.write(text),
+  get columns() { return process.stdout.columns; },
+  get rows() { return process.stdout.rows; },
+};
 /**
  * The characters and the colour depth this terminal was found to support.
  *
@@ -549,8 +569,17 @@ const pendingCalls = new Map<string, {
 }>();
 /** Paths successfully written or edited this turn, for the "files modified" footer. */
 let touchedFiles = new Set<string>();
+/** Exact line delta across this turn's edits and writes, for the completion card scoreboard. */
+let turnLineDelta = { added: 0, removed: 0 };
 /** Latest outcome for each verification class observed in this turn. */
 let verificationChecks = new Map<string, boolean>();
+/**
+ * Session-cumulative view for `/task` — per-file line deltas and the latest outcome per check
+ * class, across every turn. Mutated in place and never reassigned, so the per-turn reset above
+ * leaves them alone; they run for the life of one `main()`.
+ */
+const sessionFiles = new Map<string, { added: number; removed: number }>();
+const sessionChecks = new Map<string, boolean>();
 /** One labelled tool section per turn, so operational logs do not blend into the answer. */
 let toolSectionAnnounced = false;
 
@@ -575,6 +604,7 @@ export function configureRendering(
   activity.operation = undefined;
   activity.steps = undefined;
   touchedFiles = new Set();
+  turnLineDelta = { added: 0, removed: 0 };
   forgetToolLines();
 }
 
@@ -834,7 +864,10 @@ export function renderEvent(event: ArchymedesEvent): void {
   if (runtime.type === "tool_result") {
     activity.toolCalls += 1;
     const verificationKind = typeof runtime.data?.verificationKind === "string" ? runtime.data.verificationKind : undefined;
-    if (verificationKind) verificationChecks.set(verificationKind, !runtime.isError);
+    if (verificationKind) {
+      verificationChecks.set(verificationKind, !runtime.isError);
+      sessionChecks.set(verificationKind, !runtime.isError);
+    }
     // Read from the structured result rather than from the rendered checklist: the counter must
     // not depend on how the list happens to be printed.
     const items = Array.isArray(runtime.data?.items) ? runtime.data.items as Array<{ status?: string }> : undefined;
@@ -872,9 +905,27 @@ export function renderEvent(event: ArchymedesEvent): void {
       if (runtime.toolName === "write_file" || runtime.toolName === "edit_file") {
         toolLines.forget();
         renderWrittenCode(runtime.toolName, pending.arguments);
-        // Feeds the end-of-turn "files modified" footer.
+        // Feeds the end-of-turn "files modified" footer and the scoreboard's line delta.
         const path = typeof pending.arguments.path === "string" ? pending.arguments.path : undefined;
         if (path) touchedFiles.add(path);
+        let addedDelta = 0;
+        let removedDelta = 0;
+        if (runtime.toolName === "write_file") {
+          const content = typeof pending.arguments.content === "string" ? pending.arguments.content : "";
+          if (content) addedDelta = content.split("\n").length;
+        } else {
+          const before = typeof pending.arguments.oldText === "string" ? pending.arguments.oldText : "";
+          const after = typeof pending.arguments.newText === "string" ? pending.arguments.newText : "";
+          const stat = diffStat(diffLines(before, after));
+          addedDelta = stat.added;
+          removedDelta = stat.removed;
+        }
+        turnLineDelta.added += addedDelta;
+        turnLineDelta.removed += removedDelta;
+        if (path) {
+          const prior = sessionFiles.get(path) ?? { added: 0, removed: 0 };
+          sessionFiles.set(path, { added: prior.added + addedDelta, removed: prior.removed + removedDelta });
+        }
       } else if (runtime.toolName === "run_command") {
         toolLines.forget();
         renderCommandOutput(runtime.content);
@@ -1363,10 +1414,9 @@ async function main(): Promise<number> {
     const probes = await runDoctor(environment);
     if (args.doctorReport) {
       const selectedProvider = environment.ARCHYMEDES_PROVIDER?.trim();
-      const selectedModel = selectedProvider === "anthropic" ? environment.ANTHROPIC_MODEL
-        : selectedProvider === "openai" ? environment.OPENAI_MODEL
-        : selectedProvider === "ollama" ? environment.OLLAMA_MODEL
-        : environment.CIRCUITNOTION_MODEL;
+      const selectedModel = selectedProvider && PROVIDER_IDS.includes(selectedProvider as ProviderId)
+        ? environment[`${providerEnvPrefix(selectedProvider as ProviderId)}_MODEL`]
+        : undefined;
       const history = await stateHistory.status().catch(() => undefined);
       process.stdout.write(`${JSON.stringify(doctorReport(probes, {
         cliVersion: ARCHYMEDES_CLI_VERSION,
@@ -1651,6 +1701,8 @@ async function main(): Promise<number> {
   configureRendering(depth, !args.json && Boolean(process.stdout.isTTY), sessionGlyphs,
     activeTheme ? buildPalette(activeTheme, depth) : NO_COLOR_PALETTE);
   let mode = args.mode;
+  let bindFixedNavigation = () => {};
+  let unbindFixedNavigation = () => {};
   /** The spending pace, changeable mid-session with `/slow`. */
   let pace: PaceLevel = args.pace;
   /**
@@ -1665,7 +1717,7 @@ async function main(): Promise<number> {
    * one. A scroll region left set when the process exits is inherited by the user's own shell
    * afterward, which reads as the terminal being broken until they notice and reset it themselves.
    */
-  let exitCleanly = () => { screen?.exit(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  let exitCleanly = () => { screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
 
   /**
    * Ends the `await readline.question(...)` that the REPL is parked on when the session is closing.
@@ -1900,6 +1952,14 @@ async function main(): Promise<number> {
   // `AbortSignal` is single-use) but the prompt function itself is built once per agent and must
   // keep seeing whichever turn is currently running.
   let currentTurnAbort: AbortController | undefined;
+  /**
+   * A read-only command that is waiting on the network — currently only `/route plan`.
+   *
+   * These run outside a turn, so `turnActive` is false and Ctrl+C would otherwise fall through to
+   * the prompt's line-clearing branch and leave the request running unattended. Holding the
+   * controller here lets the same keystroke stop the wait without touching the session.
+   */
+  let pendingReadAbort: AbortController | undefined;
   const approvalPrompt = createApprovalPrompt(readline, interactive, () => currentTurnAbort?.signal);
   const handleDaemonNotification = (notification: DaemonNotification) => {
     // `turn_started`/`turn_finished`/`session_opened` exist for a client with no other way to know
@@ -2044,7 +2104,8 @@ async function main(): Promise<number> {
     resolvedModelId = tab.payload.modelId;
     tab.payload.sink.setLive(true);
     out.route(tab.payload.sink);
-    if (options.replay) replayTab(tab);
+    if (screen instanceof WorkspaceFrame) screen.navigate("live");
+    else if (options.replay) replayTab(tab);
   };
 
   /**
@@ -2066,7 +2127,7 @@ async function main(): Promise<number> {
     for (const line of replay.lines) out.write(`${line}\n`);
   }
 
-  const firstSink = new TabSink(terminalStream, { live: true });
+  const firstSink = new TabSink(sessionStream, { live: true });
   tabs.adopt(path.basename(args.root) || "archymedes", {
     agent, ledger, mode, sink: firstSink,
     provider: model, spec, prices, modelId: resolvedModelId,
@@ -2133,12 +2194,12 @@ async function main(): Promise<number> {
    */
   const terminalControls = (): TerminalControls => ({
     clearStatus: () => statusBar.clear(),
-    releaseScreen: () => screen?.exit(),
+    releaseScreen: () => { screen?.exit(); setWorkspaceMenu(undefined); },
     uninstallShortcuts: () => uninstallShortcuts(),
     installShortcuts: () => installShortcutsAgain(),
     pauseInput: () => readline.pause(),
     resumeInput: () => readline.resume(),
-    restoreScreen: () => { screen?.enter(); showIdleStatus(); },
+    restoreScreen: () => { screen?.enter(); if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu); bindFixedNavigation(); showIdleStatus(); },
   });
 
   const screenCapabilities = (): ScreenCapabilities => ({
@@ -2236,7 +2297,7 @@ async function main(): Promise<number> {
   const promptWidth = () => screen?.current.columns ?? process.stdout.columns ?? 80;
 
   const promptFrame = (status: string) =>
-    renderPromptBox({ mode, workspace: where, depth, width: promptWidth(), status, glyphs, borderStyle: palette.borderStyle });
+    renderPromptBox({ mode, workspace: where, depth, width: promptWidth(), status, glyphs, palette });
 
   /**
    * The inline input bar, for the sessions that do not pin a footer — which is almost all of them,
@@ -2249,7 +2310,7 @@ async function main(): Promise<number> {
   const promptBox = new PromptBox(out, {
     depth,
     glyphs,
-    borderStyle: palette.borderStyle,
+    palette: () => palette,
     columns: promptWidth,
   });
   /** True when the inline bar owns the bottom rows: a real TTY that is not holding a region. */
@@ -2291,7 +2352,7 @@ async function main(): Promise<number> {
 
   const startWatching = async (id: string, objective: string): Promise<void> => {
     if (watched.has(id)) { out.write(style.dim(`  already watching ${id}\n`)); return; }
-    const sink = new TabSink(terminalStream);
+    const sink = new TabSink(sessionStream);
     const stream = new JobStream({
       root: args.root,
       id,
@@ -2357,7 +2418,7 @@ async function main(): Promise<number> {
       await agent.relinquish();
       if (record.mode && !args.modeExplicit) mode = record.mode;
       agent = await openClient(record);
-      await carryResumedSpend(record);
+      await carryResumedSpend(agent.snapshot());
       out.write(style.dim(`Resumed ${record.id} — ${record.title}\n`));
       // Where the conversation actually got to, not just its id. A resumed session that opens on
       // an empty screen asks the user to trust that a transcript they cannot see is loaded, and
@@ -2366,7 +2427,7 @@ async function main(): Promise<number> {
       // Only when this run will actually stop at a prompt. A replay is orientation for someone
       // about to type; in front of a one-shot answer it is preamble nobody is waiting for, and
       // `archymedes --resume "…"` from a terminal is still a one-shot even though the terminal is real.
-      if (interactive && !args.prompt) out.write(`${renderReplay(record, sectionStyle(), { turns: 2 })}\n`);
+      if (interactive && !args.prompt) out.write(`${renderReplay(agent.snapshot(), sectionStyle(), { turns: 2 })}\n`);
     } else if (args.resume === "latest") {
       out.write(style.yellow("No matching session; starting a new one.\n"));
     } else {
@@ -2400,6 +2461,11 @@ async function main(): Promise<number> {
       out.write(style.yellow(`\n  interrupted — ${stopping}\n`));
       return;
     }
+    if (pendingReadAbort) {
+      pendingReadAbort.abort();
+      pendingReadAbort = undefined;
+      return;
+    }
     // Nothing is running, so this is the prompt. A half-typed message must survive a stray
     // Ctrl+C: every other REPL (bash, python, node) clears the line here rather than quitting,
     // and losing a paragraph you were still composing to one keystroke is the worst possible
@@ -2424,7 +2490,7 @@ async function main(): Promise<number> {
   const bindSigint = () => { process.on("SIGINT", handleSigint); readline.on("SIGINT", handleSigint); };
   const unbindSigint = () => { process.off("SIGINT", handleSigint); readline.off("SIGINT", handleSigint); };
   bindSigint();
-  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
 
   /** Set when the turn about to run is a wander lab, so its results chart is printed once, after it. */
   let wanderRunning = false;
@@ -2532,6 +2598,8 @@ async function main(): Promise<number> {
   let streamedAnswer = false;
   /** The last turn's terminal status, which headless mode turns into the process exit code. */
   let lastTurnStatus: AgentRuntimeResult["status"] = "failed";
+  /** The first thing this session was asked to do — the top line of `/task`. */
+  let sessionRequest: string | undefined;
   type RecoverableTurn = {
     request: string;
     status: AgentRuntimeResult["status"];
@@ -2545,6 +2613,7 @@ async function main(): Promise<number> {
   let lastTurnEndedAt: number | undefined;
   const runTurn = async (request: string): Promise<boolean> => {
     headless?.turnStart(request);
+    sessionRequest ??= request; // the opening ask, kept for `/task`
     streamedAnswer = false;
     if (screen) {
       screen.parkInTranscript();
@@ -2653,6 +2722,7 @@ async function main(): Promise<number> {
     activity.operation = undefined;
     activity.steps = undefined;
     touchedFiles = new Set();
+    turnLineDelta = { added: 0, removed: 0 };
     verificationChecks = new Map();
     toolSectionAnnounced = false;
     forgetToolLines();
@@ -2683,8 +2753,8 @@ async function main(): Promise<number> {
       // drops segments to fit what it is given, and handing it the full width would have it fit a
       // row that the corners and title have already spent part of.
       spinner = new Spinner(() => screen?.pinned
-        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs))
-        : statusBar.render(fields(), depth, glyphs), 120, glyphs, SPINNER_START_DELAY_MS);
+        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs, palette.primary))
+        : statusBar.render(fields(), depth, glyphs, palette.primary), 120, glyphs, SPINNER_START_DELAY_MS);
       spinner.start();
     }
     turnActive = true;
@@ -2758,15 +2828,26 @@ async function main(): Promise<number> {
         toolCalls: result.toolCallsExecuted,
         elapsedMs: Date.now() - started,
       });
-      out.write(`${renderCompletionCard({
-        status: result.status,
-        files: [...touchedFiles].sort(),
-        checks: [...verificationChecks].map(([kind, passed]) => ({ kind, passed })),
-        toolCalls: result.toolCallsExecuted,
-        iterations: result.iterations,
-        elapsed: `${(turn.elapsedMs / 1_000).toFixed(1)}s`,
-        cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
-      }, sectionStyle())}\n`);
+      // Skipped for a pure question-and-answer turn: with nothing changed, nothing verified and
+      // no tool run, the card is five lines of "no" and the closing rule already carries the cost.
+      const turnDidWork = touchedFiles.size > 0 || verificationChecks.size > 0 || result.toolCallsExecuted > 0;
+      if (turnDidWork) {
+        out.write(`${renderCompletionCard({
+          status: result.status,
+          files: [...touchedFiles].sort(),
+          lineDelta: turnLineDelta.added > 0 || turnLineDelta.removed > 0 ? { ...turnLineDelta } : undefined,
+          checks: [...verificationChecks].map(([kind, passed]) => ({ kind, passed })),
+          toolCalls: result.toolCallsExecuted,
+          iterations: result.iterations,
+          elapsed: `${(turn.elapsedMs / 1_000).toFixed(1)}s`,
+          cost: turn.cost ? formatMoney(convertTo(turn.cost, display, rates) ?? turn.cost) : "cost unknown",
+        }, sectionStyle())}\n`);
+      }
+      // The hosted exchange returns one routing decision per model call. Keep them for `/route` and
+      // show the turn's final one right under the card — the choice this answer was actually run on.
+      if (result.routingReceipts && result.routingReceipts.length > 0) {
+        out.write(`${renderRoutingReceipt(result.routingReceipts[result.routingReceipts.length - 1], sectionStyle())}\n`);
+      }
       if (manualBalance !== undefined) {
         const turnSpend = Math.max(0, (sessionSpend() ?? spendBeforeTurn) - spendBeforeTurn);
         if (turnSpend > 0) {
@@ -2944,43 +3025,37 @@ async function main(): Promise<number> {
   }
 
   const where = workspace.kind === "e2b" ? `sandbox ${workspace.label.split(":")[1]}` : path.basename(args.root);
-  const bannerOptions = {
-    width: process.stdout.columns ?? 80,
-    depth,
-    glyphs,
-    subtitle: `${mode} ${glyphs.middot} ${spec.label} ${resolvedModelId} ${glyphs.middot} ${where}`,
-    // Seeded per session, so the sky is stable while you are looking at it.
-    seed: Date.now() & 0xffff,
-  };
-  if (depth === "none") {
-    out.write(`${renderBanner(bannerOptions)}\n`);
-  } else {
-    // The sky settles in rather than arriving lit — the wordmark itself never dims (see
-    // `banner.ts`), so the one thing a person needs to read first is legible from the very first
-    // frame, and only the stars around it are what spring up to full brightness.
-    //
-    // Safe where the dropdown's row animation was not, and for a reason worth stating: every frame
-    // here occupies the *same* rows. `renderBanner` returns a fixed number of lines whose widths do
-    // not depend on `intensity` — it changes colour, never geometry — so the redraw erases exactly
-    // the rows it reprints and nothing scrolls. Animating a fixed frame is repainting; animating a
-    // frame's size is scrolling, and only one of those is reversible.
-    const bannerBlock = new ReplaceableBlock(out);
-    for (const line of renderBanner({ ...bannerOptions, intensity: 0 }).split("\n")) bannerBlock.append(line);
-    await new Promise<void>((resolve) => {
-      const animator: SpringAnimator = new SpringAnimator(0, (value) => {
-        bannerBlock.updateAll(renderBanner({ ...bannerOptions, intensity: value }).split("\n"));
-        if (animator.settled) resolve();
-      }, { intervalMs: 50 });
-      animator.retarget(1);
+  const identityMotion = new AbortController();
+  const stopIdentityMotion = () => identityMotion.abort();
+  if (ttyMode) process.stdin.on("data", stopIdentityMotion);
+  try {
+    await writeIdentity({
+      width: process.stdout.columns ?? 80,
+      rows: process.stdout.rows ?? 24,
+      version: ARCHYMEDES_CLI_VERSION,
+      workspace: where,
+      model: `${spec.label} ${resolvedModelId}`,
+      mode,
+      palette,
+      glyphs,
+    }, out, {
+      enabled: ttyMode && (args.layout ?? environment.ARCHYMEDES_LAYOUT) !== "fixed" && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
+      signal: identityMotion.signal,
+      size: () => ({ width: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }),
     });
-    bannerBlock.forget(); // committed to scrollback; nothing may rewrite it again
+  } finally {
+    if (ttyMode) process.stdin.off("data", stopIdentityMotion);
   }
-  // `/guide` sits on the opening line beside `/help`, because the two answer different questions —
-  // one lists what you can type, the other explains what any of it is for — and a manual nobody is
-  // told about is a manual nobody reads.
-  out.write(`${renderTagline(`  /help ${controlLabel(language, "help")} ${glyphs.middot} /guide ${controlLabel(language, "guide")} ${glyphs.middot} /exit ${controlLabel(language, "exit")} ${glyphs.middot} # ${controlLabel(language, "remember")}`, depth)}\n`);
-  out.write(`${style.green(`  ${renderReliabilityStatus(process.stdout.columns ?? 80, glyphs.middot)}`)}\n`);
-  out.write(style.dim(`  costs: ${display}${preference.countryCode ? ` ${glyphs.middot} location ${preference.countryCode}` : ""} ${glyphs.middot} ${preference.source === "location" ? "auto-detected" : preference.source}\n`));
+  // One dim context line under the identity rather than a stack of them: the benchmark, the
+  // currency costs are shown in, and any standing session modifiers (pace, remembered facts). The
+  // yellow lines below are the ones that ask for a decision, so those keep their own rows.
+  const context = [
+    renderReliabilityStatus(999, glyphs.middot),
+    `costs ${display}${preference.countryCode ? ` ${glyphs.middot} location ${preference.countryCode}` : ""} (${preference.source === "location" ? "auto-detected" : preference.source})`,
+  ];
+  if (pace !== "off") context.push(`${paceBadge(pace, glyphs)} ${glyphs.middot} /slow off to lift`);
+  if (memories.length > 0) context.push(`${memories.length} remembered fact${memories.length === 1 ? "" : "s"} ${glyphs.middot} /memory`);
+  out.write(`${style.dim(`  ${context.join(`  ${glyphs.middot}  `)}`)}\n`);
   if (localCurrencyWarning) out.write(`${style.yellow(`  ${localCurrencyWarning}`)}\n`);
   if (!args.budget) {
     out.write(`${style.yellow(`  No session spend cap set ${glyphs.middot} use --budget N to approve and enforce one.`)}\n`);
@@ -2988,8 +3063,6 @@ async function main(): Promise<number> {
     // this is the other half of the answer.
     if (pace === "off") out.write(style.dim(`  ${glyphs.middot} /slow paces spending without capping it\n`));
   }
-  if (pace !== "off") out.write(style.dim(`  ${paceBadge(pace, glyphs)} ${glyphs.middot} fewer model rounds per turn; /slow off to lift it\n`));
-  if (memories.length > 0) out.write(style.dim(`  ${glyphs.middot} ${memories.length} remembered fact${memories.length === 1 ? "" : "s"} in play ${glyphs.middot} /memory to see them\n`));
   if (!prices) {
     out.write(`${style.yellow(`  No price configured for ${resolvedModelId} ${glyphs.middot} costs will show as unknown.`)}\n`);
     out.write(`${style.dim(`  Set ${PRICE_ENVIRONMENT_HINT}, or run archymedes --providers.`)}\n`);
@@ -3014,15 +3087,40 @@ async function main(): Promise<number> {
    */
   // `ARCHYMEDES_PIN` exists so the choice can live in a shell profile rather than in every invocation.
   const pinFooter = args.pin || (environment.ARCHYMEDES_PIN ?? "") !== "" && environment.ARCHYMEDES_PIN !== "0";
+  const setLayout = (fixed: boolean) => {
+    screen?.exit();
+    setWorkspaceMenu(undefined);
+    screen = fixed ? new WorkspaceFrame(process.stdout,
+      () => ({ version: ARCHYMEDES_CLI_VERSION, workspace: path.basename(args.root), model: `${spec.label} / ${resolvedModelId}`, mode, palette, glyphs, busy: turnActive }),
+      () => tabs.active.payload.sink.log,
+      environment.ARCHYMEDES_NO_MOTION !== "1" && environment.NO_COLOR === undefined && environment.TERM !== "dumb")
+      : new PinnedScreen(process.stdout, { holdRegion: pinFooter });
+    screen.enter();
+    if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu);
+    showIdleStatus();
+  };
   if (ttyMode) {
     // Always constructed, because the suggestion dropdown needs its geometry either way; only the
     // *holding* of the scroll region — the part that costs scrollback — is what `--pin` buys.
-    screen = new PinnedScreen(process.stdout, { holdRegion: pinFooter });
-    screen.enter();
-    showIdleStatus();
+    setLayout((args.layout ?? environment.ARCHYMEDES_LAYOUT) === "fixed");
+    const fixedNavigation = (_str: string, key: { name?: string }) => {
+      if (!(screen instanceof WorkspaceFrame)) return;
+      screen.stopIntroMotion();
+      if (key?.name === "pageup") screen.navigate("up");
+      else if (key?.name === "pagedown") screen.navigate("down");
+      else if (screen.browsing && key?.name === "escape") screen.navigate("live");
+    };
+    unbindFixedNavigation = () => { process.stdin.off("keypress", fixedNavigation); };
+    bindFixedNavigation = () => { unbindFixedNavigation(); process.stdin.on("keypress", fixedNavigation); };
+    bindFixedNavigation();
     process.stdout.on("resize", () => {
       screen?.resize();
       showIdleStatus();
+      if (screen instanceof WorkspaceFrame && !turnActive) {
+        screen.positionInput();
+        readline.prompt(true);
+        showIdleStatus();
+      }
     });
 
     /**
@@ -3404,6 +3502,7 @@ async function main(): Promise<number> {
         : inlineBar()
           ? promptBox.draw(mode, where, idleStatusLine())
           : screen ? label : `\n${label}`;
+      if (queued === undefined && screen instanceof WorkspaceFrame) queueMicrotask(() => showIdleStatus());
       rawInput = queued ?? await askForInput(promptLabel);
     } catch (error) {
       if (isReadlineExit(error) || exitRequested) break;
@@ -3415,9 +3514,22 @@ async function main(): Promise<number> {
     promptBox.erase(rawInput);
     // Before parking, so the transcript region is whole again before anything is written into it.
     screen?.clearSuggestions();
+    if (screen instanceof WorkspaceFrame && screen.browsing) screen.navigate("live");
     screen?.parkInTranscript();
     let input = rawInput.trim();
     if (!input) continue;
+
+    if (input === "/layout" || input.startsWith("/layout ")) {
+      const choice = input.slice(7).trim();
+      if (!ttyMode) { out.write("  Fixed layout requires an interactive terminal.\n"); continue; }
+      if (choice && choice !== "fixed" && choice !== "scrollback") { out.write("  Use /layout fixed or /layout scrollback.\n"); continue; }
+      const fixed = choice ? choice === "fixed" : !(screen instanceof WorkspaceFrame);
+      setLayout(fixed);
+      out.write(style.dim(fixed
+        ? "  Fixed workspace — mode rail and composer stay put. /layout scrollback returns to the log.\n"
+        : "  Scrollback layout — the terminal keeps a normal log. /layout fixed restores the workspace.\n"));
+      continue;
+    }
 
     usage.record(input);
 
@@ -3528,6 +3640,15 @@ async function main(): Promise<number> {
         out.write(style.yellow(`  Could not export the session: ${error instanceof Error ? error.message : String(error)}\n`));
       }
       continue;
+    }
+    if (input === "/mode" && screen instanceof WorkspaceFrame) {
+      const modes = ["plan", "build", "auto", "defender"] as const;
+      const descriptions = ["Read and reason; no changes", "Edit with your approval", "Apply ordinary changes automatically", "Security review; fixes require approval"];
+      const chosen = await openChooser({ readline, input: process.stdin, output: process.stdout },
+        modes.map((value, i) => ({ value, label: value, description: descriptions[i], hint: value === mode ? "current" : undefined })),
+        { title: "Choose how Archymedes works", initialIndex: modes.indexOf(mode), paint: surfacePaint, glyphs });
+      if (!chosen) continue;
+      input = `/mode ${chosen}`;
     }
     const modeCommand = parseModeCommand(input);
     if (modeCommand?.type === "show") {
@@ -4100,7 +4221,7 @@ async function main(): Promise<number> {
           await agent.relinquish();
           if (record.mode) mode = record.mode;
           agent = await openClient(record);
-          await carryResumedSpend(record);
+          await carryResumedSpend(agent.snapshot());
           expandables.clear();
           out.write(`${renderReplay(record, style_, { turns: 2 })}\n`);
           out.write(style.green(`  resumed ${record.id}\n`));
@@ -4110,11 +4231,73 @@ async function main(): Promise<number> {
       continue;
     }
 
-    if (input === "/todos") {
-      const todos = agent.todos;
-      if (todos.length === 0) { out.write(style.dim("  no plan yet\n")); writeHint(); continue; }
-      const mark = { pending: glyphs.circleEmpty, in_progress: glyphs.circleHalf, done: glyphs.circleFull } as const;
-      out.write(`${box(todos.map((todo) => `${mark[todo.status]} ${todo.text}`), { depth, title: "todos", glyphs })}\n`);
+    if (input === "/todos" || input === "/task") {
+      // The two read-only "where do things stand" commands, rendered by `session-inspect.ts` from
+      // an explicit snapshot rather than from this loop's locals — the first handler extraction.
+      const inspect: InspectContext = {
+        style: sectionStyle(),
+        glyphs,
+        depth,
+        plan: agent.todos,
+        request: sessionRequest,
+        files: [...sessionFiles],
+        checks: [...sessionChecks],
+        lastTurnStatus,
+        turnsTaken: sessionRequest !== undefined,
+      };
+      if (input === "/todos") {
+        const todos = renderTodos(inspect);
+        if (todos === null) { out.write(style.dim("  no plan yet\n")); writeHint(); continue; }
+        out.write(`${todos}\n`);
+        continue;
+      }
+      out.write(`${renderTask(inspect)}\n`);
+      writeHint();
+      continue;
+    }
+    if (input === "/route plan") {
+      // A preflight, not a turn: it calls no model, reserves nothing, and leaves the conversation
+      // exactly as it was — so it stays interruptible and never becomes a way to spend money.
+      const planning = new AbortController();
+      pendingReadAbort = planning;
+      let plan: Awaited<ReturnType<typeof agent.planRoute>>;
+      try {
+        plan = await agent.planRoute("", planning.signal);
+      } catch (error) {
+        if (planning.signal.aborted) { out.write(style.dim("  routing plan cancelled\n")); writeHint(); continue; }
+        out.write(style.dim(`  routing plan unavailable — ${error instanceof Error ? error.message : String(error)}\n`));
+        writeHint();
+        continue;
+      } finally {
+        pendingReadAbort = undefined;
+      }
+      if (plan === null) {
+        out.write(style.dim("  /route plan needs the archymedes-cloud provider — a direct provider has one route\n"));
+        writeHint();
+        continue;
+      }
+      out.write(`${renderRoutingPlan(plan, sectionStyle())}\n`);
+      writeHint();
+      continue;
+    }
+    if (input === "/route" || input === "/route all" || input === "/route summary") {
+      const sessionReceipts = agent.routingReceipts;
+      if (sessionReceipts.length === 0) {
+        out.write(style.dim("  no hosted routing this session — /route needs the archymedes-cloud provider\n"));
+        writeHint();
+        continue;
+      }
+      if (input === "/route summary") {
+        out.write(`${renderRoutingSummary(sessionReceipts, sectionStyle())}\n`);
+        writeHint();
+        continue;
+      }
+      const shown = input === "/route all" ? sessionReceipts : sessionReceipts.slice(-1);
+      for (const [index, receipt] of shown.entries()) {
+        out.write(`${renderRoutingReceipt(receipt, sectionStyle())}\n`);
+        if (index < shown.length - 1) out.write("\n");
+      }
+      writeHint();
       continue;
     }
     if (input === "/diff" || input === "/diff stat") {
@@ -4193,7 +4376,7 @@ async function main(): Promise<number> {
               agent: newTabClient,
               ledger: new CostLedger({ prices: wanted.prices, display, rates, catalog: PRICE_CATALOG, ...(approvedBudget ? { budget: approvedBudget } : {}) }),
               mode,
-              sink: new TabSink(terminalStream),
+              sink: new TabSink(sessionStream),
               provider: wanted.provider,
               spec: wanted.spec,
               prices: wanted.prices,
@@ -4665,6 +4848,33 @@ async function main(): Promise<number> {
       if (manualBalanceCommand.kind === "clear") {
         await persistManualBalance(undefined);
         out.write(style.dim("  Balance tracking cleared. Set a new figure any time with /balance <amount>.\n"));
+        continue;
+      }
+      // On the exchange the account has a real ledger, and that — not a figure someone typed — is
+      // what the next turn reserves against. Read it first, and say plainly when it cannot be read
+      // rather than falling back to the local number as though it were the same thing.
+      const hosted = model as typeof model & { creditBalance?: (signal?: AbortSignal) => Promise<HostedCreditBalance | null> };
+      if (typeof hosted.creditBalance === "function") {
+        const reading = new AbortController();
+        pendingReadAbort = reading;
+        try {
+          const credits = await hosted.creditBalance(reading.signal);
+          if (credits) {
+            for (const line of renderHostedBalance(credits, { localCurrency: display })) out.write(`  ${line}\n`);
+          } else {
+            out.write(style.yellow("  The exchange did not return a readable balance.\n"));
+          }
+        } catch (error) {
+          if (reading.signal.aborted) out.write(style.dim("  balance check cancelled\n"));
+          else out.write(style.yellow(`  Could not read the hosted balance — ${error instanceof Error ? error.message : String(error)}\n`));
+        } finally {
+          pendingReadAbort = undefined;
+        }
+        const localTracked = currentBalance();
+        if (localTracked) {
+          // Both exist, so both are shown — labelled, never summed.
+          out.write(style.dim(`  Separately, you are tracking ${formatBalance(localTracked.amount, localTracked.currency)} locally as a pacing limit.\n`));
+        }
         continue;
       }
       const balance = currentBalance();

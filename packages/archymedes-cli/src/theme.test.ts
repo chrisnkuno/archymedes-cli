@@ -125,8 +125,8 @@ describe("the themes that ship", () => {
     }
   });
 
-  it("defaults to the blueprint", () => {
-    expect(DEFAULT_THEME_NAME).toBe("blueprint");
+  it("defaults to Archymedes", () => {
+    expect(DEFAULT_THEME_NAME).toBe("archymedes");
     expect(findBuiltinTheme("blueprint")).toBeDefined();
     expect(findBuiltinTheme("BLUEPRINT")).toBeDefined();
     expect(findBuiltinTheme("no-such-theme")).toBeUndefined();
@@ -185,9 +185,9 @@ describe("choosing a theme for the terminal", () => {
   });
 
   it("assumes dark, the commoner case and the safer mistake", () => {
-    expect(detectPreferredTheme({})).toBe("blueprint");
-    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("blueprint");
-    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("blueprint");
+    expect(detectPreferredTheme({})).toBe("archymedes");
+    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("archymedes");
+    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("archymedes");
   });
 });
 

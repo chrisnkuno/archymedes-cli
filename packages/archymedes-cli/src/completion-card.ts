@@ -3,6 +3,7 @@ import { panel, type SectionStyle } from "./sections";
 export type CompletionCardInput = {
   status: string;
   files: readonly string[];
+  lineDelta?: { added: number; removed: number };
   checks: readonly { kind: string; passed: boolean }[];
   toolCalls: number;
   iterations: number;
@@ -22,7 +23,7 @@ export function renderCompletionCard(input: CompletionCardInput, style: SectionS
   const mark = input.status === "completed" ? "completed" : input.status.replaceAll("_", " ");
   const files = input.files.length === 0
     ? "no files changed"
-    : `${input.files.length} file${input.files.length === 1 ? "" : "s"} changed`;
+    : `${input.files.length} file${input.files.length === 1 ? "" : "s"} changed${input.lineDelta ? ` · +${input.lineDelta.added} −${input.lineDelta.removed}` : ""}`;
   const checks = input.checks.length === 0
     ? "not run"
     : input.checks.map((check) => `${CHECK_LABELS[check.kind] ?? check.kind} ${check.passed ? "passed" : "failed"}`).join(" · ");
@@ -35,5 +36,13 @@ export function renderCompletionCard(input: CompletionCardInput, style: SectionS
     `time / cost  ${input.elapsed} · ${input.cost}`,
   ];
   if (input.files.length > 0 && input.files.length <= 4) lines.push(...input.files.map((file) => `             ${file}`));
-  return panel(lines, style, { title: "turn complete", tone: input.status === "completed" ? "good" : "warn" });
+  const failedCheck = input.checks.some((check) => !check.passed);
+  const failed = input.status === "failed" || failedCheck;
+  const verified = input.status === "completed" && input.checks.length > 0 && !failedCheck;
+  const title = failed ? "needs attention"
+    : input.status === "completed" ? "turn complete"
+    : input.status === "needs_verification" ? "verification needed"
+    : `turn ${mark}`;
+  if (input.files.length > 0) lines.push("review       /diff · /undo");
+  return panel(lines, style, { title, tone: failed ? "bad" : verified ? "good" : "warn" });
 }

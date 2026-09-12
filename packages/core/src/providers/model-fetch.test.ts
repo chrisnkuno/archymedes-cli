@@ -60,7 +60,7 @@ describe("where a provider's list lives", () => {
       .toBe("http://nas.local:11434/v1/models");
   });
 
-  it("has an endpoint for every provider Archymedes can be configured to use", () => {
+  it("has an endpoint for every provider with a concrete model inventory", () => {
     // The failure this replaces was silent: a provider with no case here reports "no key
     // configured" forever, which reads like the user's mistake rather than a missing branch.
     const withKeys = {
@@ -70,6 +70,10 @@ describe("where a provider's list lives", () => {
       OPENAI_COMPATIBLE_API_KEY: "k", OPENAI_COMPATIBLE_BASE_URL: "https://gw.example/v1",
     };
     for (const provider of PROVIDER_IDS) {
+      if (provider === "archymedes-cloud") {
+        expect(modelsEndpoint(provider, withKeys)).toBeUndefined();
+        continue;
+      }
       expect(modelsEndpoint(provider, withKeys), `no models endpoint for ${provider}`).toBeDefined();
     }
   });
@@ -268,5 +272,6 @@ describe("which providers are worth asking", () => {
   it("skips the ones with no key, since the answer is already known", () => {
     expect(fetchableProviders({ OPENAI_API_KEY: "k" }, ["anthropic", "openai"])).toEqual(["openai"]);
     expect(fetchableProviders({}, ["anthropic", "openai"])).toEqual([]);
+    expect(fetchableProviders({ ARCHYMEDES_CLOUD_TOKEN: "t", ARCHYMEDES_CLOUD_BASE_URL: "https://cloud.example" }, ["archymedes-cloud"])).toEqual([]);
   });
 });

@@ -91,6 +91,7 @@ export class McpConnection {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
   private initializePromise: Promise<void> | null = null;
+  private closedError: Error | undefined;
   /** Cached `tools/list` result. Cleared by `invalidateTools` when the server says its tools changed. */
   private toolsPromise: Promise<Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>> | undefined;
 
@@ -106,10 +107,19 @@ export class McpConnection {
       env: { ...sanitizeCommandEnvironment(process.env), ...config.env } as NodeJS.ProcessEnv,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    this.child.on("error", (error) => this.rejectAllPending(error));
-    this.child.on("exit", (code) => this.rejectAllPending(new Error(`MCP server '${config.id}' exited (code ${code})`)));
+    this.child.on("error", (error) => this.fail(error));
+    this.child.stdin!.on("error", (error) => this.fail(error));
+    // Wait for stdout to drain before rejecting outstanding replies from an exiting server.
+    this.child.on("close", (code) => this.fail(new Error(`MCP server '${config.id}' exited (code ${code})`)));
+    // Diagnostics are not protocol messages. An unread pipe eventually blocks the server.
+    this.child.stderr!.resume();
     const lines = createInterface({ input: this.child.stdout! });
     lines.on("line", (line) => this.handleLine(line));
+  }
+
+  private fail(error: Error): void {
+    this.closedError ??= error;
+    this.rejectAllPending(this.closedError);
   }
 
   private rejectAllPending(error: Error): void {
@@ -142,6 +152,7 @@ export class McpConnection {
   }
 
   private request(method: string, params: unknown): Promise<unknown> {
+    if (this.closedError) return Promise.reject(this.closedError);
     const id = this.nextId++;
     const line = `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`;
     return new Promise((resolve, reject) => {
@@ -158,11 +169,13 @@ export class McpConnection {
   }
 
   private notify(method: string, params: unknown): void {
+    if (this.closedError) throw this.closedError;
     this.child.stdin!.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
   }
 
   /** Idempotent — every caller awaits the same handshake rather than repeating it. */
   private initialize(): Promise<void> {
+    if (this.closedError) return Promise.reject(this.closedError);
     this.initializePromise ??= (async () => {
       await this.request("initialize", {
         protocolVersion: MCP_PROTOCOL_VERSION,
@@ -219,7 +232,7 @@ export class McpConnection {
   }
 
   close(): void {
-    this.rejectAllPending(new Error(`MCP server '${this.config.id}' connection closed`));
+    this.fail(new Error(`MCP server '${this.config.id}' connection closed`));
     this.child.kill();
   }
 }

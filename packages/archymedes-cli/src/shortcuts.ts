@@ -124,6 +124,19 @@ function painter(output: OutputStream): { paint: (frame: string) => void; erase:
  * that is easy to get subtly wrong and impossible to notice until a prompt somewhere stops
  * responding, so there is one copy of it to be correct.
  */
+let workspaceMenu: { paint: (frame: string) => void; erase: () => void; height: () => number; width: () => number } | undefined;
+
+function menuRows(host: KeyboardHost): number {
+  return host.output === process.stdout && workspaceMenu ? workspaceMenu.height() : host.output.rows ?? 24;
+}
+
+function menuColumns(host: KeyboardHost): number {
+  return host.output === process.stdout && workspaceMenu ? workspaceMenu.width() : host.output.columns ?? 80;
+}
+
+/** The fixed workspace lends its body to every picker without moving the composer. */
+export function setWorkspaceMenu(surface: typeof workspaceMenu): void { workspaceMenu = surface; }
+
 export async function withBorrowedKeyboard<T>(
   host: KeyboardHost,
   self: unknown,
@@ -135,7 +148,7 @@ export async function withBorrowedKeyboard<T>(
    * scroll-region reservation) needs to paint *there* instead, or the borrowed chooser would draw
    * a second, competing menu under the first.
    */
-  surface: { paint: (frame: string) => void; erase: () => void } = painter(host.output),
+  surface: { paint: (frame: string) => void; erase: () => void } = (host.output === process.stdout ? workspaceMenu : undefined) ?? painter(host.output),
 ): Promise<T> {
   const borrowed = host.input.listeners("keypress").filter((listener) => listener !== self);
   for (const listener of borrowed) host.input.off("keypress", listener as never);
@@ -147,6 +160,8 @@ export async function withBorrowedKeyboard<T>(
     wake?.();
   };
   host.input.on("keypress", collect);
+  const onResize = () => { pending.push({ key: {} }); wake?.(); };
+  host.output.on("resize", onResize);
 
   async function* keys(): AsyncGenerator<PaletteKey> {
     for (;;) {
@@ -162,6 +177,7 @@ export async function withBorrowedKeyboard<T>(
     // The menu comes down with the keyboard. Leaving the last frame on screen is what made an
     // answered menu look like it was still asking.
     surface.erase();
+    host.output.off("resize", onResize);
     host.input.off("keypress", collect);
     for (const listener of borrowed) host.input.on("keypress", listener as never);
   }
@@ -174,7 +190,7 @@ export async function openPalette(host: ShortcutHost, self?: unknown, options: R
   const sized = {
     width: host.output.columns ?? 80,
     ...options,
-    getSize: options.getSize ?? (() => ({ width: host.output.columns ?? 80, height: Math.max(1, (host.output.rows ?? 24) - 3) })),
+    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 3) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runCommandPalette(keys, paletteEntries(chords), paint, sized));
 }
@@ -216,7 +232,7 @@ export async function openChooser<T>(
   const sized = {
     width: host.output.columns ?? 80,
     ...options,
-    getSize: options.getSize ?? (() => ({ width: host.output.columns ?? 80, height: Math.max(1, (host.output.rows ?? 24) - 4) })),
+    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 4) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runChooser(keys, items, paint, sized));
 }
@@ -232,7 +248,7 @@ export async function openTable(host: KeyboardHost, options: RunTableOptions, se
   const sized = {
     width: host.output.columns ?? 80,
     ...options,
-    getSize: options.getSize ?? (() => ({ width: host.output.columns ?? 80, height: Math.max(1, (host.output.rows ?? 24) - 2) })),
+    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 2) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runTable(keys, paint, sized));
 }
@@ -242,7 +258,7 @@ export async function openModelPicker(host: KeyboardHost, options: RunModelPicke
   const sized = {
     width: host.output.columns ?? 80,
     ...options,
-    getSize: options.getSize ?? (() => ({ width: host.output.columns ?? 80, height: Math.max(1, (host.output.rows ?? 24) - 4) })),
+    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 4) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runModelPicker(keys, paint, sized));
 }

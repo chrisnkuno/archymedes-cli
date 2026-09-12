@@ -1,5 +1,9 @@
+import { HostedRecoveryStore } from "./hosted-recovery";
+import { mergeRoutingReceipts } from "../providers/routing-receipt";
+import type { RoutingPlan } from "../providers/routing-plan";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { access } from "node:fs/promises";
 import { agentMessagePromptParts, BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider } from "../agent-runtime";
 import { affordableOutputTokens, approximateInputTokens, priceActualModelUsage, type ModelPriceCatalog } from "../model-cost";
 import type { ModelUsage } from "../providers/model";
@@ -9,7 +13,7 @@ import { capabilitiesForMode, PermissionLedger, type ApprovalPrompt, type Archym
 import { loadMemories, memoryPromptBlock, recallMemories, recalledMemoryKey } from "./memory";
 import { probeEnvironment, type EnvironmentReport } from "./environment";
 import { buildArchymedesSystemPrompt, collectProjectContext, type ProjectContext } from "./prompt";
-import { assertTurnTransition, EventJournal, runtimeEventForJournal, type TurnStatus } from "./protocol";
+import { assertTurnTransition, EventJournal, readEventJournal, runtimeEventForJournal, type TurnStatus } from "./protocol";
 import {
   atSafeBoundary,
   buildCompactedMessages,
@@ -18,6 +22,7 @@ import {
   newSessionId,
   planCompaction,
   saveSession,
+  loadSession,
   STANDING_CONSTRAINTS_HEADING,
   titleFromObjective,
   type CompactionBoundary,
@@ -137,6 +142,8 @@ export class ArchymedesAgent {
   private readonly workspace: ArchymedesWorkspace;
   private readonly permissions: PermissionLedger;
   private readonly checkpoints: CheckpointStore;
+  private recovery: HostedRecoveryStore;
+  private ownershipReady: Promise<void> | undefined;
   /**
    * Where tool results too large for the transcript are written.
    *
@@ -208,7 +215,7 @@ export class ArchymedesAgent {
     this.nestedInstructions = new NestedInstructionTracker(this.workspace);
     this.artifacts = new WorkspaceArtifactStore(this.workspace);
     this.defenderBrain = new DefenderBrain(path.join(options.root, ".archymedes", "security-brain"));
-    this.checkpoints = new CheckpointStore(options.root, path.join(options.root, ".archymedes", "checkpoint-index"), options.git);
+    this.checkpoints = new CheckpointStore(options.root, path.join(options.root, ".archymedes", `checkpoint-index-${randomUUID()}`), options.git);
     this.session = {
       schemaVersion: 2,
       revision: 0,
@@ -224,6 +231,7 @@ export class ArchymedesAgent {
       totalRwf: 0,
     };
     this.journal = new EventJournal(options.root, this.session.id);
+    this.recovery = new HostedRecoveryStore(options.root, this.session.id);
     this.permissions = new PermissionLedger(options.mode, async (request) => {
       const turnId = this.activeTurnId ?? "turn_unbound";
       await this.activeTransition?.("waiting_approval", true);
@@ -252,6 +260,9 @@ export class ArchymedesAgent {
     return this.session.id;
   }
 
+  /** A detached view of this session's completed hosted calls. */
+  get routingReceipts() { return mergeRoutingReceipts(this.session.routingReceipts); }
+
   /**
    * A self-contained handoff record for rebuilding this session around another model or mode.
    *
@@ -266,7 +277,8 @@ export class ArchymedesAgent {
 
   /** Restores a previous session's transcript and standing approvals. */
   resume(record: SessionRecord): void {
-    this.session = { ...record, mode: this.options.mode };
+    if (this.ownershipReady) throw new Error("Relinquish the current agent before resuming another session");
+    this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode };
     this.messages = [...record.messages];
     this.recalledMemoryKeys.clear();
     for (const key of record.recalledMemoryKeys ?? []) this.recalledMemoryKeys.add(key);
@@ -284,6 +296,54 @@ export class ArchymedesAgent {
       )?.content ?? (record.title === "Untitled session" ? null : record.title);
     this.permissions.restore(record.approvals ?? {});
     this.journal = new EventJournal(this.options.root, record.id);
+    this.recovery = new HostedRecoveryStore(this.options.root, record.id);
+  }
+
+  /** Own the journal before any model call, tool effect or session mutation. */
+  async acquireOwnership(): Promise<void> {
+    this.ownershipReady ??= (async () => {
+      await this.journal.open();
+      const current = await loadSession(this.options.root, this.session.id);
+      const exists = current || await access(path.join(this.options.root, ".archymedes", "sessions", `${this.session.id}.json`)).then(() => true).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return false; throw error; });
+      if (!current && (exists || this.session.revision > 0)) {
+        await this.journal.close();
+        throw new Error("Session snapshot is missing, corrupt or incompatible; refusing to start work.");
+      }
+      if (current && current.revision !== this.session.revision) {
+        await this.journal.close();
+        throw new Error("Session changed since it was loaded; resume it again before writing.");
+      }
+    })();
+    await this.ownershipReady;
+  }
+
+  private async recordHostedUsage(): Promise<void> {
+    const responses = this.recovery.responses();
+    if (!responses.length) return;
+    const events = await readEventJournal(this.options.root, this.session.id);
+    const recorded = new Set(events.flatMap(({ payload }) => payload.type === "runtime" && payload.event.type === "model_turn" && payload.event.requestId ? [payload.event.requestId] : []));
+    for (const { requestId, turn } of responses) {
+      if (recorded.has(requestId)) continue;
+      await this.journal.append({ type: "runtime", turnId: `recovered_${requestId}`, event: {
+        type: "model_turn", requestId, iteration: 0, responseId: turn.responseId,
+        model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage,
+      } }, { durable: true });
+      recorded.add(requestId);
+    }
+  }
+
+  /** Reconcile old identities before allowing any replacement hosted work. Never replay tools. */
+  async recoverPending(signal?: AbortSignal): Promise<boolean> {
+    if (this.turnAbort && signal !== this.turnAbort.signal) throw new Error("Cannot recover while a turn is running");
+    await this.acquireOwnership();
+    const recovered = await this.recovery.recover(this.options.model, this.session, signal);
+    if (!recovered) return false;
+    await this.recordHostedUsage();
+    await saveSession(recovered);
+    this.session = recovered;
+    this.messages = [...recovered.messages];
+    await this.recovery.cleanup(recovered.hostedRecoveryBatchId);
+    return true;
   }
 
   cancel(): void {
@@ -425,6 +485,34 @@ export class ArchymedesAgent {
 
   /** Token-based preflight using the actual system prompt, history and tool schemas for this mode. */
   async estimateNextTurn(objective: string): Promise<AgentCostPrediction> {
+    const { initialInputTokens } = await this.prospectiveRequest(objective);
+    return predictAgentUsage({ initialInputTokens, objective, mode: this.options.mode });
+  }
+
+  /**
+   * Asks the provider where the next turn would be routed, without running it.
+   *
+   * Only the hosted exchange can answer this, so a direct-provider session returns null rather than
+   * inventing a local ranking. The size it plans against is the same figure `estimateNextTurn`
+   * predicts cost from — one assembly, so the preflight and the turn cannot drift apart — and the
+   * conversation itself never leaves the machine for a question this cheap.
+   */
+  async planNextTurn(objective: string, signal?: AbortSignal): Promise<RoutingPlan | null> {
+    const provider = this.options.model as AgentTurnProvider & {
+      plan?: (input: { estimatedInputTokens: number; maxOutputTokens: number; usesTools?: boolean; signal?: AbortSignal }) => Promise<RoutingPlan | null>;
+    };
+    if (typeof provider.plan !== "function") return null;
+    const { initialInputTokens, toolCount } = await this.prospectiveRequest(objective);
+    return await provider.plan({
+      estimatedInputTokens: Math.max(1, initialInputTokens),
+      maxOutputTokens: this.budgets.maxOutputTokens,
+      usesTools: toolCount > 0,
+      ...(signal ? { signal } : {}),
+    });
+  }
+
+  /** What the next turn would send: its assembled size and how many tools it would carry. */
+  private async prospectiveRequest(objective: string): Promise<{ initialInputTokens: number; toolCount: number }> {
     const context = await collectProjectContext(this.options.root);
     const externalTooling = await this.loadExternalTooling();
     const delegate = this.createDelegateRunner(context, () => this.budgets.maxRwf);
@@ -456,7 +544,7 @@ export class ArchymedesAgent {
       objective,
       toolSchemas,
     ]).expectedInputTokens;
-    return predictAgentUsage({ initialInputTokens, objective, mode: this.options.mode });
+    return { initialInputTokens, toolCount: scoped.length };
   }
 
   /**
@@ -472,6 +560,8 @@ export class ArchymedesAgent {
    * must not find the untruncated transcript still on disk.
    */
   async undo(scope: RestoreScope = "both"): Promise<Checkpoint | undefined> {
+    if (this.turnAbort) throw new Error("Cannot undo while a turn is running");
+    await this.acquireOwnership();
     const checkpoint = this.checkpoints.latest();
     if (!checkpoint) return undefined;
     if (scope === "code" || scope === "both") {
@@ -513,7 +603,7 @@ export class ArchymedesAgent {
       // first one and leave nothing for the rest of its own work.
       const reservation = Math.max(0, Math.min(remainingRwf(), this.budgets.maxRwf / 2));
       const runtime = new BoundedAgentRuntime({
-        model: this.options.model,
+        model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, `delegate:${randomUUID()}`),
         tools: subTools,
         prices: this.options.prices,
         artifacts: this.artifacts,
@@ -561,9 +651,17 @@ export class ArchymedesAgent {
    */
   async send(objective: string): Promise<ArchymedesTurnResult> {
     if (!objective.trim()) throw new Error("A request is required");
+    if (this.turnAbort) throw new Error("A turn is already running in this session");
     this.cancelled = false;
     const turnAbort = new AbortController();
     this.turnAbort = turnAbort;
+    try {
+      await this.recoverPending(turnAbort.signal);
+      turnAbort.signal.throwIfAborted();
+    } catch (error) {
+      this.turnAbort = null;
+      throw error;
+    }
     const turnId = `turn_${randomUUID()}`;
     this.activeTurnId = turnId;
     let turnStatus: TurnStatus = "queued";
@@ -577,6 +675,10 @@ export class ArchymedesAgent {
       // Recording start is ordered but not fsynced: no side effect has happened yet, so forcing a
       // disk barrier here would add latency without improving recovery. Tool calls and approvals
       // do use durable barriers before they can affect the world.
+      if (this.options.model.recoveryScope) {
+        this.session.title = this.session.title === "Untitled session" ? titleFromObjective(objective) : this.session.title;
+        await saveSession(this.session);
+      }
       await transition("running");
 
       this.openingObjective ??= objective;
@@ -660,7 +762,7 @@ export class ArchymedesAgent {
       const compaction = await this.compactIfNeeded(turnId, objective, turnAbort.signal);
       compactionActualRwf = compaction.actualRwf;
       const runtime = new BoundedAgentRuntime({
-        model: this.options.model,
+        model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "main"),
         tools: scoped,
         prices: this.options.prices,
         artifacts: this.artifacts,
@@ -713,11 +815,15 @@ export class ArchymedesAgent {
         recalledMemoryKeys: [...this.recalledMemoryKeys],
         approvals: this.permissions.snapshot(),
         totalRwf: this.session.totalRwf + combinedRwf,
+        routingReceipts: mergeRoutingReceipts(this.session.routingReceipts, result.routingReceipts, this.recovery.responses().flatMap(({ requestId, turn }) => turn.routingReceipt ? [{ ...turn.routingReceipt, taskId: turn.routingReceipt.taskId ?? requestId }] : [])),
+        hostedRecoveryBatchId: this.recovery.settledBatchId() ?? this.session.hostedRecoveryBatchId,
         updatedAt: Date.now(),
       };
       const terminalStatus = runtimeStatusToTurnStatus(result.status);
       await transition(terminalStatus, true);
+      await this.recordHostedUsage();
       await saveSession(this.session);
+      await this.recovery.cleanup(this.session.hostedRecoveryBatchId);
       return { ...result, usage: combinedUsage, actualModelRwf: combinedRwf, checkpoint };
     } catch (error) {
       if (isActiveTurnStatus(turnStatus)) {
@@ -759,7 +865,7 @@ export class ArchymedesAgent {
     );
     if (maximumOutputTokens < 1) return { usage: emptyModelUsage(), actualRwf: 0 };
 
-    const turn = await this.options.model.complete({
+    const turn = await this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "compaction").complete({
       // Summarizing is reading, not reasoning. Thinking tokens bill as output and share the output
       // budget, so paying for deep reasoning to compress a transcript spends money on the one call
       // in the session that produces nothing the user asked for. Providers whose model does not

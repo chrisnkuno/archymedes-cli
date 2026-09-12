@@ -32,7 +32,20 @@ export type StubErrorTurn = {
   message: string;
 };
 
-export type StubTurn = StubTextTurn | StubToolCallTurn | StubErrorTurn;
+/**
+ * Streams a few text deltas, then drops the socket without a `message_stop`.
+ *
+ * A provider process killed, a load balancer recycling a connection, a laptop losing wifi mid-turn:
+ * the client sees bytes stop arriving on an open request, which is a different failure from an HTTP
+ * error status and exercises a different path in the SDK's stream reader.
+ */
+export type StubDisconnectTurn = {
+  kind: "disconnect";
+  /** Text delivered before the drop, so a test can assert the partial answer is not later doubled. */
+  text?: string;
+};
+
+export type StubTurn = StubTextTurn | StubToolCallTurn | StubErrorTurn | StubDisconnectTurn;
 
 /** One request as the CLI actually sent it, for tests that assert on what the model was told. */
 export type StubRequest = {
@@ -142,6 +155,19 @@ export function startAnthropicStub(): Promise<AnthropicStub> {
         : "invalid_request_error";
       res.writeHead(turn.status, { "content-type": "application/json" });
       res.end(JSON.stringify({ type: "error", error: { type, message: turn.message } }));
+      return;
+    }
+    if (turn.kind === "disconnect") {
+      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+      const emit = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      emit("message_start", {
+        type: "message_start",
+        message: { id: `msg_stub_${requestIndex}`, type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 0 } },
+      });
+      emit("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+      if (turn.text) emit("content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: turn.text } });
+      // No content_block_stop, no message_stop: the bytes just end.
+      res.destroy();
       return;
     }
     res.writeHead(200, {

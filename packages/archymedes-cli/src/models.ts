@@ -1,4 +1,4 @@
-import { PROVIDER_IDS, PROVIDERS, catalogPrices, isProviderId, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { PROVIDER_IDS, PROVIDERS, catalogPrices, isProviderId, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { formatMoney, money, type Currency, type TokenPrices } from "@archymedes/core/money";
 
@@ -90,7 +90,7 @@ export function buildModelCatalog(
         provider,
         providerLabel: spec.label,
         model,
-        isProviderDefault: model === (environment[`${provider.toUpperCase()}_MODEL`]?.trim() || spec.defaultModel),
+        isProviderDefault: model === (environment[`${providerEnvPrefix(provider)}_MODEL`]?.trim() || spec.defaultModel),
         prices: catalogPrices(provider, model, asOf),
         ...(knownSet.has(model) ? {} : { live: true }),
       });

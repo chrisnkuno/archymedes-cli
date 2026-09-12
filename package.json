@@ -23,7 +23,12 @@
     "build:state": "cargo build --release --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state",
     "test:state": "cargo test --manifest-path packages/archymedes-state/Cargo.toml",
     "bench:state": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state-bench -- --sessions 500 --messages 40 --queries 200",
-    "bench:defender": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-defender-brain-bench -- --records 10000 --queries 2000"
+    "bench:defender": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-defender-brain-bench -- --records 10000 --queries 2000",
+    "bench:journeys": "ARCHYMEDES_JOURNEYS_FULL=1 vitest run packages/archymedes-cli/src/pty/journeys.test.ts",
+    "verify:package": "bun run tooling/build/verify-package.ts",
+    "release:check": "bun run check && bun run verify:package",
+    "preview:tui": "bun run tooling/dev/identity-demo.ts",
+    "preview:workspace": "bun run tooling/dev/workspace-preview.ts"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

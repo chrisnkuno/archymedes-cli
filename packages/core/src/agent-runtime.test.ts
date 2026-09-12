@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { agentMessagePromptParts, BoundedAgentRuntime, isRetryableProviderError, ProviderRequestError, providerFailureKind, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryDelayMs, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import type { RoutingReceipt } from "./providers/routing-receipt";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 const prices = { inputRatePerMillion: 1_610, outputRatePerMillion: 9_660 };
@@ -116,7 +117,9 @@ describe("bounded agent runtime", () => {
 
     it("retries a transient provider failure and records only the successful model turn", async () => {
       let calls = 0;
-      const value = runtimeWithProvider(async () => {
+      const ids: Array<string | undefined> = [];
+      const value = runtimeWithProvider(async (request) => {
+        ids.push(request.requestId);
         calls += 1;
         if (calls === 1) throw Object.assign(new Error("service unavailable"), { status: 503 });
         return turn({ content: "Recovered after a transient outage." });
@@ -125,6 +128,8 @@ describe("bounded agent runtime", () => {
         status: "completed", summary: "Recovered after a transient outage.", iterations: 1,
       });
       expect(calls).toBe(2);
+      expect(ids[0]).toMatch(/^cli_/);
+      expect(ids[1]).toBe(ids[0]);
       expect(value.events.filter((event) => event.type === "model_turn")).toHaveLength(1);
       expect(value.events.find((event) => event.type === "provider_retry")).toMatchObject({
         nextAttempt: 2, maxAttempts: 3, delayMs: 100, reason: "server",
@@ -806,6 +811,33 @@ describe("effort", () => {
   });
 });
 
+describe("hosted routing receipts", () => {
+  const receiptOne: RoutingReceipt = { chosen: { model: "claude-sonnet-5" }, considered: [], policy: {}, retries: 0 };
+  const receiptTwo: RoutingReceipt = { chosen: { model: "gpt-5.6-terra" }, considered: [], policy: {}, retries: 1 };
+
+  it("carries every model call's routing receipt into the run result, in order", async () => {
+    const readFile: AgentTool = {
+      name: "read_file", description: "read", capabilityId: "workspace.files", inputSchema: { type: "object" },
+      effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "ok" }; },
+    };
+    const value = harness([
+      turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: {} }], routingReceipt: { ...receiptOne } }),
+      turn({ finishReason: "stop", content: "Done.", routingReceipt: { ...receiptTwo } }),
+    ], [readFile]);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.routingReceipts).toEqual([
+      { ...receiptOne, taskId: value.requests[0].requestId },
+      { ...receiptTwo, taskId: value.requests[1].requestId },
+    ]);
+  });
+
+  it("leaves routingReceipts unset for a direct-provider run that returns none", async () => {
+    const value = harness([turn({ content: "done" })], []);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.routingReceipts).toBeUndefined();
+  });
+});
+
 describe("what a nudge costs", () => {
   /**
    * Every nudge re-sends the whole transcript, so the expensive part of a nudge is never its text —
@@ -870,4 +902,22 @@ describe("what a nudge costs", () => {
     expect(asks).toHaveLength(1);
     expect(result.status).toBe("needs_verification");
   });
+});
+
+
+it("bounds server retry delays and honors explicit terminal errors", () => {
+  expect(providerRetryDelayMs({ retryAfterMs: 2000 }, 0)).toBe(2000);
+  expect(providerRetryDelayMs({ retryAfterMs: 90000 }, 0)).toBe(10000);
+  expect(providerRetryDelayMs({ retryAfterMs: NaN }, 1)).toBe(200);
+  expect(providerRetryDelayMs({}, 1)).toBe(200);
+  expect(isRetryableProviderError({ status: 409, retryable: false })).toBe(false);
+  expect(isRetryableProviderError({ status: 409, retryable: true })).toBe(true);
+});
+
+it("gives each logical iteration and execution a distinct model request identity", async () => {
+  const value = harness([turn({ finishReason: "length", content: "partial" }), turn({ content: "done" }), turn({ content: "done again" })], []);
+  await value.runtime.execute(baseRequest);
+  await value.runtime.execute(baseRequest);
+  expect(value.requests).toHaveLength(3);
+  expect(new Set(value.requests.map((request) => request.requestId)).size).toBe(3);
 });

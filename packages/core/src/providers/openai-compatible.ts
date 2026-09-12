@@ -1,5 +1,6 @@
 import type { AgentMessage, AgentModelTurn } from "../agent-runtime";
 import type { ModelUsage } from "./model";
+import { parseRoutingReceipt } from "./routing-receipt";
 
 /**
  * The Chat Completions wire format, shared by every OpenAI-compatible provider.
@@ -27,6 +28,8 @@ export type ChatResponse = {
     prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
     completion_tokens_details?: { reasoning_tokens?: number };
   } | null;
+  /** Present only from the hosted exchange: the routing decision for this completion. */
+  archymedes?: { routing_receipt?: unknown; usage_event?: unknown };
 };
 
 export function usageOf(response: ChatResponse): ModelUsage {
@@ -118,6 +121,7 @@ export function turnFromChatResponse(response: ChatResponse): AgentModelTurn {
   const finishReason = read === "stop" && toolCalls.length > 0 ? "tool_calls" : read;
   const refusal = choice.message.refusal
     ?? (finishReason === "refusal" ? "The provider's content filter stopped this response." : undefined);
+  const routingReceipt = parseRoutingReceipt(response.archymedes?.routing_receipt);
   return {
     responseId: response.id,
     model: response.model,
@@ -130,6 +134,7 @@ export function turnFromChatResponse(response: ChatResponse): AgentModelTurn {
     // asks for the call again instead.
     toolCalls: finishReason === "length" || finishReason === "refusal" ? [] : toolCalls,
     usage: usageOf(response),
+    ...(routingReceipt ? { routingReceipt } : {}),
   };
 }
 

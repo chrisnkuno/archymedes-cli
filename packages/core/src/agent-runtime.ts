@@ -5,7 +5,8 @@
 import { addPart, affordableOutputTokensFor, newPartTotals, priceActualModelUsage, tokenEstimateFrom, type ModelPriceCatalog } from "./model-cost";
 import type { ModelUsage } from "./providers/model";
 import type { ModelCapabilities } from "./providers/model-capabilities";
-import { createHash } from "node:crypto";
+import type { RoutingReceipt } from "./providers/routing-receipt";
+import { createHash, randomUUID } from "node:crypto";
 
 export type AgentMessage =
   | { role: "system" | "user" | "assistant"; content: string; internal?: boolean }
@@ -43,12 +44,16 @@ export type AgentModelTurn = {
   refusal?: string;
   toolCalls: AgentToolCall[];
   usage: ModelUsage;
+  /** Set only by the hosted exchange: which model it routed this model call to, and why. */
+  routingReceipt?: RoutingReceipt;
 };
 
 /** How hard the model should think, where the provider's model supports being told. */
 export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export type AgentModelRequest = {
+  /** One logical model call: reused across transport retries, replaced for the next iteration. */
+  requestId?: string;
   messages: AgentMessage[];
   tools: AgentToolDefinition[];
   maxOutputTokens: number;
@@ -77,6 +82,10 @@ export type AgentModelRequest = {
 };
 
 export interface AgentTurnProvider {
+  /** Opt-in only for providers that replay the same logical request without executing it twice. */
+  readonly recoveryScope?: string;
+  /** Reconcile existing work only; must never create a new reservation or provider invocation. */
+  recoverComplete?(request: AgentModelRequest): Promise<AgentModelTurn>;
   complete(request: AgentModelRequest): Promise<AgentModelTurn>;
   /**
    * What this provider's model can hold and produce, when it knows.
@@ -177,7 +186,7 @@ export type AgentRuntimeEvent =
   | { type: "provider_retry"; iteration: number; nextAttempt: number; maxAttempts: number; delayMs: number; reason: ProviderFailureKind }
   // Usage rides along so a front end can show spend accruing during the turn. Waiting for the
   // final result means the number only appears once the money is already gone.
-  | { type: "model_turn"; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage }
+  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage }
   // Emitted immediately before a tool runs, so a front end can say what is happening while it
   // happens rather than only what happened. The result alone cannot carry this: by the time it
   // arrives the interesting part — which file, which command — is already over.
@@ -233,6 +242,8 @@ export type AgentRuntimeResult = {
   actualModelRwf: number;
   iterations: number;
   toolCallsExecuted: number;
+  /** One per hosted model call that returned a routing decision — empty for direct/BYOK turns. */
+  routingReceipts?: RoutingReceipt[];
 };
 
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
@@ -338,6 +349,8 @@ export function isRetryableProviderError(error: unknown): boolean {
     else if (typeof current === "string") messages.push(current);
     if (!record) break;
 
+    // Adapters can distinguish terminal application errors from a retryable HTTP status.
+    if (typeof record.retryable === "boolean") return record.retryable;
     const status = Number(record.status ?? record.statusCode);
     if (Number.isInteger(status)) {
       if (status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504) return true;
@@ -377,7 +390,14 @@ export function providerFailureKind(error: unknown): ProviderFailureKind {
   return "unknown";
 }
 
-function providerRetryDelay(attempt: number, signal?: AbortSignal): Promise<boolean> {
+export function providerRetryDelayMs(error: unknown, attempt: number): number {
+  const retryAfter = errorRecord(error)?.retryAfterMs;
+  const backoff = 100 * 2 ** Math.min(6, Math.max(0, attempt));
+  return typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0
+    ? Math.max(backoff, Math.min(10_000, retryAfter)) : backoff;
+}
+
+function providerRetryDelay(delayMs: number, signal?: AbortSignal): Promise<boolean> {
   // Deterministic exponential backoff keeps tests and logs reproducible. The abort listener is
   // what makes Ctrl+C immediate while Archymedes is between attempts instead of waiting for a timer.
   if (signal?.aborted) return Promise.resolve(false);
@@ -388,7 +408,7 @@ function providerRetryDelay(attempt: number, signal?: AbortSignal): Promise<bool
       signal?.removeEventListener("abort", abort);
       resolve(elapsed);
     };
-    const timer = setTimeout(() => finish(true), 100 * 2 ** attempt);
+    const timer = setTimeout(() => finish(true), delayMs);
     signal?.addEventListener("abort", abort, { once: true });
   });
 }
@@ -608,6 +628,8 @@ export class BoundedAgentRuntime {
     // model that answers "this change has nothing to assert" must be able to finish.
     let strongestEvidence = 0;
     let askedForTestEvidence = false;
+    // One per model call the hosted exchange routed; stays empty for direct/BYOK providers.
+    const routingReceipts: RoutingReceipt[] = [];
     // Measured once per part, not once per iteration: `messages` only ever grows inside this loop,
     // so a message already measured cannot change. The tool definitions are constant for the run
     // and are folded in first, which is why `measured` starts at zero rather than tracking them.
@@ -616,7 +638,10 @@ export class BoundedAgentRuntime {
 
     const stop = async (status: AgentRuntimeResult["status"], summary: string, iterations: number): Promise<AgentRuntimeResult> => {
       await this.dependencies.control.persistEvent({ type: "runtime_stop", status, summary });
-      return { status, summary, messages, usage, actualModelRwf, iterations, toolCallsExecuted };
+      return {
+        status, summary, messages, usage, actualModelRwf, iterations, toolCallsExecuted,
+        ...(routingReceipts.length > 0 ? { routingReceipts: [...routingReceipts] } : {}),
+      };
     };
 
     for (let iteration = 1; iteration <= request.maxIterations; iteration += 1) {
@@ -636,6 +661,7 @@ export class BoundedAgentRuntime {
       if (maximumOutputTokens < 1) return stop("iteration_limit", "Run reached its approved model budget before another provider call.", iteration - 1);
 
       const modelRequest: AgentModelRequest = {
+        requestId: `cli_${randomUUID()}`,
         ...(request.effort ? { effort: request.effort } : {}),
         messages: [...messages],
         tools: definitions,
@@ -667,7 +693,7 @@ export class BoundedAgentRuntime {
           if (emittedOutput) throw new ProviderRequestError(error, { attempts: attempt + 1, retrySuppressed: "output_started" });
           if (!isRetryableProviderError(error)) throw error;
           if (attempt >= MAX_PROVIDER_RETRIES) throw new ProviderRequestError(error, { attempts: attempt + 1 });
-          const delayMs = 100 * 2 ** attempt;
+          const delayMs = providerRetryDelayMs(error, attempt);
           await this.dependencies.control.persistEvent({
             type: "provider_retry",
             iteration,
@@ -676,7 +702,7 @@ export class BoundedAgentRuntime {
             delayMs,
             reason: providerFailureKind(error),
           });
-          if (!await providerRetryDelay(attempt, request.signal)) {
+          if (!await providerRetryDelay(delayMs, request.signal)) {
             return stop("cancelled", "Run cancelled while waiting to retry the model provider.", iteration - 1);
           }
           if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) {
@@ -686,10 +712,11 @@ export class BoundedAgentRuntime {
       }
       // The loop either returned a turn or rethrew the final provider error.
       if (!turn) throw new Error("Model provider retry loop ended without a response");
+      if (turn.routingReceipt) routingReceipts.push({ ...turn.routingReceipt, taskId: turn.routingReceipt.taskId ?? modelRequest.requestId });
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");
-      await this.dependencies.control.persistEvent({ type: "model_turn", iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage });
+      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage });
 
       if (turn.finishReason === "refusal") return stop("blocked", turn.refusal?.trim() || "Model refused the task.", iteration);
       if (turn.finishReason === "length") {

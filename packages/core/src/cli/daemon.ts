@@ -172,7 +172,11 @@ export class ArchymedesSessionDaemon {
       onEvent: (event) => this.publish(sessionId, { type: "agent_event", sessionId, event }),
       approve: (request) => this.requestApproval(sessionId, request),
     });
-    if (record) agent.resume(record);
+    if (record) {
+      agent.resume(record);
+      try { await agent.recoverPending(); }
+      catch (error) { await agent.relinquish().catch(() => undefined); throw error; }
+    }
     sessionId = agent.sessionId;
     const live: LiveSession = {
       agent,
@@ -269,6 +273,13 @@ export class ArchymedesSessionDaemon {
   undo(clientId: string, sessionId: string, scope?: RestoreScope): Promise<Checkpoint | undefined> { return this.requireAttached(clientId, sessionId).agent.undo(scope); }
   inspectTools(clientId: string, sessionId: string): ReturnType<ArchymedesAgent["inspectTools"]> { return this.requireAttached(clientId, sessionId).agent.inspectTools(); }
 
+  snapshot(clientId: string, sessionId: string): SessionRecord { return this.requireAttached(clientId, sessionId).agent.snapshot(); }
+
+  routingReceipts(clientId: string, sessionId: string): ArchymedesAgent["routingReceipts"] { return this.requireAttached(clientId, sessionId).agent.routingReceipts; }
+  planRoute(clientId: string, sessionId: string, objective: string, signal?: AbortSignal): ReturnType<ArchymedesAgent["planNextTurn"]> {
+    return this.requireAttached(clientId, sessionId).agent.planNextTurn(objective, signal);
+  }
+
   async release(clientId: string, sessionId: string, dispose = false): Promise<void> {
     const live = this.requireAttached(clientId, sessionId);
     live.subscribers.delete(clientId);
@@ -342,6 +353,13 @@ export class ArchymedesDaemonClient {
     this.info = info;
     return info;
   }
+  snapshot(): SessionRecord { return this.daemon.snapshot(this.id, this.sessionId); }
+  get routingReceipts(): ArchymedesAgent["routingReceipts"] { return this.daemon.routingReceipts(this.id, this.sessionId); }
+  /** A read-only routing preflight for the turn this session would send next. */
+  planRoute(objective: string, signal?: AbortSignal): ReturnType<ArchymedesAgent["planNextTurn"]> {
+    return this.daemon.planRoute(this.id, this.sessionId, objective, signal);
+  }
+
   send(objective: string, commandId = `turn_${randomUUID()}`): Promise<ArchymedesTurnResult> { return this.daemon.send(this.id, this.sessionId, objective, commandId); }
   cancel(): void { this.daemon.cancel(this.id, this.sessionId); }
   estimate(objective: string): Promise<AgentCostPrediction> { return this.daemon.estimate(this.id, this.sessionId, objective); }

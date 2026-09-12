@@ -61,6 +61,21 @@ describe("event journal", () => {
     expect(event.content).not.toContain("private-material");
   });
 
+  it("rejects an independent writer before it can damage the chain, then permits handoff", async () => {
+    const first = new EventJournal(root, "owned");
+    const second = new EventJournal(root, "owned");
+    const event = { type: "turn_status", turnId: "one", from: "queued", to: "running" } as const;
+    await first.append(event);
+    await expect(second.append(event)).rejects.toThrow("already owned");
+    await second.close().catch(() => undefined);
+    await first.append({ ...event, from: "running", to: "completed" });
+    await first.close();
+    const next = new EventJournal(root, "owned");
+    await next.append(event);
+    await next.close();
+    expect(await readEventJournal(root, "owned")).toHaveLength(3);
+  });
+
   it("serializes concurrent appends into one verifiable hash chain", async () => {
     const journal = new EventJournal(root, "session_1");
     await Promise.all([

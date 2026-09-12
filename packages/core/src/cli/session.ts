@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { agentMessagePromptParts, type AgentMessage } from "../agent-runtime";
 import { approximateInputTokens } from "../model-cost";
+import { mergeRoutingReceipts, type RoutingReceipt } from "../providers/routing-receipt";
 import type { ArchymedesMode } from "./permissions";
 
 /**
@@ -31,8 +32,12 @@ export type SessionRecord = {
   /** Standing tool approvals, so a resumed session does not re-ask what was already decided. */
   approvals: Record<string, "allow" | "deny">;
   totalRwf: number;
+  /** Normalized hosted calls, retained across resume independently of transcript compaction. */
+  routingReceipts?: RoutingReceipt[];
   /** SHA-256 over the canonical record without this field. */
   integrity?: string;
+  /** Recovery batch already incorporated atomically into this snapshot. */
+  hostedRecoveryBatchId?: string;
 };
 
 export const SESSION_SCHEMA_VERSION = 2 as const;
@@ -156,6 +161,7 @@ export async function loadSession(root: string, id: string): Promise<SessionReco
     }
     return {
       ...(parsed as SessionRecord),
+      routingReceipts: mergeRoutingReceipts(parsed.routingReceipts),
       schemaVersion: SESSION_SCHEMA_VERSION,
       revision: Number.isSafeInteger(parsed.revision) && (parsed.revision ?? -1) >= 0 ? parsed.revision! : 0,
     };

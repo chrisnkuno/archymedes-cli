@@ -2,7 +2,7 @@ import type { ColorDepth } from "./banner";
 import { terminalStream, type OutputStream } from "./output";
 import { ASCII_GLYPHS, borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 import { newMarkdownState, renderMarkdownLine, visibleWidth, type MarkdownState } from "./markdown";
-import { rgbTo256, type Rgb } from "./theme";
+import { rgbTo256, type Palette, type Rgb } from "./theme";
 
 /**
  * The pinned status region beneath the scrolling transcript, and the pieces it is built from.
@@ -575,12 +575,12 @@ export function stepProgress(
   return `${label}${counted} ${bar}`;
 }
 
-export function formatStatusLine(fields: StatusFields, width: number, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS): string {
+export function formatStatusLine(fields: StatusFields, width: number, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS, accent: string = CYAN): string {
   const label = activityLabel(fields.phase ?? "thinking", fields.operation, fields.elapsedMs);
   const ellipsis = glyphs.ellipsis;
   const separator = ` ${glyphs.middot} `;
   const left = `${fields.spinnerGlyph} ${label}${ellipsis}`;
-  const paintedLeft = `${paint(fields.spinnerGlyph, CYAN, depth)} ${paint(`${label}${ellipsis}`, DIM, depth)}`;
+  const paintedLeft = `${paint(fields.spinnerGlyph, accent, depth)} ${paint(`${label}${ellipsis}`, DIM, depth)}`;
 
   // Ordered least to most important; the front of the list is given up first.
   const optional = [
@@ -604,8 +604,8 @@ export function formatStatusLine(fields: StatusFields, width: number, depth: Col
       if (total > width) {
         if (visibleWidth(left) <= width) return paintedLeft;
         const compact = `${fields.spinnerGlyph} ${ellipsis}`;
-        if (visibleWidth(compact) <= width) return `${paint(fields.spinnerGlyph, CYAN, depth)} ${paint(ellipsis, DIM, depth)}`;
-        return width > 0 ? paint(glyphs.star, CYAN, depth) : "";
+        if (visibleWidth(compact) <= width) return `${paint(fields.spinnerGlyph, accent, depth)} ${paint(ellipsis, DIM, depth)}`;
+        return width > 0 ? paint(glyphs.star, accent, depth) : "";
       }
       const gap = Math.max(1, width - visibleWidth(left) - right.length);
       return `${paintedLeft}${" ".repeat(gap)}${paint(right, DIM, depth)}`;
@@ -620,10 +620,10 @@ export class StatusBar {
   constructor(private readonly stream: OutputStream = terminalStream) {}
 
   /** Redraws the bar in place: erase what was there, write the new line. */
-  render(fields: StatusFields, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS): void {
+  render(fields: StatusFields, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS, accent?: string): void {
     this.clear();
     const width = this.stream.columns ?? 80;
-    const line = formatStatusLine(fields, width, depth, glyphs);
+    const line = formatStatusLine(fields, width, depth, glyphs, accent);
     this.stream.write(`${line}\n`);
     this.linesDrawn = 1;
   }
@@ -1012,23 +1012,27 @@ export function renderPromptBox(options: {
   width: number;
   /** Right-hand text on the top border. Pre-painted by the caller; measured, never re-styled. */
   status?: string;
+  palette?: Palette;
   glyphs?: GlyphSet;
   borderStyle?: "round" | "single" | "double" | "none";
 }): { top: string; prefix: string; bottom: string } {
   const { mode, workspace, depth } = options;
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
-  const border = borderGlyphsFor(options.borderStyle ?? "round", glyphs);
+  const border = borderGlyphsFor(options.palette?.borderStyle ?? options.borderStyle ?? "round", glyphs);
   const width = Math.max(12, options.width);
-  const modeColor = MODE_COLORS[mode] ?? CYAN;
-  const horizontal = (count: number) => paint(border.horizontal.repeat(Math.max(0, count)), CYAN, depth);
+  const primary = options.palette?.primary ?? CYAN;
+  const modeColor = options.palette
+    ? ({ plan: options.palette.warning, auto: options.palette.success, build: primary, defender: options.palette.error }[mode] ?? primary)
+    : MODE_COLORS[mode] ?? CYAN;
+  const horizontal = (count: number) => paint(border.horizontal.repeat(Math.max(0, count)), primary, depth);
 
   const CHROME = PROMPT_CHROME_COLUMNS;
   const status = options.status ?? "";
   const separator = ` ${glyphs.middot} `;
-  const full = `${paint(glyphs.star, CYAN, depth)} ${paint("archymedes", CYAN, depth)}${separator}${paint(mode, modeColor, depth)}`;
+  const full = `${paint(glyphs.star, primary, depth)} ${paint("archymedes", primary, depth)}${separator}${paint(mode, modeColor, depth)}`;
   // What the title falls back to when the window will not hold the product's own name: the mode is
   // the part that changes what the next keystroke is allowed to do, so it is the part that stays.
-  const compact = `${paint(glyphs.star, CYAN, depth)} ${paint(mode, modeColor, depth)}`;
+  const compact = `${paint(glyphs.star, primary, depth)} ${paint(mode, modeColor, depth)}`;
 
   // The status is shown only if the smallest usable title still fits beside it — a border reduced
   // to a cost figure and a corner has stopped being an input bar. The one column of filler the
@@ -1054,13 +1058,13 @@ export function renderPromptBox(options: {
     title = `${full}${separator}${paint(shown, DIM, depth)}`;
   } else if (visibleWidth(full) <= room) title = full;
   else if (visibleWidth(compact) <= room) title = compact;
-  else title = paint(glyphs.star, CYAN, depth);
+  else title = paint(glyphs.star, primary, depth);
 
   const tail = showStatus ? ` ${status} ` : "";
   const filler = Math.max(1, width - visibleWidth(title) - visibleWidth(tail) - CHROME);
-  const top = `${paint(`${border.topLeft}${border.horizontal}`, CYAN, depth)} ${title} ${horizontal(filler)}${tail}${horizontal(1)}${paint(border.topRight, CYAN, depth)}`;
-  const prefix = `${paint(border.vertical, CYAN, depth)} ${paint(glyphs.caret, modeColor, depth)} `;
-  const bottom = `${paint(border.bottomLeft, CYAN, depth)}${horizontal(width - 2)}${paint(border.bottomRight, CYAN, depth)}`;
+  const top = `${paint(`${border.topLeft}${border.horizontal}`, primary, depth)} ${title} ${horizontal(filler)}${tail}${horizontal(1)}${paint(border.topRight, primary, depth)}`;
+  const prefix = `${paint(border.vertical, primary, depth)} ${paint(glyphs.caret, modeColor, depth)} `;
+  const bottom = `${paint(border.bottomLeft, primary, depth)}${horizontal(width - 2)}${paint(border.bottomRight, primary, depth)}`;
   return { top, prefix, bottom };
 }
 
@@ -1154,6 +1158,7 @@ export class PromptBox {
     private readonly stream: OutputStream = terminalStream,
     private readonly options: {
       depth: ColorDepth;
+      palette?: () => Palette;
       glyphs?: GlyphSet;
       borderStyle?: "round" | "single" | "double" | "none";
       columns?: () => number;
@@ -1196,6 +1201,7 @@ export class PromptBox {
       mode,
       workspace,
       depth: this.options.depth,
+      palette: this.options.palette?.(),
       width: this.width,
       ...(status === undefined ? {} : { status }),
       ...(this.options.glyphs === undefined ? {} : { glyphs: this.options.glyphs }),
@@ -1267,6 +1273,7 @@ export class PromptBox {
       mode,
       workspace,
       depth: this.options.depth,
+      palette: this.options.palette?.(),
       width: this.width,
       ...(status === undefined ? {} : { status }),
       ...(this.options.glyphs === undefined ? {} : { glyphs: this.options.glyphs }),

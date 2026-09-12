@@ -56,6 +56,44 @@ afterEach(async () => {
 });
 
 describe("ArchymedesSessionDaemon", () => {
+  it("isolates receipts by active session and retains them through handoff and disk resume", async () => {
+    const model = modelWith(() => ({ routingReceipt: {
+      chosen: { model: "hosted" }, considered: [], policy: {}, retries: 0, currency: "USD", actualMicros: 100,
+    } }));
+    const first = daemon.connect();
+    await first.open(factory(model));
+    await first.send("first");
+    const receipts = first.routingReceipts;
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].taskId).toMatch(/^cli_/);
+    const second = daemon.connect();
+    await second.open(factory(model));
+    expect(second.routingReceipts).toEqual([]);
+    await second.send("second");
+    expect(second.routingReceipts[0].taskId).not.toBe(receipts[0].taskId);
+    expect(first.routingReceipts).toEqual(receipts);
+    receipts[0].chosen.model = "mutated copy";
+    expect(first.routingReceipts[0].chosen.model).toBe("hosted");
+    const handoff = await first.relinquish();
+    const replacement = daemon.connect();
+    await replacement.open(factory(model), handoff);
+    expect(replacement.routingReceipts).toHaveLength(1);
+    const id = replacement.sessionId;
+    await replacement.relinquish();
+    const cleared = daemon.connect();
+    await cleared.open(factory(model));
+    expect(cleared.routingReceipts).toEqual([]);
+    const stored = await loadSession(root, id);
+    await daemon.shutdown();
+    daemon = new ArchymedesSessionDaemon();
+    const resumed = daemon.connect();
+    await resumed.open(factory(model), stored!);
+    expect(resumed.routingReceipts).toEqual(stored!.routingReceipts);
+    await resumed.send("continue");
+    expect(resumed.routingReceipts).toHaveLength(2);
+    expect((await loadSession(root, id))!.routingReceipts).toHaveLength(2);
+  });
+
   it("owns one session while multiple clients attach to it", async () => {
     const model = modelWith(() => ({ content: "Shared result." }));
     const first = daemon.connect({ id: "tui" });

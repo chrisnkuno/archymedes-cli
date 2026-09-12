@@ -18,6 +18,8 @@ import { computeLayout, type ScreenLayout } from "./layout";
 export type ScreenStream = { write(text: string): boolean; columns?: number; rows?: number };
 
 export type PinnedScreenOptions = {
+  /** Rows reserved above the transcript by the fixed workspace. */
+  headerRows?: number;
   /**
    * Whether to hold the scroll region for the whole session.
    *
@@ -61,6 +63,14 @@ export class PinnedScreen {
   constructor(private readonly stream: ScreenStream, options: PinnedScreenOptions = {}) {
     this.layout = computeLayout(stream.rows ?? 24, stream.columns ?? 80);
     this.holdRegion = options.holdRegion ?? true;
+    this.headerRows = options.headerRows ?? 0;
+    this.reserveHeader();
+  }
+
+  private readonly headerRows: number;
+
+  private reserveHeader(): void {
+    this.layout.scrollTop = 1 + Math.min(this.headerRows, Math.max(0, this.layout.scrollBottom - 3));
   }
 
   /** Whether this screen owns a pinned row to draw a status line on. */
@@ -85,6 +95,7 @@ export class PinnedScreen {
     // count would shrink the region by rows the dropdown no longer occupies.
     this.suggestionRows = 0;
     this.layout = computeLayout(this.stream.rows ?? 24, this.stream.columns ?? 80);
+    this.reserveHeader();
     if (this.holdRegion) {
       this.setRegion();
       this.parkInTranscript();
@@ -240,7 +251,7 @@ export class PinnedScreen {
    * hole; `MIN_TRANSCRIPT_ROWS` is the floor `computeLayout` already keeps, and this respects it.
    */
   private maxSuggestionRows(): number {
-    return Math.max(0, Math.min(8, this.layout.scrollBottom - 3));
+    return Math.max(0, Math.min(8, this.layout.scrollBottom - this.layout.scrollTop - 2));
   }
 
   /**

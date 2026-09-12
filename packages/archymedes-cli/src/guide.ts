@@ -157,8 +157,10 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       { input: "/retry", effect: "repeat a failed request when nothing had run or changed" },
       { input: "/continue", effect: "finish an interrupted task without repeating completed work" },
       { input: "/todos", effect: "the agent's current plan" },
+      { input: "/task", effect: "the whole task at a glance: request, plan, changes, verification, blockers" },
+      { input: "/route", effect: "the hosted exchange's routing decision for the last turn — chosen model, alternatives, cost vs estimate" },
     ],
-    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos"],
+    covers: ["/diff", "/expand", "/undo", "/retry", "/continue", "/todos", "/task", "/route"],
   },
   {
     id: "memory",
@@ -282,18 +284,21 @@ export const GUIDE_TOPICS: GuideTopic[] = [
   {
     id: "look",
     title: "How it looks",
-    summary: "Themes, symbols, and terminals that need help.",
+    summary: "Themes, symbols, the fixed workspace, and terminals that need help.",
     body: [
       "Archymedes ships a blueprint theme and three others, and reads themes you write yourself as .tss files in .archymedes/themes — the same format TermUI apps use, so a palette written once works in both.",
-      "If your terminal draws question marks instead of symbols, --ascii switches to characters every terminal has. If you would rather have a status line pinned to the bottom row, --pin does that, at the cost of your terminal's scrollback.",
+      "The fixed workspace keeps a mode rail and composer anchored while the transcript scrolls underneath. Start with --layout fixed or ARCHYMEDES_LAYOUT=fixed, switch mid-session with /layout, and use Page Up / Page Down to read retained history (Escape returns to live output). Menus open inside the transcript area so the composer never jumps.",
+      "If your terminal draws question marks instead of symbols, --ascii switches to characters every terminal has. If you would rather have a status line pinned to the bottom row, --pin does that, at the cost of your terminal's scrollback. ARCHYMEDES_NO_MOTION=1 keeps the opening geometry and menu focus still.",
     ],
     examples: [
       { input: "/theme list", effect: "every theme available, including your own" },
       { input: "/theme chalkboard", effect: "change the colours immediately" },
       { input: "/theme where", effect: "where to put a theme file of your own" },
+      { input: "/layout fixed", effect: "mode rail, anchored composer, menus in the transcript" },
+      { input: "/layout scrollback", effect: "return to the ordinary terminal log" },
       { input: "archymedes --ascii", effect: "plain characters for terminals that mangle symbols" },
     ],
-    covers: ["/theme"],
+    covers: ["/theme", "/layout"],
   },
   {
     id: "extend",

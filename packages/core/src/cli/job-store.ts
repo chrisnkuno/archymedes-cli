@@ -45,7 +45,8 @@ export function jobLogPath(root: string, id: string): string {
 async function readStore(file: string): Promise<JobStore> {
   try {
     const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Partial<JobStore>;
-    return Array.isArray(parsed?.jobs) ? { jobs: parsed.jobs as Job[] } : emptyStore();
+    if (!Array.isArray(parsed?.jobs)) throw new Error('expected an object with a "jobs" array');
+    return { jobs: parsed.jobs as Job[] };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyStore();
     // A corrupt store is not silently treated as empty — that would let a job vanish along with

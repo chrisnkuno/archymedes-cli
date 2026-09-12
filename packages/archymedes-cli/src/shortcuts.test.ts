@@ -20,7 +20,7 @@ function host(columns = 80): KeyboardHost & { written: string[]; text: string } 
   return {
     input,
     readline: {} as KeyboardHost["readline"],
-    output: { write: (text: string) => { written.push(text); return true; }, columns } as unknown as KeyboardHost["output"],
+    output: Object.assign(new EventEmitter(), { write: (text: string) => { written.push(text); return true; }, columns }) as unknown as KeyboardHost["output"],
     written,
     get text() { return written.join(""); },
   };

@@ -46,15 +46,16 @@ export type Theme = {
 };
 
 /**
- * Archymedes's own.
+ * The original drafting table, kept.
  *
- * A drafting table rather than a colour scheme: a deep blueprint navy ground, chalk-white for
- * ordinary text, cyan-blue for the drawn line that is live, and an amber pencil for what deserves
- * attention. Status colours are pulled toward that blueprint (a muted vermilion rather than a
- * terminal red) so a failure reads as part of the same drawing instead of an alarm pasted onto it.
+ * A palette rather than a colour scheme: a deep blueprint navy ground, chalk-white for ordinary
+ * text, cyan-blue for the drawn line that is live, and an amber pencil for what deserves attention.
+ * Status colours are pulled toward that blueprint (a muted vermilion rather than a terminal red) so
+ * a failure reads as part of the same drawing instead of an alarm pasted onto it. `archymedes` is
+ * the default now; this stays for anyone who set it and for cool-terminal preference.
  */
 export const BLUEPRINT = `
-/* Blueprint navy, chalk-white ink and an amber pencil — Archymedes's own. */
+/* Blueprint navy, chalk-white ink and an amber pencil — the original drafting table. */
 @theme blueprint {
     --primary: #7cc5ff;
     --secondary: #9fb4e8;
@@ -129,14 +130,42 @@ const HIGH_CONTRAST = `
 }
 `;
 
+/**
+ * Archymedes's own.
+ *
+ * The instrument on the workbench, not the blueprint pinned above it: bronze for the drawn line
+ * that is live, limestone-white for ordinary text, an olive accent for what is settled, all on
+ * charcoal. Status colours are warmed to match — a clay red rather than a terminal red — so a
+ * failure reads as part of the same surface. This is the default; `blueprint` and the others stay.
+ */
+export const ARCHYMEDES = `
+/* Bronze instruments, limestone ink and olive accents on charcoal — Archymedes's own. */
+@theme archymedes {
+    --primary: #e7bb78;
+    --secondary: #b9c59a;
+    --accent: #e5a58c;
+    --bg: #191815;
+    --surface: #25231e;
+    --text: #f2ecdf;
+    --text-muted: #aaa18f;
+    --success: #b5cc96;
+    --warning: #efc778;
+    --error: #f29686;
+    --border: single;
+    --border-color: #736956;
+    --border-focus: #e7bb78;
+}
+`;
+
 export const BUILTIN_THEME_SOURCES: Record<string, string> = {
+  "archymedes": ARCHYMEDES,
   "blueprint": BLUEPRINT,
   "parchment": PARCHMENT,
   "chalkboard": CHALKBOARD,
   "high-contrast": HIGH_CONTRAST,
 };
 
-export const DEFAULT_THEME_NAME = "blueprint";
+export const DEFAULT_THEME_NAME = "archymedes";
 
 /** The 16 names ANSI defines, in the order the codes run. */
 const NAMED_COLORS: Record<string, number> = {

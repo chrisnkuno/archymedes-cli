@@ -155,5 +155,5 @@ export function fetchableProviders<P extends ProviderId>(
   environment: Record<string, string | undefined>,
   providers: readonly P[],
 ): P[] {
-  return providers.filter((provider) => PROVIDER_INFO[provider].requires.every((name) => environment[name]?.trim()));
+  return providers.filter((provider) => provider !== "archymedes-cloud" && PROVIDER_INFO[provider].requires.every((name) => environment[name]?.trim()));
 }

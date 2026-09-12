@@ -63,6 +63,9 @@ function exactCapabilities(models: readonly string[], contextWindow: number, max
 }
 
 const KNOWN_CAPABILITIES: ReadonlyArray<CapabilityEntry> = [
+  // Virtual model used by Archymedes Cloud before policy routing picks a concrete provider. It is
+  // explicitly conservative because the client cannot know the selected model's limits yet.
+  { prefix: "auto", match: "exact", capabilities: { ...CONSERVATIVE_CAPABILITIES } },
   // Default models for the OpenAI-compatible providers, from each vendor's public docs. Recorded
   // once; an overridden model that is not listed falls through to the conservative default.
   { prefix: "gemini-2.5-pro", match: "prefix", capabilities: { contextWindow: 1_048_576, maxOutputTokens: 65_536, supportsEffort: true } },
