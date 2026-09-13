@@ -11,6 +11,8 @@ import {
   parseColor,
   parseThemeCommand,
   parseThemeSource,
+  rainbowHex,
+  rainbowText,
   rgbTo256,
 } from "./theme";
 
@@ -214,5 +216,33 @@ describe("the /theme grammar", () => {
   it("ignores anything that is not the command", () => {
     expect(parseThemeCommand("/themes")).toBeNull();
     expect(parseThemeCommand("theme chalkboard")).toBeNull();
+  });
+});
+
+describe("the rainbow wheel", () => {
+  it("wraps: 0 and 1 land on the same hue", () => {
+    expect(rainbowHex(0)).toBe(rainbowHex(1));
+    expect(rainbowHex(0.25)).toBe(rainbowHex(1.25));
+  });
+
+  it("is a valid hex colour at any position, including negative ones", () => {
+    for (const t of [0, 0.1, 0.5, 0.999, -0.3, 2.7]) {
+      expect(rainbowHex(t)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it("ships rainbow as a built-in theme, so /theme rainbow resolves", () => {
+    expect(findBuiltinTheme("rainbow")?.tokens.primary).toBeDefined();
+  });
+
+  it("colours only the non-space characters, closing the run at a space", () => {
+    const rendered = rainbowText("a b", "truecolor", 0);
+    expect(rendered).toContain("a");
+    expect(rendered).toContain(" ");
+    expect(rendered.endsWith("\x1b[0m")).toBe(true);
+  });
+
+  it("is a no-op with colour off", () => {
+    expect(rainbowText("hello", "none")).toBe("hello");
   });
 });

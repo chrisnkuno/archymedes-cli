@@ -97,6 +97,7 @@ export function renderGallery(options: GalleryOptions): string {
     box(["a box with a title", "and a second row"], { depth, width, title: "you", titleColor: "green", glyphs }),
     box(["a box whose border carries the state"], { depth, width, title: "failed", titleColor: "red", borderColor: "red", glyphs }),
     box(["double border"], { depth, width, title: "double", glyphs, borderStyle: "double" }),
+    box(["the /theme rainbow border"], { depth, width, title: "rainbow", titleColor: "cyan", borderColor: "rainbow", glyphs }),
   ]));
 
   parts.push(section("key/value and tables", style, [

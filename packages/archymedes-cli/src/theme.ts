@@ -157,12 +157,44 @@ export const ARCHYMEDES = `
 }
 `;
 
+/**
+ * Every hue at once, for anyone who wants the CLI loud.
+ *
+ * The tokens below are ordinary flat colours — `success`/`warning`/`error` keep their meaning, and
+ * anything that only ever paints with a token (a table rule, a border) is unaffected by picking this
+ * theme. What actually turns "rainbow" from a name into an effect is `palette.theme === "rainbow"`
+ * being read by the few surfaces built to animate: the opening identity art sweeps its geometry
+ * around the colour wheel as it spins (`identity.ts`), and the thinking spinner cycles hue while a
+ * turn runs (`archymedes.ts`). Bubbletea's own examples reach for the same trick — a `spinner` whose
+ * style function returns a different lipgloss colour per tick — which is what `rainbowHex` below is
+ * for: one wheel position in, one hex colour out, so any animator can drive it from its own clock.
+ */
+const RAINBOW = `
+/* Every hue at once — the opening art and the thinking spinner sweep the full spectrum. */
+@theme rainbow {
+    --primary: #ff5f5f;
+    --secondary: #5fd7ff;
+    --accent: #ffd75f;
+    --bg: #0c0c0c;
+    --surface: #161616;
+    --text: #f2f2f2;
+    --text-muted: #9a9a9a;
+    --success: #5fff87;
+    --warning: #ffaf5f;
+    --error: #ff3b3b;
+    --border: double;
+    --border-color: #8a8a8a;
+    --border-focus: #d75fff;
+}
+`;
+
 export const BUILTIN_THEME_SOURCES: Record<string, string> = {
   "archymedes": ARCHYMEDES,
   "blueprint": BLUEPRINT,
   "parchment": PARCHMENT,
   "chalkboard": CHALKBOARD,
   "high-contrast": HIGH_CONTRAST,
+  "rainbow": RAINBOW,
 };
 
 export const DEFAULT_THEME_NAME = "archymedes";
@@ -239,6 +271,51 @@ export function colorCode(value: string, depth: ColorDepth): string {
   return depth === "truecolor"
     ? `\x1b[38;2;${parsed.r};${parsed.g};${parsed.b}m`
     : `\x1b[38;5;${rgbTo256(parsed)}m`;
+}
+
+/**
+ * One position on the colour wheel, as a hex colour — full saturation, a lightness that still reads
+ * on both a dark and a light ground. `t` wraps: 0 and 1 are the same red, so an animator can drive
+ * this from a steadily increasing clock without ever checking the range itself.
+ */
+export function rainbowHex(t: number): string {
+  const hue = (((t % 1) + 1) % 1) * 360;
+  const c = 0.5; // chroma at 60% lightness
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = 0.6 - c / 2;
+  const [r1, g1, b1] =
+    hue < 60 ? [c, x, 0] :
+    hue < 120 ? [x, c, 0] :
+    hue < 180 ? [0, c, x] :
+    hue < 240 ? [0, x, c] :
+    hue < 300 ? [x, 0, c] :
+    [c, 0, x];
+  const channel = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, "0");
+  return `#${channel(r1)}${channel(g1)}${channel(b1)}`;
+}
+
+/**
+ * Text with each character stepping around the colour wheel from a starting position — Bubbletea's
+ * own rainbow examples do this per character too, cycling a lipgloss style across a string. A space
+ * closes the run rather than colouring it, the same convention `gradientText` in `banner.ts` uses,
+ * so multi-word rainbow text does not carry a visible colour through its gaps.
+ */
+export function rainbowText(text: string, depth: ColorDepth, phase = 0): string {
+  if (depth === "none") return text;
+  const characters = [...text];
+  let out = "";
+  let open: string | undefined;
+  characters.forEach((character, index) => {
+    if (character === " ") {
+      if (open !== undefined) { out += "\x1b[0m"; open = undefined; }
+      out += character;
+      return;
+    }
+    const code = colorCode(rainbowHex(phase + index / 12), depth);
+    if (code !== open) { out += code; open = code; }
+    out += character;
+  });
+  return open === undefined ? out : `${out}\x1b[0m`;
 }
 
 const DEFAULT_TOKENS: ThemeTokens = {

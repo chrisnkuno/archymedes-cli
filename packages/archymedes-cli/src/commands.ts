@@ -46,7 +46,7 @@ export const COMMANDS = defineCommands({
   "/slow": { args: "[on|strict|off]", description: "Spend at a slower pace: fewer model rounds, smaller replies, a pause between turns" },
   "/workspace": { description: "Open the control panel: every tab and watched job, live, on one screen" },
   "/watch": { args: "[id|show <id>|stop <id>]", description: "Follow a background job's output without giving up the prompt" },
-  "/theme": { args: "[name|list|where]", description: "Change the colours — blueprint, parchment, chalkboard, high-contrast, or a .tss file of your own" },
+  "/theme": { args: "[name|list|where]", description: "Change the colours — blueprint, parchment, chalkboard, high-contrast, rainbow, or a .tss file of your own" },
   "/tab": { args: "[new|next|prev|close|rename|N]", description: "Several pieces of work, one at a time — only the tab in front runs (/detach for parallel)" },
   "/pull": { args: "[dir]", description: "Copy sandbox files here" },
   "/where": { description: "Show the current workspace" },
@@ -68,6 +68,7 @@ export const COMMANDS = defineCommands({
   "/guide": { args: "[topic|search <text>|all]", description: "The user guide, as a screen you can browse — or print one topic with /guide <topic>" },
   "/files": { description: "Browse the project tree — expand folders, preview a file, pick one to @mention" },
   "/edit": { args: "<path>", description: "Open a file in the built-in editor — through the workspace, so it works in a sandbox too" },
+  "/cat": { args: "<path>", description: "Print a file into the transcript — markdown rendered like a document, code numbered and highlighted" },
   "/help": { args: "[all|work|review|steer|parallel|learn|setup]", description: "Commands grouped by purpose" },
   "/exit": { description: "Leave" },
 });

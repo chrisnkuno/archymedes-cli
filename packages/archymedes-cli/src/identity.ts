@@ -2,7 +2,7 @@ import { BOLD, paint } from "./ansi";
 import { clipTo } from "./chooser";
 import { ASCII_GLYPHS, type GlyphSet, UNICODE_GLYPHS } from "./glyphs";
 import { visibleWidth } from "./markdown";
-import type { Palette } from "./theme";
+import { rainbowText, type Palette } from "./theme";
 import { BEGIN_SYNC, END_SYNC } from "./fixed-screen";
 
 export type IdentityOptions = {
@@ -106,9 +106,14 @@ export function renderIdentity(options: IdentityOptions): string {
   const artWidth = Math.max(...geometry.map(visibleWidth));
   const gap = 3;
   const margin = 2;
+  // The rainbow theme's one animated surface: the solid sweeps the colour wheel as it turns, the
+  // spin itself driving the hue instead of a separate clock, so the two motions read as one thing.
+  const rainbow = palette.theme === "rainbow";
+  const phase = (options.angle ?? 0) / (Math.PI * 2);
+  const paintDrawing = (drawing: string) => rainbow ? rainbowText(drawing, palette.depth, phase) : paint(drawing, palette.primary, palette.depth);
   return geometry.map((line, index) => {
     const drawing = line + " ".repeat(artWidth - visibleWidth(line));
-    return " ".repeat(margin) + paint(drawing, palette.primary, palette.depth)
+    return " ".repeat(margin) + paintDrawing(drawing)
       + " ".repeat(gap) + paint(clipTo(clean(text[index] ?? ""), width - margin - artWidth - gap, glyphs), codes[index] ?? "", palette.depth);
   }).join("\n");
 }

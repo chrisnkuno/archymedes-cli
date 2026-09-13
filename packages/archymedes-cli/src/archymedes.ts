@@ -67,7 +67,7 @@ import { JobStream, WatchRegistry, sandboxWarning } from "./job-stream";
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./screen-host";
 import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./guide";
-import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, type Palette, type Rgb } from "./theme";
+import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme-files";
 import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./wander";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
@@ -95,7 +95,7 @@ import { removeRecording, startRecording, transcribeAudio } from "./voice";
 import { controlLabel, resolveControlLanguage, t, type ControlLanguage } from "./i18n";
 import { UNICODE_GLYPHS, resolveGlyphs, type GlyphSet } from "./glyphs";
 import { GUTTER, heading, note, panel, rule, type SectionStyle } from "./sections";
-import { describeChange, diffLines, diffStat, renderFileChange } from "./code-view";
+import { describeChange, diffLines, diffStat, fenceHeader, languageOf, renderCode, renderFileChange } from "./code-view";
 import { parseTestOutput, renderTestReport } from "./test-report";
 import { ExpandableStore, expandHint, parseExpandCommand, renderExpandableList } from "./expandable";
 import {
@@ -2209,6 +2209,28 @@ async function main(): Promise<number> {
   });
 
   /**
+   * One small, tool-less call to the session's own model to explain a file — the editor's AI tab.
+   *
+   * Same shape as `modelSuggestions` below: no tools, a hard cap on output, and the usage billed to
+   * the ledger as its own tiny turn rather than swallowed, since unlike a suggestion this is a call
+   * the reader asked for by name and would reasonably expect to see costed.
+   */
+  const explainCode = async (content: string, target: string): Promise<string> => {
+    const started = Date.now();
+    const turn = await model.complete({
+      messages: [
+        { role: "system", content: "Explain the given source file to a developer reading it for the first time. Cover what it does, its key functions or exports, and any non-obvious design decisions. Plain prose, no code fences, under 200 words." },
+        { role: "user", content: `File: ${target}\n\n${content}` },
+      ],
+      tools: [],
+      maxOutputTokens: 500,
+      safetyIdentifier: agent.sessionId,
+    });
+    ledger.record({ usage: turn.usage, iterations: 1, toolCalls: 0, elapsedMs: Date.now() - started });
+    return turn.content.trim() || "The model returned no explanation.";
+  };
+
+  /**
    * Opens a file in the built-in editor and writes it back if it was saved.
    *
    * Reads and writes through the workspace rather than `node:fs`, so `/edit` works identically
@@ -2237,6 +2259,7 @@ async function main(): Promise<number> {
         path: target,
         content: existing,
         palette,
+        explain: explainCode,
       });
     });
     if (!outcome.ok) { out.write(style.yellow(`  ${explainScreenRefusal(outcome)}\n`)); return; }
@@ -2752,9 +2775,16 @@ async function main(): Promise<number> {
       // starts. It gets the border's inner width rather than the terminal's: `formatStatusLine`
       // drops segments to fit what it is given, and handing it the full width would have it fit a
       // row that the corners and title have already spent part of.
+      // The rainbow theme's other animated surface: the thinking spinner cycles hue on its own
+      // clock (a turn can run long after the identity art's rotation has stopped), the same
+      // `rainbowHex` wheel the opening art sweeps, so the two feel like one running theme rather
+      // than two different rainbow effects.
+      const spinnerAccent = () => activeTheme?.name === "rainbow"
+        ? colorCode(rainbowHex(Date.now() / 1500), depth)
+        : palette.primary;
       spinner = new Spinner(() => screen?.pinned
-        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs, palette.primary))
-        : statusBar.render(fields(), depth, glyphs, palette.primary), 120, glyphs, SPINNER_START_DELAY_MS);
+        ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs, spinnerAccent()))
+        : statusBar.render(fields(), depth, glyphs, spinnerAccent()), 120, glyphs, SPINNER_START_DELAY_MS);
       spinner.start();
     }
     turnActive = true;
@@ -4089,6 +4119,31 @@ async function main(): Promise<number> {
       const target = input.slice("/edit".length).trim();
       if (!target) { out.write(style.yellow("  Usage: /edit <path>, or press e on a file in /files.\n")); continue; }
       await editFile(target);
+      continue;
+    }
+
+    if (input === "/cat" || input.startsWith("/cat ")) {
+      const target = input.slice("/cat".length).trim();
+      if (!target) { out.write(style.yellow("  Usage: /cat <path>\n")); continue; }
+      const style_ = sectionStyle();
+      try {
+        const file = await workspace.readFile(target, {});
+        out.write(`${rule(style_, { label: target, tone: "accent" })}\n`);
+        // Markdown is prose meant to be read, not a tool result to fold — the same reasoning
+        // `/guide` already prints its topics in full rather than behind `/expand`. Everything else
+        // gets the ordinary numbered, folded code view: a file is not less a file for being `/cat`,
+        // and a 3,000-line log dumped whole would push the very prompt someone typed off the screen.
+        if (/\.(md|markdown)$/i.test(target)) {
+          out.write(`${renderMarkdown(file.content, { width: contentWidth(), depth: renderDepth, glyphs })}\n`);
+        } else {
+          const language = languageOf(target);
+          out.write(`${fenceHeader(language, style_)}\n`);
+          writeFoldable(target, renderCode(file.content, style_, { maxLines: FOLD_AFTER_LINES, language }));
+        }
+        if (file.truncated) out.write(`${note(`… ${file.totalLines} lines total, longer than a session cares to hold at once`, style_)}\n`);
+      } catch (error) {
+        out.write(style.yellow(`  Could not read "${target}": ${error instanceof Error ? error.message : String(error)}\n`));
+      }
       continue;
     }
 

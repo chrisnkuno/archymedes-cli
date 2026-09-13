@@ -863,6 +863,15 @@ describe("box", () => {
     expect(box(["a"], { width: 80, depth: "truecolor", title: "you", titleColor: "green" })).toMatch(ESCAPE);
     expect(plain(box(["a"], { width: 80, depth: "truecolor", title: "you", titleColor: "green" })).split("\n")[0]).toContain("you");
   });
+
+  it("sweeps a rainbow border across the box without disturbing the content", () => {
+    const rendered = box(["a"], { width: 80, depth: "truecolor", title: "you", borderColor: "rainbow" });
+    expect(rendered).toMatch(ESCAPE);
+    expect(plain(rendered)).toBe(box(["a"], { width: 80, depth: "none", title: "you" }));
+    // Different rows land on different points of the wheel, not one flat colour repeated for all.
+    const [top, , bottom] = rendered.split("\n");
+    expect(top.match(ESCAPE)?.[0]).not.toBe(bottom.match(ESCAPE)?.[0]);
+  });
 });
 
 describe("renderPromptBox", () => {

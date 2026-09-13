@@ -2,7 +2,7 @@ import type { ColorDepth } from "./banner";
 import { terminalStream, type OutputStream } from "./output";
 import { ASCII_GLYPHS, borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 import { newMarkdownState, renderMarkdownLine, visibleWidth, type MarkdownState } from "./markdown";
-import { rgbTo256, type Palette, type Rgb } from "./theme";
+import { rainbowText, rgbTo256, type Palette, type Rgb } from "./theme";
 
 /**
  * The pinned status region beneath the scrolling transcript, and the pieces it is built from.
@@ -836,8 +836,11 @@ export function box(
      * state, since a red *edge* reads as "this block is the problem" from across a screen where a
      * red word inside a default-coloured frame reads as one emphasised label. Left unset the border
      * is unpainted, exactly as every box drew before this existed.
+     *
+     * `"rainbow"` is the one value that is not a flat tone: it sweeps the border around the colour
+     * wheel top to bottom, the gradient-border trick from Lip Gloss's own example gallery.
      */
-    borderColor?: BoxTone;
+    borderColor?: BoxTone | "rainbow";
     glyphs?: GlyphSet;
     borderStyle?: "round" | "single" | "double" | "none";
   },
@@ -847,10 +850,16 @@ export function box(
   const border = borderGlyphsFor(options.borderStyle ?? "round", glyphs);
   const titleWidth = options.title ? visibleWidth(options.title) : 0;
   const titlePaint = TONE_CODES[options.titleColor ?? "cyan"];
+  const rainbowBorder = options.borderColor === "rainbow";
   // Each border run is painted and reset on its own rather than one code being opened around the
   // whole row: the title in between carries its own colour, and an unclosed run would bleed this
   // one over it (and over the content of every row after, since the box is joined into one string).
-  const edge = (text: string) => (options.borderColor === undefined ? text : paint(text, TONE_CODES[options.borderColor], options.depth));
+  // `phase` only matters for the rainbow border — it is what turns four flat-painted edges into one
+  // sweep, each edge picking up the wheel where the edge before it left off.
+  const edge = (text: string, phase = 0) => {
+    if (options.borderColor === undefined) return text;
+    return rainbowBorder ? rainbowText(text, options.depth, phase) : paint(text, TONE_CODES[options.borderColor as BoxTone], options.depth);
+  };
   // Measured in columns, not characters: a todo containing an emoji is two columns wide there and
   // one character long, and padding by the latter is what leaves a border short of its own corner.
   const contentWidth = Math.min(
@@ -859,14 +868,16 @@ export function box(
   );
   const horizontal = border.horizontal.repeat(contentWidth + 2);
   const top = options.title
-    ? `${edge(`${border.topLeft}${border.horizontal}`)} ${paint(options.title, titlePaint, options.depth)} ${edge(`${border.horizontal.repeat(Math.max(0, contentWidth - titleWidth - 1))}${border.topRight}`)}`
-    : edge(`${border.topLeft}${horizontal}${border.topRight}`);
-  const bottom = edge(`${border.bottomLeft}${horizontal}${border.bottomRight}`);
-  const body = lines.map((line) => {
+    ? `${edge(`${border.topLeft}${border.horizontal}`, 0)} ${paint(options.title, titlePaint, options.depth)} ${edge(`${border.horizontal.repeat(Math.max(0, contentWidth - titleWidth - 1))}${border.topRight}`, 0.08)}`
+    : edge(`${border.topLeft}${horizontal}${border.topRight}`, 0);
+  const bottomPhase = (lines.length + 1) * 0.1;
+  const bottom = edge(`${border.bottomLeft}${horizontal}${border.bottomRight}`, bottomPhase);
+  const body = lines.map((line, index) => {
     const clipped = visibleWidth(line) > contentWidth
       ? `${sliceToWidth(line, contentWidth - visibleWidth(glyphs.ellipsis))}${glyphs.ellipsis}`
       : line;
-    return `${edge(border.vertical)} ${clipped}${" ".repeat(Math.max(0, contentWidth - visibleWidth(clipped)))} ${edge(border.vertical)}`;
+    const rowPhase = (index + 1) * 0.1;
+    return `${edge(border.vertical, rowPhase)} ${clipped}${" ".repeat(Math.max(0, contentWidth - visibleWidth(clipped)))} ${edge(border.vertical, rowPhase)}`;
   });
   return [top, ...body, bottom].join("\n");
 }
