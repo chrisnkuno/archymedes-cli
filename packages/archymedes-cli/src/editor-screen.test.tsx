@@ -9,7 +9,7 @@ import { keyToFileAction } from "./file-browser";
  * back out. Every reducer test in `editor.test.ts` can pass while the screen is wired up wrong —
  * the wrong prop, a swallowed effect, a viewport computed from the wrong number of rows.
  */
-function open(content: string, options: { columns?: number; rows?: number } = {}) {
+function open(content: string, options: { columns?: number; rows?: number; explain?: (content: string, path: string) => Promise<string> } = {}) {
   let saved: string | undefined;
   let exited = false;
   const view = render(
@@ -19,6 +19,7 @@ function open(content: string, options: { columns?: number; rows?: number } = {}
       path="notes.txt"
       content={content}
       onExit={(value) => { exited = true; saved = value; }}
+      explain={options.explain}
     />,
     { width: options.columns ?? 60, height: options.rows ?? 12 },
   );
@@ -89,6 +90,69 @@ describe("the editor screen", () => {
     expect(frame).toContain("line 1");
     expect(frame).not.toContain("line 11");
     expect(frame).toContain("^S save");
+  });
+});
+
+describe("the explainable view", () => {
+  it("is closed by default and offers itself in the key bar", () => {
+    const screen = open("export function run() {}", { columns: 110 });
+    expect(screen.frame()).toContain("^E explain");
+  });
+
+  it("opens on Ctrl+E and shows the structure tab first", () => {
+    const screen = open("export function run() {}", { columns: 90 });
+    screen.view.pressKey("e", { ctrl: true });
+    const frame = screen.frame();
+    expect(frame).toContain("[Structure]");
+    expect(frame).toContain("run");
+    expect(frame).toContain("^E close");
+    expect(frame).not.toContain("^E explain");
+  });
+
+  it("closes again on a second Ctrl+E", () => {
+    const screen = open("hi", { columns: 90 });
+    screen.view.pressKey("e", { ctrl: true });
+    screen.view.pressKey("e", { ctrl: true });
+    expect(screen.frame()).not.toContain("[Structure]");
+  });
+
+  it("cycles tabs with [ and ] while the panel is open", () => {
+    const screen = open("hi", { columns: 90 });
+    screen.view.pressKey("e", { ctrl: true });
+    screen.view.pressKey("]");
+    expect(screen.frame()).toContain("[Notes]");
+    screen.view.pressKey("]");
+    expect(screen.frame()).toContain("[Diff]");
+    screen.view.pressKey("[");
+    expect(screen.frame()).toContain("[Notes]");
+  });
+
+  it("does not steal [ or ] from typing while the panel is closed", () => {
+    const screen = open("", { columns: 90 });
+    screen.view.pressKey("i");
+    screen.view.pressKeys(["[", "]"]);
+    screen.view.pressKey("s", { ctrl: true });
+    expect(screen.saved).toBe("[]");
+  });
+
+  it("asks the model to explain on ? from the ai tab, and shows the result", async () => {
+    const explain = async () => "It runs things.";
+    const screen = open("export function run() {}", { columns: 90, explain });
+    screen.view.pressKey("e", { ctrl: true });
+    screen.view.pressKeys(["]", "]", "]"]);
+    expect(screen.frame()).toContain("[AI]");
+    screen.view.pressKey("?");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(screen.frame()).toContain("It runs things.");
+  });
+
+  it("reports when no explain callback is available", async () => {
+    const screen = open("hi", { columns: 90 });
+    screen.view.pressKey("e", { ctrl: true });
+    screen.view.pressKeys(["]", "]", "]"]);
+    screen.view.pressKey("?");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(screen.frame()).toContain("no model available");
   });
 });
 
