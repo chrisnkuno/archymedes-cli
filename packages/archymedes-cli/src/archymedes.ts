@@ -8,6 +8,8 @@ import { runAcpServer } from "./acp-server";
 import { parseArgs } from "./app/args";
 import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
+import { animateBudgetMeter, renderCostReport } from "./commands/cost";
+import { runHistoryCommand } from "./commands/history";
 import { runTabCommand } from "./commands/tab";
 import { chooseModel, rememberModelChoice } from "./commands/model";
 import { runScan } from "./commands/scan";
@@ -37,7 +39,7 @@ import { CostLedger } from "@archymedes/core/cli/cost";
 import { EXIT_CODES, HeadlessEmitter, exitCodeForStatus } from "./headless";
 import { buildModelCatalog, parseModelCommand } from "./session/models";
 import { INITIAL_TABLE_STATE, renderTable } from "./ui/table";
-import { buildCostTable, buildJobsTable } from "./ui/tables";
+import { buildJobsTable } from "./ui/tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./text/color-depth";
 import { writeIdentity } from "./render/identity";
@@ -45,11 +47,10 @@ import { WorkspaceFrame } from "./ui/workspace-frame";
 import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter, workspaceFrameOptions } from "./ui/layout-choice";
 import { isTranscriptKey, transcriptScrollForKey, type ScrollKey } from "./terminal/transcript-keys";
 import { setWorkspaceMenu, installShortcuts, openChooser, openDefenderTriage, openPalette, replaceLine, withBorrowedKeyboard } from "./ui/shortcuts";
-import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table } from "./render/tui";
+import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, Spinner, SpringAnimator, StatusBar, table } from "./render/tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./ui/dropup";
 import { visibleWidth } from "./text/text-width";
 import { PinnedScreen } from "./terminal/screen";
-import { barChart, lineChart } from "./render/charts";
 import { renderMarkdown } from "./render/markdown";
 import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./catalog/commands";
 import { KeyBindingRegistry, parseBindingOverrides } from "./terminal/keybindings";
@@ -77,7 +78,7 @@ import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream"
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
 import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./render/guide";
-import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Rgb } from "./theme/theme";
+import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
 import { cancelJob, enqueueJob, getJob, isTerminal, jobLogPath, listJobs, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
@@ -93,7 +94,7 @@ import { resolveGlyphs } from "./text/glyphs";
 import { GUTTER, heading, note, panel, rule } from "./render/sections";
 import { expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
 import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, memoryFile, memoryPromptBlock, parseMemoryCommand, recallMemories, replaceMemory, renderMemories, type MemoryEntry } from "./commands/memory";
-import { parseHistoryCommand, relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
+import { parseHistoryCommand, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
 import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, remainingCooldown, type PaceLevel } from "./commands/pacing";
 import { CliStateHistory } from "./session/state-history";
 import { type ReadlineInternals, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, hiddenQuestion, isReadlineExit, settingsChooser } from "./app/prompts";
@@ -2880,98 +2881,27 @@ async function main(): Promise<number> {
 
     const historyCommand = parseHistoryCommand(input);
     if (historyCommand) {
-      const style_ = sectionStyle();
-      let cachedEntries: HistoryEntry[] | undefined;
-      const historyEntries = async (): Promise<HistoryEntry[]> => {
-        if (cachedEntries) return cachedEntries;
-        const indexed = await stateHistory.sessions(30);
-        const listed = indexed
-          ? indexed.map((session) => ({ id: session.sessionId, title: session.title, updatedAt: session.updatedAt ?? 0 }))
-          : await listSessions(args.root, 30);
-        cachedEntries = (await Promise.all(listed.map(async (summary) => {
-          const record = await loadSession(args.root, summary.id);
-          return record ? summarizeSession(record) : null;
-        }))).filter((entry): entry is HistoryEntry => entry !== null);
-        return cachedEntries;
-      };
-      switch (historyCommand.kind) {
-        case "invalid":
-          out.write(style.yellow(`  ${historyCommand.reason}\n`));
-          break;
-        case "list":
-          {
-            const entries = await historyEntries();
-            out.write(`${renderHistoryList(entries, style_, { current: agent.sessionId })}\n`);
-            const usage = renderHistoryUsage(entries, style_);
-            if (usage) out.write(`${usage}\n`);
-          }
-          break;
-        case "search": {
-          const nativeHits = await stateHistory.search(historyCommand.query, 20);
-          const found = nativeHits
-            ? (await Promise.all(nativeHits.map(async (hit): Promise<HistoryEntry | null> => {
-                const record = await loadSession(args.root, hit.sessionId);
-                return record ? {
-                  ...summarizeSession(record),
-                  evidence: { source: hit.source, snippet: hit.snippet, why: hit.why },
-                } : null;
-              }))).filter((entry): entry is HistoryEntry => entry !== null)
-            : searchHistory(await historyEntries(), historyCommand.query);
-          out.write(`${heading(`"${historyCommand.query}" ${glyphs.middot} ${found.length} match${found.length === 1 ? "" : "es"}`, 2, style_)}\n`);
-          out.write(`${renderHistoryList(found, style_, { current: agent.sessionId })}\n`);
-          break;
-        }
-        case "status": {
-          await stateHistory.refresh();
-          const status = await stateHistory.status();
-          out.write(`${heading("history engine", 2, style_)}\n`);
-          if (status.mode === "fallback") {
-            out.write(`${note("portable JSON history is active", style_)}\n`);
-            out.write(`${note(status.reason ?? "native state engine unavailable", style_)}\n`);
-          } else {
-            out.write(`${note(`native SQLite + FTS5 ${status.indexed ? "is current" : "is ready"}`, style_)}\n`);
-            if (status.report) {
-              out.write(`${note(`${status.report.sessions} sessions ${glyphs.middot} ${status.report.documents} searchable documents ${glyphs.middot} ${status.report.failures.length} source failures`, style_)}\n`);
-            }
-          }
-          break;
-        }
-        case "show": {
-          const record = await loadSession(args.root, historyCommand.id);
-          if (!record) { out.write(style.yellow(`  No session ${historyCommand.id}. /history lists them.\n`)); break; }
-          out.write(`${renderReplay(record, style_, historyCommand.turns === undefined ? {} : { turns: historyCommand.turns })}\n`);
-          break;
-        }
-        case "resume": {
-          // Picked from a menu when no id was given: reading an id off a list and typing it back is
-          // a transcription step a chooser removes, and the ids are deliberately not memorable.
-          const entries = await historyEntries();
-          let id = historyCommand.id === "latest" ? entries[0]?.id : historyCommand.id;
-          if (!id && interactive && entries.length > 0) {
-            id = await openChooser<string>(
-              { readline, input: process.stdin, output: process.stdout },
-              entries.map((entry) => ({
-                value: entry.id,
-                label: entry.title || entry.id,
-                hint: relativeTime(entry.updatedAt),
-                description: `${entry.turns} turn${entry.turns === 1 ? "" : "s"}`,
-              })),
-              { title: "Pick up a past conversation", filter: true, height: 12, glyphs, paint: { dim: style.dim, cyan: style.cyan, green: style.green, yellow: style.yellow } },
-            );
-          }
-          if (!id) { out.write(style.dim("  no session chosen\n")); break; }
-          const record = await loadSession(args.root, id);
-          if (!record) { out.write(style.yellow(`  No session ${id}.\n`)); break; }
+      await runHistoryCommand(historyCommand, {
+        stateHistory,
+        listSessions: (limit) => listSessions(args.root, limit),
+        loadSession: (id) => loadSession(args.root, id),
+        currentSessionId: agent.sessionId,
+        ...(interactive ? {
+          choose: (items) => openChooser<string>({ readline, input: process.stdin, output: process.stdout }, items,
+            { title: "Pick up a past conversation", filter: true, height: 12, glyphs, paint: { dim: style.dim, cyan: style.cyan, green: style.green, yellow: style.yellow } }),
+        } : {}),
+        resume: async (record) => {
           await agent.relinquish();
           if (record.mode) mode = record.mode;
           agent = await openClient(record);
           await carryResumedSpend(agent.snapshot());
           expandables.clear();
-          out.write(`${renderReplay(record, style_, { turns: 2 })}\n`);
-          out.write(style.green(`  resumed ${record.id}\n`));
-          break;
-        }
-      }
+        },
+        write: (text) => out.write(text),
+        paint: style,
+        style: sectionStyle(),
+        glyphs,
+      });
       continue;
     }
 
@@ -3363,80 +3293,9 @@ async function main(): Promise<number> {
       continue;
     }
     if (input === "/cost") {
-      const history = ledger.history;
+      out.write(renderCostReport({ report: ledger.formatReport(), history: ledger.history, display, rates, paint: surfacePaint, glyphs, depth: renderDepth, width: contentWidth() }));
       const fraction = ledger.budgetFraction;
-      out.write(`${ledger.formatReport()}\n`);
-      /**
-       * The turns themselves, in columns, under the totals.
-       *
-       * The report above answers "what has this cost me" and cannot answer "which turn cost it",
-       * which is the question with something to do at the end of it: a turn carrying forty tool
-       * calls and no cached input is a prompt worth rewriting. The charts below show the shape of
-       * spend over time; this is the same session as figures you can read off.
-       */
-      if (history.length > 1) {
-        const spend = buildCostTable(history, {
-          money: (cost) => (cost ? formatMoney(convertTo(cost, display, rates) ?? cost) : ""),
-          paint: surfacePaint,
-        });
-        out.write(`${renderTable(spend.columns, spend.rows, INITIAL_TABLE_STATE, {
-          paint: surfacePaint, width: contentWidth(), glyphs, legend: "", cursor: false,
-        })}\n`);
-      }
-      // The shape of spend across turns, not just the total — a flat line and a spike to the same
-      // total are two very different sessions to have had. A sparkline said that in one row and
-      // compressed a long session into illegibility; a bar per turn stays readable and can carry
-      // the figure beside it. Kept to the last dozen turns, since a chart taller than a screen is
-      // not a chart. The sparkline remains the right tool inside the *status bar*, where there is
-      // genuinely only one row.
-      if (history.length > 1) {
-        const recent = history.slice(-12);
-        out.write(`${style.dim(`  spend per turn${history.length > recent.length ? ` (last ${recent.length} of ${history.length})` : ""}`)}\n`);
-        for (const line of barChart(
-          recent.map((turn) => ({ label: `turn ${turn.turnNumber}`, value: turn.cost?.micros ?? 0 })),
-          { width: Math.min(72, contentWidth()), depth: renderDepth, glyphs, format: (value) => formatMoney({ micros: value, currency: recent.find((turn) => turn.cost)?.cost?.currency ?? "USD" }) },
-        )) out.write(`  ${line}\n`);
-      }
-      // Throughput, which no view answered before: "why did that turn feel slow" is a question
-      // about tokens per second, and a total cannot answer it. Needs a few turns before the shape
-      // means anything.
-      const throughput = history
-        .filter((turn) => turn.elapsedMs > 0)
-        .map((turn) => (turn.usage.totalTokens / turn.elapsedMs) * 1_000);
-      if (throughput.length > 2) {
-        out.write(`${style.dim("\n  tokens/sec per turn")}\n`);
-        for (const line of lineChart(throughput, { width: Math.min(72, contentWidth()), height: 5, depth: renderDepth, glyphs })) {
-          out.write(`  ${style.dim(line)}\n`);
-        }
-      }
-      if (fraction !== undefined) {
-        // Gradient runs the theme's own success colour toward its error colour — a bar barely
-        // filled reads calm because that is all of the gradient it has exposed yet, and one nearly
-        // spent reveals almost the whole run toward the warning end, without a separate threshold
-        // check anywhere in this file deciding when to turn it red.
-        const rgbToken = (value: string): Rgb | undefined => {
-          const parsed = parseColor(value);
-          // A named ANSI colour (e.g. high-contrast's "brightGreen") parses to a palette index, not
-          // an RGB triple — the gradient has no use for one, so it falls back to progressBar's own
-          // default rather than interpolating something that isn't a colour.
-          return typeof parsed === "object" ? parsed : undefined;
-        };
-        const from = rgbToken(palette.tokens.success);
-        const to = rgbToken(palette.tokens.error);
-        // The bar fills from empty rather than jumping straight to the true fraction — spend
-        // visibly "catches up" to where it actually is instead of teleporting there, the same
-        // spring `progressBar` itself already leaves the gradient's shape to.
-        const meterLine = (value: number) => `  ${style.dim("budget")} [${progressBar(value, 24, { depth: renderDepth, glyphs, from, to })}] ${style.dim(`${Math.round(Math.min(1, value) * 100)}%`)}`;
-        const meter = new ReplaceableBlock(out);
-        const handle = meter.append(meterLine(0));
-        await new Promise<void>((resolve) => {
-          const animator: SpringAnimator = new SpringAnimator(0, (value) => {
-            meter.update(handle, meterLine(value));
-            if (animator.settled) resolve();
-          });
-          animator.retarget(fraction);
-        });
-      }
+      if (fraction !== undefined) await animateBudgetMeter(fraction, { out, palette, depth: renderDepth, glyphs, dim: style.dim });
       continue;
     }
     if (input === "/update" || input.startsWith("/update ")) {
