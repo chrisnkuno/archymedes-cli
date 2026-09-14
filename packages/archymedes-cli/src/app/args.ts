@@ -3,16 +3,7 @@ import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { isCurrency, type Currency } from "@archymedes/core/money";
 import { parseHistoryCommand, type HistoryCommand } from "../commands/chat-history";
 import { parsePaceFlag, type PaceLevel } from "../commands/pacing";
-
-/** Where a piece of work actually runs: this machine, a throwaway remote sandbox, or a container. */
-export type SandboxBackend = "local" | "e2b" | "docker";
-
-/** How a tab's location reads in prose — the answer to "where are these edits landing?". */
-export function describeLocation(backend: SandboxBackend): string {
-  if (backend === "e2b") return "in a remote E2B sandbox";
-  if (backend === "docker") return "in a local container";
-  return "on this machine";
-}
+import type { SandboxBackend } from "../session/location";
 
 export type ParsedArgs = {
   mode: ArchymedesMode;

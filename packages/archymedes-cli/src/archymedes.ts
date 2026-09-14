@@ -5,8 +5,10 @@ import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
-import { describeLocation, parseArgs, type SandboxBackend } from "./app/args";
+import { parseArgs } from "./app/args";
+import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
+import { runTabCommand } from "./commands/tab";
 import { chooseModel, rememberModelChoice } from "./commands/model";
 import { runScan } from "./commands/scan";
 import { describeFind, parseFindCommand } from "./commands/find";
@@ -68,7 +70,7 @@ import { renderReliabilityStatus } from "./render/reliability-status";
 import { CACHE_CHURN_HINT } from "@archymedes/core/cli/cost";
 import { SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, type ArchymedesSettings } from "./platform/settings";
 import { loadHistory, saveHistory } from "./session/history";
-import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./session/tabs";
+import { renderTabStrip, parseTabCommand, WorkspaceController } from "./session/tabs";
 import { TabSink, replayLines } from "./terminal/output";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
@@ -94,7 +96,7 @@ import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, me
 import { parseHistoryCommand, relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
 import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, remainingCooldown, type PaceLevel } from "./commands/pacing";
 import { CliStateHistory } from "./session/state-history";
-import { ReadlineInternals, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, hiddenQuestion, isReadlineExit, settingsChooser } from "./app/prompts";
+import { type ReadlineInternals, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, hiddenQuestion, isReadlineExit, settingsChooser } from "./app/prompts";
 import { helpText } from "./app/help";
 import { modelChoicesForSettingsField, modelPriceCatalogFor, readFxRates, renderProviders } from "./app/providers";
 import { runJobWorkerProcess, spawnJobWorker } from "./app/job-launch";
@@ -3065,119 +3067,38 @@ async function main(): Promise<number> {
     }
     const tabCommand = parseTabCommand(input);
     if (tabCommand) {
-      try {
-        switch (tabCommand.kind) {
-          case "invalid":
-            out.write(style.yellow(`  ${tabCommand.reason}\n`));
-            break;
-          case "list":
-            showTabs();
-            // The strip says what each tab *is*; neither it nor the titles say what a tab that is
-            // not in front is doing, which is the thing people get wrong. Listing tabs is someone
-            // asking exactly that question, so it is answered here.
-            out.write(style.dim(tabs.size === 1
-              ? "  one tab — /tab new opens another; only the tab in front runs\n"
-              : `  ${SEQUENTIAL_TABS_NOTE}\n`));
-            break;
-          case "new": {
-            // Resolved before anything is opened, so a typo in --model or an unreachable sandbox
-            // costs nothing: the session is untouched and the old tab is still in front.
-            const wanted = resolveProvider(environment, {
-              ...(tabCommand.provider ? { provider: tabCommand.provider } : {}),
-              ...(tabCommand.model ? { model: tabCommand.model } : {}),
-            });
-            if ("error" in wanted) {
-              out.write(style.yellow(`  ${wanted.error}\n`));
-              break;
-            }
-            const backend = tabCommand.backend ?? "local";
-            // A tab asking for somewhere else gets its very own sandbox; a tab that asked for
-            // nothing shares the session's, because starting a second local workspace on the same
-            // directory would be two agents editing one checkout with no idea about each other.
-            const ownsWorkspace = backend !== "local" || tabCommand.backend === "local";
-            let tabWorkspace = workspace;
-            if (tabCommand.backend && tabCommand.backend !== "local") {
-              const started = await createWorkspace({ backend: tabCommand.backend });
-              if ("error" in started) {
-                out.write(style.yellow(`  ${started.error}\n`));
-                break;
-              }
-              tabWorkspace = started.workspace;
-            }
-
-            // Saved before opening, or the tab being left behind keeps the incoming tab's state.
-            stashActiveTab();
-            // Opened before tabs.open() rather than inside its factory: WorkspaceController's
-            // factory is synchronous, and the client itself is already live by the time the tab
-            // record is created.
-            const newTabClient = await openClient(undefined, {
-              provider: wanted.provider,
-              prices: wanted.prices,
-              workspace: tabWorkspace,
-            });
-            const opened = tabs.open(tabCommand.title ?? `tab ${tabs.size + 1}`, () => ({
-              agent: newTabClient,
-              ledger: new CostLedger({ prices: wanted.prices, display, rates, catalog: PRICE_CATALOG, ...(approvedBudget ? { budget: approvedBudget } : {}) }),
-              mode,
-              sink: new TabSink(sessionStream),
-              provider: wanted.provider,
-              spec: wanted.spec,
-              prices: wanted.prices,
-              modelId: wanted.model,
-              backend: tabCommand.backend ?? args.backend,
-              workspace: tabWorkspace,
-              ownsWorkspace: tabWorkspace !== workspace,
-            }));
-            // A tab that has never printed anything has nothing to replay, so it opens on a clean
-            // screen the way a new tab should.
-            enterTab(opened);
-            out.write(`${GUTTER}${style.dim("running")} ${style.cyan(shortModel(wanted.model))} ${style.dim(`${glyphs.middot} ${describeLocation(opened.payload.backend)}`)}\n`);
-            showTabs();
-            // Once per session, on the tab that first creates the ambiguity. Every time would be
-            // nagging; never is how someone comes back to a paused tab expecting a finished job.
-            if (!explainedTabs) {
-              explainedTabs = true;
-              out.write(style.dim(`${GUTTER}${SEQUENTIAL_TABS_NOTE}\n`));
-            }
-            break;
-          }
-          case "next": case "previous": {
-            stashActiveTab();
-            enterTab(tabs.cycle(tabCommand.kind === "next" ? 1 : -1), { replay: true });
-            showTabs();
-            break;
-          }
-          case "select":
-            if (!switchTab(tabCommand.id)) out.write(style.yellow(`  No tab ${tabCommand.id}.\n`));
-            else showTabs();
-            break;
-          case "rename":
-            tabs.active.title = tabCommand.title;
-            showTabs();
-            break;
-          case "close": {
-            const { closed, nextActive } = tabs.close(tabCommand.id ?? tabs.active.id);
-            // Read before the sink is retired: whether the screen is about to change hands is
-            // exactly whether the tab being closed was the one on it.
-            const wasInFront = closed.payload.sink.isLive;
-            // The tab is gone from the strip, but its agent may still hold a sandbox open.
-            closed.payload.sink.setLive(false);
-            await closed.payload.agent.dispose().catch(() => undefined);
-            // A sandbox this tab started is a sandbox this tab stops paying for. The session's own
-            // workspace is shared, and disposing it here would take every other tab down with it.
-            if (closed.payload.ownsWorkspace) {
-              out.write(style.dim(`  stopping ${describeLocation(closed.payload.backend)}\n`));
-              await closed.payload.workspace.dispose().catch(() => undefined);
-            }
-            // Closing a background tab leaves the screen you were reading exactly as it was.
-            enterTab(nextActive, { replay: wasInFront });
-            showTabs();
-            break;
-          }
-        }
-      } catch (error) {
-        out.write(style.yellow(`  ${error instanceof Error ? error.message : String(error)}\n`));
-      }
+      await runTabCommand(tabCommand, {
+        tabs,
+        resolve: (request) => resolveProvider(environment, request),
+        sessionWorkspace: workspace,
+        startWorkspace: (backend) => createWorkspace({ backend }),
+        openTab: async (title, wanted, tabWorkspace, backend) => {
+          // Opened before tabs.open(): WorkspaceController's factory is synchronous.
+          const client = await openClient(undefined, { provider: wanted.provider, prices: wanted.prices, workspace: tabWorkspace });
+          return tabs.open(title, () => ({
+            agent: client,
+            ledger: new CostLedger({ prices: wanted.prices, display, rates, catalog: PRICE_CATALOG, ...(approvedBudget ? { budget: approvedBudget } : {}) }),
+            mode,
+            sink: new TabSink(sessionStream),
+            provider: wanted.provider,
+            spec: wanted.spec,
+            prices: wanted.prices,
+            modelId: wanted.model,
+            backend: backend ?? args.backend,
+            workspace: tabWorkspace,
+            ownsWorkspace: tabWorkspace !== workspace,
+          }));
+        },
+        stashActiveTab,
+        enterTab,
+        switchTab,
+        showTabs,
+        describeLocation,
+        firstTabExplanation: () => !explainedTabs && (explainedTabs = true),
+        write: (text) => out.write(text),
+        paint: style,
+        glyphs,
+      });
       continue;
     }
 

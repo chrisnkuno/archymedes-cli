@@ -86,8 +86,11 @@ def main():
     specifier = os.path.relpath(re.sub(r"\.tsx?$", "", target), os.path.dirname(source)).replace(os.sep, "/")
     specifier = specifier if specifier.startswith("../") else "./" + specifier
     if still_used:
+        type_names = {name for _, _, name in spans if re.search(rf"^(export\s+)?(type|interface)\s+{re.escape(name)}\b", open(target).read(), re.M)}
+        items = [f"type {n}" if n in type_names else n for n in sorted(still_used)]
+        statement = f'import type {{ {", ".join(sorted(still_used))} }} from "{specifier}";' if all(n in type_names for n in still_used) else f'import {{ {", ".join(items)} }} from "{specifier}";'
         last_import = max(i for i, l in enumerate(kept[:import_end]) if l.startswith("import ") or l.rstrip().endswith(";"))
-        kept.insert(last_import + 1, f'import {{ {", ".join(sorted(still_used))} }} from "{specifier}";')
+        kept.insert(last_import + 1, statement)
         source_text = "\n".join(kept)
     open(source, "w").write(source_text)
 

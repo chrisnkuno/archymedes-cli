@@ -28,7 +28,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | --- | ---: | ---: | --- |
 | `text/ansi.ts` | 27 | 17 | The escape codes for weight and emphasis, and the one function that decides whether to emit them. |
 | `text/color-depth.ts` | 8 | 17 | What the terminal can actually render, from the environment rather than from hope. |
-| `text/glyphs.ts` | 278 | 36 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
+| `text/glyphs.ts` | 278 | 38 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
 | `text/text-width.ts` | 59 | 24 | How many columns a string actually occupies. |
 
 ## `platform`
@@ -42,7 +42,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `platform/i18n.ts` | 318 | 5 | Keyed by shortcut id, not by position. |
 | `platform/local-currency.ts` | 143 | 2 | The countries a location can be set to, in the sense that matters: ones we can price in. |
 | `platform/network.ts` | 258 | 4 | Turns raw fetch/undici/SDK errors into one actionable sentence. |
-| `platform/settings.ts` | 438 | 6 | A value that can be picked from a list, with the human name shown beside the stored code. |
+| `platform/settings.ts` | 438 | 7 | A value that can be picked from a list, with the human name shown beside the stored code. |
 | `platform/update.ts` | 260 | 1 | Parses the strict subset package registries use; invalid versions never reach a command line. |
 
 ## `catalog`
@@ -97,7 +97,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/reliability-status.ts` | 27 | 1 | A release-baked trust signal: instant and offline, with a date so it can never pose as live data. |
 | `render/routing-plan.ts` | 76 | 1 | What the exchange *would* route the next turn to, shown before anything is spent. |
 | `render/routing-receipt.ts` | 130 | 2 | The hosted routing decision, shown after a turn that used the exchange. |
-| `render/sections.ts` | 249 | 20 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
+| `render/sections.ts` | 249 | 21 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
 | `render/task-view.ts` | 114 | 1 | One place to see where the task stands: what was asked, the plan against it, what changed, what |
 | `render/test-report.ts` | 372 | 1 | Test output, read as a result rather than as a wall of text. |
 | `render/transcript.ts` | 182 | 3 | How a tool call reads in the transcript. |
@@ -109,11 +109,12 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | --- | ---: | ---: | --- |
 | `session/fallback.ts` | 26 | 1 | The provider ids a fallback target may name, for help text and validators. |
 | `session/history.ts` | 40 | 1 |  |
-| `session/models.ts` | 180 | 4 | The models a session can actually switch to, and what each costs. |
+| `session/location.ts` | 15 | 3 | Where a piece of work runs, and how that reads in prose. |
+| `session/models.ts` | 180 | 5 | The models a session can actually switch to, and what each costs. |
 | `session/resumed-spend.ts` | 78 | 1 | What a session spent before this process resumed it. |
 | `session/session-export.ts` | 63 | 1 | Writes a private-by-default, redacted artifact under the project's .archymedes directory. |
 | `session/state-history.ts` | 127 | 1 | The CLI-facing lifecycle for archymedes-state. |
-| `session/tabs.ts` | 302 | 3 | Several pieces of work in one session. |
+| `session/tabs.ts` | 302 | 4 | Several pieces of work in one session. |
 
 ## `ui`
 
@@ -134,9 +135,9 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `ui/model-picker.ts` | 201 | 2 | Choosing a model by moving to it, rather than by naming it. |
 | `ui/navigation.ts` | 484 | 2 | Finding the right command without reading all of them. |
 | `ui/palette.ts` | 257 | 3 | The command palette. |
-| `ui/shortcuts.ts` | 311 | 2 | Where feature keys meet the terminal. |
-| `ui/table.ts` | 514 | 4 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
-| `ui/tables.ts` | 189 | 1 | Which columns each of Archymedes's tables has — and nothing about how a table is drawn. |
+| `ui/shortcuts.ts` | 311 | 3 | Where feature keys meet the terminal. |
+| `ui/table.ts` | 514 | 5 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
+| `ui/tables.ts` | 189 | 2 | Which columns each of Archymedes's tables has — and nothing about how a table is drawn. |
 | `ui/workspace-frame.ts` | 389 | 4 | Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. |
 | `ui/workspace-model.ts` | 321 | 2 | What the control panel is looking at, as data. |
 | `ui/workspace-screen.tsx` | 122 | 1 | The control panel, drawn. |
@@ -151,10 +152,12 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `commands/find.ts` | 30 | 1 | `/find <text>` searches; a bare `/find` (or `/find next`) moves to the next match, `/find prev` to |
 | `commands/jobs-command.ts` | 76 | 1 | `/jobs`, `/attach`, `/detach` — the command grammar for durable work. |
 | `commands/memory.ts` | 136 | 1 | The terminal half of memory: parsing `/memory` commands and drawing the result. |
+| `commands/model.ts` | 133 | 1 | The keyboard to borrow for the picker and table; omitted when nobody is at the terminal. |
 | `commands/pacing.ts` | 142 | 2 | Slow mode: spend less per turn, on purpose. |
 | `commands/pager.ts` | 28 | 1 | Runs the pager with the transcript on its stdin, and the terminal as its display. |
 | `commands/scan.ts` | 77 | 1 | A window of a file through the workspace, or null when it cannot be read. |
 | `commands/session-inspect.ts` | 60 | 1 | The read-only "where do things stand" commands — `/todos` and `/task` — as pure functions. |
+| `commands/tab.ts` | 107 | 1 | What `/tab` needs to know about a tab's payload; the session defines the rest. |
 | `commands/tools-command.ts` | 86 | 1 | `/tools` — what the agent can actually call right now, and where each of it came from. |
 | `commands/voice.ts` | 88 | 1 | Starts ffmpeg without a shell. Writing q stops it cleanly and finalizes the WAV header. |
 | `commands/wander.ts` | 222 | 2 | Wander, from the terminal. |
@@ -163,7 +166,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `app/args.ts` | 202 | 1 | Where a piece of work actually runs: this machine, a throwaway remote sandbox, or a container. |
+| `app/args.ts` | 193 | 1 | Whether a command-line mode flag should override a resumed session's saved posture. |
 | `app/help.ts` | 117 | 1 | The `--help` text, built after rendering is configured so its colours match the terminal. |
 | `app/job-launch.ts` | 82 | 1 | Starting the background job worker, detached or in this process. |
 | `app/prompts.ts` | 192 | 1 | Questions the terminal session asks the person: tool approvals, sensitive-task and spending-cap |
@@ -175,12 +178,12 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `acp-server.ts` | 142 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `archymedes.ts` | 3872 | 0 | Archymedes CLI — the terminal front end. |
+| `archymedes.ts` | 3661 | 0 | Archymedes CLI — the terminal front end. |
 | `headless.ts` | 209 | 1 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 267 | 2 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `archymedes.ts` (3872), `render/tui.ts` (1356).
+- **Large files (over 800 lines):** `archymedes.ts` (3661), `render/tui.ts` (1356).
 - **Duplicate escape helpers:** none.
 - **Modules with no source importer:** none.
