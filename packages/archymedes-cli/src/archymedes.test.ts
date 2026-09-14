@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Interface } from "node:readline/promises";
 import { visibleWidth } from "./text/text-width";
-import { configureRendering, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit, readFxRates, renderEvent, renderProviders, renderUserMessage } from "./archymedes";
+import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit, readFxRates, renderProviders } from "./archymedes";
+import { configureRendering, renderEvent, renderUserMessage } from "./app/transcript";
 import { parseArgs } from "./app/args";
 
 const ESCAPE = /\x1b\[[0-9;]*m/g;

@@ -27,8 +27,8 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `text/ansi.ts` | 34 | 17 | The escape codes, and the one function that decides whether to emit them. |
-| `text/color-depth.ts` | 8 | 13 | What the terminal can actually render, from the environment rather than from hope. |
-| `text/glyphs.ts` | 278 | 34 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
+| `text/color-depth.ts` | 8 | 14 | What the terminal can actually render, from the environment rather than from hope. |
+| `text/glyphs.ts` | 278 | 35 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
 | `text/text-width.ts` | 59 | 24 | How many columns a string actually occupies. |
 
 ## `platform`
@@ -56,7 +56,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `theme/theme-files.ts` | 85 | 1 | Themes that came from a file rather than from this binary. |
-| `theme/theme.ts` | 523 | 18 | Colour, as a set of named roles rather than a set of escape codes. |
+| `theme/theme.ts` | 523 | 19 | Colour, as a set of named roles rather than a set of escape codes. |
 
 ## `terminal`
 
@@ -67,9 +67,9 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `terminal/job-stream.ts` | 215 | 1 | A background job's output, as something you can subscribe to instead of sit inside. |
 | `terminal/keybindings.ts` | 463 | 7 | Feature keys, and the line-editing keys they must not eat. |
 | `terminal/layout.ts` | 92 | 1 | The screen, as rows and columns rather than a scrolling log. |
-| `terminal/output.ts` | 212 | 5 | Where a line goes, decided once instead of at every write. |
+| `terminal/output.ts` | 212 | 6 | Where a line goes, decided once instead of at every write. |
 | `terminal/screen-host.ts` | 113 | 1 | Opening a full-screen view, and giving the terminal back. |
-| `terminal/screen.ts` | 268 | 2 | Owns the terminal control side of the pinned footer; `layout.ts` owns the math. |
+| `terminal/screen.ts` | 268 | 3 | Owns the terminal control side of the pinned footer; `layout.ts` owns the math. |
 | `terminal/transcript-keys.ts` | 31 | 2 | Rows one wheel notch moves: the pager convention, since one row feels stuck and a page overshoots. |
 | `terminal/transcript-rows.ts` | 68 | 1 | Styles still open are replayed at the start of each row; bounded so a stream that never resets cannot grow it. |
 | `terminal/viewport.ts` | 109 | 4 | A scrollable window over more lines than fit — Archymedes's answer to Bubbles' `viewport`. |
@@ -82,9 +82,9 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/banner.ts` | 283 | 1 | The starfield Archymedes opens with. |
 | `render/canvas.ts` | 125 | 1 | The drawing surface every chart is drawn on — Archymedes's answer to ntcharts' canvas. |
 | `render/charts.ts` | 319 | 6 | Charts, in the terminal — Archymedes's answer to ntcharts. |
-| `render/code-view.ts` | 294 | 5 | The code the agent actually wrote, shown where it happened. |
+| `render/code-view.ts` | 294 | 6 | The code the agent actually wrote, shown where it happened. |
 | `render/completion-card.ts` | 48 | 1 | One compact, predictable handoff instead of several unrelated turn footers. |
-| `render/expandable.ts` | 107 | 2 | Folded blocks, and the handle that unfolds them. |
+| `render/expandable.ts` | 107 | 3 | Folded blocks, and the handle that unfolds them. |
 | `render/guide.ts` | 462 | 2 | The manual, inside the thing it documents. |
 | `render/identity.ts` | 118 | 2 | Nested tetrahedra joined at their vertices: a triangular analogue of a hypercube. |
 | `render/intraline.ts` | 155 | 1 | Which *characters* changed, not merely which lines. |
@@ -95,11 +95,11 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/reliability-status.ts` | 27 | 1 | A release-baked trust signal: instant and offline, with a date so it can never pose as live data. |
 | `render/routing-plan.ts` | 76 | 1 | What the exchange *would* route the next turn to, shown before anything is spent. |
 | `render/routing-receipt.ts` | 130 | 2 | The hosted routing decision, shown after a turn that used the exchange. |
-| `render/sections.ts` | 249 | 18 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
+| `render/sections.ts` | 249 | 19 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
 | `render/task-view.ts` | 114 | 1 | One place to see where the task stands: what was asked, the plan against it, what changed, what |
 | `render/test-report.ts` | 372 | 1 | Test output, read as a result rather than as a wall of text. |
 | `render/transcript.ts` | 182 | 3 | How a tool call reads in the transcript. |
-| `render/tui.ts` | 1356 | 11 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
+| `render/tui.ts` | 1356 | 12 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
 
 ## `session`
 
@@ -135,7 +135,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `ui/shortcuts.ts` | 311 | 1 | Where feature keys meet the terminal. |
 | `ui/table.ts` | 514 | 4 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
 | `ui/tables.ts` | 189 | 1 | Which columns each of Archymedes's tables has — and nothing about how a table is drawn. |
-| `ui/workspace-frame.ts` | 319 | 2 | Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. |
+| `ui/workspace-frame.ts` | 319 | 3 | Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. |
 | `ui/workspace-model.ts` | 321 | 2 | What the control panel is looking at, as data. |
 | `ui/workspace-screen.tsx` | 122 | 1 | The control panel, drawn. |
 
@@ -158,18 +158,19 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `app/args.ts` | 202 | 1 | Where a piece of work actually runs: this machine, a throwaway remote sandbox, or a container. |
+| `app/transcript.ts` | 530 | 1 | The transcript renderer's session state: colour switches and the themed `style`, the output |
 
 ## root
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `acp-server.ts` | 142 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `archymedes.ts` | 4865 | 0 | Archymedes CLI — the terminal front end. |
+| `archymedes.ts` | 4370 | 0 | Archymedes CLI — the terminal front end. |
 | `headless.ts` | 209 | 1 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 267 | 1 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `archymedes.ts` (4865), `render/tui.ts` (1356).
+- **Large files (over 800 lines):** `archymedes.ts` (4370), `render/tui.ts` (1356).
 - **Duplicate escape helpers:** none.
 - **Modules with no source importer:** `render/picture.ts`.
