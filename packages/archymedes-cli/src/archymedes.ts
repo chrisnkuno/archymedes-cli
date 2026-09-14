@@ -7,11 +7,17 @@ import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
 import { describeLocation, parseArgs, type SandboxBackend } from "./app/args";
 import { runCat } from "./commands/cat";
+import { runScan } from "./commands/scan";
+import { describeFind, parseFindCommand } from "./commands/find";
+import { runPager } from "./commands/pager";
+import { FALLBACK_PROVIDERS, fallbackSetting, parseFallbackPreference } from "./session/fallback";
+import { widestRow, renderPatch } from "./render/patch-view";
+import { wanderArtifacts, buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./commands/wander";
+import { describeJobForHuman } from "./job-worker";
 import { clearKittyImages, imagePreference } from "./render/image-view";
 import { FOLD_AFTER_LINES, SPINNER_START_DELAY_MS, activity, beginTranscriptTurn, configureRendering, contentWidth, endStreamedLine, expandables, forgetToolLines, glyphs, liveTerminal, markdown, out, palette, renderDepth, renderEvent, renderUserTurn, screen, sectionStyle, sessionChecks, sessionFiles, sessionStream, setScreen, setSpinner, spinner, statusBar, style, surfacePaint, toolLines, touchedFiles, turnLineDelta, verificationChecks, writeFoldable } from "./app/transcript";
 import { priceSessionModelTurns, readSessionModelTurns } from "./session/resumed-spend";
-import { renderGallery } from "./ui/gallery";
-import { displayMask, fixObjective } from "./ui/defender-screen";
+import { galleryVariants, renderGallery } from "./ui/gallery";
 import { CommandUsage, navSignals, rankWithContext, renderAsks, renderEssentials, renderGroupedHelp, renderHint, renderRecovery, renderStarters, renderSuggestions, type NavContext } from "./ui/navigation";
 import { askModelForSuggestions, mergeModelSuggestions, type Suggestion as EngineSuggestion } from "@archymedes/core/cli/suggestions";
 import type { ModelUsage } from "@archymedes/core/providers/model";
@@ -51,7 +57,6 @@ import { renderCompletionCard } from "./render/completion-card";
 import { renderTask, renderTodos, type InspectContext } from "./commands/session-inspect";
 import { renderRoutingReceipt, renderRoutingSummary } from "./render/routing-receipt";
 import { renderRoutingPlan } from "./render/routing-plan";
-import { fallbackSetting, parseFallbackPreference } from "./session/fallback";
 import { exportSession, type ExportFormat } from "./session/session-export";
 import { hostOf, providerBaseUrl } from "./platform/endpoints";
 import { fetchDailyFxRate, resolveCurrencyPreference, type FxLookupFailure } from "./platform/local-currency";
@@ -65,7 +70,6 @@ import { SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveS
 import { loadHistory, saveHistory } from "./session/history";
 import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./session/tabs";
 import { TabSink, replayLines } from "./terminal/output";
-import { renderPatch } from "./render/patch-view";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
@@ -73,7 +77,6 @@ import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type Ter
 import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Rgb } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
-import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./commands/wander";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
 import { cancelJob, enqueueJob, getJob, isTerminal, jobLogPath, listJobs, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./commands/jobs-command";
@@ -163,13 +166,11 @@ async function main(): Promise<number> {
 
   if (args.gallery) {
     // Drawn at the real terminal's width and glyph set, because the point is to see what this
-    // terminal does with it — the ASCII and no-colour forms are reached with --ascii and NO_COLOR,
-    // which are the same switches a real session honours.
-    out.write(`${renderGallery({
-      width: Math.max(24, (process.stdout.columns ?? 80) - 1),
-      depth: earlyDepth,
-      glyphs: args.ascii ? resolveGlyphs({ ...environment, ARCHYMEDES_GLYPHS: "ascii" }) : resolveGlyphs(environment),
-    })}\n`);
+    // terminal does with it. `gallery all` adds the fallback matrix: ASCII, no colour and narrow.
+    const width = Math.max(24, (process.stdout.columns ?? 80) - 1);
+    const here = { width, depth: earlyDepth, glyphs: args.ascii ? resolveGlyphs({ ...environment, ARCHYMEDES_GLYPHS: "ascii" }) : resolveGlyphs(environment) };
+    const variants = args.prompt === "all" ? galleryVariants(width) : [{ title: "", options: here }];
+    for (const variant of variants) out.write(`${variant.title ? `\n== ${variant.title} ==\n` : ""}${renderGallery(variant.options)}\n`);
     return 0;
   }
 
@@ -1661,6 +1662,8 @@ async function main(): Promise<number> {
         const graded = await agent.readFile(WANDER_LAB_FILES.results).catch(() => null);
         const chart = graded ? renderWanderResults(graded.content, sectionStyle(), contentWidth()) : null;
         if (chart) out.write(`${chart}\n`);
+        const landed = (await Promise.all(wanderArtifacts().map(async (file) => (await agent.readFile(file, { limit: 1 }).catch(() => null)) ? file : null))).filter(Boolean);
+        if (landed.length > 0) out.write(style.dim(`  lab files: ${landed.join(", ")}\n`));
       }
 
       const turn = ledger.record({
@@ -2354,7 +2357,8 @@ async function main(): Promise<number> {
     promptBox.erase(rawInput);
     // Before parking, so the transcript region is whole again before anything is written into it.
     screen?.clearSuggestions();
-    if (screen instanceof WorkspaceFrame && screen.browsing) screen.scroll({ kind: "live" });
+    // A search keeps reading history across `/find` steps; anything else returns to live output.
+    if (screen instanceof WorkspaceFrame && screen.browsing && !parseFindCommand(rawInput.trim())) screen.scroll({ kind: "live" });
     screen?.parkInTranscript();
     let input = rawInput.trim();
     if (!input) continue;
@@ -2441,7 +2445,7 @@ async function main(): Promise<number> {
       }
       const preference = parseFallbackPreference(raw);
       if (!preference) {
-        out.write(style.yellow("  Choose /fallback off, /fallback ask, or /fallback provider:model.\n"));
+        out.write(style.yellow(`  Choose /fallback off, /fallback ask, or /fallback provider:model (providers: ${FALLBACK_PROVIDERS.join(", ")}).\n`));
         continue;
       }
       const value = fallbackSetting(preference);
@@ -2928,6 +2932,22 @@ async function main(): Promise<number> {
       continue;
     }
 
+    const findRequest = parseFindCommand(input);
+    if (findRequest) {
+      const message = describeFind(screen instanceof WorkspaceFrame ? screen.find(findRequest) : undefined);
+      if (message) out.write(style.dim(`  ${message}\n`));
+      continue;
+    }
+
+    if (input === "/pager") {
+      const log = tabs.active.payload.sink.log;
+      let pager: { opened: boolean; reason?: string } = { opened: false };
+      const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => { pager = await runPager(log, environment); });
+      if (!outcome.ok) out.write(style.yellow(`  ${explainScreenRefusal(outcome)}\n`));
+      else if (!pager.opened && pager.reason) out.write(style.yellow(`  ${pager.reason}\n`));
+      continue;
+    }
+
     if (input === "/cat" || input.startsWith("/cat ")) {
       await runCat(input.slice("/cat".length).trim(), {
         readFile: (target) => workspace.readFile(target, {}),
@@ -3167,6 +3187,7 @@ async function main(): Promise<number> {
       if (!patch.trim()) { out.write(style.dim("  nothing changed since the last checkpoint\n")); writeHint(); continue; }
       const rendered = renderPatch(patch, sectionStyle(), { maxLinesPerFile: FOLD_AFTER_LINES * 2 });
       out.write(`${rendered.text}\n`);
+      if (widestRow(rendered.text) > contentWidth()) out.write(style.dim("  some lines are wider than this window — /pager shows them unwrapped\n"));
       // The whole patch stays addressable: a folded file is the common case on a real change, and
       // the alternative — printing four hundred lines at someone — is why people stop typing /diff.
       const hiddenLines = patch.split("\n").length;
@@ -3447,7 +3468,7 @@ async function main(): Promise<number> {
         out.write(style.yellow(`  No job ${attachCommand.id}. /jobs lists what exists.\n`));
         continue;
       }
-      out.write(style.dim(`  attached to ${attachCommand.id} — Ctrl+C returns to the prompt without stopping it\n`));
+      out.write(style.dim(`  attached to ${attachCommand.id} (${describeJobForHuman(first)}) — Ctrl+C returns to the prompt without stopping it\n`));
       let offset = 0;
       // Ctrl+C here must only end the attach view, not the whole session — swap the interrupt
       // handler for the duration so it does not fall through to the ordinary "quit" behaviour.
@@ -3743,68 +3764,19 @@ async function main(): Promise<number> {
     }
 
     if (input === "/scan" || input.startsWith("/scan ")) {
-      const include = input.slice("/scan".length).trim() || undefined;
-      out.write(style.dim("  scanning for likely hardcoded secrets…\n"));
-      const findings = await agent.scanSecrets(include);
-      lastScanFindings = findings.length;
-      if (findings.length === 0) {
-        out.write(`  ${style.green(glyphs.check)} No likely secrets found by pattern${include ? ` in ${include}` : ""}.\n`);
-        continue;
-      }
-      // Interactive: the queue, one finding at a time, with the evidence beside it and a decision
-      // attached — because a flat list of forty findings is read once and dealt with never. Piped
-      // or non-interactive: the same findings as lines, since there is nobody to press a key.
-      if (interactive && liveTerminal) {
-        out.write(`  ${style.yellow(`${findings.length} possible secret${findings.length === 1 ? "" : "s"}`)} found by pattern${include ? ` in ${include}` : ""} — verify each; a pattern match is a lead, not proof.\n`);
-        const outcome = await openDefenderTriage(
-          { readline, input: process.stdin, output: process.stdout },
-          findings,
-          {
-            style: { depth: renderDepth, glyphs },
-            // The matched line and its neighbours, read through the workspace so a sandboxed
-            // session shows the sandbox's copy. Already masked by the scan; the file is read here
-            // only to show the shape of the code around it.
-            loadEvidence: async (finding) => {
-              const window = await agent.readFile(finding.path, { offset: Math.max(1, finding.line - 2), limit: 5 }).catch(() => null);
-              if (!window) return undefined;
-              return window.content.split("\n").map((line, index) => {
-                const number = window.startLine + index;
-                // Never the file's own text for the matched line: the whole point of masking is
-                // that the secret does not get printed, and the line it sits on is where it is.
-                return number === finding.line ? `${number} | ${finding.masked}  (${finding.kind})` : `${number} | ${line}`;
-              });
-            },
-          },
-        );
-        lastScanFindings = outcome.findings.filter((finding) => finding.triage === "open").length;
-        for (const finding of outcome.toFix) {
-          out.write(`  ${style.yellow(glyphs.pending)} queued for repair: ${finding.path}:${finding.line} ${style.dim(finding.kind)}\n`);
-        }
-        // Decisions become work, one turn each, in the order they were picked. Queued rather than
-        // run inside the screen: a model turn needs the terminal back first.
-        for (const finding of outcome.toFix.reverse()) queuedInput.unshift(fixObjective(finding));
-        const ignored = outcome.findings.filter((finding) => finding.triage === "ignored").length;
-        if (ignored > 0) out.write(style.dim(`  ${ignored} ignored this pass\n`));
-        continue;
-      }
-
-      const bySeverity = new Map<string, number>();
-      for (const finding of findings) bySeverity.set(finding.severity, (bySeverity.get(finding.severity) ?? 0) + 1);
-      out.write(`  ${style.yellow(`${findings.length} possible secret${findings.length === 1 ? "" : "s"}`)} found by pattern, worst first — verify each; a pattern match is a lead, not proof.\n`);
-      // Bar length is the count and the label is the severity. A heat strip shaded by count drew
-      // fourteen mediums darker than two criticals, which reads as "the mediums are the worse
-      // problem" — the one thing a security summary must never imply.
-      for (const line of barChart(
-        (["critical", "high", "medium"] as const)
-          .filter((severity) => bySeverity.has(severity))
-          .map((severity) => ({ label: severity, value: bySeverity.get(severity) ?? 0 })),
-        { width: Math.min(60, contentWidth()), depth: renderDepth, glyphs, max: findings.length },
-      )) out.write(`  ${line}\n`);
-      out.write("\n");
-      for (const finding of findings) {
-        const severityColor = finding.severity === "critical" ? style.red : finding.severity === "high" ? style.yellow : style.dim;
-        out.write(`  ${severityColor(`[${finding.severity}]`)} ${finding.path}:${finding.line}: ${finding.kind} — ${style.dim(displayMask(finding.masked, glyphs))}\n`);
-      }
+      lastScanFindings = await runScan(input.slice("/scan".length).trim() || undefined, {
+        scanSecrets: (include) => agent.scanSecrets(include),
+        readWindow: (file, offset, limit) => agent.readFile(file, { offset, limit }).catch(() => null),
+        ...(interactive && liveTerminal ? {
+          triage: (findings, loadEvidence) => openDefenderTriage({ readline, input: process.stdin, output: process.stdout }, findings, { style: { depth: renderDepth, glyphs }, loadEvidence }),
+        } : {}),
+        queueFirst: (objectives) => queuedInput.unshift(...objectives),
+        write: (text) => out.write(text),
+        paint: style,
+        glyphs,
+        depth: renderDepth,
+        width: contentWidth(),
+      });
       continue;
     }
     if (input === "/where") {

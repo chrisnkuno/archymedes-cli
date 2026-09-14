@@ -324,6 +324,12 @@ were reading. Arrow keys, Home and End still edit the composer. Wheel scrolling 
 reporting, so hold Shift to select text, or set `ARCHYMEDES_MOUSE=0` to keep the terminal's own
 selection. Each tab retains up to 5,000 output lines, and resizing reflows the transcript.
 
+`/find <text>` searches the tab's history and jumps to the first match; `/find` again moves to the
+next one, `/find prev` to the previous, and `/find off` or Escape returns to live output. `/pager`
+opens the whole transcript in `$PAGER` (`less -R` by default). `/cat image.png` draws a PNG in the
+transcript with coloured half-blocks; in the scrollback layout, `ARCHYMEDES_IMAGES=kitty` uses Kitty
+graphics for real pixels, and `/clear` removes them.
+
 The opening geometry rotates while the workspace is idle and settles as soon as you type.
 `ARCHYMEDES_NO_MOTION=1` disables this motion and menu focus animation. `--ascii`, `NO_COLOR`,
 and the existing themes remain supported. Try the real interface offline from the repository

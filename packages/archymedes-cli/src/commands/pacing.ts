@@ -94,12 +94,12 @@ export function parsePaceCommand(input: string, current: PaceLevel): PaceCommand
 
 /** The runtime budgets for a pace, merged over whatever the caller was already passing. */
 export function applyPacing<T extends Record<string, number>>(base: T, level: PaceLevel): T & PaceProfile["budgets"] {
-  return { ...base, ...PACE_PROFILES[level].budgets };
+  return { ...base, ...profileFor(level).budgets };
 }
 
 /** Milliseconds still owed before the next turn may start. Zero when the pace has no cooldown. */
 export function remainingCooldown(level: PaceLevel, lastTurnEndedAt: number | undefined, now = Date.now()): number {
-  const cooldown = PACE_PROFILES[level].cooldownMs;
+  const cooldown = profileFor(level).cooldownMs;
   if (cooldown === 0 || lastTurnEndedAt === undefined) return 0;
   return Math.max(0, cooldown - (now - lastTurnEndedAt));
 }
@@ -114,7 +114,7 @@ export function exceedsPace(
   level: PaceLevel,
   prediction: { inputTokensHigh: number; outputTokensHigh: number },
 ): boolean {
-  const ceiling = PACE_PROFILES[level].confirmAboveTokens;
+  const ceiling = profileFor(level).confirmAboveTokens;
   if (ceiling === undefined) return false;
   return prediction.inputTokensHigh + prediction.outputTokensHigh > ceiling;
 }
@@ -122,12 +122,12 @@ export function exceedsPace(
 /** The compact marker the status line and prompt carry while a pace is on. */
 export function paceBadge(level: PaceLevel, glyphs: GlyphSet = UNICODE_GLYPHS): string {
   if (level === "off") return "";
-  return `${glyphs.paused} ${PACE_PROFILES[level].label}`;
+  return `${glyphs.paused} ${profileFor(level).label}`;
 }
 
 /** What `/slow` prints: the pace, what it changes, and how to leave it. */
 export function describePace(level: PaceLevel, style: SectionStyle): string {
-  const profile = PACE_PROFILES[level];
+  const profile = profileFor(level);
   const glyphs = style.glyphs ?? UNICODE_GLYPHS;
   const head = `${GUTTER}${paintAll(profile.label, [toneCode("accent", style), BOLD], style.depth)} ${paint(glyphs.middot, DIM, style.depth)} ${paint(profile.description, DIM, style.depth)}`;
   if (level === "off") return head;

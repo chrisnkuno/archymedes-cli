@@ -141,7 +141,7 @@ describe("fixed session workspace", () => {
     expect(body(writes)).not.toContain("latest");
     frame.scroll({ kind: "top" });
     expect(body(writes)).toContain("entry 0");
-    expect(writes.at(-1)).toContain("HISTORY 0%");
+    expect(writes.at(-1)).toContain("HISTORY TOP");
     frame.scroll({ kind: "pageDown" });
     expect(frame.browsing).toBe(true);
     frame.scroll({ kind: "bottom" });
@@ -163,6 +163,36 @@ describe("fixed session workspace", () => {
     frame.menu.paint("Menu");
     frame.scroll({ kind: "pageUp" });
     expect(frame.browsing).toBe(false);
+    frame.exit();
+  });
+
+  it("finds text in history, steps through matches with wrap-around, and returns live when turned off", () => {
+    const { frame, writes } = setup();
+    expect(frame.find({ kind: "query", text: "ENTRY 7" })).toEqual({ status: "found", index: 1, total: 11, query: "ENTRY 7" });
+    expect(frame.browsing).toBe(true);
+    expect(writes.at(-1)).toContain('FIND 1/11 "ENTRY 7"');
+    expect(writes.at(-2)).toContain("entry 7");
+    expect(writes.at(-2)).toContain("◀");
+    frame.find({ kind: "prev" });
+    expect(writes.at(-1)).toContain('FIND 11/11');
+    expect(frame.find({ kind: "next" })).toMatchObject({ status: "found", index: 1 });
+    frame.scroll({ kind: "bottom" });
+    expect(frame.browsing).toBe(false);
+    frame.find({ kind: "query", text: "entry 99" });
+    expect(frame.browsing).toBe(true);
+    expect(frame.find({ kind: "off" })).toEqual({ status: "cleared" });
+    expect(frame.browsing).toBe(false);
+    expect(writes.at(-2)).toContain("latest");
+    frame.exit();
+  });
+
+  it("stays live when a search finds nothing, and labels the top of history", () => {
+    const { frame, writes } = setup();
+    expect(frame.find({ kind: "query", text: "nowhere" })).toEqual({ status: "none", query: "nowhere" });
+    expect(frame.browsing).toBe(false);
+    expect(frame.find({ kind: "next" })).toEqual({ status: "idle" });
+    frame.scroll({ kind: "top" });
+    expect(writes.at(-1)).toContain("HISTORY TOP");
     frame.exit();
   });
 

@@ -8,7 +8,8 @@ import type { Palette } from "../theme/theme";
 import { renderIdentity } from "../render/identity";
 import { WHEEL_ROWS, type TranscriptScroll } from "../terminal/transcript-keys";
 import { transcriptRows } from "../terminal/transcript-rows";
-import { applyViewport, atBottom, newViewport, scrollFraction, visibleLines, type ViewportState } from "../terminal/viewport";
+import { applyViewport, atBottom, atTop, newViewport, scrollFraction, visibleLines, type ViewportState } from "../terminal/viewport";
+import { searchViewport, stepViewportSearch, type ViewportSearch } from "../terminal/viewport-search";
 import { installWheelFilter, type WheelInputSource } from "../terminal/wheel-input";
 
 export type WorkspaceFrameContext = {
@@ -77,6 +78,13 @@ export type WorkspaceFrameOptions = {
 
 type HeldHistory = { log: LineLog; text: string; count: number };
 
+export type FindRequest = { kind: "query"; text: string } | { kind: "next" } | { kind: "prev" } | { kind: "off" };
+export type FindResult =
+  | { status: "found"; index: number; total: number; query: string }
+  | { status: "none"; query: string }
+  | { status: "idle" }
+  | { status: "cleared" };
+
 function logText(log: LineLog): string {
   return [...log.lines, ...(log.pending ? [log.pending] : [])].join("\n");
 }
@@ -100,6 +108,9 @@ export class WorkspaceFrame extends PinnedScreen {
   /** Set while reading history: the window over a snapshot taken when scrolling began. */
   private view?: ViewportState;
   private held?: HeldHistory;
+  /** Active transcript search, over the rows of the held snapshot. */
+  private search?: ViewportSearch;
+  private searchedLines?: readonly string[];
   private introMotion = true;
   private uninstallWheel?: () => void;
   private readonly motion: boolean;
@@ -164,10 +175,15 @@ export class WorkspaceFrame extends PinnedScreen {
 
   private positionLabel(): string {
     if (this.overlay) return "MENU";
+    if (this.view && this.search) {
+      const { matches, index, query } = this.search;
+      return matches.length > 0 ? `FIND ${index + 1}/${matches.length} "${query}"` : `FIND no match "${query}"`;
+    }
     if (this.view && this.held) {
       const log = this.history();
       const arrived = log === this.held.log ? log.size + log.dropped - this.held.count : 0;
-      return `HISTORY ${Math.round(scrollFraction(this.view) * 100)}%${arrived > 0 ? ` +${arrived} new` : ""}`;
+      const where = atTop(this.view) ? "TOP" : `${Math.round(scrollFraction(this.view) * 100)}%`;
+      return `HISTORY ${where}${arrived > 0 ? ` +${arrived} new` : ""}`;
     }
     return this.context().busy ? "WORKING" : "LIVE";
   }
@@ -203,12 +219,26 @@ export class WorkspaceFrame extends PinnedScreen {
   private releaseHistory(): void {
     this.view = undefined;
     this.held = undefined;
+    this.search = undefined;
+    this.searchedLines = undefined;
+  }
+
+  /** Freezes a snapshot of the log and opens a window on its last page, if not already reading history. */
+  private holdHistory(): void {
+    if (this.view) return;
+    const log = this.history();
+    this.held = { log, text: logText(log), count: log.size + log.dropped };
+    this.view = applyViewport(newViewport(this.projected(), this.bodyHeight()), { kind: "bottom" });
   }
 
   private scrollbar(height: number, total: number): string {
-    if (!this.view || total <= height || height < 1) return "";
+    if (!this.view || height < 1) return "";
     const { palette: p, glyphs: g } = this.context();
     const ascii = g === ASCII_GLYPHS || g.boxHorizontal === "-";
+    const view = this.view;
+    const match = this.search && this.search.matches.length > 0 ? this.search.matches[this.search.index] - view.top : -1;
+    const marker = match >= 0 && match < height ? `\x1b[${this.current.scrollTop + match};${this.current.columns}H${paint(ascii ? "<" : "◀", p.accent, p.depth)}` : "";
+    if (total <= height) return marker;
     const thumb = Math.max(1, Math.round((height * height) / total));
     const start = Math.round((height - thumb) * scrollFraction(this.view));
     const column = this.current.columns;
@@ -216,7 +246,7 @@ export class WorkspaceFrame extends PinnedScreen {
       const onThumb = i >= start && i < start + thumb;
       const mark = onThumb ? paint(ascii ? "#" : "┃", p.primary, p.depth) : paint(ascii ? "|" : "│", p.muted, p.depth);
       return `\x1b[${this.current.scrollTop + i};${column}H${mark}`;
-    }).join("");
+    }).join("") + marker;
   }
 
   refresh(): void {
@@ -227,7 +257,14 @@ export class WorkspaceFrame extends PinnedScreen {
       if (this.held?.log !== this.history()) this.releaseHistory();
       else {
         this.view = applyViewport(applyViewport(this.view, { kind: "resize", height }), { kind: "content", lines });
-        if (atBottom(this.view)) this.releaseHistory();
+        if (this.search && this.searchedLines !== lines) {
+          // A resize reflowed the rows the matches pointed at; find them again for the same query.
+          const index = this.search.index;
+          const redone = searchViewport(this.view, this.search.query);
+          this.search = redone.search ? { ...redone.search, index: Math.min(index, Math.max(0, redone.search.matches.length - 1)) } : undefined;
+          this.searchedLines = lines;
+        }
+        if (atBottom(this.view) && !this.search) this.releaseHistory();
       }
       if (!this.view) lines = this.projected();
     }
@@ -296,14 +333,47 @@ export class WorkspaceFrame extends PinnedScreen {
     }
     if (!this.view) {
       if (action.kind === "down" || action.kind === "halfDown" || action.kind === "pageDown") return;
-      const log = this.history();
-      this.held = { log, text: logText(log), count: log.size + log.dropped };
-      this.view = applyViewport(newViewport(this.projected(), this.bodyHeight()), { kind: "bottom" });
+      this.holdHistory();
     }
-    this.view = applyViewport(this.view, action);
-    if (atBottom(this.view)) this.releaseHistory();
+    this.view = applyViewport(this.view!, action);
+    if (atBottom(this.view) && !this.search) this.releaseHistory();
     this.stopIntroMotion();
     this.refresh();
+  }
+
+  /**
+   * Transcript search: a query holds history and jumps to the first match at or after the view,
+   * `next`/`prev` wrap around the matches, and `off` returns to live output.
+   */
+  find(request: FindRequest): FindResult {
+    if (!this.active || this.overlay !== undefined) return { status: "idle" };
+    if (request.kind === "off") {
+      const had = this.search !== undefined;
+      this.releaseHistory();
+      this.refresh();
+      return had ? { status: "cleared" } : { status: "idle" };
+    }
+    if (request.kind === "query") {
+      this.holdHistory();
+      const found = searchViewport(this.view!, request.text);
+      if (!found.search || found.search.matches.length === 0) {
+        this.releaseHistory();
+        this.refresh();
+        return found.search ? { status: "none", query: found.search.query } : { status: "idle" };
+      }
+      this.view = found.viewport;
+      this.search = found.search;
+      this.searchedLines = this.projected();
+    } else {
+      if (!this.view || !this.search) return { status: "idle" };
+      const stepped = stepViewportSearch(this.view, this.search, request.kind === "next" ? 1 : -1);
+      this.view = stepped.viewport;
+      this.search = stepped.search;
+    }
+    this.stopIntroMotion();
+    this.refresh();
+    const { matches, index, query } = this.search;
+    return matches.length > 0 ? { status: "found", index: index + 1, total: matches.length, query } : { status: "none", query };
   }
 
   get browsing(): boolean { return this.view !== undefined; }

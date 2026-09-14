@@ -8,8 +8,6 @@ import { commandDescription, keyboardDescription, type ControlLanguage } from ".
  * option can walk it directly, which is what gives Tab-completion on "/" for free.
  */
 
-export type CommandContext = Record<string, never>;
-
 export type Command = {
   name: string;
   /** Shown after the name in `/help`, e.g. "[dir]" for `/pull [dir]`. Omit for no-argument commands. */
@@ -68,7 +66,9 @@ export const COMMANDS = defineCommands({
   "/guide": { args: "[topic|search <text>|all]", description: "The user guide, as a screen you can browse — or print one topic with /guide <topic>" },
   "/files": { description: "Browse the project tree — expand folders, preview a file, pick one to @mention" },
   "/edit": { args: "<path>", description: "Open a file in the built-in editor — through the workspace, so it works in a sandbox too" },
-  "/cat": { args: "<path>", description: "Print a file into the transcript — markdown rendered like a document, code numbered and highlighted" },
+  "/cat": { args: "<path>", description: "Print a file into the transcript — markdown rendered like a document, code numbered and highlighted, PNG images drawn" },
+  "/find": { args: "<text> | next | prev | off", description: "Search this tab's transcript in the fixed workspace; repeat /find for the next match" },
+  "/pager": { description: "Open this tab's transcript in $PAGER (less -R) to search, select and save it" },
   "/help": { args: "[all|work|review|steer|parallel|learn|setup]", description: "Commands grouped by purpose" },
   "/exit": { description: "Leave" },
 });

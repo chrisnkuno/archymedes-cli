@@ -10,10 +10,9 @@ import { ASCII_GLYPHS, UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import { renderMarkdown } from "../render/markdown";
 import { renderPatch } from "../render/patch-view";
 import { heading, keyValues, note, panel, rule, type SectionStyle } from "../render/sections";
-import { INITIAL_TABLE_STATE, renderTable, tableHelpView } from "./table";
+import { INITIAL_TABLE_STATE, renderTable } from "./table";
 import { renderTabStrip } from "../session/tabs";
-import { box, formatStatusLine, joinHorizontal, archymedesSpinnerFrame, paginator, progressBar, renderPromptBox, sparkline, stepProgress, table } from "../render/tui";
-import { NO_COLOR_PALETTE } from "../theme/theme";
+import { box, formatStatusLine, archymedesSpinnerFrame, paginator, progressBar, renderPromptBox, sparkline, stepProgress, table } from "../render/tui";
 
 /**
  * Every component, drawn once, so someone can look at them.
@@ -205,5 +204,3 @@ export function galleryVariants(width: number): Array<{ title: string; options: 
   ];
 }
 
-/** Unused import guard: the palette is exported for callers that want the themed variant. */
-export const GALLERY_PALETTE = NO_COLOR_PALETTE;

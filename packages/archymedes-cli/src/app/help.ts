@@ -51,6 +51,7 @@ ${style.bold(t(language, "help.running"))}
 ${style.bold(t(language, "help.files"))}
   archymedes acp                  Speak the Agent Client Protocol on stdio (for editors)
   archymedes gallery              Draw every UI component once, to see how this terminal renders it
+  archymedes gallery all          The same, plus the ASCII, no-colour and narrow fallbacks
   archymedes --sandbox            Work in a remote E2B sandbox, not on this machine
   archymedes --sandbox docker     Work in a local Docker container instead of a remote one
   archymedes --docker-image IMG   Image for --sandbox docker (or set DOCKER_CODING_IMAGE)
@@ -92,6 +93,8 @@ ${style.bold(t(language, "help.memory"))}
 
 ${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
+  /find <text>              Search this tab's history; /find again for the next match
+  /pager                    Open the transcript in $PAGER to search, select or save
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
   archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
   archymedes --layout scrollback  Plain terminal log instead of the default fixed workspace

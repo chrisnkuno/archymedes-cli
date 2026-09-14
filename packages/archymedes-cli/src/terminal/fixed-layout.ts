@@ -1,5 +1,6 @@
 import { visibleWidth } from "../text/text-width";
-import { applyViewport, atBottom, maxTop, newViewport, scrollFraction, visibleLines, type ViewportState } from "./viewport";
+import { applyViewport, atBottom, newViewport, scrollFraction, visibleLines, type ViewportState } from "./viewport";
+import { searchViewport, stepViewportSearch, type ViewportSearch } from "./viewport-search";
 
 /**
  * The transcript as something Archymedes owns, rather than something it has already given away.
@@ -41,7 +42,6 @@ export const DEFAULT_BUFFER_LINES = 20_000;
  * as visible columns.
  */
 const ESCAPE = "\u001b";
-const STYLE_PATTERN = /\u001b\[[0-9;]*m/g;
 
 export type FixedLayoutState = {
   /** Logical lines, unwrapped, oldest first. */
@@ -54,7 +54,7 @@ export type FixedLayoutState = {
   /** How many rows the frame spends on things that are not transcript. */
   chrome: number;
   /** Active search, if any. */
-  search: { query: string; matches: readonly number[]; index: number } | null;
+  search: ViewportSearch | null;
   /** Lines dropped from the front over the session's life, for an honest "history truncated" note. */
   dropped: number;
   maxBufferLines: number;
@@ -176,47 +176,17 @@ export function scroll(state: FixedLayoutState, action: FixedLayoutAction): Fixe
   return { ...state, viewport: applyViewport(state.viewport, action) };
 }
 
-/**
- * Finds every wrapped row containing `query`, and moves to the first match at or after the view.
- *
- * Case-insensitive and literal: someone searching a transcript for `TypeError` is not writing a
- * regular expression, and treating their query as one turns a `(` into an error message.
- */
+/** Finds every wrapped row containing `query` and moves to the first match at or after the view. */
 export function search(state: FixedLayoutState, query: string): FixedLayoutState {
-  const trimmed = query.trim();
-  if (!trimmed) return { ...state, search: null };
-  const needle = trimmed.toLowerCase();
-  const matches: number[] = [];
-  state.viewport.lines.forEach((line, index) => {
-    if (stripStyles(line).toLowerCase().includes(needle)) matches.push(index);
-  });
-  if (matches.length === 0) return { ...state, search: { query: trimmed, matches: [], index: 0 } };
-  const from = matches.findIndex((line) => line >= state.viewport.top);
-  const index = from === -1 ? 0 : from;
-  return revealMatch({ ...state, search: { query: trimmed, matches, index } });
+  const found = searchViewport(state.viewport, query);
+  return { ...state, viewport: found.viewport, search: found.search };
 }
 
-/** Next or previous match, wrapping around — a search that stops at the end is a search you repeat by hand. */
+/** Next or previous match, wrapping around. */
 export function stepSearch(state: FixedLayoutState, direction: 1 | -1): FixedLayoutState {
-  const current = state.search;
-  if (!current || current.matches.length === 0) return state;
-  const index = (current.index + direction + current.matches.length) % current.matches.length;
-  return revealMatch({ ...state, search: { ...current, index } });
-}
-
-/** Puts the current match on screen, a third of the way down, so its context comes with it. */
-function revealMatch(state: FixedLayoutState): FixedLayoutState {
-  const current = state.search;
-  if (!current || current.matches.length === 0) return state;
-  const line = current.matches[current.index];
-  const offset = Math.floor(state.viewport.height / 3);
-  const top = Math.max(0, Math.min(line - offset, maxTop(state.viewport)));
-  return { ...state, viewport: { ...state.viewport, top } };
-}
-
-/** Style-free text, for matching and for measuring. */
-function stripStyles(line: string): string {
-  return line.replace(STYLE_PATTERN, "");
+  if (!state.search) return state;
+  const stepped = stepViewportSearch(state.viewport, state.search, direction);
+  return { ...state, viewport: stepped.viewport, search: stepped.search };
 }
 
 export type RenderedFrame = {
@@ -260,7 +230,7 @@ export function renderFrame(state: FixedLayoutState): RenderedFrame {
  * Logical lines, not wrapped ones: the destination will wrap to its own width, and re-wrapping text
  * that was already wrapped for a 60-column window is how a pager shows a ragged left margin.
  */
-export function transcriptText(state: FixedLayoutState): string {
+export function transcriptText(state: Pick<FixedLayoutState, "buffer" | "dropped">): string {
   const header = state.dropped > 0
     ? [`[${state.dropped.toLocaleString()} earlier lines are not in this view]`, ""]
     : [];

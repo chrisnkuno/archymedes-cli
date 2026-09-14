@@ -1,20 +1,10 @@
 {
   "themeLeaks": {},
   "largeFiles": {
-    "packages/archymedes-cli/src/archymedes.ts": 3900,
+    "packages/archymedes-cli/src/archymedes.ts": 3872,
     "packages/archymedes-cli/src/render/tui.ts": 1356
   },
   "layering": {},
   "duplicateHelpers": {},
-  "unwired": {
-    "packages/archymedes-cli/src/commands/wander.ts": 1,
-    "packages/archymedes-cli/src/commands/pacing.ts": 1,
-    "packages/archymedes-cli/src/text/ansi.ts": 8,
-    "packages/archymedes-cli/src/ui/gallery.ts": 2,
-    "packages/archymedes-cli/src/render/patch-view.ts": 1,
-    "packages/archymedes-cli/src/job-worker.ts": 1,
-    "packages/archymedes-cli/src/catalog/commands.ts": 1,
-    "packages/archymedes-cli/src/session/fallback.ts": 1,
-    "packages/archymedes-cli/src/terminal/viewport.ts": 1
-  }
+  "unwired": {}
 }

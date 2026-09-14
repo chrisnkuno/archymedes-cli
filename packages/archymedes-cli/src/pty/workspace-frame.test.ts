@@ -11,7 +11,7 @@ describe("the real CLI in a fixed workspace", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "archymedes-fixed-"));
     // No --layout: the fixed workspace is the default for an interactive terminal.
     const proc = spawnArchymedes({ cwd: root, args: ["--currency", "USD"], cols: 100, rows: 30,
-      env: { ANTHROPIC_API_KEY: "sk-test-fake", ANTHROPIC_BASE_URL: stub.url, ARCHYMEDES_CONFIG_DIR: path.join(root, "config"), ARCHYMEDES_FX_OFFLINE: "true", ARCHYMEDES_NO_MOTION: "1", TZ: "UTC" } });
+      env: { ANTHROPIC_API_KEY: "sk-test-fake", ANTHROPIC_BASE_URL: stub.url, ARCHYMEDES_CONFIG_DIR: path.join(root, "config"), ARCHYMEDES_FX_OFFLINE: "true", ARCHYMEDES_NO_MOTION: "1", PAGER: "cat", TZ: "UTC" } });
     try {
       await proc.waitFor("\x1b[?1049h");
       await proc.waitFor(/›/);
@@ -37,6 +37,22 @@ describe("the real CLI in a fixed workspace", () => {
       proc.write("\x1b[1;5F");
       await proc.waitFor("LIVE", { since: beforeEnd });
       expect(proc.output().slice(beforeWheel)).not.toContain("<64;20;10M");
+      // Search holds history across /find steps, and /find off returns to live output.
+      const beforeFind = proc.output().length;
+      proc.writeLine("/find result 1");
+      await proc.waitFor(/FIND 1\/11 "result 1"/, { since: beforeFind });
+      const beforeNext = proc.output().length;
+      proc.writeLine("/find");
+      await proc.waitFor(/FIND 2\/11/, { since: beforeNext });
+      const beforeOff = proc.output().length;
+      proc.writeLine("/find off");
+      await proc.waitFor("LIVE", { since: beforeOff });
+      // The pager gets the whole transcript and hands the terminal back.
+      const beforePager = proc.output().length;
+      proc.writeLine("/pager");
+      const handedOver = await proc.waitFor("\x1b[?1049l", { since: beforePager });
+      await proc.waitFor("workspace result 0", { since: handedOver.indexOf("\x1b[?1049l", beforePager) });
+      await proc.waitFor("\x1b[?1049h", { since: beforePager });
       const beforeMode = proc.output().length;
       proc.writeLine("/mode");
       await proc.waitFor("Choose how Archymedes works", { since: beforeMode });
