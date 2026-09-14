@@ -5,8 +5,8 @@ import path from "node:path";
 export const THEME_ALLOWLIST = new Set(["ansi.ts", "theme.ts"]);
 export const LARGE_FILE_LINES = 800;
 
-export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number>; duplicateHelpers?: Record<string, number> };
-export type GuardFinding = { guard: "theme" | "size" | "layering" | "helpers"; file: string; baseline: number; current: number };
+export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number>; duplicateHelpers?: Record<string, number>; unwired?: Record<string, number> };
+export type GuardFinding = { guard: "theme" | "size" | "layering" | "helpers" | "unwired"; file: string; baseline: number; current: number };
 /** Section → sections it may import. A file's section is its first directory under the source root; anything else is unrestricted. */
 export type SectionRules = Record<string, readonly string[]>;
 
@@ -61,6 +61,49 @@ export function countLayeringViolations(file: string, source: string, rules: Sec
   return violations;
 }
 
+const EXPORTED_NAME = /^export\s+(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:function\*?|const|let|var|class|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
+const isTestPath = (file: string) => /\.test\.tsx?$/.test(file) || /(^|\/)pty\//.test(file);
+
+/**
+ * Exports that no product code reaches: not another source file, not a consumer root such as
+ * `tooling/dev`, and not their own module. Usually a finished component that was never wired in.
+ * `allow` names deliberate exceptions as "path/in/source.ts:name".
+ */
+export function findUnwiredExports(sources: Readonly<Record<string, string>>, consumers: readonly string[] = [], allow: ReadonlySet<string> = new Set()): Record<string, string[]> {
+  const found: Record<string, string[]> = {};
+  const files = Object.keys(sources);
+  for (const file of files) {
+    if (isTestPath(file)) continue;
+    for (const [, name] of sources[file].matchAll(EXPORTED_NAME)) {
+      if (allow.has(`${file}:${name}`)) continue;
+      const word = new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g");
+      const ownUses = (sources[file].match(word)?.length ?? 0) - 1;
+      const reached = ownUses > 0
+        || files.some((other) => other !== file && !isTestPath(other) && word.test(sources[other]))
+        || consumers.some((text) => word.test(text));
+      word.lastIndex = 0;
+      if (!reached) (found[file] ??= []).push(name);
+    }
+  }
+  return found;
+}
+
+export function readTree(root: string, filter: (file: string) => boolean = () => true): Record<string, string> {
+  const tree: Record<string, string> = {};
+  const walk = (directory: string) => {
+    for (const entry of readdirSync(directory)) {
+      const full = path.join(directory, entry);
+      if (statSync(full).isDirectory()) { if (entry !== "node_modules") walk(full); }
+      else if (/\.tsx?$/.test(entry)) {
+        const relative = path.relative(root, full).split(path.sep).join("/");
+        if (filter(relative)) tree[relative] = readFileSync(full, "utf8");
+      }
+    }
+  };
+  walk(root);
+  return tree;
+}
+
 export function collectMetrics(repoRoot: string, sourceRoot: string, rules: SectionRules = {}): Metrics {
   const metrics: Metrics = { themeLeaks: {}, largeFiles: {}, layering: {}, duplicateHelpers: {} };
   for (const file of sourceFiles(path.join(repoRoot, sourceRoot)).sort()) {
@@ -97,5 +140,6 @@ export function compareToBaseline(baseline: Metrics, current: Metrics): { regres
   check("size", baseline.largeFiles, current.largeFiles, LARGE_FILE_LINES);
   check("layering", baseline.layering ?? {}, current.layering ?? {}, 0);
   check("helpers", baseline.duplicateHelpers ?? {}, current.duplicateHelpers ?? {}, 0);
+  check("unwired", baseline.unwired ?? {}, current.unwired ?? {}, 0);
   return { regressions, improvements };
 }

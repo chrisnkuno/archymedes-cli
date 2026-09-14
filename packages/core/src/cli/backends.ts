@@ -9,6 +9,7 @@ import {
   globWorkspace,
   grepWorkspace,
   looksBinary,
+  readBinaryFile,
   readTextFile,
   walkWorkspace,
   writeTextFile,
@@ -104,6 +105,11 @@ export class LocalWorkspace implements ArchymedesWorkspace {
 
   readFile(path: string, options: { offset?: number; limit?: number } = {}): Promise<ReadResult> {
     return readTextFile(this.root, path, { ...options, limits: this.limits });
+  }
+
+  /** Raw bytes for rendering (images in the transcript). Local only: sandboxes expose text reads. */
+  readBytes(path: string): Promise<{ path: string; bytes: Uint8Array }> {
+    return readBinaryFile(this.root, path, this.limits);
   }
 
   writeFile(path: string, content: string): Promise<{ path: string; bytesWritten: number }> {

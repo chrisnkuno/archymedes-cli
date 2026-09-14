@@ -5,6 +5,26 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-3: Wire in built-but-unused components
+
+User request (2026-09-14): "that's exactly why this refactoring was needed, it's to detect unused
+components, wire the render/picture.ts in it and the rest". After this workstream: WS-2.11 (handler
+extraction, largest first), then WS-2.12 (measure hot paths before optimizing).
+
+`tooling/check/unused_exports.py` found, among exports reached only by tests or by nothing:
+`render/picture.ts` + `render/png.ts` (images); transcript search and pager in
+`terminal/fixed-layout.ts` / `fixed-screen.ts` (demo-only); `galleryVariants`, `profileFor`,
+`FALLBACK_PROVIDERS`, `atTop`, `widestRow`, `describeJobForHuman` and `wanderArtifacts`; plus dead
+`CommandContext`, `GALLERY_PALETTE` and the ANSI colour names the theme guard forbids.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-3.1 | `unwired` ratchet: exports only tests (or nothing) reach, with `tooling/dev` counted as a consumer and a short allowlist for test-support APIs | done | `tooling/check/` | `bun run recheck` | `findUnwiredExports` in `guards.ts`, `recheck --unwired` lists names, and `unwired-allow.json` records exceptions with reasons. Starting baseline 23 (new metric); guard test added |
+| WS-3.2 | Images in `/cat`: core `readBinaryFile` + `LocalWorkspace.readBytes` (same containment and size limit); PNG decode, glyph rendering, Kitty only with `ARCHYMEDES_IMAGES=kitty` in scrollback, `/clear` clears Kitty images | done | `packages/core/src/cli/`, `render/picture.ts`, new `app/` image module, `/cat` | `bun run recheck --pty` | Core `readBinaryFile` + `LocalWorkspace.readBytes` (containment, symlink and size tests). `render/image-view.ts` (5 tests). `/cat` extracted to `commands/cat.ts` behind `CatContext` (3 tests) with the image branch. `/clear` removes Kitty images. PTY test draws a real PNG in the fixed workspace. Unwired 23 → 17; unit 169 files / 2,844 tests; PTY 19 / 105 |
+| WS-3.3 | Transcript search and pager in the fixed workspace: `/find <text>`, `/find`, `/find prev`, `/find off`; `/pager` via `openInPager`; search logic shared with `fixed-layout.ts` | todo | `terminal/fixed-layout.ts`, `ui/workspace-frame.ts`, catalog, guide | `bun run recheck --pty` | |
+| WS-3.4 | Small wirings: `--gallery all` (fallback matrix), `profileFor`, `FALLBACK_PROVIDERS` in `/fallback` errors, `TOP` label via `atTop`, plus `widestRow`, `describeJobForHuman`, `wanderArtifacts` at their natural call sites | todo | several | `bun run recheck --pty` | |
+| WS-3.5 | Delete dead exports: `CommandContext`, `GALLERY_PALETTE`, forbidden ANSI colour names | todo | `catalog/`, `ui/gallery.ts`, `text/ansi.ts` | `bun run recheck` | |
+
 ## WS-2: Quality pass on `packages/archymedes-cli`: sections, layering, extraction
 
 Run with `docs/continuation/prompts/QUALITY_PASS.md` (started 2026-09-14, after pushing `5479634`).

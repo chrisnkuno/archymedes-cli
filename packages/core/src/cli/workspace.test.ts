@@ -8,6 +8,7 @@ import {
   globWorkspace,
   grepWorkspace,
   looksBinary,
+  readBinaryFile,
   walkWorkspace,
   readTextFile,
   resolveInWorkspace,
@@ -72,6 +73,16 @@ describe("workspace confinement", () => {
 
     await fs.writeFile(path.join(root, "big.txt"), "x".repeat(2_000));
     await expect(readTextFile(root, "big.txt", { limits: { maxReadBytes: 100, maxWriteBytes: 100, ignoredDirectories: [] } })).rejects.toThrow(/read limit/);
+  });
+
+  it("reads raw bytes for rendering under the same confinement and size limit", async () => {
+    await fs.writeFile(path.join(root, "image.bin"), Buffer.from([0x89, 0x50, 0x00, 0x01, 0x02]));
+    const read = await readBinaryFile(root, "image.bin");
+    expect(read.path).toBe("image.bin");
+    expect([...read.bytes]).toEqual([0x89, 0x50, 0x00, 0x01, 0x02]);
+    await expect(readBinaryFile(root, "../escape.png")).rejects.toThrow(WorkspaceViolation);
+    await expect(readBinaryFile(root, "missing.png")).rejects.toThrow(/does not exist/);
+    await expect(readBinaryFile(root, "image.bin", { maxReadBytes: 2, maxWriteBytes: 2, ignoredDirectories: [] })).rejects.toThrow(/read limit/);
   });
 });
 

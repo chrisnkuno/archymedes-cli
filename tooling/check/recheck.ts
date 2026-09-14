@@ -2,13 +2,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectMetrics, compareToBaseline, type Metrics, type SectionRules } from "./guards";
+import { collectMetrics, compareToBaseline, findUnwiredExports, readTree, type Metrics, type SectionRules } from "./guards";
 
 /**
  * `bun run recheck` — the loop run after every change.
  *   guards → typecheck → tests related to changed files (unit project)
  * Flags: --pty also runs every terminal test; --all runs the whole suite instead of related tests;
- * --full runs `release:check`; --update-baseline accepts current guard counts (say why in TRACKER.md).
+ * --full runs `release:check`; --update-baseline accepts current guard counts (say why in TRACKER.md);
+ * --unwired lists exports no product code reaches.
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,14 @@ function changedFiles(): string[] {
 
 const sectionConfig = JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string; allowed: SectionRules };
 const current = collectMetrics(REPO, sectionConfig.sourceRoot, sectionConfig.allowed);
+{
+  const allow = JSON.parse(readFileSync(path.join(HERE, "unwired-allow.json"), "utf8")) as Record<string, string>;
+  const sources = readTree(path.join(REPO, sectionConfig.sourceRoot));
+  const consumers = Object.values(readTree(path.join(REPO, "tooling/dev")));
+  const unwired = findUnwiredExports(sources, consumers, new Set(Object.keys(allow)));
+  current.unwired = Object.fromEntries(Object.entries(unwired).map(([file, names]) => [`${sectionConfig.sourceRoot}/${file}`, names.length]));
+  if (args.has("--unwired")) for (const [file, names] of Object.entries(unwired)) console.log(`  unwired ${file}: ${names.join(", ")}`);
+}
 if (args.has("--update-baseline") || !existsSync(BASELINE)) {
   writeFileSync(BASELINE, `${JSON.stringify(current, null, 2)}\n`);
   console.log(`Baseline written to ${path.relative(REPO, BASELINE)}.`);
@@ -46,7 +55,7 @@ const total = (counts: Record<string, number>) => Object.values(counts).reduce((
 results.push({
   step: "guards",
   ok: regressions.length === 0,
-  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; helper copies ${total(current.duplicateHelpers ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
+  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; helper copies ${total(current.duplicateHelpers ?? {})}; unwired ${total(current.unwired ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
 });
 
 let ok = regressions.length === 0;

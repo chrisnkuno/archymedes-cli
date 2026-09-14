@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
 import { describeLocation, parseArgs, type SandboxBackend } from "./app/args";
+import { runCat } from "./commands/cat";
+import { clearKittyImages, imagePreference } from "./render/image-view";
 import { FOLD_AFTER_LINES, SPINNER_START_DELAY_MS, activity, beginTranscriptTurn, configureRendering, contentWidth, endStreamedLine, expandables, forgetToolLines, glyphs, liveTerminal, markdown, out, palette, renderDepth, renderEvent, renderUserTurn, screen, sectionStyle, sessionChecks, sessionFiles, sessionStream, setScreen, setSpinner, spinner, statusBar, style, surfacePaint, toolLines, touchedFiles, turnLineDelta, verificationChecks, writeFoldable } from "./app/transcript";
 import { priceSessionModelTurns, readSessionModelTurns } from "./session/resumed-spend";
 import { renderGallery } from "./ui/gallery";
@@ -84,7 +86,6 @@ import { removeRecording, startRecording, transcribeAudio } from "./commands/voi
 import { resolveControlLanguage, t } from "./platform/i18n";
 import { resolveGlyphs } from "./text/glyphs";
 import { GUTTER, heading, note, panel, rule } from "./render/sections";
-import { fenceHeader, languageOf, renderCode } from "./render/code-view";
 import { expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
 import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, memoryFile, memoryPromptBlock, parseMemoryCommand, recallMemories, replaceMemory, renderMemories, type MemoryEntry } from "./commands/memory";
 import { parseHistoryCommand, relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
@@ -445,6 +446,8 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  /** Kitty images placed by `/cat` this session, removed again by `/clear`. */
+  const kittyImages: number[] = [];
   const readline = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -2926,27 +2929,20 @@ async function main(): Promise<number> {
     }
 
     if (input === "/cat" || input.startsWith("/cat ")) {
-      const target = input.slice("/cat".length).trim();
-      if (!target) { out.write(style.yellow("  Usage: /cat <path>\n")); continue; }
-      const style_ = sectionStyle();
-      try {
-        const file = await workspace.readFile(target, {});
-        out.write(`${rule(style_, { label: target, tone: "accent" })}\n`);
-        // Markdown is prose meant to be read, not a tool result to fold — the same reasoning
-        // `/guide` already prints its topics in full rather than behind `/expand`. Everything else
-        // gets the ordinary numbered, folded code view: a file is not less a file for being `/cat`,
-        // and a 3,000-line log dumped whole would push the very prompt someone typed off the screen.
-        if (/\.(md|markdown)$/i.test(target)) {
-          out.write(`${renderMarkdown(file.content, { width: contentWidth(), depth: renderDepth, glyphs, palette })}\n`);
-        } else {
-          const language = languageOf(target);
-          out.write(`${fenceHeader(language, style_)}\n`);
-          writeFoldable(target, renderCode(file.content, style_, { maxLines: FOLD_AFTER_LINES, language }));
-        }
-        if (file.truncated) out.write(`${note(`… ${file.totalLines} lines total, longer than a session cares to hold at once`, style_)}\n`);
-      } catch (error) {
-        out.write(style.yellow(`  Could not read "${target}": ${error instanceof Error ? error.message : String(error)}\n`));
-      }
+      await runCat(input.slice("/cat".length).trim(), {
+        readFile: (target) => workspace.readFile(target, {}),
+        ...(workspace instanceof LocalWorkspace ? { readBytes: (target: string) => (workspace as LocalWorkspace).readBytes(target) } : {}),
+        write: (text) => out.write(text),
+        warn: (text) => out.write(style.yellow(`  ${text}\n`)),
+        writeFoldable,
+        style: sectionStyle(),
+        width: contentWidth(),
+        foldAfterLines: FOLD_AFTER_LINES,
+        images: imagePreference(environment, screen instanceof WorkspaceFrame ? "fixed" : "scrollback"),
+        imageRows: Math.max(6, (process.stdout.rows ?? 24) - 8),
+        onKittyImage: (id) => kittyImages.push(id),
+        nextImageId: () => kittyImages.length + 1,
+      });
       continue;
     }
 
@@ -3506,6 +3502,7 @@ async function main(): Promise<number> {
       continue;
     }
     if (input === "/clear") {
+      if (kittyImages.length > 0) { process.stdout.write(clearKittyImages(kittyImages)); kittyImages.length = 0; }
       await agent.relinquish();
       agent = await openClient();
       // A new thread has neither the old thread's folded output nor its remembered context.

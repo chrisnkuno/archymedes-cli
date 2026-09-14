@@ -161,6 +161,23 @@ export async function readTextFile(
   };
 }
 
+/**
+ * Raw bytes of a file inside the workspace, for callers that render rather than read (an image in
+ * the transcript). Same confinement and size limit as `readTextFile`; never handed to a model.
+ */
+export async function readBinaryFile(root: string, candidate: string, limits: WorkspaceLimits = DEFAULT_WORKSPACE_LIMITS): Promise<{ path: string; bytes: Uint8Array }> {
+  const absolute = await realPathWithin(root, candidate);
+  const stat = await fs.stat(absolute).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new WorkspaceViolation(`${displayPath(root, absolute)} does not exist`);
+    throw error;
+  });
+  if (stat.isDirectory()) throw new WorkspaceViolation(`${displayPath(root, absolute)} is a directory, not a file`);
+  if (stat.size > limits.maxReadBytes) {
+    throw new WorkspaceViolation(`${displayPath(root, absolute)} is ${stat.size} bytes, above the ${limits.maxReadBytes}-byte read limit`);
+  }
+  return { path: displayPath(root, absolute), bytes: new Uint8Array(await fs.readFile(absolute)) };
+}
+
 export async function writeTextFile(root: string, candidate: string, content: string, limits = DEFAULT_WORKSPACE_LIMITS): Promise<{ path: string; bytesWritten: number }> {
   if (typeof content !== "string") throw new WorkspaceViolation("content must be a string");
   const bytes = Buffer.byteLength(content, "utf8");

@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { deflateSync } from "node:zlib";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -191,6 +192,32 @@ describe("what the transcript shows, under a real pty", () => {
       ),
     ];
     expect(nonAscii).toEqual([]);
+  }, 60_000);
+
+  it("draws a PNG named to /cat in the fixed workspace, as coloured half-blocks", async () => {
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(4, 0);
+    header.writeUInt32BE(4, 4);
+    header[8] = 8;
+    header[9] = 6;
+    const chunk = (type: string, data: Buffer) => {
+      const out = Buffer.alloc(12 + data.length);
+      out.writeUInt32BE(data.length, 0);
+      out.write(type, 4, "ascii");
+      data.copy(out, 8);
+      return out;
+    };
+    const raw = Buffer.from(Array.from({ length: 4 }, () => [0, ...Array.from({ length: 4 }, () => [255, 64, 0, 255]).flat()]).flat());
+    await writeFile(path.join(cwd, "logo.png"), Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0)),
+    ]));
+    const p = boot({ env: { COLORTERM: "truecolor", NO_COLOR: undefined } });
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+    const before = p.output().length;
+    p.writeLine("/cat logo.png");
+    await p.waitFor(/4×4/, { timeoutMs: 20_000, since: before });
+    await p.waitFor("\x1b[38;2;255;64;0m", { timeoutMs: 20_000, since: before });
+    expect(p.output().slice(before)).toContain("▀");
   }, 60_000);
 
   it("reports and changes the spending pace without ending the session", async () => {

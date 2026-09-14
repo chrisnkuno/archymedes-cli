@@ -1,0 +1,3 @@
+{
+  "render/guide.ts:undocumentedCommands": "Test-support API: guide.test.ts uses it to fail when a registered command has no guide topic."
+}

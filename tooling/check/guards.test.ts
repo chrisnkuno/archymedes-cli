@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareToBaseline, countHelperCopies, countLayeringViolations, countLines, countThemeLeaks, LARGE_FILE_LINES, sectionOf } from "./guards";
+import { compareToBaseline, countHelperCopies, findUnwiredExports, countLayeringViolations, countLines, countThemeLeaks, LARGE_FILE_LINES, sectionOf } from "./guards";
 
 describe("recheck guards", () => {
   it("counts named ANSI colours and raw colour escapes, but not weights or truecolor", () => {
@@ -28,6 +28,16 @@ describe("recheck guards", () => {
 
   it("counts private copies of the shared escape and width helpers", () => {
     expect(countHelperCopies(`const RESET = "x";\nfunction paint(a) {}\nexport function visibleWidth() {}\nconst paintRgb = 1;\n  const DIM = 2;`)).toBe(3);
+  });
+
+  it("finds exports only tests reach, counting own-module use, consumers and the allowlist as wired", () => {
+    const sources = {
+      "render/picture.ts": "export function renderGlyph() {}\nexport function helper() {}\nexport const used = helper();\nexport function demoOnly() {}\nexport function allowed() {}",
+      "render/picture.test.ts": "renderGlyph(); used; allowed();",
+      "app/cat.ts": "import { used } from '../render/picture';",
+      "pty/harness.ts": "renderGlyph();",
+    };
+    expect(findUnwiredExports(sources, ["demoOnly()"], new Set(["render/picture.ts:allowed"]))).toEqual({ "render/picture.ts": ["renderGlyph"] });
   });
 
   it("fails on growth, reports shrinkage, and treats new files from zero or the size threshold", () => {
