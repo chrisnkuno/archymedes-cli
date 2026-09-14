@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { highlightCode } from "./code-view";
-import { composeExplainPanel, initialExplainPanelState } from "./explain-view";
-import { renderMarkdown } from "./markdown";
-import { renderPatch, parsePatch } from "./patch-view";
-import { outcomeMark, toneCode } from "./sections";
-import { ANSI_PALETTE, buildPalette, findBuiltinTheme, roleCode } from "./theme";
-import { box, renderPromptBox } from "./tui";
+import { highlightCode } from "./render/code-view";
+import { composeExplainPanel, initialExplainPanelState } from "./ui/explain-view";
+import { renderMarkdown } from "./render/markdown";
+import { renderPatch, parsePatch } from "./render/patch-view";
+import { outcomeMark, toneCode } from "./render/sections";
+import { ANSI_PALETTE, buildPalette, findBuiltinTheme, roleCode } from "./theme/theme";
+import { box, renderPromptBox } from "./render/tui";
 
 const archymedes = buildPalette(findBuiltinTheme("archymedes")!, "truecolor");
 const blueprint = buildPalette(findBuiltinTheme("blueprint")!, "truecolor");

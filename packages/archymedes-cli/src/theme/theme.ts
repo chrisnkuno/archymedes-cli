@@ -1,0 +1,523 @@
+import type { ColorDepth } from "../text/color-depth";
+
+/**
+ * Colour, as a set of named roles rather than a set of escape codes.
+ *
+ * Archymedes's renderers each reached for a literal — `\x1b[36m` for anything important, `\x1b[2m` for
+ * anything subordinate — which is why "make it look different" had no answer short of editing every
+ * file. A theme names the *roles* instead (what is primary, what is subordinate, what is wrong) and
+ * resolves them to codes once, at the depth the terminal actually supports.
+ *
+ * The vocabulary and the file format are deliberately TermUI's Terminal Style Sheets
+ * (https://www.termui.io — `@theme name { --primary: … }`), not a private invention. Two reasons:
+ * a theme someone already wrote for a TSS app loads here unchanged, and when a full-screen Archymedes
+ * workspace is eventually built on that framework, the themes written today travel to it without a
+ * migration. Archymedes adds no keys of its own to the core set for exactly that reason.
+ *
+ * One deliberate omission in *this* renderer: `--bg` and `--surface` are parsed, kept and exposed,
+ * but nothing here paints them. Archymedes prints into the terminal's own scrollback, where painting a
+ * background means fighting the user's chosen one and leaving coloured bands behind on every line
+ * that scrolls. They are carried because they are part of the format and because a screen-buffer
+ * renderer, which owns every cell it draws, will need them.
+ */
+
+/** The token set, one name per role. Matches TSS's `--kebab-case` variables one for one. */
+export type ThemeTokens = {
+  primary: string;
+  secondary: string;
+  accent: string;
+  bg: string;
+  surface: string;
+  text: string;
+  textMuted: string;
+  success: string;
+  warning: string;
+  error: string;
+  border: string;
+  borderColor: string;
+  borderFocus: string;
+};
+
+export type Theme = {
+  name: string;
+  /** Shown by `/theme list`; not part of the TSS format, read from a `/* … *\/` comment above the block. */
+  description: string;
+  tokens: ThemeTokens;
+};
+
+/**
+ * The original drafting table, kept.
+ *
+ * A palette rather than a colour scheme: a deep blueprint navy ground, chalk-white for ordinary
+ * text, cyan-blue for the drawn line that is live, and an amber pencil for what deserves attention.
+ * Status colours are pulled toward that blueprint (a muted vermilion rather than a terminal red) so
+ * a failure reads as part of the same drawing instead of an alarm pasted onto it. `archymedes` is
+ * the default now; this stays for anyone who set it and for cool-terminal preference.
+ */
+export const BLUEPRINT = `
+/* Blueprint navy, chalk-white ink and an amber pencil — the original drafting table. */
+@theme blueprint {
+    --primary: #7cc5ff;
+    --secondary: #9fb4e8;
+    --accent: #ffcf6b;
+    --bg: #0a1524;
+    --surface: #122135;
+    --text: #e8eefb;
+    --text-muted: #6f89b0;
+    --success: #79dfa6;
+    --warning: #ffcf6b;
+    --error: #ff8f7a;
+    --border: round;
+    --border-color: #24406a;
+    --border-focus: #7cc5ff;
+}
+`;
+
+const PARCHMENT = `
+/* The same drawing inked on paper, for a light terminal. */
+@theme parchment {
+    --primary: #2f5fbf;
+    --secondary: #5a4a86;
+    --accent: #9a6a00;
+    --bg: #faf6ec;
+    --surface: #f1eadd;
+    --text: #1b1a16;
+    --text-muted: #6a6252;
+    --success: #196a44;
+    --warning: #8a5300;
+    --error: #b3243b;
+    --border: round;
+    --border-color: #d8cfb8;
+    --border-focus: #2f5fbf;
+}
+`;
+
+const CHALKBOARD = `
+/* A slate: near-black green, chalk white, chalk yellow — for terminals with contrast to spare. */
+@theme chalkboard {
+    --primary: #9fe8d8;
+    --secondary: #d8d0b0;
+    --accent: #ffe066;
+    --bg: #0d1a15;
+    --surface: #16271f;
+    --text: #f2efe4;
+    --text-muted: #86987f;
+    --success: #7ef2b0;
+    --warning: #ffd166;
+    --error: #ff7a7a;
+    --border: single;
+    --border-color: #2c443a;
+    --border-focus: #ffe066;
+}
+`;
+
+const HIGH_CONTRAST = `
+/* Maximum separation, named colours only — for low vision and for terminals with a fixed palette. */
+@theme high-contrast {
+    --primary: brightCyan;
+    --secondary: brightMagenta;
+    --accent: brightYellow;
+    --bg: black;
+    --surface: black;
+    --text: brightWhite;
+    --text-muted: white;
+    --success: brightGreen;
+    --warning: brightYellow;
+    --error: brightRed;
+    --border: single;
+    --border-color: white;
+    --border-focus: brightCyan;
+}
+`;
+
+/**
+ * Archymedes's own.
+ *
+ * The instrument on the workbench, not the blueprint pinned above it: bronze for the drawn line
+ * that is live, limestone-white for ordinary text, an olive accent for what is settled, all on
+ * charcoal. Status colours are warmed to match — a clay red rather than a terminal red — so a
+ * failure reads as part of the same surface. This is the default; `blueprint` and the others stay.
+ */
+export const ARCHYMEDES = `
+/* Bronze instruments, limestone ink and olive accents on charcoal — Archymedes's own. */
+@theme archymedes {
+    --primary: #e7bb78;
+    --secondary: #b9c59a;
+    --accent: #e5a58c;
+    --bg: #191815;
+    --surface: #25231e;
+    --text: #f2ecdf;
+    --text-muted: #aaa18f;
+    --success: #b5cc96;
+    --warning: #efc778;
+    --error: #f29686;
+    --border: single;
+    --border-color: #736956;
+    --border-focus: #e7bb78;
+}
+`;
+
+/**
+ * Every hue at once, for anyone who wants the CLI loud.
+ *
+ * The tokens below are ordinary flat colours — `success`/`warning`/`error` keep their meaning, and
+ * anything that only ever paints with a token (a table rule, a border) is unaffected by picking this
+ * theme. What actually turns "rainbow" from a name into an effect is `palette.theme === "rainbow"`
+ * being read by the few surfaces built to animate: the opening identity art sweeps its geometry
+ * around the colour wheel as it spins (`identity.ts`), and the thinking spinner cycles hue while a
+ * turn runs (`archymedes.ts`). Bubbletea's own examples reach for the same trick — a `spinner` whose
+ * style function returns a different lipgloss colour per tick — which is what `rainbowHex` below is
+ * for: one wheel position in, one hex colour out, so any animator can drive it from its own clock.
+ */
+const RAINBOW = `
+/* Every hue at once — the opening art and the thinking spinner sweep the full spectrum. */
+@theme rainbow {
+    --primary: #ff5f5f;
+    --secondary: #5fd7ff;
+    --accent: #ffd75f;
+    --bg: #0c0c0c;
+    --surface: #161616;
+    --text: #f2f2f2;
+    --text-muted: #9a9a9a;
+    --success: #5fff87;
+    --warning: #ffaf5f;
+    --error: #ff3b3b;
+    --border: double;
+    --border-color: #8a8a8a;
+    --border-focus: #d75fff;
+}
+`;
+
+export const BUILTIN_THEME_SOURCES: Record<string, string> = {
+  "archymedes": ARCHYMEDES,
+  "blueprint": BLUEPRINT,
+  "parchment": PARCHMENT,
+  "chalkboard": CHALKBOARD,
+  "high-contrast": HIGH_CONTRAST,
+  "rainbow": RAINBOW,
+};
+
+export const DEFAULT_THEME_NAME = "archymedes";
+
+/** The 16 names ANSI defines, in the order the codes run. */
+const NAMED_COLORS: Record<string, number> = {
+  black: 0, red: 1, green: 2, yellow: 3, blue: 4, magenta: 5, cyan: 6, white: 7,
+  brightblack: 8, brightred: 9, brightgreen: 10, brightyellow: 11,
+  brightblue: 12, brightmagenta: 13, brightcyan: 14, brightwhite: 15,
+  // TSS spells the eighth colour `gray`/`grey` as often as `brightBlack`.
+  gray: 8, grey: 8,
+};
+
+export type Rgb = { r: number; g: number; b: number };
+
+/** `#rgb`, `#rrggbb`, or one of the 16 names. Returns undefined for anything else, including `round`. */
+export function parseColor(value: string): Rgb | number | undefined {
+  const text = value.trim();
+  const named = NAMED_COLORS[text.toLowerCase().replace(/[\s_-]/g, "")];
+  if (named !== undefined) return named;
+
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text);
+  if (!hex) return undefined;
+  const digits = hex[1];
+  const full = digits.length === 3 ? digits.split("").map((digit) => digit + digit).join("") : digits;
+  return {
+    r: Number.parseInt(full.slice(0, 2), 16),
+    g: Number.parseInt(full.slice(2, 4), 16),
+    b: Number.parseInt(full.slice(4, 6), 16),
+  };
+}
+
+/**
+ * Nearest xterm-256 index for a colour.
+ *
+ * The palette is a 6×6×6 cube plus a 24-step greyscale ramp, and the two overlap badly near grey —
+ * a near-grey colour quantised into the cube lands on a visibly tinted swatch when the ramp had a
+ * closer one. Both candidates are computed and the closer wins, which is what keeps `--text-muted`
+ * from turning faintly purple on a 256-colour terminal.
+ */
+export function rgbTo256({ r, g, b }: Rgb): number {
+  const level = (value: number): number => {
+    if (value < 48) return 0;
+    if (value < 115) return 1;
+    return Math.min(5, Math.round((value - 35) / 40));
+  };
+  const cubeIndex = 16 + 36 * level(r) + 6 * level(g) + level(b);
+  const cubeValue = (step: number) => (step === 0 ? 0 : 55 + step * 40);
+  const cube = { r: cubeValue(level(r)), g: cubeValue(level(g)), b: cubeValue(level(b)) };
+
+  const greyAverage = (r + g + b) / 3;
+  const greyStep = Math.max(0, Math.min(23, Math.round((greyAverage - 8) / 10)));
+  const greyValue = 8 + greyStep * 10;
+  const grey = { r: greyValue, g: greyValue, b: greyValue };
+
+  return distance({ r, g, b }, grey) < distance({ r, g, b }, cube) ? 232 + greyStep : cubeIndex;
+}
+
+function distance(a: Rgb, b: Rgb): number {
+  return (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2;
+}
+
+/**
+ * The escape code for a colour at a given depth.
+ *
+ * Depth is honoured rather than assumed: a truecolor sequence sent to a 256-colour terminal is not
+ * gracefully ignored, it is *printed*, and the transcript fills with `38;2;138;180;248m`.
+ */
+export function colorCode(value: string, depth: ColorDepth): string {
+  if (depth === "none") return "";
+  const parsed = parseColor(value);
+  if (parsed === undefined) return "";
+  if (typeof parsed === "number") return parsed < 8 ? `\x1b[${30 + parsed}m` : `\x1b[${90 + parsed - 8}m`;
+  return depth === "truecolor"
+    ? `\x1b[38;2;${parsed.r};${parsed.g};${parsed.b}m`
+    : `\x1b[38;5;${rgbTo256(parsed)}m`;
+}
+
+/**
+ * One position on the colour wheel, as a hex colour — full saturation, a lightness that still reads
+ * on both a dark and a light ground. `t` wraps: 0 and 1 are the same red, so an animator can drive
+ * this from a steadily increasing clock without ever checking the range itself.
+ */
+export function rainbowHex(t: number): string {
+  const hue = (((t % 1) + 1) % 1) * 360;
+  const c = 0.5; // chroma at 60% lightness
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = 0.6 - c / 2;
+  const [r1, g1, b1] =
+    hue < 60 ? [c, x, 0] :
+    hue < 120 ? [x, c, 0] :
+    hue < 180 ? [0, c, x] :
+    hue < 240 ? [0, x, c] :
+    hue < 300 ? [x, 0, c] :
+    [c, 0, x];
+  const channel = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, "0");
+  return `#${channel(r1)}${channel(g1)}${channel(b1)}`;
+}
+
+/**
+ * Text with each character stepping around the colour wheel from a starting position — Bubbletea's
+ * own rainbow examples do this per character too, cycling a lipgloss style across a string. A space
+ * closes the run rather than colouring it, the same convention `gradientText` in `banner.ts` uses,
+ * so multi-word rainbow text does not carry a visible colour through its gaps.
+ */
+export function rainbowText(text: string, depth: ColorDepth, phase = 0): string {
+  if (depth === "none") return text;
+  const characters = [...text];
+  let out = "";
+  let open: string | undefined;
+  characters.forEach((character, index) => {
+    if (character === " ") {
+      if (open !== undefined) { out += "\x1b[0m"; open = undefined; }
+      out += character;
+      return;
+    }
+    const code = colorCode(rainbowHex(phase + index / 12), depth);
+    if (code !== open) { out += code; open = code; }
+    out += character;
+  });
+  return open === undefined ? out : `${out}\x1b[0m`;
+}
+
+const DEFAULT_TOKENS: ThemeTokens = {
+  primary: "cyan",
+  secondary: "blue",
+  accent: "yellow",
+  bg: "black",
+  surface: "black",
+  text: "white",
+  textMuted: "brightBlack",
+  success: "green",
+  warning: "yellow",
+  error: "red",
+  border: "round",
+  borderColor: "brightBlack",
+  borderFocus: "cyan",
+};
+
+const TOKEN_NAMES: Record<string, keyof ThemeTokens> = {
+  primary: "primary",
+  secondary: "secondary",
+  accent: "accent",
+  bg: "bg",
+  background: "bg",
+  surface: "surface",
+  text: "text",
+  fg: "text",
+  "text-muted": "textMuted",
+  muted: "textMuted",
+  success: "success",
+  warning: "warning",
+  error: "error",
+  border: "border",
+  "border-color": "borderColor",
+  "border-focus": "borderFocus",
+  highlight: "secondary",
+};
+
+/**
+ * Reads `@theme name { … }` blocks out of a TSS document.
+ *
+ * Only the variable blocks are read. A real TSS file also carries widget rules (`Gauge { … }`,
+ * `Box:focused { … }`) that mean nothing to a renderer with no widgets; those are skipped rather
+ * than rejected, so a theme written for a TermUI app is a valid Archymedes theme rather than an error
+ * about a selector Archymedes has never heard of.
+ */
+export function parseThemeSource(source: string): Theme[] {
+  const themes: Theme[] = [];
+  const withoutLineComments = source.replace(/(^|\s)\/\/[^\n]*/g, "$1");
+  const blockPattern = /(?:\/\*([\s\S]*?)\*\/\s*)?@theme\s+([A-Za-z0-9_-]+)\s*\{([^}]*)\}/g;
+
+  for (const match of withoutLineComments.matchAll(blockPattern)) {
+    const description = (match[1] ?? "").replace(/\s+/g, " ").trim();
+    const tokens: ThemeTokens = { ...DEFAULT_TOKENS };
+    // Both spellings are in the wild: TermUI's built-in themes use `--name`, its README's examples
+    // use `$name`. Accepting both costs one alternation and avoids a class of silent no-op theme.
+    for (const declaration of match[3].matchAll(/(?:--|\$)([a-z0-9-]+)\s*:\s*([^;}]+)[;]?/gi)) {
+      const key = TOKEN_NAMES[declaration[1].toLowerCase()];
+      if (key) tokens[key] = declaration[2].trim();
+    }
+    themes.push({ name: match[2], description, tokens });
+  }
+  return themes;
+}
+
+/** Every built-in theme, in the order `/theme list` shows them. */
+export function builtinThemes(): Theme[] {
+  return Object.values(BUILTIN_THEME_SOURCES).flatMap((source) => parseThemeSource(source));
+}
+
+export function findBuiltinTheme(name: string): Theme | undefined {
+  return builtinThemes().find((theme) => theme.name.toLowerCase() === name.trim().toLowerCase());
+}
+
+/**
+ * The escape codes a renderer actually paints with.
+ *
+ * Resolved once per session rather than per call: a token lookup and a hex parse on every coloured
+ * word is real work in a transcript that prints thousands of them.
+ */
+export type Palette = {
+  readonly theme: string;
+  readonly depth: ColorDepth;
+  readonly primary: string;
+  readonly secondary: string;
+  readonly accent: string;
+  readonly text: string;
+  readonly muted: string;
+  readonly success: string;
+  readonly warning: string;
+  readonly error: string;
+  readonly border: string;
+  readonly borderFocus: string;
+  /** The border style the theme asks for, for the box-drawing set to follow. */
+  readonly borderStyle: "round" | "single" | "double" | "none";
+  /** Carried for a renderer that owns its cells; nothing in the transcript paints these. */
+  readonly bg: string;
+  readonly surface: string;
+  /**
+   * The theme's raw token values, beside the escape codes resolved from them.
+   *
+   * The transcript needs codes; a screen-buffer renderer needs the *values* — TermUI's `parseColor`
+   * takes `#8ab4f8` or `cyan` and emits the escape itself, and handing it one already-escaped would
+   * put literal `38;2;…` on screen. Carrying both means neither surface has to convert.
+   */
+  readonly tokens: ThemeTokens;
+};
+
+function borderStyleOf(value: string): Palette["borderStyle"] {
+  const text = value.trim().toLowerCase();
+  return text === "single" || text === "double" || text === "none" ? text : "round";
+}
+
+export function buildPalette(theme: Theme, depth: ColorDepth): Palette {
+  const code = (value: string) => colorCode(value, depth);
+  return {
+    theme: theme.name,
+    depth,
+    primary: code(theme.tokens.primary),
+    secondary: code(theme.tokens.secondary),
+    accent: code(theme.tokens.accent),
+    text: code(theme.tokens.text),
+    muted: code(theme.tokens.textMuted),
+    success: code(theme.tokens.success),
+    warning: code(theme.tokens.warning),
+    error: code(theme.tokens.error),
+    border: code(theme.tokens.borderColor),
+    borderFocus: code(theme.tokens.borderFocus),
+    borderStyle: borderStyleOf(theme.tokens.border),
+    bg: theme.tokens.bg,
+    surface: theme.tokens.surface,
+    tokens: theme.tokens,
+  };
+}
+
+/** Deliberately outside the theme: marks a call that leaves the sandbox, a rare blast-radius signal. */
+export const EXTERNAL_MARK = "\x1b[35m";
+
+export type ColorRole = "primary" | "secondary" | "accent" | "text" | "muted" | "success" | "warning" | "error";
+
+/** The plain ANSI eight, by role: what a renderer paints with when no theme palette was handed to it. */
+export const ANSI_PALETTE: Palette = buildPalette({ name: "ansi", description: "", tokens: DEFAULT_TOKENS }, "ansi256");
+
+/**
+ * The one way a renderer turns a role into an escape code. The palette's code wins; a missing
+ * palette or a token the theme left unresolvable falls back to the ANSI code for that role.
+ */
+export function roleCode(role: ColorRole, palette: Palette | undefined, depth: ColorDepth): string {
+  if (depth === "none") return "";
+  return palette?.[role] || ANSI_PALETTE[role];
+}
+
+/** The palette a session falls back to before a theme is resolved, and whenever colour is off. */
+export const NO_COLOR_PALETTE: Palette = buildPalette(
+  findBuiltinTheme(DEFAULT_THEME_NAME) ?? { name: DEFAULT_THEME_NAME, description: "", tokens: DEFAULT_TOKENS },
+  "none",
+);
+
+/**
+ * Which theme a terminal should get when nobody has said.
+ *
+ * `COLORFGBG` is set by several terminals as `foreground;background`, where a background of 0–7 is
+ * a dark palette; iTerm and others set `TERM_BACKGROUND` outright. Assumes dark otherwise, which is
+ * both the common case and the safer failure: light text on an unexpectedly light background is
+ * unreadable, whereas the reverse merely looks bolder than intended.
+ */
+export function detectPreferredTheme(environment: Record<string, string | undefined>): string {
+  const explicit = environment.ARCHYMEDES_THEME?.trim();
+  if (explicit) return explicit;
+  if (environment.TERM_BACKGROUND?.toLowerCase() === "light") return "parchment";
+  const fgbg = environment.COLORFGBG;
+  if (fgbg) {
+    const background = Number.parseInt(fgbg.split(";").pop() ?? "", 10);
+    if (Number.isInteger(background) && background >= 8) return "parchment";
+  }
+  return DEFAULT_THEME_NAME;
+}
+
+export type ThemeCommand =
+  | { kind: "list" }
+  | { kind: "show" }
+  | { kind: "set"; name: string }
+  | { kind: "where" }
+  | { kind: "invalid"; reason: string };
+
+/** Parses `/theme`, `/theme list`, `/theme <name>`, `/theme where`. */
+export function parseThemeCommand(input: string): ThemeCommand | null {
+  const match = /^\/theme(?:\s+([\s\S]*))?$/.exec(input.trim());
+  if (!match) return null;
+  const rest = (match[1] ?? "").trim().replace(/\s+/g, " ");
+  if (!rest) return { kind: "show" };
+
+  const [verb, ...words] = rest.split(" ");
+  switch (verb.toLowerCase()) {
+    case "list": return { kind: "list" };
+    case "show": return { kind: "show" };
+    case "where": return { kind: "where" };
+    default:
+      // A theme name is the overwhelmingly common argument, so it needs no verb — but a name with
+      // a space in it is a typo, not a theme, and saying so beats searching for it and failing.
+      return words.length === 0
+        ? { kind: "set", name: verb }
+        : { kind: "invalid", reason: `Theme names have no spaces — did you mean /theme ${verb}?` };
+  }
+}

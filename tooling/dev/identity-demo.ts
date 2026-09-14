@@ -1,9 +1,9 @@
-import { detectColorDepth } from "../../packages/archymedes-cli/src/banner";
-import { renderCompletionCard } from "../../packages/archymedes-cli/src/completion-card";
-import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../../packages/archymedes-cli/src/glyphs";
-import { writeIdentity } from "../../packages/archymedes-cli/src/identity";
-import { buildPalette, DEFAULT_THEME_NAME, findBuiltinTheme } from "../../packages/archymedes-cli/src/theme";
-import { renderPromptBox } from "../../packages/archymedes-cli/src/tui";
+import { detectColorDepth } from "../../packages/archymedes-cli/src/text/color-depth";
+import { renderCompletionCard } from "../../packages/archymedes-cli/src/render/completion-card";
+import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../../packages/archymedes-cli/src/text/glyphs";
+import { writeIdentity } from "../../packages/archymedes-cli/src/render/identity";
+import { buildPalette, DEFAULT_THEME_NAME, findBuiltinTheme } from "../../packages/archymedes-cli/src/theme/theme";
+import { renderPromptBox } from "../../packages/archymedes-cli/src/render/tui";
 
 // Offline preview with synthetic data: no configuration, tools, or model requests.
 const themeName = process.argv[2] ?? DEFAULT_THEME_NAME;

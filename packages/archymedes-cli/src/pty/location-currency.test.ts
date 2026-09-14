@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { SETTING_FIELDS } from "../settings";
+import { SETTING_FIELDS } from "../platform/settings";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 import { spawnArchymedes } from "./harness";
 

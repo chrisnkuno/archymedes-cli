@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareToBaseline, countLines, countThemeLeaks, LARGE_FILE_LINES } from "./guards";
+import { compareToBaseline, countLayeringViolations, countLines, countThemeLeaks, LARGE_FILE_LINES, sectionOf } from "./guards";
 
 describe("recheck guards", () => {
   it("counts named ANSI colours and raw colour escapes, but not weights or truecolor", () => {
@@ -13,6 +13,17 @@ describe("recheck guards", () => {
     expect(countLines("")).toBe(0);
     expect(countLines("a\nb\n")).toBe(2);
     expect(countLines("a\nb")).toBe(2);
+  });
+
+  it("counts imports that point against the section matrix, leaving root and unknown directories unrestricted", () => {
+    const rules = { text: ["text"], render: ["render", "text"], ui: ["ui", "render", "text"] };
+    const source = `import { a } from "../text/ansi";\nimport { b } from "../ui/chooser";\nconst c = await import("./markdown");\nimport x from "@archymedes/core";`;
+    expect(sectionOf("render/sections.ts", rules)).toBe("render");
+    expect(sectionOf("archymedes.ts", rules)).toBeUndefined();
+    expect(sectionOf("pty/harness.ts", rules)).toBeUndefined();
+    expect(countLayeringViolations("render/sections.ts", source, rules)).toBe(1);
+    expect(countLayeringViolations("archymedes.ts", `import { b } from "./ui/chooser";`, rules)).toBe(0);
+    expect(countLayeringViolations("text/ansi.ts", `import { b } from "../render/banner";`, rules)).toBe(1);
   });
 
   it("fails on growth, reports shrinkage, and treats new files from zero or the size threshold", () => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadSession, type SessionRecord } from "@archymedes/core/cli/session";
 import { startAnthropicStub, type AnthropicStub } from "./pty/anthropic-stub";
-import { readSessionModelTurns } from "./resumed-spend";
+import { readSessionModelTurns } from "./session/resumed-spend";
 
 /**
  * Resuming a past session, end to end, through the real binary.

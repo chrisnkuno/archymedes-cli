@@ -5,6 +5,23 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-2: Quality pass on `packages/archymedes-cli`: sections, layering, extraction
+
+Run with `docs/continuation/prompts/QUALITY_PASS.md` (started 2026-09-14, after pushing `5479634`).
+Phase 0: tree clean, recheck green. Phase 1 map: 88 source modules, 0 import cycles. Duplicate
+escape helpers: `RESET` ×6, `paint` ×4, `DIM` ×3, `BOLD` ×2. `picture.ts` has no source importer.
+The draft section matrix has 31 wrong-way imports; most come from `ColorDepth` living in `banner.ts`,
+`visibleWidth` in `markdown.ts`, and `clipTo` in `chooser.ts`.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-2.1 | Layering guard: import-direction violations per file, ratcheted, from `tooling/check/sections.json` | done | `tooling/check/` | `bun run recheck` | `countLayeringViolations` + `sections.json`; guard unit tests pass; files at the root or in `pty/` are unrestricted |
+| WS-2.2 | Extract primitives: `ColorDepth`/`detectColorDepth` → `color-depth.ts`; `visibleWidth`/`clipTo` → `text-width.ts` (behaviour-free, imports updated) | done | `banner.ts`, `markdown.ts`, `chooser.ts`, importers | `bun run recheck` | `text-width.ts` and `color-depth.ts` created; `rewrite_imports.py move-symbols` repointed 71 importers and merged duplicate imports. `tui.ts` reuses `DIM`/`RESET` from `ansi.ts`, paying for its import line. `archymedes.ts` 5,097 → 5,073 (duplicate imports merged); typecheck and related unit tests pass |
+| WS-2.3 | Mechanical move into `text/ platform/ catalog/ theme/ terminal/ render/ ui/ session/ commands/`; entry points stay at root | done | all of `src/`, `tooling/dev`, `resume.test.ts`, baseline | `bun run recheck --full` | `rewrite_imports.py move-files`: 167 files moved (tests follow), 97 files re-imported. The first attempt stopped on untracked files and was rolled back; the script now handles them. `recheck --full`: 186 files / 2,937 tests pass, build and package verified, layering 0. `pty/acceptance.test.ts` (tmux) failed once under full load and passed 3/3 alone and on rerun. Note: `verify:package` repacks the gitignored local 2.2.0 tarball; the npm copy is unaffected |
+| WS-2.4 | `MODULE_MAP.md` generated from the real graph, with the section matrix | done | `docs/continuation/` | read-through | `tooling/check/module_map.py` generates `MODULE_MAP.md` (90 modules). ARCHITECTURE, START_HERE and QUALITY_PASS point at the new paths and tools |
+| WS-2.5 | Deduplicate escape helpers into `text/ansi.ts` | todo | `tui.ts`, `markdown.ts`, `banner.ts`, others | `bun run recheck --pty` | |
+| WS-2.6 | `picture.ts`/`png.ts` have no source importer: ask the user whether to wire them in or delete | blocked (user decision) | `render/` | | |
+
 ## WS-1: Fixed workspace by default, proper scrolling, full theme coverage, code organization
 
 User request (2026-09-14): make the fixed layout the default, implement proper scrolling, fix

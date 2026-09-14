@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CreditBalance } from "@archymedes/core/providers/credit-balance";
-import { renderHostedBalance } from "./balance";
+import { renderHostedBalance } from "./commands/balance";
 
 const credits: CreditBalance = {
   accountId: "acct_7", currency: "USD", availableMicros: 4_250_000,

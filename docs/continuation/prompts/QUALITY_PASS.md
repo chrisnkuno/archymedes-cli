@@ -53,8 +53,9 @@ the guard counts in `tooling/check/baseline.json` have fallen or held steady.
 
 ## Phase 1: Map the scope (read-only)
 
-Produce a module map for the scope and save it as `docs/continuation/MODULE_MAP.md` (update it if it
-exists). For every module record:
+Regenerate the module map with `python3 tooling/check/module_map.py`, which writes
+`docs/continuation/MODULE_MAP.md` from the real import graph and `tooling/check/sections.json`.
+For a scope outside the CLI source, produce the same table by hand. For every module record:
 
 | Column | How to get it |
 | --- | --- |
@@ -75,22 +76,17 @@ Then find, with evidence:
 
 ## Phase 2: Design the sections
 
-Group modules into sections with **one direction of dependency**. For this CLI the starting proposal
-is below. Validate it against the map and adjust with reasons.
+Group modules into sections with **one direction of dependency**. The current design for the CLI
+is in `tooling/check/sections.json` (the enforced import matrix) and `docs/continuation/MODULE_MAP.md`
+(purpose and members of each section):
 
-| Section | Holds | May import |
-| --- | --- | --- |
-| root | Entry points: `archymedes.ts`, `headless.ts`, `acp-server.ts` | anything |
-| `platform/` | Network, endpoints, updates, doctor, i18n, currency | nothing in `src` except `platform/` |
-| `theme/` | Palette roles, theme files | `platform/` |
-| `terminal/` | Escape codes, glyphs, screen and layout, fixed frame, viewport, key and wheel input, output sinks | `theme/`, `platform/` |
-| `render/` | Pure transcript renderers: markdown, sections, code, patch and test views, tables, charts, pictures, banner | `terminal/`, `theme/`, `platform/` |
-| `ui/` | Interactive menus and full screens: chooser, palette, pickers, editor, file browser, guide, workspace panel | `render/`, `terminal/`, `theme/`, `platform/` |
-| `session/` | Tabs, models, fallback, jobs, routing plan and receipt, spend, state history | `platform/`, `@archymedes/core` |
-| `commands/` | Slash-command features: registry, navigation, memory, pacing, balance, jobs and tools commands, history, export | everything except root |
+`text` ← `platform` ← `catalog`/`theme` ← `terminal` ← `render` ← `ui` ← `commands` ← root entry points,
+with `session` depending only on `theme`, `platform` and `text`.
 
-Write the final table into `MODULE_MAP.md`, including the allowed-import matrix. A module that fits
-two sections is usually two modules. Split it, or place it by its dominant dependency and note why.
+Place new modules by their dependencies, not by their name. A module that fits two sections is
+usually two modules: split it, or place it by its dominant dependency and note why. Change the
+matrix only with reasons recorded in the tracker, and regenerate the map afterwards. For scopes
+outside the CLI, design the same kind of matrix first.
 
 ## Phase 3: Plan the tasks
 
@@ -99,7 +95,8 @@ Add a workstream to the tracker. Order tasks from safest to riskiest:
 1. **Guards first.** Extend `tooling/check/guards.ts` so the design is enforced before code moves.
    Add a layering guard (imports that break the section matrix, counted per file and ratcheted), and
    any other ratchets the map suggests, such as duplicate-helper counts. Unit-test the guard.
-2. **Mechanical moves.** Use a script that runs `git mv` (so history follows) and rewrites every
+2. **Mechanical moves.** Use `python3 tooling/check/rewrite_imports.py move-files <mapping.json>`
+   (or `move-symbols` to repoint named exports). It runs `git mv` (so history follows) and rewrites every
    relative import, including dynamic `import()` and `vi.mock()` specifiers, `tooling/dev` imports,
    package scripts and `baseline.json` paths. Moves only, no edits in the same task. Then run
    `bun run recheck --full`.

@@ -5,8 +5,10 @@ import path from "node:path";
 export const THEME_ALLOWLIST = new Set(["ansi.ts", "theme.ts"]);
 export const LARGE_FILE_LINES = 800;
 
-export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number> };
-export type GuardFinding = { guard: "theme" | "size"; file: string; baseline: number; current: number };
+export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number> };
+export type GuardFinding = { guard: "theme" | "size" | "layering"; file: string; baseline: number; current: number };
+/** Section → sections it may import. A file's section is its first directory under the source root; anything else is unrestricted. */
+export type SectionRules = Record<string, readonly string[]>;
 
 const COLOUR_NAME = /\b(?:RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|GREY)\b/g;
 const COLOUR_ESCAPE = /\\x1b\[(?:3[0-7]|9[0-7])m/g;
@@ -31,8 +33,28 @@ function sourceFiles(root: string): string[] {
   return found;
 }
 
-export function collectMetrics(repoRoot: string, sourceRoot: string): Metrics {
-  const metrics: Metrics = { themeLeaks: {}, largeFiles: {} };
+const RELATIVE_IMPORT = /(?:from\s+|import\s*\(\s*|^import\s+)["'](\.{1,2}\/[^"']+)["']/gm;
+
+export function sectionOf(relativeToSource: string, rules: SectionRules): string | undefined {
+  const [first, ...rest] = relativeToSource.split("/");
+  return rest.length > 0 && first in rules ? first : undefined;
+}
+
+/** Imports from `file` (a path relative to the source root) into sections its own section may not depend on. */
+export function countLayeringViolations(file: string, source: string, rules: SectionRules): number {
+  const from = sectionOf(file, rules);
+  if (!from) return 0;
+  let violations = 0;
+  for (const [, specifier] of source.matchAll(RELATIVE_IMPORT)) {
+    const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
+    const to = sectionOf(target, rules);
+    if (to && !rules[from].includes(to)) violations++;
+  }
+  return violations;
+}
+
+export function collectMetrics(repoRoot: string, sourceRoot: string, rules: SectionRules = {}): Metrics {
+  const metrics: Metrics = { themeLeaks: {}, largeFiles: {}, layering: {} };
   for (const file of sourceFiles(path.join(repoRoot, sourceRoot)).sort()) {
     const relative = path.relative(repoRoot, file).split(path.sep).join("/");
     const source = readFileSync(file, "utf8");
@@ -42,6 +64,9 @@ export function collectMetrics(repoRoot: string, sourceRoot: string): Metrics {
     }
     const lines = countLines(source);
     if (lines > LARGE_FILE_LINES) metrics.largeFiles[relative] = lines;
+    const inSource = path.relative(path.join(repoRoot, sourceRoot), file).split(path.sep).join("/");
+    const layering = countLayeringViolations(inSource, source, rules);
+    if (layering > 0) metrics.layering![relative] = layering;
   }
   return metrics;
 }
@@ -60,5 +85,6 @@ export function compareToBaseline(baseline: Metrics, current: Metrics): { regres
   };
   check("theme", baseline.themeLeaks, current.themeLeaks, 0);
   check("size", baseline.largeFiles, current.largeFiles, LARGE_FILE_LINES);
+  check("layering", baseline.layering ?? {}, current.layering ?? {}, 0);
   return { regressions, improvements };
 }

@@ -23,12 +23,12 @@ flowchart TD
 
 | Module | Responsibility | Start reading |
 | --- | --- | --- |
-| CLI | Input, terminal presentation, slash commands, approvals | `packages/archymedes-cli/src/archymedes.ts` |
+| CLI | Input, terminal presentation, slash commands, approvals | `packages/archymedes-cli/src/archymedes.ts`; sections and import rules in [MODULE_MAP.md](MODULE_MAP.md) |
 | Application agent | Workspace setup, permissions, session persistence, checkpoints | `packages/core/src/cli/agent.ts` |
 | Bounded runtime | Model/tool loop, cancellation, budgets, retry limits, verification | `packages/core/src/agent-runtime.ts` |
 | Provider adapters | Translate common agent requests into provider APIs | `packages/core/src/providers/` |
 | Hosted client | Authentication, caps, request identity, receipt decoding | `packages/core/src/providers/archymedes-cloud-agent.ts` |
-| Receipt presentation | Explain choices, attempts, forecasts and charges | `packages/archymedes-cli/src/routing-receipt.ts` |
+| Receipt presentation | Explain choices, attempts, forecasts and charges | `packages/archymedes-cli/src/render/routing-receipt.ts` |
 | State sidecar | Rebuildable SQLite/FTS history index | `packages/archymedes-state/README.md` |
 
 ## One user turn

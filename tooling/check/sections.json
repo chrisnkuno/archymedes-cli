@@ -1,0 +1,15 @@
+{
+  "//": "Sections of packages/archymedes-cli/src and what each may import. A file's section is its first directory; files at the root are entry points and may import anything. See docs/continuation/MODULE_MAP.md.",
+  "sourceRoot": "packages/archymedes-cli/src",
+  "allowed": {
+    "text": ["text"],
+    "platform": ["platform", "text"],
+    "catalog": ["catalog", "platform", "text"],
+    "theme": ["theme", "platform", "text"],
+    "terminal": ["terminal", "catalog", "theme", "platform", "text"],
+    "render": ["render", "terminal", "catalog", "theme", "platform", "text"],
+    "session": ["session", "theme", "platform", "text"],
+    "ui": ["ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
+    "commands": ["commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"]
+  }
+}

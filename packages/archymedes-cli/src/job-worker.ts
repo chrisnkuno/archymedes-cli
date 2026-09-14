@@ -17,8 +17,8 @@ import {
   requestJobApproval,
   type Job,
 } from "@archymedes/core";
-import { describeToolCall, summarizeToolResult } from "./transcript";
-import { buildWanderPrompt, gatherWanderEvidence, resolveWanderJobTopic } from "./wander";
+import { describeToolCall, summarizeToolResult } from "./render/transcript";
+import { buildWanderPrompt, gatherWanderEvidence, resolveWanderJobTopic } from "./commands/wander";
 
 /**
  * The process that actually does the work once a job has been handed to it.

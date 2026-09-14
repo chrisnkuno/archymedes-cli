@@ -28,8 +28,8 @@ import {
   stepSearch,
   transcriptText,
   type FixedLayoutState,
-} from "../../packages/archymedes-cli/src/fixed-layout";
-import { FixedScreen, decodeFixedKey, fixedStatusLine, openInPager } from "../../packages/archymedes-cli/src/fixed-screen";
+} from "../../packages/archymedes-cli/src/terminal/fixed-layout";
+import { FixedScreen, decodeFixedKey, fixedStatusLine, openInPager } from "../../packages/archymedes-cli/src/terminal/fixed-screen";
 
 const argument = (name: string): string | undefined => {
   const index = process.argv.indexOf(name);

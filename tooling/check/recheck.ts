@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectMetrics, compareToBaseline, type Metrics } from "./guards";
+import { collectMetrics, compareToBaseline, type Metrics, type SectionRules } from "./guards";
 
 /**
  * `bun run recheck` — the loop run after every change.
@@ -14,7 +14,6 @@ import { collectMetrics, compareToBaseline, type Metrics } from "./guards";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
 const BASELINE = path.join(HERE, "baseline.json");
-const SOURCE_ROOT = "packages/archymedes-cli/src";
 const args = new Set(process.argv.slice(2));
 const results: Array<{ step: string; ok: boolean; detail: string }> = [];
 
@@ -33,7 +32,8 @@ function changedFiles(): string[] {
   return [...files].filter((file) => /\.(ts|tsx)$/.test(file) && existsSync(path.join(REPO, file)));
 }
 
-const current = collectMetrics(REPO, SOURCE_ROOT);
+const sectionConfig = JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string; allowed: SectionRules };
+const current = collectMetrics(REPO, sectionConfig.sourceRoot, sectionConfig.allowed);
 if (args.has("--update-baseline") || !existsSync(BASELINE)) {
   writeFileSync(BASELINE, `${JSON.stringify(current, null, 2)}\n`);
   console.log(`Baseline written to ${path.relative(REPO, BASELINE)}.`);
@@ -46,7 +46,7 @@ const total = (counts: Record<string, number>) => Object.values(counts).reduce((
 results.push({
   step: "guards",
   ok: regressions.length === 0,
-  detail: `theme leaks ${total(current.themeLeaks)} in ${Object.keys(current.themeLeaks).length} files; ${Object.keys(current.largeFiles).length} files over the size line`,
+  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
 });
 
 let ok = regressions.length === 0;

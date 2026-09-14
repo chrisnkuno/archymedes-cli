@@ -5,10 +5,10 @@ import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { ArchymedesAgent, type ArchymedesEvent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
-import { priceSessionModelTurns, readSessionModelTurns } from "./resumed-spend";
-import { renderGallery } from "./gallery";
-import { displayMask, fixObjective } from "./defender-screen";
-import { CommandUsage, isEssential, navSignals, rankWithContext, renderAsks, renderEssentials, renderGroupedHelp, renderHint, renderRecovery, renderStarters, renderSuggestions, type NavContext } from "./navigation";
+import { priceSessionModelTurns, readSessionModelTurns } from "./session/resumed-spend";
+import { renderGallery } from "./ui/gallery";
+import { displayMask, fixObjective } from "./ui/defender-screen";
+import { CommandUsage, isEssential, navSignals, rankWithContext, renderAsks, renderEssentials, renderGroupedHelp, renderHint, renderRecovery, renderStarters, renderSuggestions, type NavContext } from "./ui/navigation";
 import { askModelForSuggestions, mergeModelSuggestions, type Suggestion as EngineSuggestion } from "@archymedes/core/cli/suggestions";
 import type { ModelUsage } from "@archymedes/core/providers/model";
 import { ArchymedesSessionDaemon, type DaemonApprovalRequest, type DaemonNotification, type ArchymedesDaemonClient } from "@archymedes/core/cli/daemon";
@@ -22,56 +22,55 @@ import { downloadProject, DockerWorkspace, E2BWorkspace, LocalWorkspace, uploadP
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { EXIT_CODES, HeadlessEmitter, exitCodeForStatus } from "./headless";
-import { buildModelCatalog, describePrice, matchModelQuery, modelsForProvider, parseModelCommand, type ModelChoice } from "./models";
-import { buildPickerRows, type PickerResult } from "./model-picker";
-import { INITIAL_TABLE_STATE, renderTable } from "./table";
-import { buildCostTable, buildJobsTable, buildModelTable } from "./tables";
+import { buildModelCatalog, describePrice, matchModelQuery, modelsForProvider, parseModelCommand, type ModelChoice } from "./session/models";
+import { buildPickerRows, type PickerResult } from "./ui/model-picker";
+import { INITIAL_TABLE_STATE, renderTable } from "./ui/table";
+import { buildCostTable, buildJobsTable, buildModelTable } from "./ui/tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
-import { detectColorDepth } from "./banner";
-import { writeIdentity } from "./identity";
-import { WorkspaceFrame } from "./workspace-frame";
-import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter, workspaceFrameOptions } from "./layout-choice";
-import { isTranscriptKey, transcriptScrollForKey, type ScrollKey } from "./transcript-keys";
-import { setWorkspaceMenu } from "./shortcuts";
-import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
-import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
-import { visibleWidth } from "./markdown";
-import { PinnedScreen } from "./screen";
-import { barChart, heatStrip, lineChart } from "./charts";
-import { describeToolCall, summarizeToolResult } from "./transcript";
-import { renderMarkdown } from "./markdown";
-import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderCommandHelp, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./commands";
-import { KeyBindingRegistry, parseBindingOverrides } from "./keybindings";
-import { installShortcuts, openChooser, openDefenderTriage, openModelPicker, openPalette, openTable, replaceLine, withBorrowedKeyboard } from "./shortcuts";
-import { runChooser, type ChooserItem } from "./chooser";
-import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./doctor";
-import { renderCompletionCard } from "./completion-card";
-import { renderTask, renderTodos, type InspectContext } from "./session-inspect";
-import { renderRoutingReceipt, renderRoutingSummary } from "./routing-receipt";
-import { renderRoutingPlan } from "./routing-plan";
-import { fallbackSetting, parseFallbackPreference } from "./fallback";
-import { exportSession, type ExportFormat } from "./session-export";
-import { hostOf, providerBaseUrl } from "./endpoints";
-import { fetchDailyFxRate, resolveCurrencyPreference, type FxLookupFailure } from "./local-currency";
-import { classifyNetworkError } from "./network";
-import { ARCHYMEDES_CLI_VERSION, compareVersions, fetchLatestVersion, runSelfUpdate } from "./update";
-import { readAutoUpdateMode, runAutoUpdate } from "./auto-update";
-import { updateDefenderFeed } from "./defender-feed-update";
-import { renderReliabilityStatus } from "./reliability-status";
+import { detectColorDepth } from "./text/color-depth";
+import { writeIdentity } from "./render/identity";
+import { WorkspaceFrame } from "./ui/workspace-frame";
+import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter, workspaceFrameOptions } from "./ui/layout-choice";
+import { isTranscriptKey, transcriptScrollForKey, type ScrollKey } from "./terminal/transcript-keys";
+import { setWorkspaceMenu, installShortcuts, openChooser, openDefenderTriage, openModelPicker, openPalette, openTable, replaceLine, withBorrowedKeyboard } from "./ui/shortcuts";
+import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./render/tui";
+import { dropupRowBudget, renderDropup, type DropupEntry } from "./ui/dropup";
+import { visibleWidth } from "./text/text-width";
+import { PinnedScreen } from "./terminal/screen";
+import { barChart, heatStrip, lineChart } from "./render/charts";
+import { describeToolCall, summarizeToolResult } from "./render/transcript";
+import { renderMarkdown } from "./render/markdown";
+import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderCommandHelp, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./catalog/commands";
+import { KeyBindingRegistry, parseBindingOverrides } from "./terminal/keybindings";
+import { runChooser, type ChooserItem } from "./ui/chooser";
+import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./platform/doctor";
+import { renderCompletionCard } from "./render/completion-card";
+import { renderTask, renderTodos, type InspectContext } from "./commands/session-inspect";
+import { renderRoutingReceipt, renderRoutingSummary } from "./render/routing-receipt";
+import { renderRoutingPlan } from "./render/routing-plan";
+import { fallbackSetting, parseFallbackPreference } from "./session/fallback";
+import { exportSession, type ExportFormat } from "./session/session-export";
+import { hostOf, providerBaseUrl } from "./platform/endpoints";
+import { fetchDailyFxRate, resolveCurrencyPreference, type FxLookupFailure } from "./platform/local-currency";
+import { classifyNetworkError } from "./platform/network";
+import { ARCHYMEDES_CLI_VERSION, compareVersions, fetchLatestVersion, runSelfUpdate } from "./platform/update";
+import { readAutoUpdateMode, runAutoUpdate } from "./platform/auto-update";
+import { updateDefenderFeed } from "./platform/defender-feed-update";
+import { renderReliabilityStatus } from "./render/reliability-status";
 import { CACHE_CHURN_HINT } from "@archymedes/core/cli/cost";
-import { MODEL_FIELD_PROVIDER, SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, settingsFile, type ArchymedesSettings, type SettingChoice, type SettingKey, type SettingsPrompts } from "./settings";
-import { loadHistory, saveHistory } from "./history";
-import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./tabs";
-import { OutputRouter, TabSink, replayLines, terminalStream } from "./output";
-import { renderPatch } from "./patch-view";
+import { MODEL_FIELD_PROVIDER, SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, settingsFile, type ArchymedesSettings, type SettingChoice, type SettingKey, type SettingsPrompts } from "./platform/settings";
+import { loadHistory, saveHistory } from "./session/history";
+import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./session/tabs";
+import { OutputRouter, TabSink, replayLines, terminalStream } from "./terminal/output";
+import { renderPatch } from "./render/patch-view";
 import { fetchProviderModels, fetchableProviders, isCacheFresh, loadLiveModels, mergeModelLists, readModelCache } from "@archymedes/core/providers/model-fetch";
-import { JobStream, WatchRegistry, sandboxWarning } from "./job-stream";
-import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./workspace-model";
-import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./screen-host";
-import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./guide";
-import { ANSI_PALETTE, DEFAULT_THEME_NAME, EXTERNAL_MARK, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme";
-import { discoverThemes, findTheme, themeDirectory } from "./theme-files";
-import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./wander";
+import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
+import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
+import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
+import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./render/guide";
+import { ANSI_PALETTE, DEFAULT_THEME_NAME, EXTERNAL_MARK, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme/theme";
+import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
+import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./commands/wander";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
 import {
   appendJobLog,
@@ -87,46 +86,23 @@ import {
   resolveJobApproval,
 } from "@archymedes/core";
 import { runJobWorkerForever, workerId } from "./job-worker";
-import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./jobs-command";
-import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./balance";
+import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./commands/jobs-command";
+import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./commands/balance";
 import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
 import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
-import { renderTools } from "./tools-command";
-import { removeRecording, startRecording, transcribeAudio } from "./voice";
-import { controlLabel, resolveControlLanguage, t, type ControlLanguage } from "./i18n";
-import { UNICODE_GLYPHS, resolveGlyphs, type GlyphSet } from "./glyphs";
-import { GUTTER, heading, note, panel, rule, type SectionStyle } from "./sections";
-import { describeChange, diffLines, diffStat, fenceHeader, languageOf, renderCode, renderFileChange } from "./code-view";
-import { parseTestOutput, renderTestReport } from "./test-report";
-import { ExpandableStore, expandHint, parseExpandCommand, renderExpandableList } from "./expandable";
-import {
-  addMemory,
-  clearMemories,
-  describeAdded,
-  forgetMemory,
-  loadMemories,
-  memoryFile,
-  memoryPromptBlock,
-  parseMemoryCommand,
-  recallMemories,
-  replaceMemory,
-  renderMemories,
-  type MemoryEntry,
-} from "./memory";
-import {
-  parseHistoryCommand,
-  relativeTime,
-  renderHistoryList,
-  renderHistoryUsage,
-  renderReplay,
-  searchHistory,
-  summarizeSession,
-  type HistoryCommand,
-  type HistoryEntry,
-} from "./chat-history";
-import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, parsePaceFlag, remainingCooldown, type PaceLevel } from "./pacing";
-import { CliStateHistory } from "./state-history";
+import { renderTools } from "./commands/tools-command";
+import { removeRecording, startRecording, transcribeAudio } from "./commands/voice";
+import { controlLabel, resolveControlLanguage, t, type ControlLanguage } from "./platform/i18n";
+import { UNICODE_GLYPHS, resolveGlyphs, type GlyphSet } from "./text/glyphs";
+import { GUTTER, heading, note, panel, rule, type SectionStyle } from "./render/sections";
+import { describeChange, diffLines, diffStat, fenceHeader, languageOf, renderCode, renderFileChange } from "./render/code-view";
+import { parseTestOutput, renderTestReport } from "./render/test-report";
+import { ExpandableStore, expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
+import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, memoryFile, memoryPromptBlock, parseMemoryCommand, recallMemories, replaceMemory, renderMemories, type MemoryEntry } from "./commands/memory";
+import { parseHistoryCommand, relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryCommand, type HistoryEntry } from "./commands/chat-history";
+import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, parsePaceFlag, remainingCooldown, type PaceLevel } from "./commands/pacing";
+import { CliStateHistory } from "./session/state-history";
 
 /**
  * Archymedes CLI — the terminal front end.
@@ -2255,7 +2231,7 @@ async function main(): Promise<number> {
     }
     let saved: string | undefined;
     const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
-      const { runEditorScreen } = await import("./editor-screen");
+      const { runEditorScreen } = await import("./ui/editor-screen");
       saved = await runEditorScreen({
         columns: process.stdout.columns ?? 80,
         rows: process.stdout.rows ?? 24,
@@ -4013,7 +3989,7 @@ async function main(): Promise<number> {
       // and the pinned footer both have to let go first, or two things will be reading stdin and
       // one of them will be writing over the other.
       const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
-        const { runWorkspace } = await import("./workspace-screen");
+        const { runWorkspace } = await import("./ui/workspace-screen");
         await runWorkspace({ read: readSnapshot });
       });
       // No text path for the panel — several live panes is the thing a transcript cannot express —
@@ -4035,7 +4011,7 @@ async function main(): Promise<number> {
        */
       const openGuideScreen = async (startAt?: string): Promise<boolean> => {
         const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
-          const { runGuideScreen } = await import("./guide-screen");
+          const { runGuideScreen } = await import("./ui/guide-screen");
           await runGuideScreen({
             columns: process.stdout.columns ?? 80,
             rows: process.stdout.rows ?? 24,
@@ -4091,7 +4067,7 @@ async function main(): Promise<number> {
       // are reachable.
       let picked: { path: string; intent: "mention" | "edit" } | undefined;
       const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
-        const { runFileScreen } = await import("./file-screen");
+        const { runFileScreen } = await import("./ui/file-screen");
         picked = await runFileScreen({
           columns: process.stdout.columns ?? 80,
           rows: process.stdout.rows ?? 24,

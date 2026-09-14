@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Interface } from "node:readline/promises";
-import { visibleWidth } from "./markdown";
+import { visibleWidth } from "./text/text-width";
 import {
   configureRendering,
   confirmSensitiveTask,
