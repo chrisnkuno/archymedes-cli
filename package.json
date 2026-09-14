@@ -27,6 +27,7 @@
     "bench:journeys": "ARCHYMEDES_JOURNEYS_FULL=1 vitest run packages/archymedes-cli/src/pty/journeys.test.ts",
     "verify:package": "bun run tooling/build/verify-package.ts",
     "release:check": "bun run check && bun run verify:package",
+    "recheck": "bun run tooling/check/recheck.ts",
     "preview:tui": "bun run tooling/dev/identity-demo.ts",
     "preview:workspace": "bun run tooling/dev/workspace-preview.ts"
   },

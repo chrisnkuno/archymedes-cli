@@ -8,7 +8,8 @@ Improve the routing intelligence, CLI capabilities, reliability, efficiency, and
 
 ## Read in order
 
-1. This file: current state and immediate closeout.
+1. This file: current state and immediate closeout. For active work and how it is verified, read
+   [TRACKER.md](TRACKER.md) and [WORKFLOW.md](WORKFLOW.md) (`bun run recheck`).
 2. [Architecture](ARCHITECTURE.md): responsibility and request flow.
 3. [Priorities](PRIORITIES.md): next work, acceptance criteria, and optimization principles.
 4. `docs/EXCHANGE_API.md`: public hosted client contract.
