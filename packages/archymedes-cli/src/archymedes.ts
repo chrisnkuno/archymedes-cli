@@ -7,6 +7,7 @@ import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
 import { describeLocation, parseArgs, type SandboxBackend } from "./app/args";
 import { runCat } from "./commands/cat";
+import { chooseModel, rememberModelChoice } from "./commands/model";
 import { runScan } from "./commands/scan";
 import { describeFind, parseFindCommand } from "./commands/find";
 import { runPager } from "./commands/pager";
@@ -32,17 +33,16 @@ import { downloadProject, DockerWorkspace, E2BWorkspace, LocalWorkspace, uploadP
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { EXIT_CODES, HeadlessEmitter, exitCodeForStatus } from "./headless";
-import { buildModelCatalog, describePrice, matchModelQuery, parseModelCommand, type ModelChoice } from "./session/models";
-import { buildPickerRows, type PickerResult } from "./ui/model-picker";
+import { buildModelCatalog, parseModelCommand } from "./session/models";
 import { INITIAL_TABLE_STATE, renderTable } from "./ui/table";
-import { buildCostTable, buildJobsTable, buildModelTable } from "./ui/tables";
+import { buildCostTable, buildJobsTable } from "./ui/tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./text/color-depth";
 import { writeIdentity } from "./render/identity";
 import { WorkspaceFrame } from "./ui/workspace-frame";
 import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter, workspaceFrameOptions } from "./ui/layout-choice";
 import { isTranscriptKey, transcriptScrollForKey, type ScrollKey } from "./terminal/transcript-keys";
-import { setWorkspaceMenu, installShortcuts, openChooser, openDefenderTriage, openModelPicker, openPalette, openTable, replaceLine, withBorrowedKeyboard } from "./ui/shortcuts";
+import { setWorkspaceMenu, installShortcuts, openChooser, openDefenderTriage, openPalette, replaceLine, withBorrowedKeyboard } from "./ui/shortcuts";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table } from "./render/tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./ui/dropup";
 import { visibleWidth } from "./text/text-width";
@@ -66,7 +66,7 @@ import { readAutoUpdateMode, runAutoUpdate } from "./platform/auto-update";
 import { updateDefenderFeed } from "./platform/defender-feed-update";
 import { renderReliabilityStatus } from "./render/reliability-status";
 import { CACHE_CHURN_HINT } from "@archymedes/core/cli/cost";
-import { SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, type ArchymedesSettings, type SettingKey } from "./platform/settings";
+import { SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, type ArchymedesSettings } from "./platform/settings";
 import { loadHistory, saveHistory } from "./session/history";
 import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./session/tabs";
 import { TabSink, replayLines } from "./terminal/output";
@@ -2520,135 +2520,23 @@ async function main(): Promise<number> {
     }
     const modelCommand = parseModelCommand(input);
     if (modelCommand) {
-      // Refreshed on demand: `/models refresh` is the answer to "a model shipped and it is not
-      // here", and it is the only path that waits on the network.
-      // The list is wanted now, so this is the moment to pay for it: on demand, and only when the
-      // cache has nothing fresh to offer or the user asked for a refresh outright.
-      const wantsRefresh = modelCommand.kind === "refresh";
-      if (wantsRefresh || Object.keys(liveModels).length === 0) {
-        if (wantsRefresh) out.write(style.dim("  asking every provider what it has…\n"));
-        const { errors } = await refreshLiveModels(wantsRefresh ? { refresh: true } : {});
-        for (const error of errors) out.write(style.yellow(`  ${error}\n`));
-      }
-      const catalog = buildModelCatalog(environment, undefined, liveModels);
-      const paint = surfacePaint;
-      const price = (choice: ModelChoice) => describePrice(choice.prices, display, (money) => convertTo(money, display, rates));
-      /**
-       * One side of a model's price, as a bare figure for a column of its own.
-       *
-       * `price` above renders both sides as a phrase, which is right for a menu row and useless in a
-       * table: a column has to hold one number, and it has to hold it unpainted or the sort reads a
-       * colour code instead of a value.
-       */
-      const modelRate = (choice: ModelChoice, side: "input" | "output"): string => {
-        if (!choice.prices) return "";
-        const micros = side === "input" ? choice.prices.inputPerMillion : choice.prices.outputPerMillion;
-        const own = { currency: choice.prices.currency, micros };
-        // Falls back to the provider's own currency when no rate is configured, which is what
-        // `describePrice` does — a converted figure nobody can reconcile is worse than a foreign one.
-        return formatMoney(convertTo(own, display, rates) ?? own);
-      };
-
-      let picked: ModelChoice | undefined;
-      if (modelCommand.kind === "list" || modelCommand.kind === "refresh") {
-        // Nothing configured is not a list to show — it is one thing to do. Printing "run
-        // /settings" here would be telling someone the name of the door they are standing at.
-        if (catalog.choices.length === 0) {
-          out.write(style.yellow("  No provider is configured yet — opening settings.\n"));
-          if (await openSettings() === "exit") break;
-          continue;
-        }
-        const modelTable = () => buildModelTable(catalog, {
-          current: { provider: spec.id, model: resolvedModelId },
-          rate: modelRate,
-          paint,
-          glyphs,
-        });
-        // A pipe or a non-TTY has no cursor to move, so it prints instead of opening a surface — as
-        // a table now rather than a sentence per row, because the columns are worth as much to
-        // something reading the output as to someone looking at it.
-        if (!interactive) {
-          const printed = modelTable();
-          out.write(`${renderTable(printed.columns, printed.rows, INITIAL_TABLE_STATE, {
-            paint: surfacePaint, width: contentWidth(), glyphs, legend: "", cursor: false,
-          })}\n`);
-          // The things the grid has no row for: a provider with no key, and how to choose.
-          for (const note of printed.notes ?? []) out.write(`  ${note}\n`);
-          continue;
-        }
-        // Two views of one list, each able to hand over to the other: the menu answers "what can I
-        // switch to", the table answers "which of these is cheapest". Escape from the table comes
-        // back here rather than closing `/models` outright, which is what a view toggle implies.
-        let chosen: PickerResult | undefined;
-        for (;;) {
-          chosen = await openModelPicker({ readline, input: process.stdin, output: process.stdout }, {
-            rows: buildPickerRows(catalog),
-            current: { provider: spec.id, model: resolvedModelId },
-            price,
-            paint,
-            glyphs,
-          });
-          if (chosen?.kind !== "table") break;
-          const browsed = modelTable();
-          const row = await openTable({ readline, input: process.stdin, output: process.stdout }, {
-            columns: browsed.columns,
-            rows: browsed.rows,
-            paint: surfacePaint,
-            glyphs,
-            title: "models · by any column you like",
-            height: 12,
-            // Opens on the model in use, like the menu it came from: a view toggle that also moved
-            // the cursor would make `t` feel like it had lost your place.
-            initialIndex: Math.max(0, catalog.choices.findIndex((choice) => choice.provider === spec.id && choice.model === resolvedModelId)),
-          });
-          // `runTable` hands back the row itself, and `sortRows` preserves references, so the model
-          // it stands for is found by identity — no un-sorting an index to get back to the datum.
-          const fromTable = row ? catalog.choices[browsed.rows.indexOf(row)] : undefined;
-          if (fromTable) { chosen = { kind: "model", choice: fromTable }; break; }
-        }
-        if (!chosen) { out.write(style.dim("  no change\n")); continue; }
-        if (chosen.kind === "settings") {
-          if (await openSettings() === "exit") break;
-          continue;
-        }
-        picked = chosen.choice;
-      }
-
-      let providerArg: string | undefined;
-      let modelArg: string | undefined;
-      if (picked) {
-        providerArg = picked.provider;
-        modelArg = picked.model;
-      } else if (modelCommand.kind === "pick") {
-        const chosen = catalog.choices[modelCommand.index - 1];
-        if (!chosen) {
-          out.write(style.yellow(`  There is no model ${modelCommand.index}. Run /models to see the list.\n`));
-          continue;
-        }
-        providerArg = chosen.provider;
-        modelArg = chosen.model;
-      } else if (modelCommand.kind === "query") {
-        const found = matchModelQuery(catalog, modelCommand.text);
-        if (found.kind === "none") {
-          out.write(style.yellow(`  No configured model matches "${modelCommand.text}". Run /models to see the list.\n`));
-          continue;
-        }
-        if (found.kind === "ambiguous") {
-          // Naming the candidates makes the retry a copy rather than another guess.
-          out.write(style.yellow(`  "${modelCommand.text}" matches ${found.candidates.length} models: ${found.candidates.map((choice) => choice.model).join(", ")}.\n`));
-          continue;
-        }
-        providerArg = found.choice.provider;
-        modelArg = found.choice.model;
-      } else if (modelCommand.kind === "explicit") {
-        ({ provider: providerArg, model: modelArg } = modelCommand);
-      }
-
-      const attempt = resolveProvider(environment, { provider: providerArg, model: modelArg });
-      if ("error" in attempt) {
-        out.write(`${style.red(attempt.error)}\n`);
-        continue;
-      }
+      const target = await chooseModel(modelCommand, {
+        environment,
+        liveModels: () => liveModels,
+        refreshLiveModels,
+        current: { provider: spec.id, model: resolvedModelId },
+        display,
+        rates,
+        ...(interactive ? { host: { readline, input: process.stdin, output: process.stdout } } : {}),
+        write: (text) => out.write(text),
+        paint: { ...surfacePaint, yellow: style.yellow, dim: style.dim },
+        glyphs,
+        width: contentWidth(),
+      });
+      if (target.kind === "settings") { if (await openSettings() === "exit") break; continue; }
+      if (target.kind === "none") continue;
+      const attempt = resolveProvider(environment, { provider: target.provider, model: target.model });
+      if ("error" in attempt) { out.write(`${style.red(attempt.error)}\n`); continue; }
       if (attempt.spec.id === spec.id && attempt.model === resolvedModelId) {
         out.write(style.dim(`  already on ${spec.label} ${resolvedModelId}\n`));
         continue;
@@ -2658,32 +2546,12 @@ async function main(): Promise<number> {
       prices = attempt.prices;
       resolvedModelId = attempt.model;
       ledger.setPrices(prices);
-      const previous = agent;
-      const carried = await previous.relinquish();
-      agent = await openClient(carried);
+      agent = await openClient(await agent.relinquish());
       await checkBalance(true);
-      const priceNote = prices ? "" : " — no price configured, costs will show as unknown";
-
-      // Persisted, because a switch the user had to make again on every launch is a switch they
-      // never really made. Both halves are written: the model alone would be re-read under whatever
-      // provider happened to sort first, which is how you ask for one model and get another.
-      const modelKey = `${providerEnvPrefix(spec.id)}_MODEL` as SettingKey;
-      savedSettings = { ...savedSettings, ARCHYMEDES_PROVIDER: spec.id, [modelKey]: resolvedModelId };
-      let persistence = "";
-      try {
-        await saveSettings(savedSettings, processEnvironment);
-        // A real environment variable outranks the file by design (mergedEnvironment), so saving
-        // succeeds while changing nothing about the next launch. Saying so beats a silent no-op.
-        const shadowed = [modelKey, "ARCHYMEDES_PROVIDER"].filter((key) => processEnvironment[key]?.trim());
-        persistence = shadowed.length > 0
-          ? ` · saved, but ${shadowed.join(" and ")} in your environment will override it next launch`
-          : " · saved as your default";
-        Object.assign(environment, mergedEnvironment(savedSettings, processEnvironment));
-      } catch {
-        // The switch itself already happened and is valid for this session; only the memory failed.
-        persistence = " · could not save it as your default";
-      }
-      out.write(style.dim(`  switched to ${spec.label} ${resolvedModelId}${priceNote}${persistence}\n`));
+      const remembered = await rememberModelChoice(savedSettings, { id: spec.id, envPrefix: providerEnvPrefix(spec.id) }, resolvedModelId, processEnvironment, saveSettings);
+      savedSettings = remembered.settings;
+      if (remembered.environment) Object.assign(environment, remembered.environment);
+      out.write(style.dim(`  switched to ${spec.label} ${resolvedModelId}${prices ? "" : " — no price configured, costs will show as unknown"}${remembered.note}\n`));
       continue;
     }
     const expandCommand = parseExpandCommand(input);
