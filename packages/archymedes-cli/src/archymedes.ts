@@ -68,6 +68,7 @@ import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream"
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
 import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./render/guide";
+import { RESET } from "./text/ansi";
 import { ANSI_PALETTE, DEFAULT_THEME_NAME, EXTERNAL_MARK, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
 import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./commands/wander";
@@ -112,8 +113,6 @@ import { CliStateHistory } from "./session/state-history";
  * there is what allows a second front end (an editor extension, an HTTP server in OpenCode's
  * shape) to be added later without re-litigating any of the safety behaviour.
  */
-
-const RESET = "[0m";
 
 /**
  * Whether output is going somewhere that can render colour and be drawn on.

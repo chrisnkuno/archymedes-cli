@@ -46,7 +46,7 @@ const total = (counts: Record<string, number>) => Object.values(counts).reduce((
 results.push({
   step: "guards",
   ok: regressions.length === 0,
-  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
+  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; helper copies ${total(current.duplicateHelpers ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
 });
 
 let ok = regressions.length === 0;

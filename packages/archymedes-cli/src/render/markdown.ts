@@ -1,3 +1,4 @@
+import { BOLD, DIM, ITALIC, STRIKE, paint } from "../text/ansi";
 import type { ColorDepth } from "../text/color-depth";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
@@ -14,11 +15,6 @@ import { ANSI_PALETTE, type ColorRole, type Palette } from "../theme/theme";
  * is what lets the whole renderer be tested by comparing strings instead of by driving a pty.
  */
 
-const RESET = "\x1b[0m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-const ITALIC = "\x1b[3m";
-const STRIKE = "\x1b[9m";
 
 /** A role's code for the palette in use; the ANSI eight when none was given. `paint` drops it at depth none. */
 const colour = (role: ColorRole, palette: Palette | undefined) => palette?.[role] || ANSI_PALETTE[role];
@@ -55,10 +51,6 @@ export function parseInline(line: string, palette?: Palette): StyledToken[] {
   }
   if (lastIndex < line.length) tokens.push({ text: unescapeMarkdown(line.slice(lastIndex)), code: "" });
   return tokens.filter((token) => token.text.length > 0);
-}
-
-function paint(text: string, code: string, depth: ColorDepth): string {
-  return depth === "none" || code === "" ? text : `${code}${text}${RESET}`;
 }
 
 /**

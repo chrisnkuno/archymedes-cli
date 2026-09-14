@@ -1,6 +1,7 @@
 import { DEFAULT_UPDATE_REGISTRY, FX_ENDPOINTS, hostOf, providerEndpoints, type ProviderEnvironment } from "./endpoints";
 import { t, type ControlLanguage } from "./i18n";
 import { classifyNetworkError, type NetworkDiagnosis } from "./network";
+import { RESET } from "../text/ansi";
 import type { ColorDepth } from "../text/color-depth";
 import { modelsEndpoint } from "@archymedes/core/providers/model-list";
 import type { ProviderId } from "@archymedes/core/providers/agent-matrix";
@@ -133,8 +134,6 @@ export async function runDoctor(environment: ProviderEnvironment, options: Docto
 export function doctorExitCode(probes: readonly DoctorProbe[]): number {
   return probes.some((probe) => probe.required && !probe.ok && !probe.skipped) ? 1 : 0;
 }
-
-const RESET = "\u001b[0m";
 
 /** Renders probe results with the colour depth the terminal actually reports. */
 export function renderDoctor(probes: readonly DoctorProbe[], depth: ColorDepth, language: ControlLanguage = "en"): string {

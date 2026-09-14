@@ -5,8 +5,8 @@ import path from "node:path";
 export const THEME_ALLOWLIST = new Set(["ansi.ts", "theme.ts"]);
 export const LARGE_FILE_LINES = 800;
 
-export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number> };
-export type GuardFinding = { guard: "theme" | "size" | "layering"; file: string; baseline: number; current: number };
+export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number>; duplicateHelpers?: Record<string, number> };
+export type GuardFinding = { guard: "theme" | "size" | "layering" | "helpers"; file: string; baseline: number; current: number };
 /** Section → sections it may import. A file's section is its first directory under the source root; anything else is unrestricted. */
 export type SectionRules = Record<string, readonly string[]>;
 
@@ -17,6 +17,14 @@ const WIDGET_COLOUR = /\bcolor\s*:\s*["'](?:red|green|yellow|blue|magenta|cyan|g
 /** Hardcoded foreground colours: ANSI constants, raw `\x1b[3Xm` literals, or widget `color: "red"`, all of which ignore `/theme`. */
 export function countThemeLeaks(source: string): number {
   return [COLOUR_NAME, COLOUR_ESCAPE, WIDGET_COLOUR].reduce((sum, pattern) => sum + (source.match(pattern)?.length ?? 0), 0);
+}
+
+const HELPER_DECLARATION = /^(?:export\s+)?(?:const|function)\s+(?:RESET|BOLD|DIM|ITALIC|UNDERLINE|REVERSE|STRIKE|paint|paintAll|visibleWidth|clipTo)\b/gm;
+/** Owners of the shared escape and width helpers; a declaration anywhere else is a private copy. */
+export const HELPER_OWNERS = new Set(["ansi.ts", "text-width.ts"]);
+
+export function countHelperCopies(source: string): number {
+  return source.match(HELPER_DECLARATION)?.length ?? 0;
 }
 
 export function countLines(source: string): number {
@@ -54,7 +62,7 @@ export function countLayeringViolations(file: string, source: string, rules: Sec
 }
 
 export function collectMetrics(repoRoot: string, sourceRoot: string, rules: SectionRules = {}): Metrics {
-  const metrics: Metrics = { themeLeaks: {}, largeFiles: {}, layering: {} };
+  const metrics: Metrics = { themeLeaks: {}, largeFiles: {}, layering: {}, duplicateHelpers: {} };
   for (const file of sourceFiles(path.join(repoRoot, sourceRoot)).sort()) {
     const relative = path.relative(repoRoot, file).split(path.sep).join("/");
     const source = readFileSync(file, "utf8");
@@ -67,6 +75,8 @@ export function collectMetrics(repoRoot: string, sourceRoot: string, rules: Sect
     const inSource = path.relative(path.join(repoRoot, sourceRoot), file).split(path.sep).join("/");
     const layering = countLayeringViolations(inSource, source, rules);
     if (layering > 0) metrics.layering![relative] = layering;
+    const copies = HELPER_OWNERS.has(path.basename(file)) ? 0 : countHelperCopies(source);
+    if (copies > 0) metrics.duplicateHelpers![relative] = copies;
   }
   return metrics;
 }
@@ -86,5 +96,6 @@ export function compareToBaseline(baseline: Metrics, current: Metrics): { regres
   check("theme", baseline.themeLeaks, current.themeLeaks, 0);
   check("size", baseline.largeFiles, current.largeFiles, LARGE_FILE_LINES);
   check("layering", baseline.layering ?? {}, current.layering ?? {}, 0);
+  check("helpers", baseline.duplicateHelpers ?? {}, current.duplicateHelpers ?? {}, 0);
   return { regressions, improvements };
 }

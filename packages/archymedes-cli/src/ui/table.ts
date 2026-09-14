@@ -1,6 +1,7 @@
 import { terminalColumns, windowStart } from "./chooser";
 import { borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import type { KeypressEvent } from "../terminal/keybindings";
+import { RESET } from "../text/ansi";
 import { visibleWidth } from "../text/text-width";
 import { padToWidth, paginator, scrollIndicator, scrollPercent, sliceToWidth, type Align } from "../render/tui";
 
@@ -172,8 +173,6 @@ export function columnWidths(
 
 /** `> ` or `  ` in front of every row, header and rule included, so nothing shifts when the cursor moves. */
 const CURSOR_WIDTH = 2;
-
-const RESET = "\x1b[0m";
 
 /**
  * A cell clipped and padded to exactly `width` columns, with the colour codes in it left intact.

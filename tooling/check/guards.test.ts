@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareToBaseline, countLayeringViolations, countLines, countThemeLeaks, LARGE_FILE_LINES, sectionOf } from "./guards";
+import { compareToBaseline, countHelperCopies, countLayeringViolations, countLines, countThemeLeaks, LARGE_FILE_LINES, sectionOf } from "./guards";
 
 describe("recheck guards", () => {
   it("counts named ANSI colours and raw colour escapes, but not weights or truecolor", () => {
@@ -24,6 +24,10 @@ describe("recheck guards", () => {
     expect(countLayeringViolations("render/sections.ts", source, rules)).toBe(1);
     expect(countLayeringViolations("archymedes.ts", `import { b } from "./ui/chooser";`, rules)).toBe(0);
     expect(countLayeringViolations("text/ansi.ts", `import { b } from "../render/banner";`, rules)).toBe(1);
+  });
+
+  it("counts private copies of the shared escape and width helpers", () => {
+    expect(countHelperCopies(`const RESET = "x";\nfunction paint(a) {}\nexport function visibleWidth() {}\nconst paintRgb = 1;\n  const DIM = 2;`)).toBe(3);
   });
 
   it("fails on growth, reports shrinkage, and treats new files from zero or the size threshold", () => {

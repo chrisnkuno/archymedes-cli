@@ -115,7 +115,7 @@ function dimmed(color: Rgb, intensity: number): Rgb {
   ];
 }
 
-function paint(text: string, [red, green, blue]: Rgb, depth: ColorDepth): string {
+function paintRgb(text: string, [red, green, blue]: Rgb, depth: ColorDepth): string {
   if (depth === "none") return text;
   if (depth === "truecolor") return `[38;2;${red};${green};${blue}m${text}[0m`;
   // 256-colour cube: 16 + 36r + 6g + b, each channel quantised to six levels.
@@ -182,7 +182,7 @@ function starLine(width: number, density: number, next: () => number, depth: Col
     const brightness = next();
     const glyph = stars[Math.min(stars.length - 1, Math.floor(brightness * stars.length))];
     const color = STAR_COLORS[Math.min(STAR_COLORS.length - 1, Math.floor(brightness * STAR_COLORS.length))];
-    line += paint(glyph, intensity === 1 ? color : dimmed(color, intensity), depth);
+    line += paintRgb(glyph, intensity === 1 ? color : dimmed(color, intensity), depth);
   }
   return line.trimEnd();
 }
@@ -207,8 +207,8 @@ export function renderBanner(options: BannerOptions): string {
     // "∴" — therefore — for a tool that shows its work; "::" where the terminal has no unicode.
     const mark = ascii ? "::" : "\u2234";
     const markColor = intensity === 1 ? STAR_COLORS[3] : dimmed(STAR_COLORS[3], intensity);
-    const compact = `${paint(mark, markColor, depth)} ${paint("ARCHYMEDES", NIGHT_GRADIENT[4], depth)} ${paint(mark, markColor, depth)}`;
-    return options.subtitle ? `${compact} ${paint(options.subtitle, NIGHT_GRADIENT[0], depth)}` : compact;
+    const compact = `${paintRgb(mark, markColor, depth)} ${paintRgb("ARCHYMEDES", NIGHT_GRADIENT[4], depth)} ${paintRgb(mark, markColor, depth)}`;
+    return options.subtitle ? `${compact} ${paintRgb(options.subtitle, NIGHT_GRADIENT[0], depth)}` : compact;
   }
 
   const indent = Math.max(2, Math.floor((width - wordmarkWidth) / 2));
@@ -231,7 +231,7 @@ export function renderBanner(options: BannerOptions): string {
 
   if (options.subtitle) {
     const subtitleIndent = Math.max(2, Math.floor((width - options.subtitle.length) / 2));
-    lines.push(`${" ".repeat(subtitleIndent)}${paint(options.subtitle, NIGHT_GRADIENT[2], depth)}`);
+    lines.push(`${" ".repeat(subtitleIndent)}${paintRgb(options.subtitle, NIGHT_GRADIENT[2], depth)}`);
   }
   return lines.join("\n");
 }
@@ -256,7 +256,7 @@ function flank(indent: number, next: () => number, depth: ColorDepth, stars: rea
   const position = Math.floor(next() * reserved);
   const glyph = stars[Math.min(stars.length - 1, Math.floor(brightness * stars.length))];
   const color = STAR_COLORS[Math.min(STAR_COLORS.length - 1, Math.floor(brightness * STAR_COLORS.length))];
-  return `${" ".repeat(position)}${paint(glyph, intensity === 1 ? color : dimmed(color, intensity), depth)}${" ".repeat(reserved - position - 1)}`;
+  return `${" ".repeat(position)}${paintRgb(glyph, intensity === 1 ? color : dimmed(color, intensity), depth)}${" ".repeat(reserved - position - 1)}`;
 }
 
 /**
@@ -274,10 +274,10 @@ function trailing(next: () => number, depth: ColorDepth, stars: readonly string[
   const glyph = stars[Math.min(stars.length - 1, Math.floor(brightness * stars.length))];
   const color = STAR_COLORS[Math.min(STAR_COLORS.length - 1, Math.floor(brightness * STAR_COLORS.length))];
   const gap = Math.min(2 + Math.floor(next() * 4), Math.max(2, room - 1));
-  return `${" ".repeat(gap)}${paint(glyph, intensity === 1 ? color : dimmed(color, intensity), depth)}`;
+  return `${" ".repeat(gap)}${paintRgb(glyph, intensity === 1 ? color : dimmed(color, intensity), depth)}`;
 }
 
 /** The one-line hint under the banner, kept separate so callers can drop it. */
 export function renderTagline(text: string, depth: ColorDepth): string {
-  return paint(text, NIGHT_GRADIENT[0], depth);
+  return paintRgb(text, NIGHT_GRADIENT[0], depth);
 }

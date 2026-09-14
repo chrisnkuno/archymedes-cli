@@ -1,4 +1,4 @@
-import { DIM, RESET } from "../text/ansi";
+import { DIM, RESET, paint } from "../text/ansi";
 import type { ColorDepth } from "../text/color-depth";
 import { terminalStream, type OutputStream } from "../terminal/output";
 import { ASCII_GLYPHS, borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
@@ -15,10 +15,6 @@ import { ANSI_PALETTE, rainbowText, rgbTo256, roleCode, type ColorRole, type Pal
  * Every other writer (a tool line, an approval prompt, the next turn) has to close it first, the
  * same way `archymedes.ts` already makes every writer call `endStreamedLine()` before printing.
  */
-
-function paint(text: string, code: string, depth: ColorDepth): string {
-  return depth === "none" ? text : `${code}${text}${RESET}`;
-}
 
 /**
  * A drawn arc sweeping a full turn — a compass tracing a spiral, not a generic wheel.

@@ -25,7 +25,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `text/ansi.ts` | 33 | 13 | The escape codes, and the one function that decides whether to emit them. |
+| `text/ansi.ts` | 34 | 17 | The escape codes, and the one function that decides whether to emit them. |
 | `text/color-depth.ts` | 8 | 13 | What the terminal can actually render, from the environment rather than from hope. |
 | `text/glyphs.ts` | 278 | 34 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
 | `text/text-width.ts` | 59 | 24 | How many columns a string actually occupies. |
@@ -36,7 +36,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | --- | ---: | ---: | --- |
 | `platform/auto-update.ts` | 226 | 1 | Staying current without getting in the way. |
 | `platform/defender-feed-update.ts` | 32 | 1 | Non-blocking CLI scheduler for the central Defensive Brain feed. |
-| `platform/doctor.ts` | 227 | 1 | `archymedes --doctor`: probes every network endpoint the CLI depends on and reports exactly which |
+| `platform/doctor.ts` | 226 | 1 | `archymedes --doctor`: probes every network endpoint the CLI depends on and reports exactly which |
 | `platform/endpoints.ts` | 70 | 5 | The network endpoints Archymedes depends on, in one place. |
 | `platform/i18n.ts` | 318 | 4 | Keyed by shortcut id, not by position. |
 | `platform/local-currency.ts` | 143 | 2 | The countries a location can be set to, in the sense that matters: ones we can price in. |
@@ -87,7 +87,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/guide.ts` | 462 | 2 | The manual, inside the thing it documents. |
 | `render/identity.ts` | 118 | 2 | Nested tetrahedra joined at their vertices: a triangular analogue of a hypercube. |
 | `render/intraline.ts` | 155 | 1 | Which *characters* changed, not merely which lines. |
-| `render/markdown.ts` | 298 | 4 | Markdown, rendered for a terminal. |
+| `render/markdown.ts` | 290 | 4 | Markdown, rendered for a terminal. |
 | `render/patch-view.ts` | 224 | 2 | A unified diff, read back into something worth looking at. |
 | `render/picture.ts` | 250 | 0 | Images in the terminal — Archymedes's port of ntcharts' `picture`. |
 | `render/png.ts` | 193 | 1 | A PNG decoder, because the alternative was a dependency Archymedes cannot justify. |
@@ -98,7 +98,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/task-view.ts` | 114 | 1 | One place to see where the task stands: what was asked, the plan against it, what changed, what |
 | `render/test-report.ts` | 372 | 1 | Test output, read as a result rather than as a wall of text. |
 | `render/transcript.ts` | 182 | 3 | How a tool call reads in the transcript. |
-| `render/tui.ts` | 1360 | 11 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
+| `render/tui.ts` | 1356 | 11 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
 
 ## `session`
 
@@ -132,7 +132,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `ui/navigation.ts` | 484 | 1 | Finding the right command without reading all of them. |
 | `ui/palette.ts` | 257 | 3 | The command palette. |
 | `ui/shortcuts.ts` | 311 | 1 | Where feature keys meet the terminal. |
-| `ui/table.ts` | 515 | 4 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
+| `ui/table.ts` | 514 | 4 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
 | `ui/tables.ts` | 189 | 1 | Which columns each of Archymedes's tables has — and nothing about how a table is drawn. |
 | `ui/workspace-frame.ts` | 319 | 2 | Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. |
 | `ui/workspace-model.ts` | 321 | 2 | What the control panel is looking at, as data. |
@@ -157,12 +157,12 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `acp-server.ts` | 142 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `archymedes.ts` | 5073 | 0 | Archymedes CLI — the terminal front end. |
+| `archymedes.ts` | 5072 | 0 | Archymedes CLI — the terminal front end. |
 | `headless.ts` | 209 | 1 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 267 | 1 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `archymedes.ts` (5073), `render/tui.ts` (1360).
-- **Duplicate escape helpers:** `BOLD` in `render/markdown.ts`, `text/ansi.ts`; `DIM` in `render/markdown.ts`, `text/ansi.ts`; `RESET` in `archymedes.ts`, `platform/doctor.ts`, `render/markdown.ts`, `text/ansi.ts`, `ui/table.ts`; `paint` in `render/banner.ts`, `render/markdown.ts`, `render/tui.ts`, `text/ansi.ts`.
+- **Large files (over 800 lines):** `archymedes.ts` (5072), `render/tui.ts` (1356).
+- **Duplicate escape helpers:** none.
 - **Modules with no source importer:** `render/picture.ts`.
