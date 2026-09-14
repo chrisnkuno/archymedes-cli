@@ -20,6 +20,7 @@ PURPOSE = {
     "ui": "Interactive menus and full screens, and the fixed workspace frame.",
     "session": "Tabs, models, fallback, spend, history and exported sessions.",
     "commands": "Slash-command features built from the sections below them.",
+    "app": "Support for the terminal entry point: argument parsing, transcript render state, launch helpers.",
 }
 
 

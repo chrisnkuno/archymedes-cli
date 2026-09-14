@@ -19,6 +19,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `session/` | Tabs, models, fallback, spend, history and exported sessions. | `theme`, `platform`, `text` |
 | `ui/` | Interactive menus and full screens, and the fixed workspace frame. | `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
 | `commands/` | Slash-command features built from the sections below them. | `ui`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
+| `app/` | Support for the terminal entry point: argument parsing, transcript render state, launch helpers. | `commands`, `ui`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
 | root | Entry points: the terminal CLI, headless and ACP front ends, the background job worker. | anything |
 
 ## `text`
@@ -143,26 +144,32 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `commands/balance.ts` | 278 | 1 | `/balance` — the command grammar and everything it prints. |
-| `commands/chat-history.ts` | 257 | 1 | Past conversations, as something you can look through rather than a list of ids. |
+| `commands/chat-history.ts` | 257 | 2 | Past conversations, as something you can look through rather than a list of ids. |
 | `commands/jobs-command.ts` | 76 | 1 | `/jobs`, `/attach`, `/detach` — the command grammar for durable work. |
 | `commands/memory.ts` | 136 | 1 | The terminal half of memory: parsing `/memory` commands and drawing the result. |
-| `commands/pacing.ts` | 142 | 1 | Slow mode: spend less per turn, on purpose. |
+| `commands/pacing.ts` | 142 | 2 | Slow mode: spend less per turn, on purpose. |
 | `commands/session-inspect.ts` | 60 | 1 | The read-only "where do things stand" commands — `/todos` and `/task` — as pure functions. |
 | `commands/tools-command.ts` | 86 | 1 | `/tools` — what the agent can actually call right now, and where each of it came from. |
 | `commands/voice.ts` | 88 | 1 | Starts ffmpeg without a shell. Writing q stops it cleanly and finalizes the WAV header. |
 | `commands/wander.ts` | 222 | 2 | Wander, from the terminal. |
+
+## `app`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `app/args.ts` | 202 | 1 | Where a piece of work actually runs: this machine, a throwaway remote sandbox, or a container. |
 
 ## root
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `acp-server.ts` | 142 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `archymedes.ts` | 5072 | 0 | Archymedes CLI — the terminal front end. |
+| `archymedes.ts` | 4865 | 0 | Archymedes CLI — the terminal front end. |
 | `headless.ts` | 209 | 1 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 267 | 1 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `archymedes.ts` (5072), `render/tui.ts` (1356).
+- **Large files (over 800 lines):** `archymedes.ts` (4865), `render/tui.ts` (1356).
 - **Duplicate escape helpers:** none.
 - **Modules with no source importer:** `render/picture.ts`.

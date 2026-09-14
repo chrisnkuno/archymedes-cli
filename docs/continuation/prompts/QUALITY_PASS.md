@@ -166,6 +166,10 @@ Do not micro-optimize code that is not on a measured hot path.
   `palette.accent` (an escape code) silently breaks colour.
 - The size guard counts `archymedes.ts`. New imports there cost lines, so pay for them by extracting.
 - A moved file keeps its tests green only if `vi.mock()` and dynamic `import()` paths moved with it.
+- Text-based tooling (import rewriting, unused-import detection) is a heuristic. Always follow it with
+  typecheck and the PTY suite: a spread like `...name(` once looked like a property access and hid a real use.
+- `verify:package` repacks the gitignored `artifacts/` tarball for the current version; never treat it
+  as the published archive after a release.
 
 ## Report at the end of the pass
 

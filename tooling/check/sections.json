@@ -10,6 +10,7 @@
     "render": ["render", "terminal", "catalog", "theme", "platform", "text"],
     "session": ["session", "theme", "platform", "text"],
     "ui": ["ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
-    "commands": ["commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"]
+    "commands": ["commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
+    "app": ["app", "commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"]
   }
 }
