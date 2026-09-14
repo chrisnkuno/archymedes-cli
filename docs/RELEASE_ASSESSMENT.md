@@ -126,7 +126,6 @@ Before announcing availability, verify registry metadata and install the publish
 fresh project. The local archive check does not prove registry publication, real provider access,
 native optional sidecar availability, hosted billing, or that GitHub's OS matrix has executed.
 
-Registry authentication rechecked on 2026-09-14 returned 401 for `bun pm whoami`.
-Authenticated npm access is required to publish; no release was uploaded during that preflight.
-Authentication should be configured through the user's npm/Bun environment, not committed to this
-repository or pasted into a report.
+2.2.0 was published to the npm registry on 2026-09-14 (`bun publish ./artifacts/archymedes-cli-2.2.0.tgz --access public`,
+browser-based auth). A clean `npm install archymedes-cli@2.2.0` in a fresh directory afterward resolved
+and ran `--version`/`--help` correctly, confirming registry availability.
