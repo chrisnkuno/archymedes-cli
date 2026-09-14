@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Interface } from "node:readline/promises";
 import { visibleWidth } from "./text/text-width";
-import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit, readFxRates, renderProviders } from "./archymedes";
+import { readFxRates, renderProviders } from "./app/providers";
+import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit } from "./app/prompts";
 import { configureRendering, renderEvent, renderUserMessage } from "./app/transcript";
 import { parseArgs } from "./app/args";
 

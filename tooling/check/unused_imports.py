@@ -29,6 +29,6 @@ def rewrite(match):
     return f'import {match.group(1) or ""}{{ {", ".join(kept)} }} from {match.group(3)};\n'
 
 updated = IMPORT.sub(rewrite, text)
-print(f"{path}: unused {unused_total}")
+print(f"{path}: {len(unused_total)} unused import(s){' removed' if fix else ''}" if len(unused_total) > 12 else f"{path}: unused {unused_total}")
 if fix and updated != text:
     open(path, "w").write(updated)

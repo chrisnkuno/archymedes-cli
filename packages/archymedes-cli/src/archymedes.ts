@@ -10,21 +10,21 @@ import { FOLD_AFTER_LINES, SPINNER_START_DELAY_MS, activity, beginTranscriptTurn
 import { priceSessionModelTurns, readSessionModelTurns } from "./session/resumed-spend";
 import { renderGallery } from "./ui/gallery";
 import { displayMask, fixObjective } from "./ui/defender-screen";
-import { CommandUsage, isEssential, navSignals, rankWithContext, renderAsks, renderEssentials, renderGroupedHelp, renderHint, renderRecovery, renderStarters, renderSuggestions, type NavContext } from "./ui/navigation";
+import { CommandUsage, navSignals, rankWithContext, renderAsks, renderEssentials, renderGroupedHelp, renderHint, renderRecovery, renderStarters, renderSuggestions, type NavContext } from "./ui/navigation";
 import { askModelForSuggestions, mergeModelSuggestions, type Suggestion as EngineSuggestion } from "@archymedes/core/cli/suggestions";
 import type { ModelUsage } from "@archymedes/core/providers/model";
-import { ArchymedesSessionDaemon, type DaemonApprovalRequest, type DaemonNotification, type ArchymedesDaemonClient } from "@archymedes/core/cli/daemon";
-import type { ArchymedesMode, PermissionDecision } from "@archymedes/core/cli/permissions";
-import { assessTaskSafety, type SafetyAssessment } from "@archymedes/core/cli/safety";
+import { ArchymedesSessionDaemon, type DaemonNotification, type ArchymedesDaemonClient } from "@archymedes/core/cli/daemon";
+import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
+import { assessTaskSafety } from "@archymedes/core/cli/safety";
 import { listSessions, loadSession, type SessionRecord } from "@archymedes/core/cli/session";
-import { catalogPrices, describeProviders, PRICE_ENVIRONMENT_HINT, PROVIDER_IDS, providerEnvPrefix, resolveProvider, type ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { convertTo, fromUnits, toUnits, formatMoney, isCurrency, priceUsage, type Currency, type FxRate, type Money, type TokenPrices } from "@archymedes/core/money";
+import { catalogPrices, PRICE_ENVIRONMENT_HINT, PROVIDER_IDS, providerEnvPrefix, resolveProvider, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { convertTo, fromUnits, toUnits, formatMoney, isCurrency, priceUsage, type Money } from "@archymedes/core/money";
 import { createExaClient } from "@archymedes/core/providers/exa";
 import { downloadProject, DockerWorkspace, E2BWorkspace, LocalWorkspace, uploadProject, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { EXIT_CODES, HeadlessEmitter, exitCodeForStatus } from "./headless";
-import { buildModelCatalog, describePrice, matchModelQuery, modelsForProvider, parseModelCommand, type ModelChoice } from "./session/models";
+import { buildModelCatalog, describePrice, matchModelQuery, parseModelCommand, type ModelChoice } from "./session/models";
 import { buildPickerRows, type PickerResult } from "./ui/model-picker";
 import { INITIAL_TABLE_STATE, renderTable } from "./ui/table";
 import { buildCostTable, buildJobsTable, buildModelTable } from "./ui/tables";
@@ -41,7 +41,7 @@ import { visibleWidth } from "./text/text-width";
 import { PinnedScreen } from "./terminal/screen";
 import { barChart, lineChart } from "./render/charts";
 import { renderMarkdown } from "./render/markdown";
-import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderCommandHelp, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./catalog/commands";
+import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./catalog/commands";
 import { KeyBindingRegistry, parseBindingOverrides } from "./terminal/keybindings";
 import { runChooser, type ChooserItem } from "./ui/chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./platform/doctor";
@@ -59,12 +59,12 @@ import { readAutoUpdateMode, runAutoUpdate } from "./platform/auto-update";
 import { updateDefenderFeed } from "./platform/defender-feed-update";
 import { renderReliabilityStatus } from "./render/reliability-status";
 import { CACHE_CHURN_HINT } from "@archymedes/core/cli/cost";
-import { MODEL_FIELD_PROVIDER, SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, type ArchymedesSettings, type SettingChoice, type SettingKey, type SettingsPrompts } from "./platform/settings";
+import { SETTING_FIELDS, loadSettings, mergedEnvironment, runSettingsMenu, saveSettings, type ArchymedesSettings, type SettingKey } from "./platform/settings";
 import { loadHistory, saveHistory } from "./session/history";
 import { renderTabStrip, parseTabCommand, SEQUENTIAL_TABS_NOTE, shortModel, WorkspaceController } from "./session/tabs";
 import { TabSink, replayLines } from "./terminal/output";
 import { renderPatch } from "./render/patch-view";
-import { fetchProviderModels, fetchableProviders, isCacheFresh, loadLiveModels, mergeModelLists, readModelCache } from "@archymedes/core/providers/model-fetch";
+import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
@@ -73,8 +73,7 @@ import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPr
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
 import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./commands/wander";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
-import { appendJobLog, cancelJob, enqueueJob, finishJob, getJob, isTerminal, jobLogPath, listJobs, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
-import { runJobWorkerForever, workerId } from "./job-worker";
+import { cancelJob, enqueueJob, getJob, isTerminal, jobLogPath, listJobs, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./commands/jobs-command";
 import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./commands/balance";
 import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
@@ -82,15 +81,19 @@ import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
 import { renderTools } from "./commands/tools-command";
 import { removeRecording, startRecording, transcribeAudio } from "./commands/voice";
-import { resolveControlLanguage, t, type ControlLanguage } from "./platform/i18n";
+import { resolveControlLanguage, t } from "./platform/i18n";
 import { resolveGlyphs } from "./text/glyphs";
 import { GUTTER, heading, note, panel, rule } from "./render/sections";
-import { fenceHeader, languageOf, renderCode, renderFileChange } from "./render/code-view";
+import { fenceHeader, languageOf, renderCode } from "./render/code-view";
 import { expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
 import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, memoryFile, memoryPromptBlock, parseMemoryCommand, recallMemories, replaceMemory, renderMemories, type MemoryEntry } from "./commands/memory";
 import { parseHistoryCommand, relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
 import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, remainingCooldown, type PaceLevel } from "./commands/pacing";
 import { CliStateHistory } from "./session/state-history";
+import { ReadlineInternals, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, hiddenQuestion, isReadlineExit, settingsChooser } from "./app/prompts";
+import { helpText } from "./app/help";
+import { modelChoicesForSettingsField, modelPriceCatalogFor, readFxRates, renderProviders } from "./app/providers";
+import { runJobWorkerProcess, spawnJobWorker } from "./app/job-launch";
 
 /**
  * Archymedes CLI — the terminal front end.
@@ -100,476 +103,6 @@ import { CliStateHistory } from "./session/state-history";
  * there is what allows a second front end (an editor extension, an HTTP server in OpenCode's
  * shape) to be added later without re-litigating any of the safety behaviour.
  */
-
-// A function, not a constant: it is built after `configureRendering` has learned whether the
-// destination can render colour at all, which a module-level template literal would predate.
-function helpText(language: ControlLanguage = "en", shortcuts: ReadonlyMap<string, string> = new Map()): string {
-  // The module-level glyph set, which `configureRendering` has already resolved by the time this
-  // is called — the reason this is a function rather than a constant.
-  const star = glyphs.star;
-  // Marked rather than reordered. This page is grepped and piped as often as it is read, so the
-  // rows have to stay where they were; what changes is that a few of them are now findable.
-  const mark = (command: string) => (isEssential(command) ? `${star} ` : "  ");
-  return `
-${style.bold("archymedes")} — ${t(language, "tagline")}
-
-${style.bold(t(language, "help.startHere"))}
-  ${star} archymedes settings           Paste an API key. Nothing runs until one is saved.
-  ${star} archymedes                    Start a session, then just describe what you want
-  ${star} archymedes --resume           Pick up the last session where it stopped
-  ${star} /help                   Inside a session: everything you can do
-  ${star} /undo                   Inside a session: take back the last turn's changes
-  ${style.dim(t(language, "help.footnote"))}
-
-${style.bold(t(language, "help.running"))}
-  archymedes                      Start an interactive session
-  archymedes "add a health check" Run one request and exit
-  archymedes --plan               Plan mode: read and reason, never write
-  archymedes --auto               Auto mode: ordinary edits apply; sensitive actions ask
-  archymedes --defender           Defender mode: find and fix real security issues, every change still asks
-  archymedes --allow-sensitive    Approve a flagged task preflight (tool guards still apply)
-  archymedes --json "task"        One turn, JSONL on stdout for another program to read
-  archymedes --resume [id]        Continue a previous session ("latest" by default)
-  archymedes --sessions           List sessions in this project
-  archymedes history [search Q]   Browse or search history without starting a model
-  archymedes history status       Check the native index and portable fallback
-  archymedes --cwd <dir>          Work in a different project root
-  archymedes update               Check, confirm, and install the latest Archymedes CLI
-  archymedes --update             Alias for archymedes update
-  archymedes update --check       Check for an update without installing it
-  archymedes update --yes         Update without an interactive confirmation
-  archymedes --version            Print the installed CLI version
-
-${style.bold(t(language, "help.files"))}
-  archymedes acp                  Speak the Agent Client Protocol on stdio (for editors)
-  archymedes gallery              Draw every UI component once, to see how this terminal renders it
-  archymedes --sandbox            Work in a remote E2B sandbox, not on this machine
-  archymedes --sandbox docker     Work in a local Docker container instead of a remote one
-  archymedes --docker-image IMG   Image for --sandbox docker (or set DOCKER_CODING_IMAGE)
-  archymedes --sandbox --upload   ...seeded with a copy of this project
-  archymedes --image <preset>     Sandbox image to use (default: general)
-  archymedes --sandbox-minutes N  Sandbox lifetime (default 30)
-
-${style.bold(t(language, "help.model"))}
-  archymedes --provider <name>    ${PROVIDER_IDS.join(" | ")}
-  archymedes --model <id>         Model to run (defaults to the provider's)
-  /model                    Pick a model from a list, with prices, keeping the transcript
-  /model <name>             Switch straight to one, e.g. /model opus
-  archymedes --providers          Show which providers are configured, and what is missing
-  archymedes doctor              Test service health, credentials and every endpoint Archymedes needs
-  archymedes doctor --report     Print a redacted JSON support report with request ids
-  archymedes --doctor             Alias for archymedes doctor
-  archymedes settings             Configure keys, URLs, models, pricing and voice input
-
-${style.bold(t(language, "help.cost"))}
-  archymedes --location EG        Select a country (auto-detected from your locale by default)
-  archymedes --currency EGP       Select any supported ISO display currency
-  archymedes --budget N           Approve and enforce a cap in the display currency
-  archymedes --slow               Spend at a slower pace: fewer model rounds, smaller replies
-  archymedes --slow strict        Slower still, with a pause between turns
-  /slow [on|strict|off]     Change the pace mid-session
-  archymedes --estimate "task"    Show a token/cost forecast without calling the model
-  /cost                     Token and cost breakdown for this session
-
-${style.bold(t(language, "help.memory"))}
-  # we use bun, not npm     Remember a fact for every future session in this project
-  /memory                   Everything remembered, project and personal, with numbers
-  /memory add --user <fact> Remember something about you rather than about this project
-  /memory forget N          Drop one entry
-  /history                  Past conversations in this project
-  /history search <text>    Find one by what you asked for
-  /history <id>             Read a past conversation back
-  /history resume           Pick one up where it stopped
-  /history status           Show whether native indexed history or JSON fallback is active
-
-${style.bold(t(language, "help.transcript"))}
-  /expand [N|all|list]      Unfold written code, a test run, or a long result
-  archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
-  archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
-  archymedes --layout scrollback  Plain terminal log instead of the default fixed workspace
-  /layout [fixed|scrollback]  Switch layouts mid-session
-  PgUp/PgDn, wheel            Scroll the fixed workspace; Alt+Up/Down by line, Ctrl+Home top, Esc live
-  archymedes --pin                Pin the status line to the bottom row. Costs the terminal's
-                            scrollback: a reserved footer means scrolled-off lines are
-                            never saved, so this is off unless you ask for it.
-                            (or set ARCHYMEDES_GLYPHS=ascii)
-
-${style.bold(t(language, "help.headless"))}
-  With --json, stdout carries one JSON object per line and nothing else; everything
-  a person would read goes to stderr. Exit codes are stable:
-    0 completed   1 failed    2 usage         3 blocked
-    4 unverified  5 approval  6 limit hit     7 cancelled
-
-${style.bold(t(language, "help.inSession"))}  ${style.dim(`(${star} ${t(language, "help.sessionHint")})`)}
-${renderCommandHelp(language, shortcuts, { mark })}
-`;
-}
-
-/**
- * Everything that can occupy the last rows of the screen, and therefore has to be closed or
- * cleared before anything else prints there.
- *
- * `markdown` holds a partial assistant line, `toolLine` holds a tool call awaiting its result,
- * and `statusBar` holds the spinner. They are module state for the same reason `renderEvent` is a
- * module function: the renderer is one thing with one screen, and threading three cursors through
- * every call site is how the two of them fall out of step.
- *
- * `screen` is undefined outside a real interactive TTY session — a one-shot `archymedes "..."` run, a
- * pipe, `--estimate` — every one of which prints a few lines and exits, where a pinned footer would
- * be pure overhead with nothing to keep separately scrolled from. `statusBar`'s own erase-above-
- * cursor redraw stays the fallback for exactly that case; `screen`, when present, takes over
- * instead — `statusBar.clear()`'s calls elsewhere stay in place and are simply harmless no-ops once
- * nothing is ever drawn through it.
- */
-/**
- * readline runtime state that `@types/node` leaves untyped. The current line, its input stream,
- * and the closed flag all exist on the interface at runtime (readline is written in plain JS).
- */
-type ReadlineInternals = {
-  input: NodeJS.ReadableStream;
-  closed: boolean;
-  line: string;
-};
-
-
-/**
- * The setup view: what works, what is missing, and the exact variable that fixes it.
- */
-export function renderProviders(environment: Record<string, string | undefined>, depth: ReturnType<typeof detectColorDepth>): string {
-  // The banner honours NO_COLOR; this view has to as well, or `archymedes --providers > setup.txt`
-  // writes escape codes into the file someone is about to read.
-  const paint = (text: string, apply: (value: string) => string) => (depth === "none" ? text : apply(text));
-  const statuses = describeProviders(environment);
-  const rows: string[][] = [];
-
-  for (const status of statuses) {
-    const mark = status.configured ? paint(glyphs.check, style.green) : paint(glyphs.circleEmpty, style.dim);
-    const detail = status.configured
-      ? paint(`${status.model} · pricing: ${status.pricing}`, style.dim)
-      // `archymedes settings` leads: it stores the key for next time, where an exported variable lives
-      // only as long as the shell does. The variable name still appears, for CI and containers.
-      : paint(`archymedes settings, or set ${status.missing.join(" and ")}`, style.yellow);
-    rows.push([mark, status.label, detail]);
-  }
-  const exaConfigured = Boolean(environment.EXA_API_KEY?.trim());
-  rows.push([
-    exaConfigured ? paint(glyphs.check, style.green) : paint(glyphs.circleEmpty, style.dim),
-    "Exa search",
-    exaConfigured ? paint("web_search enabled", style.dim) : paint("archymedes settings, or set EXA_API_KEY", style.yellow),
-  ]);
-  const lines: string[] = [table(["", "provider", "status"], rows, { depth, glyphs })];
-
-  const unpriced = statuses.filter((status) => status.configured && status.pricing === "unknown");
-  if (unpriced.length > 0) {
-    lines.push("");
-    lines.push(paint(`  No published price for ${unpriced.map((status) => status.model).join(", ")} — costs show as unknown.`, style.dim));
-    lines.push(paint(`  Set ${PRICE_ENVIRONMENT_HINT} to price it.`, style.dim));
-  }
-  if (readFxRates(environment).length === 0) {
-    lines.push(paint("  Set ARCHYMEDES_FX_FROM / ARCHYMEDES_FX_TO / ARCHYMEDES_FX_RATE to price models in another currency offline.", style.dim));
-  }
-  return lines.join("\n");
-}
-
-/**
- * Exchange rates, from configuration only.
- *
- * Deliberately not fetched: a CLI that silently calls a rates API turns every cost display into a
- * network dependency, and a stale-but-known rate is more auditable than a fresh-but-invisible one.
- * `ARCHYMEDES_FX_FROM=USD ARCHYMEDES_FX_TO=EUR ARCHYMEDES_FX_RATE=0.92` is the whole interface, and the rate's date is recorded beside it so
- * a historical figure can be reconciled later.
- */
-/**
- * Builds the `choose` half of `SettingsPrompts` from a readline.
- *
- * Defined once and used by all three ways into settings — first run, `archymedes settings`, `/settings` —
- * because a menu that navigates differently depending on how you opened it is the specific thing
- * this is meant to stop.
- */
-function settingsChooser(readline: Interface): NonNullable<SettingsPrompts["choose"]> {
-  return (request) => openChooser(
-    { readline, input: process.stdin, output: process.stdout },
-    request.items.map((item) => ({ ...item })),
-    {
-      title: request.title,
-      ...(request.filter ? { filter: true } : {}),
-      ...(request.initialIndex === undefined ? {} : { initialIndex: request.initialIndex }),
-      height: 12,
-      // The real terminal, so rows are clipped rather than wrapped onto lines the repaint does
-      // not know it drew.
-      width: process.stdout.columns ?? 80,
-      glyphs,
-      paint: { dim: style.dim, cyan: style.cyan, green: style.green, yellow: style.yellow },
-    },
-  );
-}
-
-export function readFxRates(environment: Record<string, string | undefined>): FxRate[] {
-  const genericRate = Number(environment.ARCHYMEDES_FX_RATE);
-  const genericFrom = environment.ARCHYMEDES_FX_FROM?.trim().toUpperCase();
-  const genericTo = environment.ARCHYMEDES_FX_TO?.trim().toUpperCase();
-  const configured: FxRate[] = [];
-  if (Number.isFinite(genericRate) && genericRate > 0 && genericFrom && genericTo && isCurrency(genericFrom) && isCurrency(genericTo) && genericFrom !== genericTo) {
-    configured.push({
-      from: genericFrom,
-      to: genericTo,
-      rate: genericRate,
-      asOf: environment.ARCHYMEDES_FX_ASOF?.trim() || new Date().toISOString().slice(0, 10),
-      source: environment.ARCHYMEDES_FX_SOURCE?.trim() || "ARCHYMEDES_FX_RATE",
-    });
-  }
-  return configured;
-}
-
-/**
- * The approval gate, as a person experiences it.
- *
- * `signal` reaches in for the *current turn's* abort signal at ask-time, not construction-time:
- * one prompt function is built per agent and lives across many turns, while an `AbortSignal` is
- * single-use. Ctrl+C during a normal tool loop cancels via `agent.cancel()`, a flag the runtime
- * only checks between steps — but a pending `readline.question()` here is not a step the runtime
- * is looping over, so that flag alone leaves it blocked forever on an answer nobody can give
- * anymore. Aborting the question is what actually returns control to the prompt.
- */
-/** What a pending `write_file`/`edit_file` approval would actually change — no file read needed: `write_file` carries its whole new content, `edit_file` carries the exact before/after snippet. */
-function renderApprovalPreview(preview: DaemonApprovalRequest["preview"]): string | undefined {
-  if (!preview) return undefined;
-  const rendered = preview.toolName === "write_file"
-    ? renderFileChange({ path: preview.path, kind: "write", content: preview.content }, sectionStyle(), { maxLines: FOLD_AFTER_LINES })
-    : renderFileChange({ path: preview.path, kind: "edit", before: preview.oldText, after: preview.newText }, sectionStyle(), { maxLines: FOLD_AFTER_LINES });
-  return rendered.text;
-}
-
-export function createApprovalPrompt(readline: Interface, interactive: boolean, signal: () => AbortSignal | undefined) {
-  return async ({ summary, safety, preview }: { summary: string; safety?: SafetyAssessment; preview?: DaemonApprovalRequest["preview"] }): Promise<PermissionDecision> => {
-    // Without a terminal there is nobody to ask, and a prompt written to a pipe would either hang
-    // or read the next line of piped input as an answer. Denying is the only honest result — and
-    // it is reported, so the run does not look like the model simply chose not to act.
-    if (!interactive) {
-      out.write(`\n  ${style.yellow("!")} Archymedes needs approval to ${style.bold(summary)}, but stdin is not a terminal.\n`);
-      out.write(`    ${style.dim("Re-run with --auto to pre-approve workspace edits.")}\n`);
-      return "deny_always";
-    }
-    // A tool call can arrive before the model emits visible text. In that case the TUI spinner is
-    // still redrawing the last row and can overwrite the first approval question unless it is
-    // explicitly stopped here.
-    activity.awaitingFirstDelta = false;
-    spinner?.stop();
-    statusBar.clear();
-    endStreamedLine();
-    out.write(`\n  ${style.yellow("?")} Archymedes wants to ${style.bold(summary)}\n`);
-    // What you approve is what gets executed — see the exact change before answering, not just
-    // the one-line summary. Reuses the same renderer the post-write receipt already shows, built
-    // straight from the call's own arguments, so nothing here can differ from what actually runs.
-    const previewText = renderApprovalPreview(preview);
-    if (previewText) out.write(`${previewText}\n`);
-    if (safety?.sensitive) out.write(`    ${style.yellow("Safety guard:")} ${safety.reasons.join(", ")}\n`);
-    let answer: string;
-    try {
-      answer = (await readline.question(`    ${style.dim("[y]es / [n]o / [a]lways / [d]eny always: ")}`, { signal: signal() })).trim().toLowerCase();
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        out.write(style.yellow("\n  interrupted — treating as denied\n"));
-        return "deny";
-      }
-      throw error;
-    }
-    if (answer === "a" || answer === "always") return "allow_always";
-    if (answer === "d") return "deny_always";
-    if (answer === "n" || answer === "no") return "deny";
-    return answer === "" || answer === "y" || answer === "yes" ? "allow" : "deny";
-  };
-}
-
-/** Sensitive objectives are acknowledged before estimation, model contact, or sandbox effects. */
-export async function confirmSensitiveTask(
-  readline: Interface,
-  interactive: boolean,
-  assessment: SafetyAssessment,
-  explicitlyAllowed = false,
-): Promise<boolean> {
-  if (!assessment.sensitive) return true;
-  const detail = assessment.reasons.join(", ");
-  if (explicitlyAllowed) {
-    out.write(`  ${style.yellow("Safety guard:")} ${detail} — task preflight approved by --allow-sensitive.\n`);
-    return true;
-  }
-  if (!interactive) {
-    out.write(`  ${style.yellow("Safety guard blocked this task:")} ${detail}.\n`);
-    out.write(`    ${style.dim("Review it, then re-run with --allow-sensitive. Sensitive tool operations remain separately gated.")}\n`);
-    return false;
-  }
-  statusBar.clear();
-  const answer = (await readline.question(`  ${style.yellow("Safety review:")} ${style.bold(detail)}. Continue? ${style.dim("[y/N]: ")}`)).trim().toLowerCase();
-  return answer === "y" || answer === "yes";
-}
-
-/** Confirms the one bounded amount the session may spend before any sandbox or model is started. */
-export async function confirmSpendingCap(readline: Interface, interactive: boolean, renderedCap: string): Promise<boolean> {
-  // A non-interactive caller supplied --budget in the command itself; that explicit argument is
-  // the approval. Prompting a pipe would hang or consume the task text as an answer.
-  if (!interactive) return true;
-  statusBar.clear();
-  const answer = (await readline.question(`  ${style.yellow("?")} Approve a session spend cap of ${style.bold(renderedCap)}? ${style.dim("[Y/n]: ")}`)).trim().toLowerCase();
-  return answer === "" || answer === "y" || answer === "yes";
-}
-
-/** Ctrl+D/EOF is a normal way to leave a terminal program, never an application failure. */
-export function isReadlineExit(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || /aborted with ctrl\+d|readline was closed/i.test(error.message));
-}
-
-/** Reads a secret through readline without echoing pasted credentials to the terminal or history. */
-async function hiddenQuestion(readline: Interface, question: string): Promise<string> {
-  process.stdout.write(`${question}${style.dim("[input hidden] ")}`);
-  const stdout = process.stdout as typeof process.stdout & { write: typeof process.stdout.write };
-  const original = stdout.write;
-  try {
-    stdout.write = (() => true) as typeof process.stdout.write;
-    const answer = await readline.question("");
-    // readline records answers automatically. A hidden value must not become visible again when
-    // the user presses Up, nor reach the persistent prompt history file.
-    const history = (readline as Interface & { history?: string[] }).history;
-    if (history) {
-      for (let index = history.length - 1; index >= 0; index -= 1) if (history[index] === answer) history.splice(index, 1);
-    }
-    return answer;
-  } finally {
-    stdout.write = original;
-    original.call(process.stdout, "\n");
-  }
-}
-
-/**
- * `ModelPriceCatalog` for the runtime's own runaway guard, from the ledger's `TokenPrices`.
- *
- * The two exist for different readers. `TokenPrices` is what the ledger and the display report
- * are built on — currency-aware, dated, converted for a human. `ModelPriceCatalog` is a bare
- * integer rate `ArchymedesAgent` compares a running total against before every provider call, and it has
- * always used a coarser unit than the ledger by design: an approved cap switches to full
- * currency-micros precision so the runtime can clamp accurately against a real promise made to the
- * user, while the common case (no explicit cap) uses whole-currency-units-per-million as a loose
- * backstop, because a guard rail nobody configured should be generous rather than surprising.
- */
-/**
- * What a model field in the settings menu should offer, asked of the provider itself.
- *
- * A model id is the one setting whose valid answers Archymedes cannot know: they belong to the provider,
- * they change with no release of Archymedes, and the key needed to ask for them has — by the time this
- * field is opened — just been typed into the field above. So this asks, using the settings as they
- * stand in the menu rather than as they were saved, which is what makes "paste a key, then pick a
- * model" work in one visit instead of two.
- *
- * The catalog stays underneath: it is what knows prices, and it is the whole list when there is no
- * key yet or the provider cannot be reached. The fetch only ever widens it, and never blocks on
- * more than one provider — the one whose field is open.
- */
-async function modelChoicesForSettingsField(
-  field: SettingKey,
-  settings: ArchymedesSettings,
-  processEnvironment: Record<string, string | undefined>,
-  display: Currency,
-  rates: readonly FxRate[],
-): Promise<readonly SettingChoice[]> {
-  const provider = MODEL_FIELD_PROVIDER[field];
-  if (!provider) return [];
-  // The in-progress menu values win over the process environment, so a key pasted a moment ago is
-  // the key this asks with.
-  const environment = mergedEnvironment(settings, processEnvironment);
-  const known = modelsForProvider(provider);
-  const fetched = await fetchProviderModels(provider, environment, globalThis.fetch as never).catch(() => null);
-  const models = mergeModelLists(known, fetched?.models);
-
-  return models.map((model) => {
-    const prices = catalogPrices(provider, model);
-    return {
-      value: model,
-      label: model,
-      // Named rather than left blank: a model this build has no rate for is perfectly usable, and
-      // saying so is different from saying nothing — the cost report will say the same thing later.
-      description: prices
-        ? describePrice(prices, display, (amount) => convertTo(amount, display, rates))
-        : "no published rate — costs will show as unknown",
-    };
-  });
-}
-
-function modelPriceCatalogFor(prices: Pick<TokenPrices, "inputPerMillion" | "outputPerMillion" | "largeContext"> | undefined, exact: boolean) {
-  if (!prices) return { inputRatePerMillion: 1, outputRatePerMillion: 1 };
-  const rates = exact
-    ? { inputRatePerMillion: prices.inputPerMillion, outputRatePerMillion: prices.outputPerMillion }
-    : { inputRatePerMillion: Math.max(1, Math.round(prices.inputPerMillion / 1_000_000)), outputRatePerMillion: Math.max(1, Math.round(prices.outputPerMillion / 1_000_000)) };
-  return { ...rates, ...(prices.largeContext ? { largeContext: prices.largeContext } : {}) };
-}
-
-/**
- * Launches a job's worker as its own detached process.
- *
- * Detached and unreferenced, so it outlives this terminal closing — the entire point of a durable
- * job is that it does not depend on the process that queued it. Its own stdio is redirected to the
- * job's log file rather than inherited, since there is nobody left to read a shared stdout once
- * this process exits, and inheriting it would tie the child's lifetime to a pipe that goes away
- * with the parent.
- */
-async function spawnJobWorker(root: string, jobId: string): Promise<number | undefined> {
-  const { spawn } = await import("node:child_process");
-  const { openSync, mkdirSync } = await import("node:fs");
-  const logFile = jobLogPath(root, jobId);
-  mkdirSync(path.dirname(logFile), { recursive: true });
-  const fd = openSync(logFile, "a");
-  try {
-    const child = spawn(process.execPath, [process.argv[1], "--archymedes-job-worker", root, jobId], {
-      detached: true,
-      stdio: ["ignore", fd, fd],
-      cwd: root,
-    });
-    child.unref();
-    return child.pid;
-  } finally {
-    const { closeSync } = await import("node:fs");
-    closeSync(fd);
-  }
-}
-
-/**
- * The process a spawned job runs as.
- *
- * Everything above `main()` in this file assumes a person is at a terminal: a readline loop, a
- * status bar, approval prompts. None of that exists here — this branch runs the same `ArchymedesAgent`
- * loop headlessly and reports through the job store instead of the screen, which is the entire
- * difference between a foreground turn and a background one.
- */
-async function runJobWorkerProcess(root: string, jobId: string): Promise<number> {
-  const savedSettings = await loadSettings(process.env as Record<string, string | undefined>);
-  const environment = mergedEnvironment(savedSettings, process.env as Record<string, string | undefined>);
-  const resolved = resolveProvider(environment, {});
-  if ("error" in resolved) {
-    await appendJobLog(root, jobId, `✗ ${resolved.error}`).catch(() => undefined);
-    await finishJob(root, jobId, workerId(), "failed", { error: resolved.error }).catch(() => undefined);
-    return 1;
-  }
-
-  let cancel: (() => void) | undefined;
-  // /jobs cancel sends SIGTERM to this pid; a live turn needs the same clean interrupt Ctrl+C gives
-  // an interactive one, not the process simply vanishing mid-write.
-  const onSignal = () => cancel?.();
-  process.on("SIGTERM", onSignal);
-  process.on("SIGINT", onSignal);
-  try {
-    const outcome = await runJobWorkerForever({
-      root,
-      jobId,
-      provider: resolved.provider,
-      prices: modelPriceCatalogFor(resolved.prices, false),
-      search: createExaClient(environment),
-      onAgentReady: (agent) => { cancel = () => agent.cancel(); },
-    });
-    return outcome.outcome === "failed" ? 1 : 0;
-  } finally {
-    process.off("SIGTERM", onSignal);
-    process.off("SIGINT", onSignal);
-  }
-}
 
 async function main(): Promise<number> {
   // A closed pipe (`archymedes --help | head`, `archymedes --providers | less -F`) is not an error. Without

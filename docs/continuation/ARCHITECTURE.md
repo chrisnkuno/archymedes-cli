@@ -23,7 +23,7 @@ flowchart TD
 
 | Module | Responsibility | Start reading |
 | --- | --- | --- |
-| CLI | Input, terminal presentation, slash commands, approvals | `packages/archymedes-cli/src/archymedes.ts`; sections and import rules in [MODULE_MAP.md](MODULE_MAP.md) |
+| CLI | Input, terminal presentation, slash commands, approvals | `packages/archymedes-cli/src/archymedes.ts` (`main()`), with entry-point support in `src/app/`; sections and import rules in [MODULE_MAP.md](MODULE_MAP.md) |
 | Application agent | Workspace setup, permissions, session persistence, checkpoints | `packages/core/src/cli/agent.ts` |
 | Bounded runtime | Model/tool loop, cancellation, budgets, retry limits, verification | `packages/core/src/agent-runtime.ts` |
 | Provider adapters | Translate common agent requests into provider APIs | `packages/core/src/providers/` |

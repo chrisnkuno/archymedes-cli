@@ -27,7 +27,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `text/ansi.ts` | 34 | 17 | The escape codes, and the one function that decides whether to emit them. |
-| `text/color-depth.ts` | 8 | 14 | What the terminal can actually render, from the environment rather than from hope. |
+| `text/color-depth.ts` | 8 | 15 | What the terminal can actually render, from the environment rather than from hope. |
 | `text/glyphs.ts` | 278 | 35 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
 | `text/text-width.ts` | 59 | 24 | How many columns a string actually occupies. |
 
@@ -39,17 +39,17 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `platform/defender-feed-update.ts` | 32 | 1 | Non-blocking CLI scheduler for the central Defensive Brain feed. |
 | `platform/doctor.ts` | 226 | 1 | `archymedes --doctor`: probes every network endpoint the CLI depends on and reports exactly which |
 | `platform/endpoints.ts` | 70 | 5 | The network endpoints Archymedes depends on, in one place. |
-| `platform/i18n.ts` | 318 | 4 | Keyed by shortcut id, not by position. |
+| `platform/i18n.ts` | 318 | 5 | Keyed by shortcut id, not by position. |
 | `platform/local-currency.ts` | 143 | 2 | The countries a location can be set to, in the sense that matters: ones we can price in. |
 | `platform/network.ts` | 258 | 4 | Turns raw fetch/undici/SDK errors into one actionable sentence. |
-| `platform/settings.ts` | 438 | 3 | A value that can be picked from a list, with the human name shown beside the stored code. |
+| `platform/settings.ts` | 438 | 6 | A value that can be picked from a list, with the human name shown beside the stored code. |
 | `platform/update.ts` | 260 | 1 | Parses the strict subset package registries use; invalid versions never reach a command line. |
 
 ## `catalog`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `catalog/commands.ts` | 301 | 5 | The slash-command registry. |
+| `catalog/commands.ts` | 301 | 6 | The slash-command registry. |
 
 ## `theme`
 
@@ -82,7 +82,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/banner.ts` | 283 | 1 | The starfield Archymedes opens with. |
 | `render/canvas.ts` | 125 | 1 | The drawing surface every chart is drawn on — Archymedes's answer to ntcharts' canvas. |
 | `render/charts.ts` | 319 | 6 | Charts, in the terminal — Archymedes's answer to ntcharts. |
-| `render/code-view.ts` | 294 | 6 | The code the agent actually wrote, shown where it happened. |
+| `render/code-view.ts` | 294 | 7 | The code the agent actually wrote, shown where it happened. |
 | `render/completion-card.ts` | 48 | 1 | One compact, predictable handoff instead of several unrelated turn footers. |
 | `render/expandable.ts` | 107 | 3 | Folded blocks, and the handle that unfolds them. |
 | `render/guide.ts` | 462 | 2 | The manual, inside the thing it documents. |
@@ -99,7 +99,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `render/task-view.ts` | 114 | 1 | One place to see where the task stands: what was asked, the plan against it, what changed, what |
 | `render/test-report.ts` | 372 | 1 | Test output, read as a result rather than as a wall of text. |
 | `render/transcript.ts` | 182 | 3 | How a tool call reads in the transcript. |
-| `render/tui.ts` | 1356 | 12 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
+| `render/tui.ts` | 1356 | 13 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
 
 ## `session`
 
@@ -107,7 +107,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | --- | ---: | ---: | --- |
 | `session/fallback.ts` | 26 | 1 | The provider ids a fallback target may name, for help text and validators. |
 | `session/history.ts` | 40 | 1 |  |
-| `session/models.ts` | 180 | 3 | The models a session can actually switch to, and what each costs. |
+| `session/models.ts` | 180 | 4 | The models a session can actually switch to, and what each costs. |
 | `session/resumed-spend.ts` | 78 | 1 | What a session spent before this process resumed it. |
 | `session/session-export.ts` | 63 | 1 | Writes a private-by-default, redacted artifact under the project's .archymedes directory. |
 | `session/state-history.ts` | 127 | 1 | The CLI-facing lifecycle for archymedes-state. |
@@ -130,9 +130,9 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `ui/guide-screen.tsx` | 98 | 1 | The guide, as a screen you read in. |
 | `ui/layout-choice.ts` | 43 | 1 | `--pin` or `ARCHYMEDES_PIN` (any value but empty or 0): hold a footer over the scrollback log. |
 | `ui/model-picker.ts` | 201 | 2 | Choosing a model by moving to it, rather than by naming it. |
-| `ui/navigation.ts` | 484 | 1 | Finding the right command without reading all of them. |
+| `ui/navigation.ts` | 484 | 2 | Finding the right command without reading all of them. |
 | `ui/palette.ts` | 257 | 3 | The command palette. |
-| `ui/shortcuts.ts` | 311 | 1 | Where feature keys meet the terminal. |
+| `ui/shortcuts.ts` | 311 | 2 | Where feature keys meet the terminal. |
 | `ui/table.ts` | 514 | 4 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
 | `ui/tables.ts` | 189 | 1 | Which columns each of Archymedes's tables has — and nothing about how a table is drawn. |
 | `ui/workspace-frame.ts` | 319 | 3 | Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. |
@@ -158,19 +158,23 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `app/args.ts` | 202 | 1 | Where a piece of work actually runs: this machine, a throwaway remote sandbox, or a container. |
-| `app/transcript.ts` | 530 | 1 | The transcript renderer's session state: colour switches and the themed `style`, the output |
+| `app/help.ts` | 114 | 1 | The `--help` text, built after rendering is configured so its colours match the terminal. |
+| `app/job-launch.ts` | 82 | 1 | Starting the background job worker, detached or in this process. |
+| `app/prompts.ts` | 192 | 1 | Questions the terminal session asks the person: tool approvals, sensitive-task and spending-cap |
+| `app/providers.ts` | 133 | 2 | Provider and price facts for the terminal session: the providers listing, FX rates from the |
+| `app/transcript.ts` | 530 | 5 | The transcript renderer's session state: colour switches and the themed `style`, the output |
 
 ## root
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `acp-server.ts` | 142 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `archymedes.ts` | 4370 | 0 | Archymedes CLI — the terminal front end. |
+| `archymedes.ts` | 3903 | 0 | Archymedes CLI — the terminal front end. |
 | `headless.ts` | 209 | 1 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 267 | 1 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `archymedes.ts` (4370), `render/tui.ts` (1356).
+- **Large files (over 800 lines):** `archymedes.ts` (3903), `render/tui.ts` (1356).
 - **Duplicate escape helpers:** none.
 - **Modules with no source importer:** `render/picture.ts`.
