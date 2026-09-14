@@ -24,10 +24,10 @@ export function frameText(text: string, width: number): string {
   let columns = 0;
   const safe = text.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
     .replace(/\x1b\[(?![0-9;]*m)[0-?]*[ -/]*[@-~]/g, "")
-    .replace(/\x1b[^\[]/g, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, (c) => c === "\x1b" ? c : "");
+    .replace(/\x1b[^\[]/g, "").replace(/[\x00-\x1f\x7f-\x9f]/g, (c) => c === "\x1b" ? c : c === "\t" ? " " : "");
   for (const part of safe.split(/(\x1b\[[0-9;]*m)/)) {
     if (/^\x1b\[[0-9;]*m$/.test(part)) { result += part; continue; }
-    for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(part)) {
+    for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(part.replace(/\x1b/g, ""))) {
       if (columns + visibleWidth(segment) > width) return result + (result.includes("\x1b") ? "\x1b[0m" : "");
       result += segment;
       columns += visibleWidth(segment);
@@ -79,6 +79,8 @@ export class WorkspaceFrame extends PinnedScreen {
   private lines: string[] = [];
   private introLog?: LineLog;
   private introSize = -1;
+  private introPending = "";
+  private suggestions: readonly string[] = [];
   private heldText?: string;
   private cachedHeldText?: string;
   private introMotion = true;
@@ -93,7 +95,7 @@ export class WorkspaceFrame extends PinnedScreen {
     this.active = true;
     process.once("exit", this.restoreOnExit);
     process.once("SIGTERM", this.terminate);
-    if (!this.introLog) { this.introLog = this.history(); this.introSize = this.history().size; }
+    if (!this.introLog) { this.introLog = this.history(); this.introSize = this.history().size; this.introPending = this.history().pending; }
     this.output.write(`${ENTER_ALTERNATE_SCREEN}\x1b[2J`);
     super.enter();
     this.refresh();
@@ -121,6 +123,7 @@ export class WorkspaceFrame extends PinnedScreen {
   private readonly terminate = () => { this.exit(); process.exit(143); };
 
   override resize() {
+    this.suggestions = [];
     const layout = super.resize();
     if (this.active) { this.output.write("\x1b[2J"); this.refresh(); }
     return layout;
@@ -171,14 +174,18 @@ export class WorkspaceFrame extends PinnedScreen {
   }
 
   private showIntro(): boolean {
-    return this.history() === this.introLog && this.history().size === this.introSize && !this.context().busy && !this.offset;
+    return this.history() === this.introLog && this.history().size === this.introSize && this.history().pending === this.introPending && !this.context().busy && !this.offset;
   }
 
   refresh(): void {
     if (!this.active) return;
-    const height = this.current.scrollBottom - this.current.scrollTop + 1;
-    const lines = this.projected();
+    const height = this.current.scrollBottom - this.current.scrollTop + 1 - this.suggestions.length;
+    let lines = this.projected();
     this.offset = Math.min(this.offset, Math.max(0, lines.length - height));
+    if (!this.offset && this.heldText !== undefined) {
+      this.heldText = undefined;
+      lines = this.projected();
+    }
     const end = Math.max(0, lines.length - this.offset);
     let body = lines.slice(Math.max(0, end - height), end);
     if (this.showIntro()) {
@@ -215,6 +222,18 @@ export class WorkspaceFrame extends PinnedScreen {
     } else body = [...Array<string>(Math.max(0, Math.floor((height - body.length) * (this.showIntro() ? 0.45 : 1)))).fill(""), ...body];
     this.output.write(`${BEGIN_SYNC}\x1b7${Array.from({ length: height }, (_, i) => `\x1b[${this.current.scrollTop + i};1H\x1b[2K${frameText(body[i] ?? "", this.current.columns - 1)}`).join("")}\x1b8${END_SYNC}`);
     this.drawHeader();
+  }
+
+  override renderSuggestions(lines: readonly string[]): void {
+    this.suggestions = lines.slice(0, Math.max(0, Math.min(8, this.current.scrollBottom - this.current.scrollTop - 2)));
+    super.renderSuggestions(lines);
+    this.refresh();
+  }
+
+  override clearSuggestions(): void {
+    this.suggestions = [];
+    super.clearSuggestions();
+    this.refresh();
   }
 
   navigate(direction: "up" | "down" | "live"): void {

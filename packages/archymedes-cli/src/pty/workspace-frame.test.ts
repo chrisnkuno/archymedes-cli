@@ -29,7 +29,16 @@ describe("the real CLI in a fixed workspace", () => {
       await proc.waitFor("Choose how Archymedes works", { since: beforeMode });
       proc.write("\x1b[A\r");
       await proc.waitFor("switched to plan mode");
+      // Resize an open menu, cancel it, and confirm readline still accepts commands.
+      const beforeReopen = proc.output().length;
+      proc.writeLine("/mode");
+      await proc.waitFor("Choose how Archymedes works", { since: beforeReopen });
+      const beforeResize = proc.output().length;
       proc.resize(40, 12);
+      await proc.waitFor("MENU", { since: beforeResize });
+      const beforeDismiss = proc.output().length;
+      proc.write("\x1b");
+      await proc.waitFor("LIVE", { since: beforeDismiss });
       const beforeHelp = proc.output().length;
       proc.writeLine("/where");
       await proc.waitFor(root, { since: beforeHelp });

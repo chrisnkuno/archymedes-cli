@@ -143,18 +143,18 @@ describe("resuming a past session", () => {
 
   it("resumes a named session rather than the newest one", async () => {
     stub.enqueue({ kind: "text", text: "first" });
-    await run(["the older thread"]);
+    expect((await run(["the older thread"])).code).toBe(0);
+    const [olderId] = await sessionIds();
+    expect(olderId).toBeDefined();
     stub.enqueue({ kind: "text", text: "second" });
-    await run(["the newer thread"]);
+    expect((await run(["the newer thread"])).code).toBe(0);
 
-    const older = (await Promise.all((await sessionIds()).map((id) => loadSession(cwd, id))))
-      .filter((record): record is SessionRecord => record !== null)
-      .sort((left, right) => left.updatedAt - right.updatedAt)[0];
-
+    // Name the record captured after the first run. Wall-clock timestamp ordering must not
+    // change which thread this explicit-ID test requests.
     stub.enqueue({ kind: "text", text: "third" });
-    const resumed = await run(["--resume", older.id, "carry on"]);
+    const resumed = await run(["--resume", olderId, "carry on"]);
     expect(resumed.code).toBe(0);
-    expect(resumed.stdout).toContain(`Resumed ${older.id}`);
+    expect(resumed.stdout).toContain(`Resumed ${olderId}`);
     expect(textOf(stub.requests()[2]).join("\n")).toContain("the older thread");
   }, 180_000);
 

@@ -313,10 +313,11 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     examples: [
       { input: "/tools", effect: "every tool, skill, plugin, MCP server and hook" },
       { input: "/voice", effect: "record a prompt, then edit it before sending" },
+      { input: "/cat README.md", effect: "read a file in the transcript, with markdown formatting or numbered code" },
       { input: "/files", effect: "browse the project tree and @mention a file" },
       { input: "/edit src/app.ts", effect: "open a file in the built-in editor" },
     ],
-    covers: ["/tools", "/voice", "/files", "/edit"],
+    covers: ["/tools", "/voice", "/files", "/edit", "/cat"],
   },
 ];
 

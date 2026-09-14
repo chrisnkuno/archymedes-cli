@@ -61,6 +61,54 @@ describe("fixed session workspace", () => {
     frame.exit();
   });
 
+  it("returns to live projection when short history or a resize removes the scroll offset", () => {
+    const { frame, log, writes, stream } = setup();
+    log.clear(); log.write("short history\n");
+    frame.navigate("up");
+    expect(frame.browsing).toBe(false);
+    log.write("new short arrival\n");
+    frame.refresh();
+    expect(writes.at(-2)).toContain("new short arrival");
+    log.write(Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n") + "\n");
+    frame.navigate("up");
+    log.write("arrival during history\n");
+    stream.rows = 100;
+    frame.resize();
+    expect(frame.browsing).toBe(false);
+    expect(writes.at(-2)).toContain("arrival during history");
+    frame.exit();
+  });
+
+  it("keeps redraws above suggestions and restores the transcript when they close", () => {
+    const { frame, writes } = setup();
+    frame.renderSuggestions(["first", "second", "third"]);
+    const before = writes.length;
+    frame.refresh();
+    const redraw = writes.slice(before).join("");
+    for (let row = frame.current.scrollBottom - 2; row <= frame.current.scrollBottom; row++) {
+      expect(redraw).not.toContain(`\x1b[${row};1H`);
+    }
+    frame.clearSuggestions();
+    expect(writes.at(-2)).toContain("latest");
+    frame.exit();
+  });
+
+  it("retires the intro as soon as a partial output line arrives", () => {
+    const { frame, log, writes } = setup();
+    // Return to the same committed line count captured when the frame entered.
+    log.clear();
+    log.write(Array.from({ length: 100 }, (_, i) => `entry ${i}`).join("\n") + "\n");
+    log.write("partial output");
+    frame.refresh();
+    expect(writes.at(-2)).toContain("partial output");
+    frame.exit();
+  });
+
+  it("never lets embedded newlines, tabs or C1 controls move a frame row", () => {
+    expect(frameText("one\ntwo\tthree\u0085four", 80)).toBe("onetwo threefour");
+    expect(frameText("safe\x1b", 80)).toBe("safe");
+  });
+
   it("cleans up motion, margins and the alternate screen exactly once", () => {
     vi.useFakeTimers();
     try {

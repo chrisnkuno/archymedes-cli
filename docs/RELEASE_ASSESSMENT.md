@@ -1,6 +1,6 @@
 # Archymedes CLI release assessment
 
-Assessed 2026-09-06. Scope: public CLI, the runtime it bundles, terminal interfaces, and npm artifacts.
+TUI and release readiness reviewed 2026-09-14; original product assessment 2026-09-06. Scope: public CLI, the runtime it bundles, terminal interfaces, and npm artifacts.
 Private hosted services are separate products with separate release requirements.
 
 ## Product judgment
@@ -85,26 +85,38 @@ pseudo-terminal coverage. Keep these foundations.
    settlement or provider routing. Release the BYOK/local CLI on its own merits; validate the hosted
    service separately before advertising an end-to-end managed offering.
 
+## Fixed workspace review (2026-09-14)
+
+- Page Up on a short transcript and enlarging the terminal while browsing now release the history
+  snapshot when the view returns to live output. New output remains visible on subsequent redraws.
+- Transcript and intro redraws respect rows reserved for command suggestions. Closing suggestions
+  restores the retained transcript rather than leaving a blank gap.
+- Partial output retires the opening identity immediately; frame text removes cursor-moving controls
+  and incomplete escape characters while retaining styling and whole graphemes.
+- `/cat` appears in grouped help and the guide. Regression coverage includes short history, resize,
+  suggestion boundaries, partial output, control characters, and resizing/dismissing an open mode menu.
+
 ## Release procedure
 
-Validation for 2.1.0 passed on 2026-09-12: 177 test files / 2,867 passing tests and one skipped (including PTY scenarios),
-TypeScript checking, core and CLI package builds, and `git diff --check`. The final 27-entry CLI
-archive passed isolated installation under Node 22.22.0, version/help/provider-listing checks,
-and external TUI dependency imports. This did not call a live model provider. The archive checksum
-is stored beside it in `artifacts/archymedes-cli-2.1.0.tgz.sha256`
-(`324774fbb9485c62dcf954c823d85ab7134ed052faf74dd8bcc5f6f4e01cd6a8`).
+Validation for 2.2.0 passed on 2026-09-14 after the fixed-workspace corrections:
+180 test files / 2,906 passing tests and one skipped (including PTY scenarios), TypeScript checking,
+core and CLI package builds, and `git diff --check`. The final 28-entry CLI archive passed isolated
+Bun installation under Node 22.22.0, version/help/provider-listing checks, and external TUI dependency
+imports. The named-session test now captures the requested record ID directly instead of assuming
+wall-clock timestamp order identifies the first thread. This validation did not call a live model
+provider. The archive checksum is stored beside it in `artifacts/archymedes-cli-2.2.0.tgz.sha256`.
 
 ```sh
 bun install --frozen-lockfile
 bun run release:check
 # Publish the same archive that the isolated consumer test inspected:
-bun publish ./artifacts/archymedes-cli-2.1.0.tgz --access public
+bun publish ./artifacts/archymedes-cli-2.2.0.tgz --access public
 ```
 
-`verify:package` installs the archive with Bun. The 2.0.0 archive was also installed with npm; it
-resolved while skipping the unavailable optional `@archymedes/state-*` sidecars, and the installed
-binary started normally. Repeat that npm-client check for 2.1.0 before announcing availability.
-Publishing those sidecar packages is a separate release with its own artifacts.
+`verify:package` installs the archive with Bun. The final 2.2.0 archive was also installed with npm
+in a separate temporary consumer on 2026-09-14; installation and Node version/help/provider-listing
+checks passed. Unavailable optional native sidecars do not block this CLI installation. Publishing
+those sidecar packages remains a separate release with its own artifacts.
 
 The archive path follows the CLI package version. Update it if the manifest version changes.
 The root package stays private. Publishing a reviewed archive avoids rerunning a build between
@@ -114,7 +126,7 @@ Before announcing availability, verify registry metadata and install the publish
 fresh project. The local archive check does not prove registry publication, real provider access,
 native optional sidecar availability, hosted billing, or that GitHub's OS matrix has executed.
 
-Registry preflight in this session returned 404 for `archymedes-cli` and 401 for `bun pm whoami`.
+Registry authentication rechecked on 2026-09-14 returned 401 for `bun pm whoami`.
 Authenticated npm access is required to publish; no release was uploaded during that preflight.
 Authentication should be configured through the user's npm/Bun environment, not committed to this
 repository or pasted into a report.
