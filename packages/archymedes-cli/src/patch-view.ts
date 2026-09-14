@@ -1,6 +1,7 @@
 import { GUTTER, note, panel, rule, type SectionStyle } from "./sections";
 import { UNICODE_GLYPHS } from "./glyphs";
-import { BOLD, DIM, GREEN, RED, REVERSE, paint, paintAll } from "./ansi";
+import { BOLD, DIM, REVERSE, paint, paintAll } from "./ansi";
+import { roleCode } from "./theme";
 import { pairHunkLines, type Segment } from "./intraline";
 import { describeChange, highlightCode, type DiffLine } from "./code-view";
 import { visibleWidth } from "./markdown";
@@ -147,19 +148,21 @@ export function renderPatchFile(file: PatchFile, style: SectionStyle, options: {
       const number = line.kind === "remove" ? "" : `${lineNumber}`;
       if (line.kind !== "remove") lineNumber += 1;
       const gutterNumber = paint(number.padStart(5), DIM, depth);
-      const marker = line.kind === "add" ? paint("+", GREEN, depth) : line.kind === "remove" ? paint("-", RED, depth) : " ";
+      const added = roleCode("success", style.palette, depth);
+      const removed = roleCode("error", style.palette, depth);
+      const marker = line.kind === "add" ? paint("+", added, depth) : line.kind === "remove" ? paint("-", removed, depth) : " ";
       // Syntax highlighting only on the surviving text: colouring a removed line the same as a
       // kept one makes the two hard to tell apart at a glance, which is the whole job here.
       const body = line.kind === "remove"
-        ? paintSegments(line.text, line.segments, RED, depth)
+        ? paintSegments(line.text, line.segments, removed, depth)
         : line.kind === "add"
-          ? paintSegments(line.text, line.segments, GREEN, depth)
-          : highlightCode(line.text, depth);
+          ? paintSegments(line.text, line.segments, added, depth)
+          : highlightCode(line.text, depth, style.palette);
       rows.push(`${gutterNumber} ${marker} ${body}`);
     }
   }
 
-  const badge = `${describeChange({ added: file.added, removed: file.removed }, depth)}${KIND_LABEL[file.kind] ? `  ${KIND_LABEL[file.kind]}` : ""}`;
+  const badge = `${describeChange({ added: file.added, removed: file.removed }, depth, style.palette)}${KIND_LABEL[file.kind] ? `  ${KIND_LABEL[file.kind]}` : ""}`;
   const title = file.previousPath ? `${file.previousPath} ${glyphs.arrowRight} ${file.path}` : file.path;
   const shown = rows.slice(0, maxLines === Number.POSITIVE_INFINITY ? rows.length : maxLines);
   return {
@@ -192,7 +195,7 @@ export function renderPatch(
     parts.push(renderPatchFile(file, style, options.maxLinesPerFile ? { maxLines: options.maxLinesPerFile } : {}).text);
   }
   parts.push(rule(style, {
-    trailing: `${totals.files} file${totals.files === 1 ? "" : "s"} ${style.glyphs?.middot ?? "·"} ${describeChange({ added: totals.added, removed: totals.removed }, style.depth)}`,
+    trailing: `${totals.files} file${totals.files === 1 ? "" : "s"} ${style.glyphs?.middot ?? "·"} ${describeChange({ added: totals.added, removed: totals.removed }, style.depth, style.palette)}`,
   }));
   return { text: parts.join("\n"), files, totals };
 }

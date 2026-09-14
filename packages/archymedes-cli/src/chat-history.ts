@@ -1,10 +1,10 @@
 import type { AgentMessage } from "@archymedes/core/agent-runtime";
 import type { SessionRecord } from "@archymedes/core/cli/session";
-import { BOLD, CYAN, DIM, paint, paintAll } from "./ansi";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
 import { barChart } from "./charts";
 import { UNICODE_GLYPHS } from "./glyphs";
 import { renderMarkdown } from "./markdown";
-import { GUTTER, clip, heading, rule, type SectionStyle } from "./sections";
+import { GUTTER, clip, heading, rule, toneCode, type SectionStyle } from "./sections";
 import { describeToolCall } from "./transcript";
 
 /**
@@ -142,7 +142,7 @@ export function renderHistoryList(entries: readonly HistoryEntry[], style: Secti
 
   const lines = entries.flatMap((entry) => {
     const active = entry.id === options.current;
-    const mark = active ? paint(glyphs.circleFull, CYAN, style.depth) : " ";
+    const mark = active ? paint(glyphs.circleFull, toneCode("accent", style), style.depth) : " ";
     const title = clip(entry.title || "untitled", titleWidth, glyphs).padEnd(titleWidth);
     const meta = `${relativeTime(entry.updatedAt, now)} ${glyphs.middot} ${entry.turns} turn${entry.turns === 1 ? "" : "s"}`;
     const row = `${GUTTER}${mark} ${active ? paintAll(title, [BOLD], style.depth) : title}  ${paint(meta, DIM, style.depth)}`;
@@ -199,7 +199,7 @@ export function renderReplay(record: SessionRecord, style: SectionStyle, options
     if (message.role === "user") {
       turn += 1;
       out.push(rule(style, { label: `turn ${turn}`, tone: "accent" }));
-      out.push(message.content.split("\n").map((line) => `${GUTTER}${paint(glyphs.prompt, CYAN, style.depth)} ${paintAll(line, [BOLD], style.depth)}`).join("\n"));
+      out.push(message.content.split("\n").map((line) => `${GUTTER}${paint(glyphs.prompt, toneCode("accent", style), style.depth)} ${paintAll(line, [BOLD], style.depth)}`).join("\n"));
       continue;
     }
     if (message.role === "tool") continue; // the call line below already says what happened
@@ -207,13 +207,13 @@ export function renderReplay(record: SessionRecord, style: SectionStyle, options
       if (options.tools === false) continue;
       for (const call of message.toolCalls) {
         const detail = describeToolCall(call.name, (call.arguments ?? {}) as Record<string, unknown>);
-        out.push(`${GUTTER}${paint(glyphs.check, DIM, style.depth)} ${paint(call.name, CYAN, style.depth)}${detail ? paint(`  ${clip(detail, Math.max(8, style.width - 24), glyphs)}`, DIM, style.depth) : ""}`);
+        out.push(`${GUTTER}${paint(glyphs.check, DIM, style.depth)} ${paint(call.name, toneCode("accent", style), style.depth)}${detail ? paint(`  ${clip(detail, Math.max(8, style.width - 24), glyphs)}`, DIM, style.depth) : ""}`);
       }
       if (!message.content.trim()) continue;
     }
     if (message.content.trim()) {
       out.push(`${GUTTER}${paint(glyphs.star, DIM, style.depth)} ${paintAll("Archymedes", [BOLD], style.depth)}`);
-      out.push(renderMarkdown(message.content.trim(), { width: style.width, depth: style.depth }));
+      out.push(renderMarkdown(message.content.trim(), { width: style.width, depth: style.depth, palette: style.palette }));
     }
   }
   out.push(rule(style, { label: "end of session", tone: "neutral" }));

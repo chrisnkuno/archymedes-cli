@@ -1,5 +1,6 @@
 import type { ColorDepth } from "./banner";
 import { UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
+import { ANSI_PALETTE, type ColorRole, type Palette } from "./theme";
 
 /**
  * Markdown, rendered for a terminal.
@@ -17,10 +18,9 @@ const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
 const ITALIC = "\x1b[3m";
 const STRIKE = "\x1b[9m";
-const CYAN = "\x1b[36m";
-const BLUE = "\x1b[34m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
+
+/** A role's code for the palette in use; the ANSI eight when none was given. `paint` drops it at depth none. */
+const colour = (role: ColorRole, palette: Palette | undefined) => palette?.[role] || ANSI_PALETTE[role];
 
 const ANSI = /\x1b\[[0-9;]*m/g;
 
@@ -65,7 +65,7 @@ const unescapeMarkdown = (text: string) => text.replace(/\\([\\`*_[\]{}()#+.!~>-
  * Code spans are matched first and never re-scanned, so `**` inside backticks stays literal —
  * which matters constantly in a coding agent, where the model quotes shell globs and pointers.
  */
-export function parseInline(line: string): StyledToken[] {
+export function parseInline(line: string, palette?: Palette): StyledToken[] {
   const tokens: StyledToken[] = [];
   let lastIndex = 0;
   INLINE_PATTERN.lastIndex = 0;
@@ -73,14 +73,14 @@ export function parseInline(line: string): StyledToken[] {
   for (let match = INLINE_PATTERN.exec(line); match !== null; match = INLINE_PATTERN.exec(line)) {
     if (match.index > lastIndex) tokens.push({ text: unescapeMarkdown(line.slice(lastIndex, match.index)), code: "" });
     const [whole, code, boldStars, boldUnderscores, strike, italicStars, italicUnderscores, link, linkLabel, linkUrl, autolink, autolinkUrl] = match;
-    if (code !== undefined) tokens.push({ text: code.slice(1, -1), code: CYAN });
+    if (code !== undefined) tokens.push({ text: code.slice(1, -1), code: colour("primary", palette) });
     else if (boldStars !== undefined) tokens.push({ text: boldStars.slice(2, -2), code: BOLD });
     else if (boldUnderscores !== undefined) tokens.push({ text: boldUnderscores.slice(2, -2), code: BOLD });
     else if (strike !== undefined) tokens.push({ text: strike.slice(2, -2), code: STRIKE });
     else if (italicStars !== undefined) tokens.push({ text: italicStars.slice(1, -1), code: ITALIC });
     else if (italicUnderscores !== undefined) tokens.push({ text: italicUnderscores.slice(1, -1), code: ITALIC });
-    else if (link !== undefined) tokens.push({ text: `${link.startsWith("!") ? `image: ${linkLabel}` : linkLabel} (${linkUrl})`, code: CYAN });
-    else if (autolink !== undefined) tokens.push({ text: autolinkUrl, code: CYAN });
+    else if (link !== undefined) tokens.push({ text: `${link.startsWith("!") ? `image: ${linkLabel}` : linkLabel} (${linkUrl})`, code: colour("primary", palette) });
+    else if (autolink !== undefined) tokens.push({ text: autolinkUrl, code: colour("primary", palette) });
     lastIndex = match.index + whole.length;
   }
   if (lastIndex < line.length) tokens.push({ text: unescapeMarkdown(line.slice(lastIndex)), code: "" });
@@ -222,9 +222,9 @@ function renderTableLine(cells: string[], separator: boolean, width: number, dep
 export function renderMarkdownLine(
   line: string,
   state: MarkdownState,
-  options: { width: number; depth: ColorDepth; glyphs?: GlyphSet },
+  options: { width: number; depth: ColorDepth; glyphs?: GlyphSet; palette?: Palette },
 ): string[] {
-  const { width, depth } = options;
+  const { width, depth, palette } = options;
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
 
   const fence = FENCE.exec(line);
@@ -250,7 +250,7 @@ export function renderMarkdownLine(
   if (state.inFence) {
     // Code is never re-wrapped: a broken line of code is a lie about the file it came from, so it
     // is left to the terminal and marked with a gutter that makes the block's extent obvious.
-    return [`${paint(`  ${glyphs.boxVertical} `, DIM, depth)}${paint(line, GREEN, depth)}`];
+    return [`${paint(`  ${glyphs.boxVertical} `, DIM, depth)}${paint(line, colour("success", palette), depth)}`];
   }
 
   const table = tableCells(line);
@@ -266,7 +266,7 @@ export function renderMarkdownLine(
   const heading = HEADING.exec(line);
   if (heading) {
     const level = heading[1].length;
-    const code = level <= 2 ? `${BOLD}${CYAN}` : BOLD;
+    const code = level <= 2 ? `${BOLD}${colour("primary", palette)}` : BOLD;
     // Parsed for inline markers so a heading like "## What `hello.py` does" loses its backticks,
     // then painted uniformly: a code span inside an already-coloured heading reads as a mistake.
     const tokens = parseInline(heading[2]).map((token) => ({ text: token.text, code }));
@@ -275,8 +275,8 @@ export function renderMarkdownLine(
 
   const task = TASK.exec(line);
   if (task) {
-    return wrapTokens(parseInline(task[3]), width, {
-      firstPrefix: `${task[1]}${paint(task[2].trim() ? glyphs.checkboxDone : glyphs.checkbox, task[2].trim() ? GREEN : BLUE, depth)} `,
+    return wrapTokens(parseInline(task[3], palette), width, {
+      firstPrefix: `${task[1]}${paint(task[2].trim() ? glyphs.checkboxDone : glyphs.checkbox, task[2].trim() ? colour("success", palette) : colour("secondary", palette), depth)} `,
       continuationPrefix: `${task[1]}  `,
       depth,
     });
@@ -285,8 +285,8 @@ export function renderMarkdownLine(
   const bullet = BULLET.exec(line);
   if (bullet) {
     const indent = bullet[1];
-    return wrapTokens(parseInline(bullet[3]), width, {
-      firstPrefix: `${indent}${paint(glyphs.bullet, BLUE, depth)} `,
+    return wrapTokens(parseInline(bullet[3], palette), width, {
+      firstPrefix: `${indent}${paint(glyphs.bullet, colour("secondary", palette), depth)} `,
       continuationPrefix: `${indent}  `,
       depth,
     });
@@ -296,8 +296,8 @@ export function renderMarkdownLine(
   if (numbered) {
     const indent = numbered[1];
     const marker = numbered[2];
-    return wrapTokens(parseInline(numbered[3]), width, {
-      firstPrefix: `${indent}${paint(marker, BLUE, depth)} `,
+    return wrapTokens(parseInline(numbered[3], palette), width, {
+      firstPrefix: `${indent}${paint(marker, colour("secondary", palette), depth)} `,
       continuationPrefix: `${indent}${" ".repeat(marker.length + 1)}`,
       depth,
     });
@@ -306,18 +306,18 @@ export function renderMarkdownLine(
   const quote = BLOCKQUOTE.exec(line);
   if (quote) {
     return wrapTokens([{ text: quote[1], code: DIM }], width, {
-      firstPrefix: paint(`${glyphs.boxVertical} `, YELLOW, depth),
-      continuationPrefix: paint(`${glyphs.boxVertical} `, YELLOW, depth),
+      firstPrefix: paint(`${glyphs.boxVertical} `, colour("accent", palette), depth),
+      continuationPrefix: paint(`${glyphs.boxVertical} `, colour("accent", palette), depth),
       depth,
     });
   }
 
   if (line.trim() === "") return [""];
-  return wrapTokens(parseInline(line), width, { depth });
+  return wrapTokens(parseInline(line, palette), width, { depth });
 }
 
 /** Renders a whole markdown document, for text that is already complete when it arrives. */
-export function renderMarkdown(text: string, options: { width: number; depth: ColorDepth; glyphs?: GlyphSet }): string {
+export function renderMarkdown(text: string, options: { width: number; depth: ColorDepth; glyphs?: GlyphSet; palette?: Palette }): string {
   const state = newMarkdownState();
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
   const rendered = text

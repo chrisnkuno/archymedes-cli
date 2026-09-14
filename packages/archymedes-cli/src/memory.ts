@@ -1,6 +1,6 @@
-import { BOLD, CYAN, DIM, paint, paintAll } from "./ansi";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
 import { UNICODE_GLYPHS } from "./glyphs";
-import { GUTTER, heading, note, type SectionStyle } from "./sections";
+import { GUTTER, heading, note, toneCode, type SectionStyle } from "./sections";
 import {
   MEMORY_LIMITS,
   memoryChars,
@@ -132,5 +132,5 @@ export function renderMemories(entries: readonly MemoryEntry[], style: SectionSt
 /** The confirmation line printed when a fact is recorded. */
 export function describeAdded(entry: { scope: MemoryScope; text: string }, style: SectionStyle): string {
   const glyphs = style.glyphs ?? UNICODE_GLYPHS;
-  return `${GUTTER}${paint(glyphs.check, CYAN, style.depth)} ${paintAll("remembered", [BOLD], style.depth)} ${paint(`(${entry.scope})`, DIM, style.depth)} ${entry.text}`;
+  return `${GUTTER}${paint(glyphs.check, toneCode("accent", style), style.depth)} ${paintAll("remembered", [BOLD], style.depth)} ${paint(`(${entry.scope})`, DIM, style.depth)} ${entry.text}`;
 }

@@ -1,5 +1,6 @@
 import type { ColorDepth } from "./banner";
-import { BOLD, CYAN, DIM, GREEN, MAGENTA, RED, paint, paintAll } from "./ansi";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
+import { roleCode, type Palette } from "./theme";
 import { UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 import { visibleWidth } from "./markdown";
 import { GUTTER, clip, panel, type SectionStyle } from "./sections";
@@ -138,7 +139,7 @@ const LITERALS = new Set(["true", "false", "null", "nil", "None", "True", "False
  * shape of a line scannable. Four categories does that, in one pass, for every language at once —
  * and being approximate is safe here because it colours a *quotation*, never a decision.
  */
-export function highlightCode(line: string, depth: ColorDepth): string {
+export function highlightCode(line: string, depth: ColorDepth, palette?: Palette): string {
   if (depth === "none") return line;
   const commentAt = findCommentStart(line);
   const code = commentAt === -1 ? line : line.slice(0, commentAt);
@@ -147,10 +148,10 @@ export function highlightCode(line: string, depth: ColorDepth): string {
   const painted = code.replace(
     /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$]*)\b/g,
     (whole, text: string | undefined, numeric: string | undefined, word: string | undefined) => {
-      if (text !== undefined) return paint(text, GREEN, depth);
-      if (numeric !== undefined) return paint(numeric, MAGENTA, depth);
-      if (word !== undefined && KEYWORDS.has(word)) return paint(word, CYAN, depth);
-      if (word !== undefined && LITERALS.has(word)) return paint(word, MAGENTA, depth);
+      if (text !== undefined) return paint(text, roleCode("success", palette, depth), depth);
+      if (numeric !== undefined) return paint(numeric, roleCode("accent", palette, depth), depth);
+      if (word !== undefined && KEYWORDS.has(word)) return paint(word, roleCode("primary", palette, depth), depth);
+      if (word !== undefined && LITERALS.has(word)) return paint(word, roleCode("accent", palette, depth), depth);
       return whole;
     },
   );
@@ -209,7 +210,7 @@ export function renderCode(content: string, style: SectionStyle, options: CodeVi
 
   const render = (from: number, to: number) => lines.slice(from, to).map((line, index) => {
     const number = paint(String(start + from + index).padStart(numberWidth), DIM, style.depth);
-    const painted = options.highlight === false ? line : highlightCode(line, style.depth);
+    const painted = options.highlight === false ? line : highlightCode(line, style.depth, style.palette);
     return `${number} ${clip(painted, bodyWidth, glyphs)}`;
   });
 
@@ -232,8 +233,8 @@ export function renderDiff(diff: readonly DiffLine[], style: SectionStyle, optio
   const row = (line: DiffLine | { kind: "gap"; text: string }): string => {
     if (line.kind === "gap") return paint(`${glyphs.middot.repeat(3)} ${line.text}`, DIM, style.depth);
     const mark = line.kind === "add" ? glyphs.plus : line.kind === "remove" ? glyphs.minus : " ";
-    const code = line.kind === "add" ? GREEN : line.kind === "remove" ? RED : DIM;
-    const body = line.kind === "context" ? paint(line.text, DIM, style.depth) : highlightCode(line.text, style.depth);
+    const code = line.kind === "add" ? roleCode("success", style.palette, style.depth) : line.kind === "remove" ? roleCode("error", style.palette, style.depth) : DIM;
+    const body = line.kind === "context" ? paint(line.text, DIM, style.depth) : highlightCode(line.text, style.depth, style.palette);
     return `${paint(mark, code, style.depth)} ${clip(body, bodyWidth, glyphs)}`;
   };
 
@@ -284,10 +285,10 @@ export function fenceHeader(language: string, style: SectionStyle): string {
   const glyphs = style.glyphs ?? UNICODE_GLYPHS;
   const label = language ? ` ${language} ` : glyphs.boxHorizontal.repeat(4);
   const width = Math.max(0, style.width - GUTTER.length - visibleWidth(label) - 3);
-  return `${GUTTER}${paint(glyphs.boxTopLeft + glyphs.boxHorizontal, DIM, style.depth)}${paintAll(label, [CYAN, BOLD], style.depth)}${paint(glyphs.boxHorizontal.repeat(Math.max(0, width)), DIM, style.depth)}`;
+  return `${GUTTER}${paint(glyphs.boxTopLeft + glyphs.boxHorizontal, DIM, style.depth)}${paintAll(label, [roleCode("primary", style.palette, style.depth), BOLD], style.depth)}${paint(glyphs.boxHorizontal.repeat(Math.max(0, width)), DIM, style.depth)}`;
 }
 
 /** How a diff of a file reads in one line, for the status line and for tool summaries. */
-export function describeChange(stat: { added: number; removed: number }, depth: ColorDepth): string {
-  return `${paint(`+${stat.added}`, GREEN, depth)} ${paint(`-${stat.removed}`, RED, depth)}`;
+export function describeChange(stat: { added: number; removed: number }, depth: ColorDepth, palette?: Palette): string {
+  return `${paint(`+${stat.added}`, roleCode("success", palette, depth), depth)} ${paint(`-${stat.removed}`, roleCode("error", palette, depth), depth)}`;
 }

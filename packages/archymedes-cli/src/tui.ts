@@ -2,7 +2,7 @@ import type { ColorDepth } from "./banner";
 import { terminalStream, type OutputStream } from "./output";
 import { ASCII_GLYPHS, borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 import { newMarkdownState, renderMarkdownLine, visibleWidth, type MarkdownState } from "./markdown";
-import { rainbowText, rgbTo256, type Palette, type Rgb } from "./theme";
+import { ANSI_PALETTE, rainbowText, rgbTo256, roleCode, type ColorRole, type Palette, type Rgb } from "./theme";
 
 /**
  * The pinned status region beneath the scrolling transcript, and the pieces it is built from.
@@ -16,10 +16,6 @@ import { rainbowText, rgbTo256, type Palette, type Rgb } from "./theme";
 
 const RESET = "\x1b[0m";
 const DIM = "\x1b[2m";
-const CYAN = "\x1b[36m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
 
 function paint(text: string, code: string, depth: ColorDepth): string {
   return depth === "none" ? text : `${code}${text}${RESET}`;
@@ -575,7 +571,7 @@ export function stepProgress(
   return `${label}${counted} ${bar}`;
 }
 
-export function formatStatusLine(fields: StatusFields, width: number, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS, accent: string = CYAN): string {
+export function formatStatusLine(fields: StatusFields, width: number, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS, accent: string = ANSI_PALETTE.primary): string {
   const label = activityLabel(fields.phase ?? "thinking", fields.operation, fields.elapsedMs);
   const ellipsis = glyphs.ellipsis;
   const separator = ` ${glyphs.middot} `;
@@ -756,6 +752,7 @@ export class MarkdownStream {
      */
     private readonly live = true,
     private readonly glyphs: GlyphSet = UNICODE_GLYPHS,
+    private readonly palette?: Palette,
   ) {}
 
   /** True while a partial line is on screen that nothing else may print over. */
@@ -791,7 +788,7 @@ export class MarkdownStream {
     }
     if (this.pending !== "") this.finalizeLine();
     if (this.state.inFence) {
-      const rendered = renderMarkdownLine("```", this.state, { width: this.columns(), depth: this.depth, glyphs: this.glyphs });
+      const rendered = renderMarkdownLine("```", this.state, { width: this.columns(), depth: this.depth, glyphs: this.glyphs, palette: this.palette });
       this.stream.write(`${rendered.join("\n")}\n`);
     }
   }
@@ -805,7 +802,7 @@ export class MarkdownStream {
 
   private finalizeLine(): void {
     this.erasePending();
-    const rendered = renderMarkdownLine(this.pending, this.state, { width: this.columns(), depth: this.depth, glyphs: this.glyphs });
+    const rendered = renderMarkdownLine(this.pending, this.state, { width: this.columns(), depth: this.depth, glyphs: this.glyphs, palette: this.palette });
     this.stream.write(`${rendered.join("\n")}\n`);
     this.pending = "";
   }
@@ -843,13 +840,15 @@ export function box(
     borderColor?: BoxTone | "rainbow";
     glyphs?: GlyphSet;
     borderStyle?: "round" | "single" | "double" | "none";
+    /** Theme colours for the title and border tones; the ANSI eight when omitted. */
+    palette?: Palette;
   },
 ): string {
   const terminalWidth = options.width ?? process.stdout.columns ?? 80;
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
-  const border = borderGlyphsFor(options.borderStyle ?? "round", glyphs);
+  const border = borderGlyphsFor(options.borderStyle ?? options.palette?.borderStyle ?? "round", glyphs);
   const titleWidth = options.title ? visibleWidth(options.title) : 0;
-  const titlePaint = TONE_CODES[options.titleColor ?? "cyan"];
+  const titlePaint = roleCode(TONE_ROLE[options.titleColor ?? "cyan"], options.palette, options.depth);
   const rainbowBorder = options.borderColor === "rainbow";
   // Each border run is painted and reset on its own rather than one code being opened around the
   // whole row: the title in between carries its own colour, and an unclosed run would bleed this
@@ -858,7 +857,7 @@ export function box(
   // sweep, each edge picking up the wheel where the edge before it left off.
   const edge = (text: string, phase = 0) => {
     if (options.borderColor === undefined) return text;
-    return rainbowBorder ? rainbowText(text, options.depth, phase) : paint(text, TONE_CODES[options.borderColor as BoxTone], options.depth);
+    return rainbowBorder ? rainbowText(text, options.depth, phase) : paint(text, roleCode(TONE_ROLE[options.borderColor as BoxTone], options.palette, options.depth), options.depth);
   };
   // Measured in columns, not characters: a todo containing an emoji is two columns wide there and
   // one character long, and padding by the latter is what leaves a border short of its own corner.
@@ -965,10 +964,10 @@ export function joinHorizontal(
 /** The tones a box can be given, for its title or its border. */
 export type BoxTone = "cyan" | "green" | "yellow" | "red";
 
-const TONE_CODES: Record<BoxTone, string> = { cyan: CYAN, green: GREEN, yellow: YELLOW, red: RED };
+const TONE_ROLE: Record<BoxTone, ColorRole> = { cyan: "primary", green: "success", yellow: "warning", red: "error" };
 
 /** The mode's accent colour in the input bar, so the permission posture is legible at a glance. */
-const MODE_COLORS: Record<string, string> = { plan: YELLOW, auto: GREEN, build: CYAN, defender: RED };
+const MODE_ROLE: Record<string, ColorRole> = { plan: "warning", auto: "success", build: "primary", defender: "error" };
 
 /** Visible columns the `│ › ` prefix of the prompt box occupies. */
 export const PROMPT_PREFIX_COLUMNS = 4;
@@ -1031,10 +1030,8 @@ export function renderPromptBox(options: {
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
   const border = borderGlyphsFor(options.palette?.borderStyle ?? options.borderStyle ?? "round", glyphs);
   const width = Math.max(12, options.width);
-  const primary = options.palette?.primary ?? CYAN;
-  const modeColor = options.palette
-    ? ({ plan: options.palette.warning, auto: options.palette.success, build: primary, defender: options.palette.error }[mode] ?? primary)
-    : MODE_COLORS[mode] ?? CYAN;
+  const primary = roleCode("primary", options.palette, depth);
+  const modeColor = roleCode(MODE_ROLE[mode] ?? "primary", options.palette, depth);
   const horizontal = (count: number) => paint(border.horizontal.repeat(Math.max(0, count)), primary, depth);
 
   const CHROME = PROMPT_CHROME_COLUMNS;

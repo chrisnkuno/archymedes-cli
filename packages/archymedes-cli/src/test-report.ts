@@ -1,6 +1,6 @@
-import { BOLD, DIM, GREEN, RED, YELLOW, paint, paintAll } from "./ansi";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
 import { UNICODE_GLYPHS } from "./glyphs";
-import { GUTTER, clip, outcomeMark, rule, type SectionStyle } from "./sections";
+import { GUTTER, clip, outcomeMark, rule, toneCode, type SectionStyle } from "./sections";
 import { visibleWidth } from "./markdown";
 
 /**
@@ -328,7 +328,7 @@ export function renderTestReport(
     const mark = outcomeMark(group.failed > 0 ? "fail" : group.passed === 0 ? "skip" : "pass", style);
     const counts = [
       group.passed > 0 ? `${group.passed} passed` : "",
-      group.failed > 0 ? paint(`${group.failed} failed`, RED, style.depth) : "",
+      group.failed > 0 ? paint(`${group.failed} failed`, toneCode("bad", style), style.depth) : "",
       group.skipped > 0 ? `${group.skipped} skipped` : "",
     ].filter(Boolean).join(` ${glyphs.middot} `);
     const name = (group.suite || "tests").padEnd(width + 2);
@@ -348,7 +348,7 @@ export function renderTestReport(
     out.push(rule(style, { label: `failures ${glyphs.middot} ${report.failures.length}`, tone: "bad" }));
     for (const failure of report.failures) {
       const name = clip(failure.name, Math.max(8, style.width - GUTTER.length - 2), glyphs);
-      out.push(`${GUTTER}${paint(glyphs.cross, RED, style.depth)} ${paintAll(name, [BOLD], style.depth)}`);
+      out.push(`${GUTTER}${paint(glyphs.cross, toneCode("bad", style), style.depth)} ${paintAll(name, [BOLD], style.depth)}`);
       for (const line of failure.lines.slice(0, maxFailureLines)) {
         out.push(`${GUTTER}${GUTTER}${paint(clip(line, Math.max(8, style.width - 6), glyphs), DIM, style.depth)}`);
       }
@@ -361,9 +361,9 @@ export function renderTestReport(
 
   const totals = [
     `${report.totals.total} test${report.totals.total === 1 ? "" : "s"}`,
-    report.totals.passed > 0 ? paint(`${report.totals.passed} passed`, GREEN, style.depth) : "",
-    report.totals.failed > 0 ? paint(`${report.totals.failed} failed`, RED, style.depth) : "",
-    report.totals.skipped > 0 ? paint(`${report.totals.skipped} skipped`, YELLOW, style.depth) : "",
+    report.totals.passed > 0 ? paint(`${report.totals.passed} passed`, toneCode("good", style), style.depth) : "",
+    report.totals.failed > 0 ? paint(`${report.totals.failed} failed`, toneCode("bad", style), style.depth) : "",
+    report.totals.skipped > 0 ? paint(`${report.totals.skipped} skipped`, toneCode("warn", style), style.depth) : "",
     formatDuration(report.durationMs),
   ].filter(Boolean).join(` ${glyphs.middot} `);
   out.push(rule(style, { label: failing ? "failed" : "passed", tone: failing ? "bad" : "good", trailing: totals }));

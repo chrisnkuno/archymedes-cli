@@ -1,6 +1,6 @@
-import { BOLD, CYAN, DIM, YELLOW, paint, paintAll } from "./ansi";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
 import { UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
-import { GUTTER, keyValues, type SectionStyle } from "./sections";
+import { GUTTER, keyValues, toneCode, type SectionStyle } from "./sections";
 
 /**
  * Slow mode: spend less per turn, on purpose.
@@ -129,7 +129,7 @@ export function paceBadge(level: PaceLevel, glyphs: GlyphSet = UNICODE_GLYPHS): 
 export function describePace(level: PaceLevel, style: SectionStyle): string {
   const profile = PACE_PROFILES[level];
   const glyphs = style.glyphs ?? UNICODE_GLYPHS;
-  const head = `${GUTTER}${paintAll(profile.label, [CYAN, BOLD], style.depth)} ${paint(glyphs.middot, DIM, style.depth)} ${paint(profile.description, DIM, style.depth)}`;
+  const head = `${GUTTER}${paintAll(profile.label, [toneCode("accent", style), BOLD], style.depth)} ${paint(glyphs.middot, DIM, style.depth)} ${paint(profile.description, DIM, style.depth)}`;
   if (level === "off") return head;
   const rows: [string, string][] = [
     ["model rounds", String(profile.budgets.maxIterations ?? "runtime default")],
@@ -138,5 +138,5 @@ export function describePace(level: PaceLevel, style: SectionStyle): string {
     ["pause between turns", profile.cooldownMs > 0 ? `${Math.round(profile.cooldownMs / 1_000)}s` : "none"],
     ["confirm turns above", profile.confirmAboveTokens ? `${profile.confirmAboveTokens.toLocaleString()} estimated tokens` : "never"],
   ];
-  return [head, keyValues(rows, style), `${GUTTER}${paint("/slow off returns to full speed", YELLOW, style.depth)}`].join("\n");
+  return [head, keyValues(rows, style), `${GUTTER}${paint("/slow off returns to full speed", toneCode("warn", style), style.depth)}`].join("\n");
 }

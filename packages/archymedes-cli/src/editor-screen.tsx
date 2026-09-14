@@ -93,7 +93,7 @@ export function EditorScreen({ columns, rows, path, content, onExit, palette = N
     });
   });
 
-  const frame = composeEditorFrame(state, codeWidth, palette.accent);
+  const frame = composeEditorFrame(state, codeWidth, palette.tokens.accent);
   // `editor.ts` knows nothing about the panel, so its hint is appended here rather than taught to
   // the editor's own key bar — the same reason the toggle is intercepted above rather than added to
   // `keyToEditorAction`: the panel is a second, independent feature, not a mode of the editor. Only
@@ -107,7 +107,7 @@ export function EditorScreen({ columns, rows, path, content, onExit, palette = N
   // document has, so a short file would otherwise hand the panel a height of three and silently
   // truncate everything past its tab strip and hint row.
   const panelRows = panelWidth > 0
-    ? composeExplainPanel({ path, before: content, after: editorContent(state), panel }, panelWidth - 2, rows)
+    ? composeExplainPanel({ path, before: content, after: editorContent(state), panel }, panelWidth - 2, rows, palette.tokens)
     : [];
 
   return (

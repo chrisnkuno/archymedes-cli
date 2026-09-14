@@ -54,6 +54,35 @@ export type ArchymedesProcess = {
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 
+/**
+ * What was written into the transcript flow: out-of-flow paints (synchronized frame repaints and
+ * save/restore-cursor chrome such as the fixed workspace header) and all escape sequences removed.
+ * The fixed workspace repaints its header between streamed chunks, so raw output is not contiguous.
+ */
+export function flowText(raw: string): string {
+  return raw
+    .replace(/\x1b\[\?2026h[\s\S]*?\x1b\[\?2026l/g, "")
+    .replace(/\x1b7[\s\S]*?\x1b8/g, "")
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b./g, "");
+}
+
+/** The synchronized repaint holding the last occurrence of `needle`, or all of `raw` when it was written in the flow. */
+export function paintContaining(raw: string, needle: string): string {
+  const at = raw.lastIndexOf(needle);
+  if (at < 0) return raw;
+  const start = raw.lastIndexOf("\x1b[?2026h", at);
+  const closedBefore = raw.lastIndexOf("\x1b[?2026l", at);
+  if (start < 0 || closedBefore > start) return raw;
+  const end = raw.indexOf("\x1b[?2026l", at);
+  return raw.slice(start, end < 0 ? raw.length : end);
+}
+
+function matches(pattern: RegExp, raw: string): boolean {
+  return pattern.test(raw) || pattern.test(flowText(raw));
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -87,7 +116,7 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
     // common "wait, act, wait again" shape), and mutating `waiters` mid-iteration would either
     // skip or double-serve the new entry.
     for (const waiter of [...waiters]) {
-      if (waiter.pattern.test(buffer.slice(waiter.since))) {
+      if (matches(waiter.pattern, buffer.slice(waiter.since))) {
         waiters.splice(waiters.indexOf(waiter), 1);
         waiter.settle(buffer);
       }
@@ -106,7 +135,7 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
     waitFor: (pattern, waitOptions = {}) => {
       const regex = typeof pattern === "string" ? new RegExp(escapeRegExp(pattern)) : pattern;
       const since = waitOptions.since ?? 0;
-      if (regex.test(buffer.slice(since))) return Promise.resolve(buffer);
+      if (matches(regex, buffer.slice(since))) return Promise.resolve(buffer);
       const timeoutMs = waitOptions.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       return new Promise((resolve, reject) => {
         const waiter = {

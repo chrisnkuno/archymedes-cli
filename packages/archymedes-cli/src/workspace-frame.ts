@@ -1,12 +1,16 @@
 import { BOLD, REVERSE, paint } from "./ansi";
 import { clipTo } from "./chooser";
-import { BEGIN_SYNC, END_SYNC, ENTER_ALTERNATE_SCREEN, LEAVE_ALTERNATE_SCREEN } from "./fixed-screen";
+import { BEGIN_SYNC, DISABLE_MOUSE, ENABLE_MOUSE, END_SYNC, ENTER_ALTERNATE_SCREEN, LEAVE_ALTERNATE_SCREEN } from "./fixed-screen";
 import { ASCII_GLYPHS, type GlyphSet } from "./glyphs";
 import { visibleWidth } from "./markdown";
 import type { LineLog } from "./output";
 import { PinnedScreen, type ScreenStream } from "./screen";
 import type { Palette } from "./theme";
 import { renderIdentity } from "./identity";
+import { WHEEL_ROWS, type TranscriptScroll } from "./transcript-keys";
+import { transcriptRows } from "./transcript-rows";
+import { applyViewport, atBottom, newViewport, scrollFraction, visibleLines, type ViewportState } from "./viewport";
+import { installWheelFilter, type WheelInputSource } from "./wheel-input";
 
 export type WorkspaceFrameContext = {
   version: string;
@@ -53,11 +57,11 @@ export function workspaceHeader(context: WorkspaceFrameContext, width: number, p
     + " ".repeat(Math.max(1, width - visibleWidth(title) - 2 - visibleWidth(workspace) - tail.length))
     + ink(tail, context.busy || position !== "LIVE" ? color + BOLD : p.muted);
   const modes = ["plan", "build", "auto", "defender"].map((mode) => mode === context.mode
-    ? ink(` ${mode.toUpperCase()} `, color + BOLD + REVERSE) : ink(` ${mode} `, p.muted)).join(ink("│", p.muted));
+    ? ink(` ${mode.toUpperCase()} `, color + BOLD + REVERSE) : ink(` ${mode} `, p.muted)).join(ink(g.boxVertical, p.muted));
   const second = width >= 48 ? ` ${modes}` : ` ${ink(`[${context.mode.toUpperCase()}]`, color + BOLD)}`;
   const hint = width >= 90 ? `  /mode choose  Ctrl+G menu` : "";
   const model = clean(context.model);
-  const navigation = width >= 72 ? "PgUp/PgDn history  Esc live " : "";
+  const navigation = width >= 72 ? (position.startsWith("HISTORY") ? "Esc live " : "PgUp/wheel history ") : "";
   const modelWidth = Math.max(0, width - navigation.length - 3);
   const shownModel = clipTo(model, modelWidth, g);
   const third = ` ${ink(shownModel, p.secondary)}${" ".repeat(Math.max(1, width - visibleWidth(shownModel) - navigation.length - 1))}${ink(navigation)}`;
@@ -65,29 +69,48 @@ export function workspaceHeader(context: WorkspaceFrameContext, width: number, p
   return [frameText(first, width), frameText(second + ink(hint), width), frameText(third, width), frameText(rule, width)];
 }
 
+export type WorkspaceFrameOptions = {
+  /** Header and intro animation. */
+  motion?: boolean;
+  /** Terminal input to read wheel reports from; mouse reporting is enabled only when given. */
+  input?: WheelInputSource;
+};
+
+type HeldHistory = { log: LineLog; text: string; count: number };
+
+function logText(log: LineLog): string {
+  return [...log.lines, ...(log.pending ? [log.pending] : [])].join("\n");
+}
+
 /** A real session surface: fixed chrome, retained per-tab history and bounded menu overlays. */
 export class WorkspaceFrame extends PinnedScreen {
   private active = false;
   private timer?: ReturnType<typeof setInterval>;
   private phase = 0;
-  private offset = 0;
   private overlay?: string;
   private cachedLog?: LineLog;
   private cachedSize = -1;
   private cachedWidth = -1;
   private cachedPending = "";
+  private cachedHeld?: HeldHistory;
   private lines: string[] = [];
   private introLog?: LineLog;
   private introSize = -1;
   private introPending = "";
   private suggestions: readonly string[] = [];
-  private heldText?: string;
-  private cachedHeldText?: string;
+  /** Set while reading history: the window over a snapshot taken when scrolling began. */
+  private view?: ViewportState;
+  private held?: HeldHistory;
   private introMotion = true;
+  private uninstallWheel?: () => void;
+  private readonly motion: boolean;
+  private readonly input?: WheelInputSource;
 
   constructor(private readonly output: ScreenStream, private readonly context: () => WorkspaceFrameContext,
-    private readonly history: () => LineLog, private readonly motion = true) {
+    private readonly history: () => LineLog, options: WorkspaceFrameOptions = {}) {
     super(output, { holdRegion: true, headerRows: 4 });
+    this.motion = options.motion ?? true;
+    this.input = options.input;
   }
 
   override enter(): void {
@@ -96,14 +119,15 @@ export class WorkspaceFrame extends PinnedScreen {
     process.once("exit", this.restoreOnExit);
     process.once("SIGTERM", this.terminate);
     if (!this.introLog) { this.introLog = this.history(); this.introSize = this.history().size; this.introPending = this.history().pending; }
-    this.output.write(`${ENTER_ALTERNATE_SCREEN}\x1b[2J`);
+    if (this.input) this.uninstallWheel = installWheelFilter(this.input, (direction) => this.scroll({ kind: direction, rows: WHEEL_ROWS }));
+    this.output.write(`${ENTER_ALTERNATE_SCREEN}${this.input ? ENABLE_MOUSE : ""}\x1b[2J`);
     super.enter();
     this.refresh();
     if (this.motion) {
       this.timer = setInterval(() => {
         this.phase++;
         if (this.introMotion && this.showIntro() && !this.overlay) this.refresh();
-        else if (this.context().busy || this.overlay || this.offset) this.drawHeader();
+        else if (this.context().busy || this.overlay || this.view) this.drawHeader();
       }, 120);
       this.timer.unref();
     }
@@ -114,9 +138,11 @@ export class WorkspaceFrame extends PinnedScreen {
     clearInterval(this.timer);
     this.timer = undefined;
     this.active = false;
+    this.uninstallWheel?.();
+    this.uninstallWheel = undefined;
     process.off("exit", this.restoreOnExit);
     process.off("SIGTERM", this.terminate);
-    this.output.write(`\x1b[r\x1b[?25h${LEAVE_ALTERNATE_SCREEN}`);
+    this.output.write(`\x1b[r\x1b[?25h${this.input ? DISABLE_MOUSE : ""}${LEAVE_ALTERNATE_SCREEN}`);
   }
 
   private readonly restoreOnExit = () => this.exit();
@@ -131,69 +157,88 @@ export class WorkspaceFrame extends PinnedScreen {
 
   /** Transcript output remains native while live, including streaming and replaceable tool blocks. */
   write(text: string): void {
-    if (!this.active || (!this.offset && !this.overlay)) this.output.write(text);
+    if (!this.active || (!this.view && !this.overlay)) this.output.write(text);
     else this.drawHeader();
   }
 
   override renderStatus(text: string): void { super.renderStatus(text); this.drawHeader(); }
 
+  private positionLabel(): string {
+    if (this.overlay) return "MENU";
+    if (this.view && this.held) {
+      const log = this.history();
+      const arrived = log === this.held.log ? log.size + log.dropped - this.held.count : 0;
+      return `HISTORY ${Math.round(scrollFraction(this.view) * 100)}%${arrived > 0 ? ` +${arrived} new` : ""}`;
+    }
+    return this.context().busy ? "WORKING" : "LIVE";
+  }
+
   private drawHeader(): void {
     if (!this.active) return;
-    const label = this.overlay ? "MENU" : this.offset ? `HISTORY -${this.offset}` : this.context().busy ? "WORKING" : "LIVE";
-    const rows = workspaceHeader(this.context(), this.current.columns, this.phase, label).slice(0, this.current.scrollTop - 1);
+    const rows = workspaceHeader(this.context(), this.current.columns, this.phase, this.positionLabel()).slice(0, this.current.scrollTop - 1);
     this.output.write(`${BEGIN_SYNC}\x1b7${rows.map((line, i) => `\x1b[${i + 1};1H\x1b[2K${line}`).join("")}\x1b8${END_SYNC}`);
   }
 
+  private bodyHeight(): number {
+    return this.current.scrollBottom - this.current.scrollTop + 1 - this.suggestions.length;
+  }
+
+  /** Retained output wrapped to the body width with its styling; replayed escapes never move the cursor. */
   private projected(): string[] {
     const log = this.history();
     const width = Math.max(1, this.current.columns - 1);
-    if (this.cachedLog === log && this.cachedSize === log.size + log.dropped && this.cachedPending === log.pending && this.cachedWidth === width && this.cachedHeldText === this.heldText) return this.lines;
+    if (this.cachedLog === log && this.cachedSize === log.size + log.dropped && this.cachedPending === log.pending && this.cachedWidth === width && this.cachedHeld === this.held) return this.lines;
     this.cachedLog = log;
     this.cachedSize = log.size + log.dropped;
     this.cachedPending = log.pending;
     this.cachedWidth = width;
-    this.cachedHeldText = this.heldText;
-    // Replayed history is plain text; terminal cursor commands are never executed a second time.
-    const plain = (this.heldText ?? [...log.lines, ...(log.pending ? [log.pending] : [])].join("\n"))
-      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
-      .replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b./g, "")
-      .split("\n").map((line) => line.replace(/^.*\r(?=.)/, "").replace(/\r/g, "")).join("\n");
-    this.lines = [];
-    for (const line of plain.split("\n")) {
-      let row = "";
-      let used = 0;
-      for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(line)) {
-        const size = visibleWidth(segment);
-        if (used + size > width && row) { this.lines.push(row); row = ""; used = 0; }
-        row += size > width ? "?" : segment;
-        used += Math.min(size, width);
-      }
-      this.lines.push(row);
-    }
+    this.cachedHeld = this.held;
+    this.lines = transcriptRows(this.held?.text ?? logText(log), width);
     return this.lines;
   }
 
   private showIntro(): boolean {
-    return this.history() === this.introLog && this.history().size === this.introSize && this.history().pending === this.introPending && !this.context().busy && !this.offset;
+    return this.history() === this.introLog && this.history().size === this.introSize && this.history().pending === this.introPending && !this.context().busy && !this.view;
+  }
+
+  private releaseHistory(): void {
+    this.view = undefined;
+    this.held = undefined;
+  }
+
+  private scrollbar(height: number, total: number): string {
+    if (!this.view || total <= height || height < 1) return "";
+    const { palette: p, glyphs: g } = this.context();
+    const ascii = g === ASCII_GLYPHS || g.boxHorizontal === "-";
+    const thumb = Math.max(1, Math.round((height * height) / total));
+    const start = Math.round((height - thumb) * scrollFraction(this.view));
+    const column = this.current.columns;
+    return Array.from({ length: height }, (_, i) => {
+      const onThumb = i >= start && i < start + thumb;
+      const mark = onThumb ? paint(ascii ? "#" : "┃", p.primary, p.depth) : paint(ascii ? "|" : "│", p.muted, p.depth);
+      return `\x1b[${this.current.scrollTop + i};${column}H${mark}`;
+    }).join("");
   }
 
   refresh(): void {
     if (!this.active) return;
-    const height = this.current.scrollBottom - this.current.scrollTop + 1 - this.suggestions.length;
+    const height = this.bodyHeight();
     let lines = this.projected();
-    this.offset = Math.min(this.offset, Math.max(0, lines.length - height));
-    if (!this.offset && this.heldText !== undefined) {
-      this.heldText = undefined;
-      lines = this.projected();
+    if (this.view) {
+      if (this.held?.log !== this.history()) this.releaseHistory();
+      else {
+        this.view = applyViewport(applyViewport(this.view, { kind: "resize", height }), { kind: "content", lines });
+        if (atBottom(this.view)) this.releaseHistory();
+      }
+      if (!this.view) lines = this.projected();
     }
-    const end = Math.max(0, lines.length - this.offset);
-    let body = lines.slice(Math.max(0, end - height), end);
+    let body = this.view ? visibleLines(this.view) : lines.slice(Math.max(0, lines.length - height));
     if (this.showIntro()) {
       const context = this.context();
       const warnings = lines.filter((line) => /No session spend cap|No price configured|No current.*rate/.test(line));
       body = renderIdentity({ ...context, width: this.current.columns - 1, rows: height >= 15 ? 24 : 12,
         angle: this.phase * 0.065 }).split("\n");
-      body.push("", ...warnings.map((line) => paint(line, context.palette.warning, context.palette.depth)));
+      body.push("", ...warnings);
       body.push(paint("  /mode choose your tools   /palette find any action", context.palette.muted, context.palette.depth));
       body = body.slice(0, height);
     }
@@ -220,7 +265,9 @@ export class WorkspaceFrame extends PinnedScreen {
       const top = Math.max(0, Math.floor((height - body.length) / 3));
       body = [...Array<string>(top).fill(""), ...body];
     } else body = [...Array<string>(Math.max(0, Math.floor((height - body.length) * (this.showIntro() ? 0.45 : 1)))).fill(""), ...body];
-    this.output.write(`${BEGIN_SYNC}\x1b7${Array.from({ length: height }, (_, i) => `\x1b[${this.current.scrollTop + i};1H\x1b[2K${frameText(body[i] ?? "", this.current.columns - 1)}`).join("")}\x1b8${END_SYNC}`);
+    const rows = Array.from({ length: height }, (_, i) => `\x1b[${this.current.scrollTop + i};1H\x1b[2K${frameText(body[i] ?? "", this.current.columns - 1)}`).join("");
+    const bar = this.overlay === undefined ? this.scrollbar(height, lines.length) : "";
+    this.output.write(`${BEGIN_SYNC}\x1b7${rows}${bar}\x1b8${END_SYNC}`);
     this.drawHeader();
   }
 
@@ -236,19 +283,31 @@ export class WorkspaceFrame extends PinnedScreen {
     this.refresh();
   }
 
-  navigate(direction: "up" | "down" | "live"): void {
-    if (this.overlay) return;
-    if (direction === "up" && !this.offset) {
-      const log = this.history();
-      this.heldText = [...log.lines, ...(log.pending ? [log.pending] : [])].join("\n");
+  /**
+   * Moves the transcript window. Scrolling up from live output freezes a snapshot so arriving output
+   * cannot move what is being read; reaching the bottom, `bottom` or `live` returns to live output.
+   */
+  scroll(action: TranscriptScroll): void {
+    if (!this.active || this.overlay !== undefined) return;
+    if (action.kind === "live" || action.kind === "bottom") {
+      // Always repaints: a tab switch returns to live output and relies on this to show the new tab's log.
+      this.releaseHistory();
+      this.refresh();
+      return;
     }
-    const page = Math.max(1, this.current.scrollBottom - this.current.scrollTop - 1);
-    this.offset = direction === "live" ? 0 : Math.max(0, this.offset + (direction === "up" ? page : -page));
-    if (!this.offset) this.heldText = undefined;
+    if (!this.view) {
+      if (action.kind === "down" || action.kind === "halfDown" || action.kind === "pageDown") return;
+      const log = this.history();
+      this.held = { log, text: logText(log), count: log.size + log.dropped };
+      this.view = applyViewport(newViewport(this.projected(), this.bodyHeight()), { kind: "bottom" });
+    }
+    this.view = applyViewport(this.view, action);
+    if (atBottom(this.view)) this.releaseHistory();
+    this.stopIntroMotion();
     this.refresh();
   }
 
-  get browsing(): boolean { return this.offset > 0; }
+  get browsing(): boolean { return this.view !== undefined; }
 
   stopIntroMotion(): void { this.introMotion = false; }
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
+import { paintContaining, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -131,7 +131,9 @@ describe("what a tab keeps, under a real pty", () => {
     const returning = p.output().length;
     p.writeLine("/tab 1");
     await p.waitFor(/belonging to tab one/, { timeoutMs: 30_000, since: returning });
-    expect(p.output().slice(returning)).not.toContain("belonging to tab two");
+    // The fixed workspace repaints the still-current tab once as the command is submitted, so check
+    // the paint that shows tab one rather than every byte since.
+    expect(paintContaining(p.output().slice(returning), "belonging to tab one")).not.toContain("belonging to tab two");
   }, 90_000);
 
   it("paints in the theme it was told to, and changes it without restarting", async () => {

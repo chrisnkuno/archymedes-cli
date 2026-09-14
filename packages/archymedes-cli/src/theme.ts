@@ -451,6 +451,23 @@ export function buildPalette(theme: Theme, depth: ColorDepth): Palette {
   };
 }
 
+/** Deliberately outside the theme: marks a call that leaves the sandbox, a rare blast-radius signal. */
+export const EXTERNAL_MARK = "\x1b[35m";
+
+export type ColorRole = "primary" | "secondary" | "accent" | "text" | "muted" | "success" | "warning" | "error";
+
+/** The plain ANSI eight, by role: what a renderer paints with when no theme palette was handed to it. */
+export const ANSI_PALETTE: Palette = buildPalette({ name: "ansi", description: "", tokens: DEFAULT_TOKENS }, "ansi256");
+
+/**
+ * The one way a renderer turns a role into an escape code. The palette's code wins; a missing
+ * palette or a token the theme left unresolvable falls back to the ANSI code for that role.
+ */
+export function roleCode(role: ColorRole, palette: Palette | undefined, depth: ColorDepth): string {
+  if (depth === "none") return "";
+  return palette?.[role] || ANSI_PALETTE[role];
+}
+
 /** The palette a session falls back to before a theme is resolved, and whenever colour is off. */
 export const NO_COLOR_PALETTE: Palette = buildPalette(
   findBuiltinTheme(DEFAULT_THEME_NAME) ?? { name: DEFAULT_THEME_NAME, description: "", tokens: DEFAULT_TOKENS },

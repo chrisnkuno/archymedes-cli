@@ -49,7 +49,7 @@ describe("scrollback, under a real pty", () => {
       cwd,
       cols: 100,
       rows: 40,
-      args: ["--currency", "USD", "--auto", ...(options.args ?? [])],
+      args: ["--layout", "scrollback", "--currency", "USD", "--auto", ...(options.args ?? [])],
       env: {
         ANTHROPIC_API_KEY: ANTHROPIC_TEST_KEY,
         ANTHROPIC_BASE_URL: stub.url,

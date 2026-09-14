@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnArchymedes, type ArchymedesProcess } from "./harness";
+import { flowText, spawnArchymedes, type ArchymedesProcess } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -75,7 +75,7 @@ describe("what a first session points at", () => {
     await p.waitFor(/Done\./, { timeoutMs: 40_000, since: afterBoot });
     await p.waitFor(PROMPT, { timeoutMs: 20_000, since: afterBoot });
 
-    expect(p.output().slice(afterBoot)).not.toContain("take it back");
+    expect(flowText(p.output().slice(afterBoot))).not.toContain("take it back");
   }, 120_000);
 
   it("marks the essentials in /help, with a legend for the mark", async () => {

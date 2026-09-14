@@ -1,3 +1,4 @@
+import type { ThemeTokens } from "./theme";
 import { diffLines, languageOf, type DiffLine } from "./code-view";
 
 /**
@@ -150,6 +151,10 @@ export function withAiExplanation(state: ExplainPanelState, ai: AiExplanation): 
 
 export type ExplainRow = { text: string; bold?: boolean; dim?: boolean; color?: string };
 
+/** Theme token values (TermUI colour strings, not escape codes) for the panel's status colours. */
+export type ExplainColors = Pick<ThemeTokens, "success" | "warning" | "error">;
+const DEFAULT_EXPLAIN_COLORS: ExplainColors = { success: "green", warning: "yellow", error: "red" };
+
 const TAB_LABELS: Record<ExplainTab, string> = { facts: "Structure", notes: "Notes", diff: "Diff", ai: "AI" };
 
 /** The tab strip at the top of the panel — the same "[active]" convention `tabs.ts` uses for tabs. */
@@ -204,15 +209,15 @@ function factsRows(facts: StructuralFacts, width: number): ExplainRow[] {
   return rows.slice(0, -1);
 }
 
-function notesRows(notes: Annotation[], width: number): ExplainRow[] {
+function notesRows(notes: Annotation[], width: number, colors: ExplainColors): ExplainRow[] {
   if (notes.length === 0) return [{ text: "Nothing flagged.", dim: true }];
   return notes.slice(0, 60).map((entry) => ({
     text: `${String(entry.line).padStart(4)}  ${entry.note}`.slice(0, width),
-    color: entry.severity === "warn" ? "yellow" : undefined,
+    color: entry.severity === "warn" ? colors.warning : undefined,
   }));
 }
 
-function diffRows(diff: readonly DiffLine[], width: number): ExplainRow[] {
+function diffRows(diff: readonly DiffLine[], width: number, colors: ExplainColors): ExplainRow[] {
   if (diff.length === 0 || diff.every((line) => line.kind === "context")) {
     return [{ text: "No changes yet.", dim: true }];
   }
@@ -221,15 +226,15 @@ function diffRows(diff: readonly DiffLine[], width: number): ExplainRow[] {
     .slice(0, 200)
     .map((line) => ({
       text: `${line.kind === "add" ? "+" : "-"} ${line.text}`.slice(0, width),
-      color: line.kind === "add" ? "green" : "red",
+      color: line.kind === "add" ? colors.success : colors.error,
     }));
 }
 
-function aiRows(ai: AiExplanation, width: number): ExplainRow[] {
+function aiRows(ai: AiExplanation, width: number, colors: ExplainColors): ExplainRow[] {
   switch (ai.status) {
     case "idle": return [{ text: "Press ? to ask the model to explain this file.", dim: true }];
     case "loading": return [{ text: "Thinking…", dim: true }];
-    case "error": return [{ text: `Could not get an explanation: ${ai.message}`, color: "red" }];
+    case "error": return [{ text: `Could not get an explanation: ${ai.message}`, color: colors.error }];
     case "ready": return ai.text.split("\n").flatMap((line) => wrap(line, width)).map((text) => ({ text }));
   }
 }
@@ -245,13 +250,14 @@ export function composeExplainPanel(
   input: { path: string; before: string; after: string; panel: ExplainPanelState },
   width: number,
   height: number,
+  colors: ExplainColors = DEFAULT_EXPLAIN_COLORS,
 ): ExplainRow[] {
   const body: ExplainRow[] = (() => {
     switch (input.panel.tab) {
       case "facts": return factsRows(structuralFacts(input.after, input.path), width);
-      case "notes": return notesRows(annotateLines(input.after), width);
-      case "diff": return diffRows(diffLines(input.before, input.after), width);
-      case "ai": return aiRows(input.panel.ai, width);
+      case "notes": return notesRows(annotateLines(input.after), width, colors);
+      case "diff": return diffRows(diffLines(input.before, input.after), width, colors);
+      case "ai": return aiRows(input.panel.ai, width, colors);
     }
   })();
 

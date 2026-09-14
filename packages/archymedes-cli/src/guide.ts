@@ -287,7 +287,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     summary: "Themes, symbols, the fixed workspace, and terminals that need help.",
     body: [
       "Archymedes ships a blueprint theme and three others, and reads themes you write yourself as .tss files in .archymedes/themes — the same format TermUI apps use, so a palette written once works in both.",
-      "The fixed workspace keeps a mode rail and composer anchored while the transcript scrolls underneath. Start with --layout fixed or ARCHYMEDES_LAYOUT=fixed, switch mid-session with /layout, and use Page Up / Page Down to read retained history (Escape returns to live output). Menus open inside the transcript area so the composer never jumps.",
+      "Sessions open in the fixed workspace: a mode rail and composer stay anchored while the transcript scrolls underneath. Read history with the mouse wheel or Page Up / Page Down, move a line at a time with Alt+Up / Alt+Down, jump to the top with Ctrl+Home, and press Escape to return to live output. Menus open inside the transcript area so the composer never jumps. Prefer the plain terminal log? Use --layout scrollback, ARCHYMEDES_LAYOUT=scrollback, or /layout. ARCHYMEDES_MOUSE=0 keeps the terminal's own text selection instead of wheel scrolling.",
       "If your terminal draws question marks instead of symbols, --ascii switches to characters every terminal has. If you would rather have a status line pinned to the bottom row, --pin does that, at the cost of your terminal's scrollback. ARCHYMEDES_NO_MOTION=1 keeps the opening geometry and menu focus still.",
     ],
     examples: [

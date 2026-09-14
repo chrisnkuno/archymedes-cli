@@ -312,13 +312,17 @@ The startup geometry makes a brief rotation on roomy interactive terminals. Set 
 
 ## Fixed workspace
 
-Start with `archymedes --layout fixed` for a persistent mode bar, an anchored composer, and menus
-that open inside the transcript area. `/layout` switches layouts during a session;
-`ARCHYMEDES_LAYOUT=fixed` makes the fixed workspace your launch preference.
+Interactive sessions open in the fixed workspace: a persistent mode bar, an anchored composer, and
+menus that open inside the transcript area. `/layout` switches layouts during a session;
+`archymedes --layout scrollback` or `ARCHYMEDES_LAYOUT=scrollback` keeps the plain terminal log.
 
-Use `/mode` to choose plan, build, auto, or defender with the arrow keys. Page Up / Page Down
-read retained transcript history; Escape returns to live output. Home and End still edit the
-composer. Each tab retains up to 5,000 output lines. Resize reflows the live transcript.
+Use `/mode` to choose plan, build, auto, or defender with the arrow keys. To read history, use the
+mouse wheel or Page Up / Page Down. Alt+Up / Alt+Down (or Ctrl) move one line, and Ctrl+Home jumps
+to the top. Escape, Ctrl+End, or scrolling back to the bottom returns to live output. History keeps
+its colours, a scrollbar shows your position, and the header counts output that arrived while you
+were reading. Arrow keys, Home and End still edit the composer. Wheel scrolling uses mouse
+reporting, so hold Shift to select text, or set `ARCHYMEDES_MOUSE=0` to keep the terminal's own
+selection. Each tab retains up to 5,000 output lines, and resizing reflows the transcript.
 
 The opening geometry rotates while the workspace is idle and settles as soon as you type.
 `ARCHYMEDES_NO_MOTION=1` disables this motion and menu focus animation. `--ascii`, `NO_COLOR`,

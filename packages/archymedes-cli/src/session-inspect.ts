@@ -42,7 +42,7 @@ export function renderTodos(context: InspectContext): string | null {
   const mark = { pending: context.glyphs.circleEmpty, in_progress: context.glyphs.circleHalf, done: context.glyphs.circleFull } as const;
   return box(
     context.plan.map((todo) => `${mark[todo.status]} ${todo.text}`),
-    { depth: context.depth, title: "todos", glyphs: context.glyphs },
+    { depth: context.depth, title: "todos", glyphs: context.glyphs, palette: context.style.palette },
   );
 }
 

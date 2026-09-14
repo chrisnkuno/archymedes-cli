@@ -30,6 +30,8 @@ import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./banner";
 import { writeIdentity } from "./identity";
 import { WorkspaceFrame } from "./workspace-frame";
+import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter, workspaceFrameOptions } from "./layout-choice";
+import { isTranscriptKey, transcriptScrollForKey, type ScrollKey } from "./transcript-keys";
 import { setWorkspaceMenu } from "./shortcuts";
 import { box, CountdownTimer, formatCountdown, formatHeaderSegments, formatStatusLine, MarkdownStream, progressBar, PromptBox, PROMPT_PREFIX_COLUMNS, promptStatusRoom, renderPromptBox, ReplaceableBlock, sparkline, Spinner, SpringAnimator, StatusBar, table, wrapPlain } from "./tui";
 import { dropupRowBudget, renderDropup, type DropupEntry } from "./dropup";
@@ -67,7 +69,7 @@ import { JobStream, WatchRegistry, sandboxWarning } from "./job-stream";
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./screen-host";
 import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./guide";
-import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme";
+import { ANSI_PALETTE, DEFAULT_THEME_NAME, EXTERNAL_MARK, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeCommand, rainbowHex, type Palette, type Rgb } from "./theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme-files";
 import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, wanderJobObjective } from "./wander";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
@@ -173,12 +175,12 @@ const style = {
   bold: wrap("\x1b[1m"),
   // Not themed: the "this call leaves the sandbox" mark is a rare, informational blast-radius
   // signal, not part of the transcript's usual colour vocabulary a theme should be free to recolour.
-  magenta: wrap("\x1b[35m"),
-  cyan: role(() => palette.primary, "\x1b[36m"),
-  green: role(() => palette.success, "\x1b[32m"),
-  yellow: role(() => palette.warning, "\x1b[33m"),
-  red: role(() => palette.error, "\x1b[31m"),
-  accent: role(() => palette.accent, "\x1b[33m"),
+  magenta: wrap(EXTERNAL_MARK),
+  cyan: role(() => palette.primary, ANSI_PALETTE.primary),
+  green: role(() => palette.success, ANSI_PALETTE.success),
+  yellow: role(() => palette.warning, ANSI_PALETTE.warning),
+  red: role(() => palette.error, ANSI_PALETTE.error),
+  accent: role(() => palette.accent, ANSI_PALETTE.accent),
 };
 
 /**
@@ -471,8 +473,9 @@ ${style.bold(t(language, "help.transcript"))}
   /expand [N|all|list]      Unfold written code, a test run, or a long result
   archymedes --ascii              Draw with plain ASCII when the terminal mangles symbols
   archymedes --theme chalkboard       Start in a named theme (/theme list shows them all)
-  archymedes --layout fixed       Fixed workspace, mode rail and anchored composer
-  /layout [fixed|scrollback]  Switch layouts mid-session; PgUp/PgDn read history
+  archymedes --layout scrollback  Plain terminal log instead of the default fixed workspace
+  /layout [fixed|scrollback]  Switch layouts mid-session
+  PgUp/PgDn, wheel            Scroll the fixed workspace; Alt+Up/Down by line, Ctrl+Home top, Esc live
   archymedes --pin                Pin the status line to the bottom row. Costs the terminal's
                             scrollback: a reserved footer means scrolled-off lines are
                             never saved, so this is off unless you ask for it.
@@ -595,7 +598,7 @@ export function configureRendering(
   glyphs = glyphSet;
   renderDepth = depth;
   palette = themePalette;
-  markdown = new MarkdownStream(out, depth, contentWidth, live, glyphSet);
+  markdown = new MarkdownStream(out, depth, contentWidth, live, glyphSet, themePalette);
   toolSectionAnnounced = false;
   activity.awaitingFirstDelta = false;
   activity.toolCalls = 0;
@@ -760,7 +763,7 @@ export function renderUserMessage(
   // Wrapped per line rather than as one blob: a pasted stack trace or a numbered list is a shape
   // the sender chose, and reflowing it into a paragraph destroys the thing that made it readable.
   const body = text.split("\n").flatMap((line) => wrapPlain(line, Math.max(8, width - 6)));
-  return box(body, { depth, width, title: "you", titleColor: "green", glyphs: glyphSet, borderStyle });
+  return box(body, { depth, width, title: "you", titleColor: "green", glyphs: glyphSet, borderStyle, palette });
 }
 
 /**
@@ -2104,7 +2107,7 @@ async function main(): Promise<number> {
     resolvedModelId = tab.payload.modelId;
     tab.payload.sink.setLive(true);
     out.route(tab.payload.sink);
-    if (screen instanceof WorkspaceFrame) screen.navigate("live");
+    if (screen instanceof WorkspaceFrame) screen.scroll({ kind: "live" });
     else if (options.replay) replayTab(tab);
   };
 
@@ -2826,7 +2829,7 @@ async function main(): Promise<number> {
       const spokenText = spoken?.content.trim();
       // A provider that cannot stream reaches here with the whole answer at once. It gets the same
       // markdown treatment the streamed path gives it, so the two are indistinguishable on screen.
-      const asMarkdown = (text: string) => renderMarkdown(text, { width: contentWidth(), depth });
+      const asMarkdown = (text: string) => renderMarkdown(text, { width: contentWidth(), depth, palette });
       // A provider that never streamed never printed renderEvent's assistant-section divider
       // branch owns — this is the one other place a reply begins, so it owns the header here.
       if (!streamedAnswer) {
@@ -3069,7 +3072,7 @@ async function main(): Promise<number> {
       palette,
       glyphs,
     }, out, {
-      enabled: ttyMode && (args.layout ?? environment.ARCHYMEDES_LAYOUT) !== "fixed" && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
+      enabled: ttyMode && resolveLayout(args, environment) !== "fixed" && !readline.line && environment.TERM !== "dumb" && environment.NO_COLOR === undefined && environment.ARCHYMEDES_NO_MOTION !== "1",
       signal: identityMotion.signal,
       size: () => ({ width: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }),
     });
@@ -3116,14 +3119,13 @@ async function main(): Promise<number> {
    * nothing to keep separately scrolled from before it is torn down again a moment later.
    */
   // `ARCHYMEDES_PIN` exists so the choice can live in a shell profile rather than in every invocation.
-  const pinFooter = args.pin || (environment.ARCHYMEDES_PIN ?? "") !== "" && environment.ARCHYMEDES_PIN !== "0";
+  const pinFooter = wantsPinnedFooter(args.pin, environment);
   const setLayout = (fixed: boolean) => {
     screen?.exit();
     setWorkspaceMenu(undefined);
     screen = fixed ? new WorkspaceFrame(process.stdout,
       () => ({ version: ARCHYMEDES_CLI_VERSION, workspace: path.basename(args.root), model: `${spec.label} / ${resolvedModelId}`, mode, palette, glyphs, busy: turnActive }),
-      () => tabs.active.payload.sink.log,
-      environment.ARCHYMEDES_NO_MOTION !== "1" && environment.NO_COLOR === undefined && environment.TERM !== "dumb")
+      () => tabs.active.payload.sink.log, workspaceFrameOptions(environment, process.stdin))
       : new PinnedScreen(process.stdout, { holdRegion: pinFooter });
     screen.enter();
     if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu);
@@ -3132,13 +3134,12 @@ async function main(): Promise<number> {
   if (ttyMode) {
     // Always constructed, because the suggestion dropdown needs its geometry either way; only the
     // *holding* of the scroll region — the part that costs scrollback — is what `--pin` buys.
-    setLayout((args.layout ?? environment.ARCHYMEDES_LAYOUT) === "fixed");
-    const fixedNavigation = (_str: string, key: { name?: string }) => {
+    setLayout(resolveLayout(args, environment) === "fixed");
+    const fixedNavigation = (_str: string, key: ScrollKey | undefined) => {
       if (!(screen instanceof WorkspaceFrame)) return;
       screen.stopIntroMotion();
-      if (key?.name === "pageup") screen.navigate("up");
-      else if (key?.name === "pagedown") screen.navigate("down");
-      else if (screen.browsing && key?.name === "escape") screen.navigate("live");
+      const action = transcriptScrollForKey(key, screen.browsing);
+      if (action) screen.scroll(action);
     };
     unbindFixedNavigation = () => { process.stdin.off("keypress", fixedNavigation); };
     bindFixedNavigation = () => { unbindFixedNavigation(); process.stdin.on("keypress", fixedNavigation); };
@@ -3315,8 +3316,8 @@ async function main(): Promise<number> {
      * whole fix: the old code simply declined to draw anything inline, which is why the default
      * session — nearly every session, since pinning costs scrollback — had ghost text and no list.
      */
-    const paintSuggestions = (_str: string | undefined, key: { name?: string } | undefined) => setImmediate(() => {
-      if (turnActive || browsing) return;
+    const paintSuggestions = (_str: string | undefined, key: ScrollKey | undefined) => setImmediate(() => {
+      if (turnActive || browsing || isTranscriptKey(key)) return;
       const line = (readline as { line?: string }).line ?? "";
       const suggestions = suggestionsFor(line, buildModelCatalog(environment, undefined, liveModels).choices.map((choice) => choice.model));
 
@@ -3544,20 +3545,16 @@ async function main(): Promise<number> {
     promptBox.erase(rawInput);
     // Before parking, so the transcript region is whole again before anything is written into it.
     screen?.clearSuggestions();
-    if (screen instanceof WorkspaceFrame && screen.browsing) screen.navigate("live");
+    if (screen instanceof WorkspaceFrame && screen.browsing) screen.scroll({ kind: "live" });
     screen?.parkInTranscript();
     let input = rawInput.trim();
     if (!input) continue;
 
-    if (input === "/layout" || input.startsWith("/layout ")) {
-      const choice = input.slice(7).trim();
-      if (!ttyMode) { out.write("  Fixed layout requires an interactive terminal.\n"); continue; }
-      if (choice && choice !== "fixed" && choice !== "scrollback") { out.write("  Use /layout fixed or /layout scrollback.\n"); continue; }
-      const fixed = choice ? choice === "fixed" : !(screen instanceof WorkspaceFrame);
-      setLayout(fixed);
-      out.write(style.dim(fixed
-        ? "  Fixed workspace — mode rail and composer stay put. /layout scrollback returns to the log.\n"
-        : "  Scrollback layout — the terminal keeps a normal log. /layout fixed restores the workspace.\n"));
+    const layoutCommand = parseLayoutCommand(input, screen instanceof WorkspaceFrame ? "fixed" : "scrollback");
+    if (layoutCommand) {
+      if (!ttyMode) out.write("  Fixed layout requires an interactive terminal.\n");
+      else if ("error" in layoutCommand) out.write(layoutCommand.error);
+      else { setLayout(layoutCommand.layout === "fixed"); out.write(style.dim(layoutNotice(layoutCommand.layout))); }
       continue;
     }
 
@@ -4134,7 +4131,7 @@ async function main(): Promise<number> {
         // gets the ordinary numbered, folded code view: a file is not less a file for being `/cat`,
         // and a 3,000-line log dumped whole would push the very prompt someone typed off the screen.
         if (/\.(md|markdown)$/i.test(target)) {
-          out.write(`${renderMarkdown(file.content, { width: contentWidth(), depth: renderDepth, glyphs })}\n`);
+          out.write(`${renderMarkdown(file.content, { width: contentWidth(), depth: renderDepth, glyphs, palette })}\n`);
         } else {
           const language = languageOf(target);
           out.write(`${fenceHeader(language, style_)}\n`);
@@ -4360,7 +4357,7 @@ async function main(): Promise<number> {
       // just not the one `/diff` was being asked.
       if (input === "/diff stat") {
         const stat = await agent.diffStat();
-        if (stat) out.write(`${box(stat.split("\n"), { depth, title: "diff", glyphs })}\n`);
+        if (stat) out.write(`${box(stat.split("\n"), { depth, title: "diff", glyphs, palette })}\n`);
         else { out.write(style.dim("  nothing changed since the last checkpoint\n")); writeHint(); }
         continue;
       }
@@ -4740,7 +4737,7 @@ async function main(): Promise<number> {
         }
         out.write(style.dim("  transcribing…\n"));
         let transcript = await transcribeAudio(audioFile, environment);
-        out.write(`${box(transcript.split("\n"), { depth, title: "voice transcript", glyphs })}\n`);
+        out.write(`${box(transcript.split("\n"), { depth, title: "voice transcript", glyphs, palette })}\n`);
         const decision = (await readline.question("  Send this prompt? [Y/n/e to edit]: ")).trim().toLowerCase();
         if (decision === "n" || decision === "no") continue;
         if (decision === "e" || decision === "edit") transcript = (await readline.question("  Edit prompt: ")).trim() || transcript;

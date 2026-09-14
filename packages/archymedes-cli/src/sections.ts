@@ -1,6 +1,6 @@
 import type { ColorDepth } from "./banner";
-import type { Palette } from "./theme";
-import { BOLD, CYAN, DIM, GREEN, RED, YELLOW, paint, paintAll } from "./ansi";
+import { roleCode, type ColorRole, type Palette } from "./theme";
+import { BOLD, DIM, paint, paintAll } from "./ansi";
 import { borderGlyphsFor, UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 import { visibleWidth } from "./markdown";
 
@@ -42,12 +42,11 @@ export type SectionStyle = {
 
 export type Tone = "neutral" | "good" | "bad" | "warn" | "accent";
 
-const FALLBACK_TONE_CODE: Record<Tone, string> = {
-  neutral: DIM,
-  good: GREEN,
-  bad: RED,
-  warn: YELLOW,
-  accent: CYAN,
+const TONE_ROLE: Record<Exclude<Tone, "neutral">, ColorRole> = {
+  good: "success",
+  bad: "error",
+  warn: "warning",
+  accent: "primary",
 };
 
 /**
@@ -58,17 +57,9 @@ const FALLBACK_TONE_CODE: Record<Tone, string> = {
  * `neutral` stays DIM even under a theme: it is a *weight*, and a theme that recoloured it would
  * turn the transcript's subordinate text into another voice competing with the main one.
  */
-function toneCode(tone: Tone, style: SectionStyle): string {
+export function toneCode(tone: Tone, style: SectionStyle): string {
   if (style.depth === "none") return "";
-  const palette = style.palette;
-  if (!palette) return FALLBACK_TONE_CODE[tone];
-  switch (tone) {
-    case "neutral": return DIM;
-    case "good": return palette.success || FALLBACK_TONE_CODE.good;
-    case "bad": return palette.error || FALLBACK_TONE_CODE.bad;
-    case "warn": return palette.warning || FALLBACK_TONE_CODE.warn;
-    case "accent": return palette.primary || FALLBACK_TONE_CODE.accent;
-  }
+  return tone === "neutral" ? DIM : roleCode(TONE_ROLE[tone], style.palette, style.depth);
 }
 
 /** The left margin every transcript line shares, so nothing sits flush against the terminal edge. */
@@ -242,10 +233,10 @@ export function clip(text: string, width: number, glyphs: GlyphSet = UNICODE_GLY
 export function outcomeMark(outcome: "pass" | "fail" | "skip" | "running", style: SectionStyle): string {
   const glyphs = setOf(style);
   switch (outcome) {
-    case "pass": return paint(glyphs.check, GREEN, style.depth);
-    case "fail": return paint(glyphs.cross, RED, style.depth);
+    case "pass": return paint(glyphs.check, toneCode("good", style), style.depth);
+    case "fail": return paint(glyphs.cross, toneCode("bad", style), style.depth);
     case "skip": return paint(glyphs.circleEmpty, DIM, style.depth);
-    default: return paint(glyphs.pending, CYAN, style.depth);
+    default: return paint(glyphs.pending, toneCode("accent", style), style.depth);
   }
 }
 

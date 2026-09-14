@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { frameText, WorkspaceFrame, workspaceHeader } from "./workspace-frame";
 import { LineLog } from "./output";
@@ -26,7 +27,7 @@ describe("fixed session workspace", () => {
     const stream = { columns: 80, rows: 24, write: (text: string) => { writes.push(text); return true; } };
     const log = new LineLog();
     log.write(Array.from({ length: 100 }, (_, i) => `entry ${i}`).join("\n") + "\n");
-    const frame = new WorkspaceFrame(stream, () => context, () => log, motion);
+    const frame = new WorkspaceFrame(stream, () => context, () => log, { motion });
     frame.enter();
     // Retire the opening identity so this exercises the actual transcript.
     log.write("latest\n");
@@ -35,14 +36,14 @@ describe("fixed session workspace", () => {
 
   it("keeps history still as new output arrives, then returns to the live tail", () => {
     const { frame, log, writes } = setup();
-    frame.navigate("up");
+    frame.scroll({ kind: "pageUp" });
     expect(frame.browsing).toBe(true);
     const before = writes.length;
     log.write("new arrival\n");
     frame.write("new arrival\n");
     frame.refresh();
     expect(writes.slice(before).join("")).not.toContain("new arrival");
-    frame.navigate("live");
+    frame.scroll({ kind: "live" });
     expect(writes.at(-2)).toContain("new arrival");
     expect(frame.browsing).toBe(false);
     frame.exit();
@@ -64,13 +65,13 @@ describe("fixed session workspace", () => {
   it("returns to live projection when short history or a resize removes the scroll offset", () => {
     const { frame, log, writes, stream } = setup();
     log.clear(); log.write("short history\n");
-    frame.navigate("up");
+    frame.scroll({ kind: "pageUp" });
     expect(frame.browsing).toBe(false);
     log.write("new short arrival\n");
     frame.refresh();
     expect(writes.at(-2)).toContain("new short arrival");
     log.write(Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n") + "\n");
-    frame.navigate("up");
+    frame.scroll({ kind: "pageUp" });
     log.write("arrival during history\n");
     stream.rows = 100;
     frame.resize();
@@ -125,5 +126,80 @@ describe("fixed session workspace", () => {
       expect(quiet.writes).toHaveLength(quietCount);
       quiet.frame.exit();
     } finally { vi.useRealTimers(); }
+  });
+
+  const body = (writes: string[]) => writes.at(-2) ?? "";
+
+  it("scrolls by line and page, shows position and a scrollbar, and returns live at the bottom", () => {
+    const { frame, writes } = setup();
+    frame.scroll({ kind: "down", rows: 1 });
+    expect(frame.browsing).toBe(false);
+    frame.scroll({ kind: "up", rows: 1 });
+    expect(frame.browsing).toBe(true);
+    expect(writes.at(-1)).toContain("HISTORY");
+    expect(body(writes)).toContain(`;80H`);
+    expect(body(writes)).not.toContain("latest");
+    frame.scroll({ kind: "top" });
+    expect(body(writes)).toContain("entry 0");
+    expect(writes.at(-1)).toContain("HISTORY 0%");
+    frame.scroll({ kind: "pageDown" });
+    expect(frame.browsing).toBe(true);
+    frame.scroll({ kind: "bottom" });
+    expect(frame.browsing).toBe(false);
+    expect(body(writes)).toContain("latest");
+    frame.scroll({ kind: "up", rows: 2 });
+    frame.scroll({ kind: "down", rows: 2 });
+    expect(frame.browsing).toBe(false);
+    frame.exit();
+  });
+
+  it("counts output that arrives while reading history, and ignores scrolling under a menu", () => {
+    const { frame, log, writes } = setup();
+    frame.scroll({ kind: "pageUp" });
+    log.write("one\ntwo\n");
+    frame.write("one\ntwo\n");
+    expect(writes.at(-1)).toContain("+2 new");
+    frame.scroll({ kind: "live" });
+    frame.menu.paint("Menu");
+    frame.scroll({ kind: "pageUp" });
+    expect(frame.browsing).toBe(false);
+    frame.exit();
+  });
+
+  it("replays history with its colours but without cursor movement", () => {
+    const writes: string[] = [];
+    const stream = { columns: 80, rows: 24, write: (text: string) => { writes.push(text); return true; } };
+    const log = new LineLog();
+    log.write(Array.from({ length: 60 }, (_, i) => `\x1b[33mwarn ${i}\x1b[0m\x1b[2A`).join("\n") + "\n");
+    const frame = new WorkspaceFrame(stream, () => context, () => log, { motion: false });
+    frame.enter();
+    log.write("tail\n");
+    frame.scroll({ kind: "pageUp" });
+    expect(body(writes)).toContain("\x1b[33mwarn");
+    expect(body(writes)).not.toContain("\x1b[2A");
+    frame.exit();
+  });
+
+  it("turns wheel reporting on only with an input, scrolls on a notch, and restores the input on exit", () => {
+    const writes: string[] = [];
+    const stream = { columns: 80, rows: 24, write: (text: string) => { writes.push(text); return true; } };
+    const log = new LineLog();
+    log.write(Array.from({ length: 100 }, (_, i) => `entry ${i}`).join("\n") + "\n");
+    const input = new EventEmitter();
+    const typed: string[] = [];
+    input.on("data", (chunk: string) => typed.push(chunk));
+    const frame = new WorkspaceFrame(stream, () => context, () => log, { motion: false, input });
+    frame.enter();
+    log.write("latest\n");
+    expect(writes.join("")).toContain("\x1b[?1000h\x1b[?1006h");
+    input.emit("data", "\x1b[<64;5;5M");
+    expect(frame.browsing).toBe(true);
+    expect(typed).toEqual([]);
+    input.emit("data", "\x1b[<65;5;5M\x1b[<65;5;5M");
+    expect(frame.browsing).toBe(false);
+    frame.exit();
+    expect(writes.at(-1)).toContain("\x1b[?1006l\x1b[?1000l");
+    input.emit("data", "x");
+    expect(typed).toEqual(["x"]);
   });
 });

@@ -35,7 +35,7 @@ afterAll(async () => { await stub.close(); });
 /** An ordinary inline session: no `--pin`, which is what nearly every real session is. */
 async function boot(rows = 30) {
   const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-dropupcfg-"));
-  const p = spawnArchymedes({ cwd, rows, args: ["--currency", "USD"], env: {
+  const p = spawnArchymedes({ cwd, rows, args: ["--layout", "scrollback", "--currency", "USD"], env: {
     ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
     ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC",
   }});
