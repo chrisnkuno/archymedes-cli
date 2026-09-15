@@ -22,6 +22,8 @@ export type WorkspaceFrameContext = {
   busy: boolean;
 };
 
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 /** Clips styled text on grapheme boundaries; only SGR escapes may reach the frame. */
 export function frameText(text: string, width: number): string {
   let result = "";
@@ -31,7 +33,7 @@ export function frameText(text: string, width: number): string {
     .replace(/\x1b[^\[]/g, "").replace(/[\x00-\x1f\x7f-\x9f]/g, (c) => c === "\x1b" ? c : c === "\t" ? " " : "");
   for (const part of safe.split(/(\x1b\[[0-9;]*m)/)) {
     if (/^\x1b\[[0-9;]*m$/.test(part)) { result += part; continue; }
-    for (const { segment } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(part.replace(/\x1b/g, ""))) {
+    for (const { segment } of GRAPHEMES.segment(part.replace(/\x1b/g, ""))) {
       if (columns + visibleWidth(segment) > width) return result + (result.includes("\x1b") ? "\x1b[0m" : "");
       result += segment;
       columns += visibleWidth(segment);
@@ -101,6 +103,10 @@ export class WorkspaceFrame extends PinnedScreen {
   private cachedPending = "";
   private cachedHeld?: HeldHistory;
   private lines: string[] = [];
+  private tail: string[] = [];
+  private cachedTailLog?: LineLog;
+  private cachedTailKey = "";
+  private cachedTailPending = "";
   private introLog?: LineLog;
   private introSize = -1;
   private introPending = "";
@@ -202,7 +208,11 @@ export class WorkspaceFrame extends PinnedScreen {
   private projected(): string[] {
     const log = this.history();
     const width = Math.max(1, this.current.columns - 1);
-    if (this.cachedLog === log && this.cachedSize === log.size + log.dropped && this.cachedPending === log.pending && this.cachedWidth === width && this.cachedHeld === this.held) return this.lines;
+    // A held snapshot does not change as output arrives, so only its identity and the width matter.
+    const unchanged = this.held
+      ? this.cachedHeld === this.held && this.cachedWidth === width
+      : this.cachedHeld === undefined && this.cachedLog === log && this.cachedSize === log.size + log.dropped && this.cachedPending === log.pending && this.cachedWidth === width;
+    if (unchanged) return this.lines;
     this.cachedLog = log;
     this.cachedSize = log.size + log.dropped;
     this.cachedPending = log.pending;
@@ -210,6 +220,25 @@ export class WorkspaceFrame extends PinnedScreen {
     this.cachedHeld = this.held;
     this.lines = transcriptRows(this.held?.text ?? logText(log), width);
     return this.lines;
+  }
+
+  /**
+   * The last `height` rows of live output, wrapped from only the log lines that can reach the screen:
+   * each logical line is at least one row. Full projection is kept for history, where every row can
+   * be scrolled to. An SGR style left open across more than a screenful of lines is not carried in.
+   */
+  private liveTail(height: number): string[] {
+    const log = this.history();
+    const width = Math.max(1, this.current.columns - 1);
+    const key = `${log.size + log.dropped}:${log.pending.length}:${width}:${height}`;
+    if (this.cachedTailLog === log && this.cachedTailKey === key && this.cachedTailPending === log.pending) return this.tail;
+    this.cachedTailLog = log;
+    this.cachedTailKey = key;
+    this.cachedTailPending = log.pending;
+    const source = log.lines.slice(-height);
+    const rows = transcriptRows([...source, ...(log.pending ? [log.pending] : [])].join("\n"), width);
+    this.tail = rows.slice(-height);
+    return this.tail;
   }
 
   private showIntro(): boolean {
@@ -252,7 +281,7 @@ export class WorkspaceFrame extends PinnedScreen {
   refresh(): void {
     if (!this.active) return;
     const height = this.bodyHeight();
-    let lines = this.projected();
+    let lines = this.view ? this.projected() : this.liveTail(height);
     if (this.view) {
       if (this.held?.log !== this.history()) this.releaseHistory();
       else {
@@ -266,7 +295,7 @@ export class WorkspaceFrame extends PinnedScreen {
         }
         if (atBottom(this.view) && !this.search) this.releaseHistory();
       }
-      if (!this.view) lines = this.projected();
+      if (!this.view) lines = this.liveTail(height);
     }
     let body = this.view ? visibleLines(this.view) : lines.slice(Math.max(0, lines.length - height));
     if (this.showIntro()) {

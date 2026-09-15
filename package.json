@@ -24,6 +24,7 @@
     "test:state": "cargo test --manifest-path packages/archymedes-state/Cargo.toml",
     "bench:state": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state-bench -- --sessions 500 --messages 40 --queries 200",
     "bench:defender": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-defender-brain-bench -- --records 10000 --queries 2000",
+    "bench:render": "bun run benchmarks/render/hot-paths.bench.ts",
     "bench:journeys": "ARCHYMEDES_JOURNEYS_FULL=1 vitest run packages/archymedes-cli/src/pty/journeys.test.ts",
     "verify:package": "bun run tooling/build/verify-package.ts",
     "release:check": "bun run check && bun run verify:package",

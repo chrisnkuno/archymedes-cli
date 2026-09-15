@@ -1,6 +1,7 @@
 import { UNICODE_GLYPHS, type GlyphSet } from "./glyphs";
 
 const ANSI = /\x1b\[[0-9;]*m/g;
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 
 /**
  * How many columns a string actually occupies.
@@ -10,8 +11,10 @@ const ANSI = /\x1b\[[0-9;]*m/g;
  * box border sit one character short of its own corner.
  */
 export function visibleWidth(text: string): number {
+  // Most measured text is printable ASCII: one column per character, no escapes to strip.
+  if (PRINTABLE_ASCII.test(text)) return text.length;
   let width = 0;
-  for (const character of text.replace(ANSI, "")) {
+  for (const character of text.includes("\x1b") ? text.replace(ANSI, "") : text) {
     const code = character.codePointAt(0) ?? 0;
     if (code >= 0x300 && code <= 0x36f) continue; // combining marks sit on the previous cell
     width += isWide(code) ? 2 : 1;

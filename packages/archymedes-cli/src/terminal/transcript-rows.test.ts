@@ -30,6 +30,11 @@ describe("transcript rows", () => {
     expect(transcriptRows("a\tb", 20)).toEqual(["a       b"]);
   });
 
+  it("keeps a combining mark with the letter before it when a plain run fills the row", () => {
+    expect(transcriptRows("abcde\u0301f", 5)).toEqual(["abcde\u0301", "f"]);
+    expect(transcriptRows("\x1b[36mabcdefgh\x1b[0m 界界", 4)).toEqual(["\x1b[36mabcd\x1b[0m", "\x1b[36mefgh\x1b[0m", " 界", "界"]);
+  });
+
   it("replaces a glyph wider than the row instead of overflowing", () => {
     expect(transcriptRows("界", 1)).toEqual(["?"]);
   });

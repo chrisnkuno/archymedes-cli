@@ -7,6 +7,9 @@ const OTHER_ESCAPE = /\x1b(?:[^\[]|$)|\x1b\[(?![0-9;]*m)[0-?]*$/g;
 const CONTROLS = /[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f-\x9f]/g;
 const SGR_SPLIT = /(\x1b\[[0-9;]*m)/;
 const TAB_STOP = 8;
+const PRINTABLE_ASCII = /^[\x20-\x7e]+$/;
+/** Printable-ASCII runs and everything else; a grapheme never starts inside an ASCII run it did not begin. */
+const ASCII_OR_OTHER = /[\x20-\x7e]+|[^\x20-\x7e]+/g;
 /** Styles still open are replayed at the start of each row; bounded so a stream that never resets cannot grow it. */
 const MAX_OPEN_STYLES = 8;
 
@@ -45,21 +48,34 @@ export function transcriptRows(text: string, width: number): string[] {
         row += part;
         continue;
       }
-      for (const { segment } of graphemes.segment(part)) {
-        if (segment === "\t") {
-          let spaces = TAB_STOP - (used % TAB_STOP);
-          if (used + spaces > limit) {
-            if (used > 0) push();
-            spaces = Math.min(TAB_STOP, limit);
+      for (const run of part.match(ASCII_OR_OTHER) ?? []) {
+        if (PRINTABLE_ASCII.test(run)) {
+          // One column per character, so a plain run is sliced to the space left instead of segmented.
+          for (let index = 0; index < run.length;) {
+            if (used >= limit) push();
+            const take = Math.min(limit - used, run.length - index);
+            row += run.slice(index, index + take);
+            used += take;
+            index += take;
           }
-          row += " ".repeat(spaces);
-          used += spaces;
           continue;
         }
-        const size = visibleWidth(segment);
-        if (used + size > limit && used > 0) push();
-        row += size > limit ? "?" : segment;
-        used += Math.min(size, limit);
+        for (const { segment } of graphemes.segment(run)) {
+          if (segment === "\t") {
+            let spaces = TAB_STOP - (used % TAB_STOP);
+            if (used + spaces > limit) {
+              if (used > 0) push();
+              spaces = Math.min(TAB_STOP, limit);
+            }
+            row += " ".repeat(spaces);
+            used += spaces;
+            continue;
+          }
+          const size = visibleWidth(segment);
+          if (used + size > limit && used > 0) push();
+          row += size > limit ? "?" : segment;
+          used += Math.min(size, limit);
+        }
       }
     }
     push();
