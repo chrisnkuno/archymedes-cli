@@ -8,6 +8,9 @@ import { runAcpServer } from "./acp-server";
 import { parseArgs } from "./app/args";
 import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
+import { runMemoryCommand } from "./commands/memory-command";
+import { runGuideCommand } from "./commands/guide-command";
+import { runThemeCommand } from "./commands/theme-command";
 import { animateBudgetMeter, renderCostReport } from "./commands/cost";
 import { runHistoryCommand } from "./commands/history";
 import { runTabCommand } from "./commands/tab";
@@ -77,7 +80,7 @@ import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
-import { findTopic, parseGuideCommand, renderGuideIndex, renderGuideTopic, renderWholeGuide, searchTopics } from "./render/guide";
+import { parseGuideCommand } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
@@ -93,7 +96,7 @@ import { resolveControlLanguage, t } from "./platform/i18n";
 import { resolveGlyphs } from "./text/glyphs";
 import { GUTTER, heading, note, panel, rule } from "./render/sections";
 import { expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
-import { addMemory, clearMemories, describeAdded, forgetMemory, loadMemories, memoryFile, memoryPromptBlock, parseMemoryCommand, recallMemories, replaceMemory, renderMemories, type MemoryEntry } from "./commands/memory";
+import { loadMemories, parseMemoryCommand, type MemoryEntry } from "./commands/memory";
 import { parseHistoryCommand, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
 import { applyPacing, describePace, exceedsPace, paceBadge, parsePaceCommand, remainingCooldown, type PaceLevel } from "./commands/pacing";
 import { CliStateHistory } from "./session/state-history";
@@ -2578,64 +2581,17 @@ async function main(): Promise<number> {
 
     const memoryCommand = parseMemoryCommand(input);
     if (memoryCommand) {
-      const style_ = sectionStyle();
-      const files = { project: memoryFile("project", args.root, environment), user: memoryFile("user", args.root, environment) };
-      switch (memoryCommand.kind) {
-        case "invalid":
-          out.write(style.yellow(`  ${memoryCommand.reason}\n`));
-          break;
-        case "where":
-          out.write(`${note(`project ${glyphs.middot} ${files.project}`, style_)}\n${note(`you     ${glyphs.middot} ${files.user}`, style_)}\n`);
-          break;
-        case "list":
-          out.write(`${renderMemories(memories, style_, files)}\n`);
-          break;
-        case "add": {
-          try {
-            const result = await addMemory(memoryCommand.scope, memoryCommand.text, args.root, environment, { kind: memoryCommand.memoryKind, pinned: memoryCommand.pinned });
-            memories = await loadMemories(args.root, environment);
-            out.write(result.changed
-              ? `${describeAdded({ scope: memoryCommand.scope, text: memoryCommand.text }, style_)}\n`
-              : style.dim("  already remembered\n"));
-          } catch (error) {
-            out.write(style.yellow(`  ${error instanceof Error ? error.message : String(error)}\n`));
-          }
-          break;
-        }
-        case "replace": {
-          try {
-            await replaceMemory(memoryCommand.scope, memoryCommand.oldText, memoryCommand.newText, args.root, environment);
-            memories = await loadMemories(args.root, environment);
-            out.write(style.green(`  memory updated: ${memoryCommand.newText}\n`));
-          } catch (error) {
-            out.write(style.yellow(`  ${error instanceof Error ? error.message : String(error)}\n`));
-          }
-          break;
-        }
-        case "recall": {
-          const recalled = recallMemories(memories, memoryCommand.query);
-          out.write(recalled.entries.length
-            ? `${memoryPromptBlock(recalled.entries)}${style.dim(`  ${recalled.usedChars} chars recalled${recalled.omitted ? ` ${glyphs.middot} ${recalled.omitted} omitted by budget` : ""}\n`)}`
-            : style.dim(`  no memory matched “${memoryCommand.query}”\n`));
-          break;
-        }
-        case "forget": {
-          const result = await forgetMemory(memoryCommand.scope, memoryCommand.index, args.root, environment);
-          memories = await loadMemories(args.root, environment);
-          out.write(result.removed
-            ? style.green(`  forgot: ${result.removed.text}\n`)
-            : style.yellow(`  there is no ${memoryCommand.scope} memory ${memoryCommand.index} — /memory lists them\n`));
-          break;
-        }
-        case "clear": {
-          const answer = (await readline.question(`  ${style.yellow("?")} Forget every ${memoryCommand.scope} memory? ${style.dim("[y/N]: ")}`)).trim().toLowerCase();
-          if (answer !== "y" && answer !== "yes") { out.write(style.dim("  kept\n")); break; }
-          await clearMemories(memoryCommand.scope, args.root, environment);
-          memories = await loadMemories(args.root, environment);
-          out.write(style.dim(`  ${memoryCommand.scope} memory cleared\n`));
-          break;
-        }
-      }
+      await runMemoryCommand(memoryCommand, {
+        root: args.root,
+        environment,
+        memories,
+        setMemories: (entries) => { memories = entries; },
+        confirm: async (question) => ["y", "yes"].includes((await readline.question(`  ${style.yellow("?")} ${question} ${style.dim("[y/N]: ")}`)).trim().toLowerCase()),
+        write: (text) => out.write(text),
+        paint: style,
+        style: sectionStyle(),
+        glyphs,
+      });
       continue;
     }
 
@@ -2708,64 +2664,20 @@ async function main(): Promise<number> {
 
     const guideCommand = parseGuideCommand(input);
     if (guideCommand) {
-      const style_ = sectionStyle();
-
-      /**
-       * Opens the guide as a screen, and reports whether it happened.
-       *
-       * A `false` return is not an error — it means the printed guide below is the right answer for
-       * this terminal, which is true for a pipe, a window too small to hold a page, and a build
-       * where the framework was pruned. See `docs/reference/terminal-design-system.md` §10.
-       */
-      const openGuideScreen = async (startAt?: string): Promise<boolean> => {
-        const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
+      await runGuideCommand(guideCommand, {
+        // A `false` means the printed guide is the right answer: a pipe, a small window, or a pruned build.
+        openScreen: async () => (await withFullScreen(screenCapabilities(), terminalControls(), async () => {
           const { runGuideScreen } = await import("./ui/guide-screen");
-          await runGuideScreen({
-            columns: process.stdout.columns ?? 80,
-            rows: process.stdout.rows ?? 24,
-            palette,
-            ...(startAt ? { startAt } : {}),
-          });
-        });
-        return outcome.ok;
-      };
-
-      if (guideCommand.kind === "index") {
-        // A bare /guide is "show me the manual", which is a browsing job. The printed index stays
-        // for pipes and for terminals that cannot draw a screen.
-        if (await openGuideScreen()) continue;
-        out.write(`${renderGuideIndex(style_)}\n`);
-        continue;
-      }
-      if (guideCommand.kind === "all") {
-        // Folded, because the whole guide is longer than a screen and printing it at someone is how
-        // a manual becomes something they scroll past rather than read.
-        const whole = renderWholeGuide(style_);
-        const lines = whole.split("\n");
-        out.write(`${lines.slice(0, FOLD_AFTER_LINES * 3).join("\n")}\n`);
-        const hidden = Math.max(0, lines.length - FOLD_AFTER_LINES * 3);
-        if (hidden > 0) {
-          const id = expandables.add("guide", whole, hidden);
-          out.write(`${GUTTER}${expandHint(id, hidden, renderDepth, glyphs)}\n`);
-        }
-        continue;
-      }
-      if (guideCommand.kind === "search") {
-        const found = searchTopics(guideCommand.query);
-        if (found.length === 0) { out.write(style.yellow(`  Nothing in the guide mentions "${guideCommand.query}".\n`)); continue; }
-        out.write(`${heading(`guide ${glyphs.middot} "${guideCommand.query}"`, 2, style_)}\n`);
-        for (const topic of found) out.write(`${GUTTER}${style.cyan(topic.id)}  ${style.dim(topic.summary)}\n`);
-        continue;
-      }
-      if (guideCommand.kind === "unknown") {
-        out.write(style.yellow(`  No guide topic called "${guideCommand.id}".\n`));
-        out.write(style.dim("  /guide lists them · /guide search <text> finds one\n"));
-        continue;
-      }
-      const topic = findTopic(guideCommand.id);
-      // A named topic prints. Someone who typed `/guide tabs` asked for that page, and a page in
-      // the transcript can be scrolled back to, copied and piped; a screen takes it away again.
-      if (topic) out.write(`${renderGuideTopic(topic, style_)}\n`);
+          await runGuideScreen({ columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24, palette });
+        })).ok,
+        fold: (label, text, hidden) => expandables.add(label, text, hidden),
+        foldAfterLines: FOLD_AFTER_LINES,
+        write: (text) => out.write(text),
+        paint: style,
+        style: sectionStyle(),
+        glyphs,
+        depth: renderDepth,
+      });
       continue;
     }
 
@@ -2839,43 +2751,17 @@ async function main(): Promise<number> {
 
     const themeCommand = parseThemeCommand(input);
     if (themeCommand) {
-      const style_ = sectionStyle();
-      if (themeCommand.kind === "invalid") { out.write(style.yellow(`  ${themeCommand.reason}\n`)); continue; }
-      if (themeCommand.kind === "where") {
-        out.write(`${heading("themes", 2, style_)}\n`);
-        for (const scope of ["project", "user"] as const) {
-          out.write(`${note(`${scope}: ${themeDirectory(scope, args.root, environment)}`, style_)}\n`);
-        }
-        out.write(`${note("drop a .tss file in either — the same format TermUI themes use", style_)}\n`);
-        continue;
-      }
-      if (themeCommand.kind === "list") {
-        const available = await discoverThemes(args.root, environment);
-        out.write(`${heading("themes", 2, style_)}\n`);
-        for (const theme of available) {
-          const marker = theme.name === themeName ? glyphs.circleFull : " ";
-          const origin = theme.source === "builtin" ? "" : ` (${theme.source})`;
-          out.write(`${GUTTER}${marker} ${style.cyan(theme.name)}${style.dim(origin)}${theme.description ? style.dim(` — ${theme.description}`) : ""}\n`);
-        }
-        out.write(`${note("/theme <name> to change it", style_)}\n`);
-        continue;
-      }
-      if (themeCommand.kind === "show") {
-        out.write(`${GUTTER}${style.cyan(themeName)}${activeTheme?.description ? style.dim(` — ${activeTheme.description}`) : ""}\n`);
-        // A swatch of the roles, because the names mean nothing until they are seen next to
-        // each other in the terminal that will actually be drawing them.
-        out.write(`${GUTTER}${style.cyan("primary")}  ${style.accent("accent")}  ${style.green("success")}  ${style.yellow("warning")}  ${style.red("error")}  ${style.dim("muted")}\n`);
-        continue;
-      }
-      const chosen = await findTheme(themeCommand.name, args.root, environment);
-      if (!chosen) {
-        out.write(style.yellow(`  No theme named "${themeCommand.name}". /theme list shows what there is.\n`));
-        continue;
-      }
-      activeTheme = chosen;
-      applyTheme(chosen);
-      out.write(`${rule(sectionStyle(), { label: chosen.name, tone: "accent" })}\n`);
-      out.write(`${GUTTER}${style.cyan("primary")}  ${style.accent("accent")}  ${style.green("success")}  ${style.yellow("warning")}  ${style.red("error")}  ${style.dim("muted")}\n`);
+      await runThemeCommand(themeCommand, {
+        discover: () => discoverThemes(args.root, environment),
+        find: (name) => findTheme(name, args.root, environment),
+        directory: (scope) => themeDirectory(scope, args.root, environment),
+        active: { name: themeName, ...(activeTheme?.description ? { description: activeTheme.description } : {}) },
+        apply: (theme) => { activeTheme = theme as typeof activeTheme; applyTheme(theme); },
+        write: (text) => out.write(text),
+        paint: () => style,
+        style: sectionStyle,
+        glyphs,
+      });
       continue;
     }
 
