@@ -319,3 +319,36 @@ export function composeFrame(snapshot: WorkspaceSnapshot): FrameRow[] {
   // into the pane. The finished frame is clipped once here so every caller gets the same guarantee.
   return rows.map((row) => ({ ...row, text: clip(row.text, columns) }));
 }
+
+/** Everything the control panel needs, per frame: tab panes, watched-job panes, and their activity. */
+export function buildWorkspaceSnapshot(input: {
+  views: readonly TabView[];
+  linesFor: (id: number) => { lines: readonly string[]; dropped: number };
+  jobs: readonly { id: string; objective: string; done: boolean; lines: readonly string[]; dropped: number }[];
+  activity: PaneActivity;
+  palette: Palette;
+  columns: number;
+  rows: number;
+}): WorkspaceSnapshot {
+  const panes: WorkspacePane[] = [
+    ...tabPanes(input.views, input.linesFor),
+    ...input.jobs.map((job) => ({
+      kind: "job" as const,
+      key: job.id,
+      title: `job ${job.id.slice(-6)}`,
+      subtitle: job.objective,
+      status: (job.done ? "done" : "running") as "done" | "running",
+      lines: job.lines,
+      dropped: job.dropped,
+    })),
+  ];
+  const activity = input.activity.sample(panes);
+  return {
+    panes: panes.map((pane) => ({ ...pane, activity: activity.get(pane.key) })),
+    selected: Math.max(0, input.views.findIndex((view) => view.active)),
+    scroll: 0,
+    palette: input.palette,
+    columns: input.columns,
+    rows: input.rows,
+  };
+}

@@ -8,6 +8,8 @@ import { runAcpServer } from "./acp-server";
 import { parseArgs } from "./app/args";
 import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
+import { runWatchCommand } from "./commands/watch-command";
+import { runAttach } from "./commands/attach";
 import { runUpdateCommand } from "./commands/update-command";
 import { runJobsCommand } from "./commands/jobs-runner";
 import { runBalanceCommand } from "./commands/balance-command";
@@ -79,7 +81,7 @@ import { renderTabStrip, parseTabCommand, WorkspaceController } from "./session/
 import { TabSink, replayLines } from "./terminal/output";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
-import { PaneActivity, tabPanes, type WorkspaceSnapshot } from "./ui/workspace-model";
+import { buildWorkspaceSnapshot, PaneActivity } from "./ui/workspace-model";
 import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
 import { parseGuideCommand } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
@@ -95,7 +97,7 @@ import { renderTools } from "./commands/tools-command";
 import { removeRecording, startRecording, transcribeAudio } from "./commands/voice";
 import { resolveControlLanguage, t } from "./platform/i18n";
 import { resolveGlyphs } from "./text/glyphs";
-import { GUTTER, heading, note, panel, rule } from "./render/sections";
+import { GUTTER, heading, panel, rule } from "./render/sections";
 import { expandHint, parseExpandCommand, renderExpandableList } from "./render/expandable";
 import { loadMemories, parseMemoryCommand, type MemoryEntry } from "./commands/memory";
 import { parseHistoryCommand, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "./commands/chat-history";
@@ -2611,54 +2613,23 @@ async function main(): Promise<number> {
     }
 
     if (input === "/workspace" || input === "/panel") {
-      /**
-       * The control panel: every tab and every watched job, live, side by side.
-       *
-       * This is the one screen Archymedes draws rather than scrolls, and it is deliberately a *view* —
-       * it reads the session and never mutates it, so leaving it puts you back exactly where you
-       * were with nothing to undo.
-       */
-      // Lives for as long as the panel is open, which is the only span its samples mean anything
-      // over: "lines since the last frame" is a rate only while the frames keep coming.
-      const paneActivity = new PaneActivity();
-      const readSnapshot = (): WorkspaceSnapshot => {
-        const views = tabs.views(describeTab);
-        const activeIndex = Math.max(0, views.findIndex((view) => view.active));
-        const panes = [
-            ...tabPanes(views, (id) => {
-              const held = tabs.find(id);
-              return { lines: held?.payload.sink.log.lines ?? [], dropped: held?.payload.sink.log.dropped ?? 0 };
-            }),
-            ...watched.all.map((job) => ({
-              kind: "job" as const,
-              key: job.stream.id,
-              title: `job ${job.stream.id.slice(-6)}`,
-              subtitle: job.objective,
-              status: (job.stream.done ? "done" : "running") as "done" | "running",
-              lines: job.sink.log.lines,
-              dropped: job.sink.log.dropped,
-            })),
-        ];
-        const activity = paneActivity.sample(panes);
-        return {
-          panes: panes.map((pane) => ({ ...pane, activity: activity.get(pane.key) })),
-          selected: activeIndex,
-          scroll: 0,
-          palette,
-          columns: process.stdout.columns ?? 80,
-          rows: process.stdout.rows ?? 24,
-        };
-      };
-
-      // The panel takes the terminal: raw mode, the alternate screen, and every keystroke. readline
-      // and the pinned footer both have to let go first, or two things will be reading stdin and
-      // one of them will be writing over the other.
+      // A read-only view of every tab and watched job; activity samples only mean something while it is open.
+      const activity = new PaneActivity();
       const outcome = await withFullScreen(screenCapabilities(), terminalControls(), async () => {
         const { runWorkspace } = await import("./ui/workspace-screen");
-        await runWorkspace({ read: readSnapshot });
+        await runWorkspace({
+          read: () => buildWorkspaceSnapshot({
+            views: tabs.views(describeTab),
+            linesFor: (id) => { const held = tabs.find(id); return { lines: held?.payload.sink.log.lines ?? [], dropped: held?.payload.sink.log.dropped ?? 0 }; },
+            jobs: watched.all.map((job) => ({ id: job.stream.id, objective: job.objective, done: job.stream.done, lines: job.sink.log.lines, dropped: job.sink.log.dropped })),
+            activity,
+            palette,
+            columns: process.stdout.columns ?? 80,
+            rows: process.stdout.rows ?? 24,
+          }),
+        });
       });
-      // No text path for the panel — several live panes is the thing a transcript cannot express —
-      // so a refusal is said plainly rather than swallowed.
+      // No text path: several live panes is the thing a transcript cannot express.
       if (!outcome.ok) out.write(style.yellow(`  ${explainScreenRefusal(outcome)}\n`));
       continue;
     }
@@ -2979,96 +2950,38 @@ async function main(): Promise<number> {
     }
 
     if (input === "/watch" || input.startsWith("/watch ")) {
-      const rest = input.slice("/watch".length).trim().replace(/\s+/g, " ");
-      const style_ = sectionStyle();
-
-      if (!rest) {
-        if (watched.size === 0) { out.write(style.dim("  watching nothing — /watch <job id>, or /jobs to see what exists\n")); continue; }
-        out.write(`${heading("watching", 2, style_)}\n`);
-        for (const job of watched.all) {
-          const status = job.stream.done ? job.stream.status : "live";
-          out.write(`${GUTTER}${style.cyan(job.stream.id)} ${style.dim(`${status} ${glyphs.middot} ${job.sink.log.size} lines`)}  ${job.objective}\n`);
-        }
-        out.write(`${note("/watch show <id> to read it · /watch stop <id> to stop", style_)}\n`);
-        continue;
-      }
-
-      const [verb, ...words] = rest.split(" ");
-      const target = words.join(" ").trim();
-
-      if (verb === "stop") {
-        if (target === "all") { watched.stopAll(); out.write(style.dim("  stopped watching everything\n")); continue; }
-        const stopped = watched.stop(target);
-        out.write(stopped ? style.dim(`  stopped watching ${target}\n`) : style.yellow(`  not watching ${target}\n`));
-        continue;
-      }
-
-      if (verb === "show") {
-        const job = watched.get(target);
-        if (!job) { out.write(style.yellow(`  not watching ${target}\n`)); continue; }
-        // Printed from the job's own record rather than re-read from the log: this is exactly what
-        // the stream has received, which is the thing being asked about.
-        const replay = replayLines(job.sink.log, 200);
-        out.write(`${rule(style_, { label: `job ${target}`, tone: "accent", ...(replay.omitted > 0 ? { trailing: `${replay.omitted} earlier lines` } : {}) })}\n`);
-        if (replay.lines.length === 0) out.write(`${note("nothing yet", style_)}\n`);
-        for (const line of replay.lines) out.write(`${line}\n`);
-        continue;
-      }
-
-      const id = verb;
-      const job = await getJob(args.root, id);
-      if (!job) { out.write(style.yellow(`  No job ${id}. /jobs lists what exists.\n`)); continue; }
-      await startWatching(id, job.objective);
-      out.write(style.dim(`  watching ${id} — it keeps running while you work; /watch show ${id} to read it\n`));
+      await runWatchCommand(input.slice("/watch".length), {
+        watched,
+        getJob: (id) => getJob(args.root, id),
+        startWatching,
+        write: (text) => out.write(text),
+        paint: style,
+        style: sectionStyle(),
+        glyphs,
+      });
       continue;
     }
 
     const attachCommand = parseAttachCommand(input);
     if (attachCommand) {
-      if (attachCommand.kind === "invalid") {
-        out.write(style.yellow(`  ${attachCommand.reason}\n`));
-        continue;
-      }
-      const first = await getJob(args.root, attachCommand.id);
-      if (!first) {
-        out.write(style.yellow(`  No job ${attachCommand.id}. /jobs lists what exists.\n`));
-        continue;
-      }
-      out.write(style.dim(`  attached to ${attachCommand.id} (${describeJobForHuman(first)}) — Ctrl+C returns to the prompt without stopping it\n`));
-      let offset = 0;
-      // Ctrl+C here must only end the attach view, not the whole session — swap the interrupt
-      // handler for the duration so it does not fall through to the ordinary "quit" behaviour.
-      let detachView = false;
-      const onAttachSigint = () => { detachView = true; };
-      unbindSigint();
-      process.on("SIGINT", onAttachSigint);
-      readline.on("SIGINT", onAttachSigint);
-      try {
-        for (;;) {
-          const chunk = await readJobLog(args.root, attachCommand.id, offset);
-          if (chunk.text) out.write(chunk.text);
-          offset = chunk.nextByte;
-          if (detachView) break;
-          const current = await getJob(args.root, attachCommand.id);
-          if (!current) break;
-          if (current.pendingApproval) {
-            // The digest read here is the one displayed; answering it authorizes that action only.
-            // Re-reading the job after the question would race a worker that re-parked a different
-            // call while the human was typing, and silently redirect the answer onto it.
-            const { summary, actionDigest } = current.pendingApproval;
-            const answer = (await readline.question(`  ${style.yellow("approval needed:")} ${summary} [y/N]: `)).trim().toLowerCase();
-            const applied = await resolveJobApproval(args.root, attachCommand.id, answer === "y" || answer === "yes" ? "allow" : "deny", actionDigest);
-            if (!applied) out.write(style.yellow("  That request changed before your answer arrived — nothing was authorized.\n"));
-            continue;
-          }
-          if (isTerminal(current.status)) { out.write(style.dim(`  job ${current.status}\n`)); break; }
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-      } finally {
-        process.off("SIGINT", onAttachSigint);
-        readline.off("SIGINT", onAttachSigint);
-        bindSigint();
-      }
+      if (attachCommand.kind === "invalid") { out.write(style.yellow(`  ${attachCommand.reason}\n`)); continue; }
+      await runAttach(attachCommand.id, {
+        getJob: (id) => getJob(args.root, id),
+        readLog: (id, offset) => readJobLog(args.root, id, offset),
+        resolveApproval: (id, decision, digest) => resolveJobApproval(args.root, id, decision, digest),
+        isTerminal,
+        describe: describeJobForHuman,
+        ask: (question) => readline.question(question),
+        takeInterrupt: (onInterrupt) => {
+          unbindSigint();
+          process.on("SIGINT", onInterrupt);
+          readline.on("SIGINT", onInterrupt);
+          return () => { process.off("SIGINT", onInterrupt); readline.off("SIGINT", onInterrupt); bindSigint(); };
+        },
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        write: (text) => out.write(text),
+        paint: style,
+      });
       continue;
     }
 
