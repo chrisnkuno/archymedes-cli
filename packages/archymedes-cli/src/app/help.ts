@@ -60,7 +60,7 @@ ${style.bold(t(language, "help.files"))}
   archymedes --sandbox-minutes N  Sandbox lifetime (default 30)
 
 ${style.bold(t(language, "help.model"))}
-  archymedes --free               Free tool models via OpenRouter (key required; quotas apply)
+  archymedes --free               Free tool models: hosted gateway, or your OPENROUTER_API_KEY
   archymedes --provider <name>    ${PROVIDER_IDS.join(" | ")}
   archymedes --model <id>         Model to run (defaults to the provider's)
   /model                    Pick a model from a list, with prices, keeping the transcript

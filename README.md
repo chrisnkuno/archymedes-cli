@@ -28,14 +28,16 @@ capped request to the execution exchange, which selects the provider and returns
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
 | Ollama (local) | — | `llama3.1` |
 | OpenAI-compatible | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | your choice |
-| Free models (`--free`) | `OPENROUTER_API_KEY` | `openrouter/free` |
+| Free models (`--free`) | none via the free gateway, or `OPENROUTER_API_KEY` | `openrouter/free` |
 
 Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and recorded once.
 
-`archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account. Only
+`archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account. Without a
+key it goes through the hosted [free gateway](packages/free-gateway/README.md), which holds the key
+server-side and rate limits requests; with your own `OPENROUTER_API_KEY` it goes to OpenRouter directly. Only
 `openrouter/free` or exact `publisher/model:free` IDs that OpenRouter lists at zero price with tool
 support are accepted; every request carries a zero maximum price, and free mode never falls back to
-a paid provider. OpenRouter's free-tier rate limits and quotas still apply. Model discovery also
+a paid provider. Free capacity is rate limited either way. Model discovery also
 reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
 
 ## Cost and balance
@@ -70,6 +72,7 @@ The control surfaces are localized into 16 languages — `archymedes --language 
 | `packages/archymedes-cli` | `archymedes-cli` | The terminal app and its `archymedes` binary. |
 | `packages/core` | `@archymedes/core` | Provider-neutral agent runtime, model adapters, workspace backends, cost accounting. Internal CLI-only code lives under `src/cli/`. |
 | `packages/archymedes-state` | `archymedes-state` (Rust) | The local, rebuildable history and memory index. Optional at runtime — the CLI falls back to a portable TypeScript projection. |
+| `packages/free-gateway` | `@archymedes/free-gateway` (private) | Separately deployed server behind `archymedes --free`: holds the OpenRouter key, serves only verified free models, rate limits. |
 | `tooling/build` | — | Builds the packages into something npm can install. |
 
 ## Develop

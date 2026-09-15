@@ -1,9 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { PROVIDER_INFO, type ProviderId } from "./provider-specs";
+import { PROVIDER_INFO, missingRequirements, type ProviderId } from "./provider-specs";
 import { isConversationalModel, modelsEndpoint, parseModelsResponse } from "./model-list";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
-import type { FreeCatalog } from "./free-catalog";
+import { freeAccess, type FreeCatalog } from "./free-catalog";
 
 // Re-exported so every existing importer of this module goes on working unchanged.
 export { isConversationalModel, mergeModelLists, modelsEndpoint, modelsUrl, parseModelsResponse } from "./model-list";
@@ -57,7 +57,9 @@ export async function fetchProviderModels(
 ): Promise<ModelFetchResult> {
   if (provider === "free") {
     try {
-      const freeCatalog = await fetchFreeCatalog({ fetchImpl, timeoutMs });
+      const access = freeAccess(environment);
+      const modelsUrl = access && "gatewayUrl" in access ? `${access.gatewayUrl}/v1/models` : undefined;
+      const freeCatalog = await fetchFreeCatalog({ fetchImpl, timeoutMs, modelsUrl });
       return { provider, models: freeCatalog.models.filter((model) => model.eligible).map((model) => model.id), freeCatalog,
         ...(freeCatalog.warnings.length ? { error: freeCatalog.warnings.join("; ") } : {}) };
     } catch { return { provider, models: [], error: "Free model catalog unavailable; retry /models refresh. Cached entries may be stale." }; }
@@ -171,5 +173,5 @@ export function fetchableProviders<P extends ProviderId>(
   environment: Record<string, string | undefined>,
   providers: readonly P[],
 ): P[] {
-  return providers.filter((provider) => provider !== "archymedes-cloud" && PROVIDER_INFO[provider].requires.every((name) => environment[name]?.trim()));
+  return providers.filter((provider) => provider !== "archymedes-cloud" && missingRequirements(provider, environment).length === 0);
 }

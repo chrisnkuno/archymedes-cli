@@ -1,6 +1,7 @@
 /**
- * Free mode's turn provider. Every request goes to the fixed OpenRouter host with a zero price cap
- * and fallbacks disabled, after re-checking the live catalog, because a stale cache must never
+ * Free mode's turn provider. With the user's own key every request goes to the fixed OpenRouter
+ * host; without one it goes to a free gateway that holds a key server-side and never receives the
+ * user's. Either way requests carry a zero price cap and fallbacks disabled, after re-checking the live catalog, because a stale cache must never
  * authorize paid inference. Failures are reported as they are; there is no silent paid fallback.
  */
 import OpenAI from "openai";
@@ -25,7 +26,7 @@ class FreeAccessError extends Error {
   constructor(message: string, readonly status = 400, readonly retryable = false, readonly retryAfterMs?: number) { super(message); }
 }
 
-/** Fixed-host direct access, with the free-only constraint enforced on every request. */
+/** Direct or gateway access, with the free-only constraint enforced on every request. */
 export class FreeAgentTurnProvider implements AgentTurnProvider {
   readonly selection: { provider: string; model: string };
   // Safe offline budgets until live metadata is available; never inherit an unknown model's 200K.
@@ -35,14 +36,21 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   /** Models OpenRouter refused (403/404) for this key; skipped by the router for this process. */
   private readonly refused = new Set<string>();
 
-  constructor(private readonly options: { apiKey: string; model: string; timeoutMs?: number }, private readonly dependencies: {
+  private readonly baseUrl: string;
+  private readonly viaGateway: boolean;
+
+  constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number }, private readonly dependencies: {
     call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number;
   } = {}) {
     this.selection = { provider: "free", model: options.model };
-    if (!options.apiKey.trim()) throw new FreeAccessError("Free mode needs OPENROUTER_API_KEY. Configure it in archymedes settings.");
+    const apiKey = options.apiKey?.trim();
+    this.viaGateway = !apiKey && Boolean(options.gatewayUrl);
+    if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode needs OPENROUTER_API_KEY, or a free gateway in ARCHYMEDES_FREE_GATEWAY_URL. Configure the key in archymedes settings.");
     if (!isFreeModelId(options.model)) throw new FreeAccessError("Free mode accepts openrouter/free or an exact publisher/model:free ID; paid models are not allowed.");
+    this.baseUrl = this.viaGateway ? `${options.gatewayUrl}/v1` : FREE_BASE_URL;
     const client = dependencies.call ? undefined : new OpenAI({
-      apiKey: options.apiKey, baseURL: FREE_BASE_URL, maxRetries: 0,
+      // The gateway ignores Authorization; the placeholder only satisfies the SDK.
+      apiKey: apiKey ?? "archymedes-free-gateway", baseURL: this.baseUrl, maxRetries: 0,
       fetch: (input, init) => globalThis.fetch(input, { ...init, redirect: "error" }),
     });
     this.call = dependencies.call ?? (async (body, signal) => await client!.chat.completions.create(body as never, { signal }));
@@ -55,7 +63,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       if (!request.safetyIdentifier.trim()) throw new FreeAccessError("safetyIdentifier is required");
       const now = (this.dependencies.now ?? Date.now)();
       if (!this.catalog || this.catalog.fetchedAt > now || now - this.catalog.fetchedAt >= FREE_CATALOG_TTL_MS) {
-        this.catalog = await (this.dependencies.catalog ?? ((abort) => fetchFreeCatalog({ signal: abort, discovery: false })))(signal).catch(() => {
+        this.catalog = await (this.dependencies.catalog ?? ((abort) => fetchFreeCatalog({ signal: abort, discovery: false, modelsUrl: `${this.baseUrl}/models` })))(signal).catch(() => {
           throw new FreeAccessError("Could not verify the free model catalog. Check connectivity and retry; no inference was attempted.", 503, true);
         });
       }
@@ -85,7 +93,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
           return await this.attempt(candidate.id, messages, output, request, onTextDelta, signal);
         } catch (error) {
           const status = (error as { status?: unknown })?.status;
-          const switchable = this.options.model === FREE_ROUTER && !streamed && !signal.aborted && (!(error instanceof FreeAccessError) || status === 502)
+          // A gateway's own limit or outage applies to every model behind it; switching would only spend more of it.
+          const gatewayOwned = this.viaGateway && Boolean((error as { headers?: Headers })?.headers?.get?.("x-free-gateway-error"));
+          const switchable = this.options.model === FREE_ROUTER && !streamed && !signal.aborted && !gatewayOwned && (!(error instanceof FreeAccessError) || status === 502)
             && (status === 403 || status === 404 || status === 429 || (typeof status === "number" && status >= 500));
           if (this.options.model === FREE_ROUTER && !streamed && (status === 403 || status === 404)) this.refused.add(candidate.id);
           if (!switchable || attempt === Math.min(ordered.length, MAX_ROUTER_ATTEMPTS) - 1) throw error;
@@ -96,7 +106,12 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       if (signal.aborted) throw signal.reason;
       if (error instanceof FreeAccessError) throw error;
       const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 503;
-      const hint = status === 401 ? "OpenRouter rejected the key. Update OPENROUTER_API_KEY in archymedes settings."
+      const hint = this.viaGateway ? (
+        status === 429 ? "Free gateway limit reached. Wait before retrying, or set your own OPENROUTER_API_KEY."
+        : status === 413 ? "The conversation is too large for the free gateway. Start a new session."
+        : status === 403 ? "This free model refused the request. Choose another with /model."
+        : "The free gateway could not complete the request. Try again later, or set your own OPENROUTER_API_KEY; no paid fallback was attempted.")
+        : status === 401 ? "OpenRouter rejected the key. Update OPENROUTER_API_KEY in archymedes settings."
         : status === 403 ? "OpenRouter refused this free model for this key; some are limited to listed apps. Choose another with /model."
         : status === 402 ? "OpenRouter account quota or key budget is exhausted. Check the key limits."
         : status === 429 ? "OpenRouter free-model rate limit reached. Wait before retrying."

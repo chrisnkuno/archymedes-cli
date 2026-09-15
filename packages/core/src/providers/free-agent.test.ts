@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { FreeAgentTurnProvider } from "./free-agent";
 import { mergeFreeCatalog, parseFreeOpenRouterModels } from "./free-catalog";
 import type { ChatResponse, ChatStreamChunk } from "./openai-compatible";
-import { resolveProvider } from "./agent-matrix";
+import { availableProviders, missingRequirements, resolveProvider } from "./agent-matrix";
+import { freeAccess } from "./free-catalog";
 
 const entry = { id: "lab/code:free", context_length: 65536, top_provider: { max_completion_tokens: 1024 },
   pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["text"] }, supported_parameters: ["tools"] };
@@ -116,6 +117,56 @@ describe("free-only model adapter", () => {
       const explicit = new FreeAgentTurnProvider({ apiKey: "k", model: big.id }, { call: pinned, catalog: routed });
       await expect(explicit.complete(request)).rejects.toMatchObject({ status: 429 });
       expect(pinned).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe("gateway access", () => {
+    it("does not spend more of a gateway limit by switching models, but still moves past a gated model", async () => {
+      const big = { ...entry, id: "lab/gated:free", context_length: 1_000_000 };
+      const routed = () => Promise.resolve(mergeFreeCatalog(parseFreeOpenRouterModels({ data: [big, entry] }), [], Date.now()));
+      const limited = vi.fn(async () => { throw Object.assign(new Error("limit"), { status: 429, headers: new Headers({ "x-free-gateway-error": "429" }) }); });
+      await expect(new FreeAgentTurnProvider({ gatewayUrl: "https://gw.test", model: "openrouter/free" }, { call: limited, catalog: routed }).complete(request)).rejects.toMatchObject({ status: 429 });
+      expect(limited).toHaveBeenCalledTimes(1);
+      const gated = vi.fn(async (body: Record<string, unknown>) => {
+        if (body.model === big.id) throw Object.assign(new Error("gated"), { status: 403, headers: new Headers() });
+        return response;
+      });
+      expect(await new FreeAgentTurnProvider({ gatewayUrl: "https://gw.test", model: "openrouter/free" }, { call: gated, catalog: routed }).complete(request)).toMatchObject({ content: "Done" });
+      expect(gated).toHaveBeenCalledTimes(2);
+    });
+    it("uses the user's key directly when present and never sends it to a gateway", () => {
+      expect(freeAccess({ OPENROUTER_API_KEY: " k ", ARCHYMEDES_FREE_GATEWAY_URL: "https://gw.test" })).toEqual({ apiKey: "k" });
+      expect(freeAccess({ ARCHYMEDES_FREE_GATEWAY_URL: "https://gw.test/" })).toEqual({ gatewayUrl: "https://gw.test" });
+      expect(freeAccess({ ARCHYMEDES_FREE_GATEWAY_URL: "http://localhost:8787" })).toEqual({ gatewayUrl: "http://localhost:8787" });
+      for (const unsafe of ["http://gw.test", "https://user:pw@gw.test", "ftp://gw.test", "nonsense"]) {
+        expect(freeAccess({ ARCHYMEDES_FREE_GATEWAY_URL: unsafe })).toBeUndefined();
+      }
+    });
+    it("counts a gateway as configured, but never auto-selects free mode", () => {
+      const environment = { ARCHYMEDES_FREE_GATEWAY_URL: "https://gw.test" };
+      expect(missingRequirements("free", environment)).toEqual([]);
+      expect(missingRequirements("free", {})).toEqual(["OPENROUTER_API_KEY"]);
+      expect(availableProviders(environment).map((spec) => spec.id)).toContain("free");
+      expect(resolveProvider(environment)).toHaveProperty("error");
+      expect(resolveProvider(environment, { provider: "free" })).toMatchObject({ spec: { id: "free" }, model: "openrouter/free" });
+    });
+    it("reads the gateway's model listing and reports gateway limits without blaming a key", async () => {
+      const loads: string[] = [];
+      const provider = new FreeAgentTurnProvider({ gatewayUrl: "https://gw.test", model: entry.id }, {
+        catalog: undefined,
+        call: async () => { throw Object.assign(new Error("limited"), { status: 429, headers: new Headers({ "retry-after": "30" }) }); },
+      });
+      const original = globalThis.fetch;
+      globalThis.fetch = (async (url: string) => {
+        loads.push(String(url));
+        return new Response(JSON.stringify({ data: [entry] }), { headers: { "content-type": "application/json" } });
+      }) as typeof fetch;
+      try {
+        const error = await provider.complete(request).catch((caught: Error) => caught);
+        expect(loads).toEqual(["https://gw.test/v1/models"]);
+        expect(error).toMatchObject({ status: 429, retryable: true, retryAfterMs: 30_000 });
+        expect((error as Error).message).toContain("Free gateway limit");
+        expect((error as Error).message).not.toContain("rejected the key");
+      } finally { globalThis.fetch = original; }
     });
   });
 });

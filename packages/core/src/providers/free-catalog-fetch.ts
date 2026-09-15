@@ -1,11 +1,12 @@
 /**
  * Fetches the public free-model listings with a timeout, a byte cap and no redirects. It never sees
- * a credential or a caller-supplied URL, so catalog data cannot steer the OpenRouter key elsewhere.
+ * a credential, so catalog data cannot steer the OpenRouter key elsewhere; `modelsUrl` only chooses
+ * which public listing (OpenRouter's or a free gateway's) is read.
  * A failed discovery fetch degrades to verified OpenRouter metadata instead of failing the refresh.
  */
 import { FREE_BASE_URL, FREE_DISCOVERY_URL, mergeFreeCatalog, parseFreeDiscovery, parseFreeOpenRouterModels, type FreeCatalog } from "./free-catalog";
 
-/** Fetches public metadata only. No credentials or caller-supplied URLs enter this module. */
+/** Fetches public metadata only. No credentials enter this module. */
 export type FreeCatalogFetch = (url: string, init?: { signal?: AbortSignal; redirect?: RequestRedirect; headers?: Record<string, string> }) => Promise<{
   ok: boolean; status: number; json(): Promise<unknown>;
   body?: ReadableStream<Uint8Array> | null;
@@ -39,14 +40,14 @@ async function boundedJson(fetchImpl: FreeCatalogFetch, url: string, signal: Abo
 }
 
 export async function fetchFreeCatalog(options: {
-  fetchImpl?: FreeCatalogFetch; signal?: AbortSignal; timeoutMs?: number; now?: number; discovery?: boolean;
+  fetchImpl?: FreeCatalogFetch; signal?: AbortSignal; timeoutMs?: number; now?: number; discovery?: boolean; modelsUrl?: string;
 } = {}): Promise<FreeCatalog> {
   const signal = AbortSignal.any([AbortSignal.timeout(options.timeoutMs ?? 15_000), ...(options.signal ? [options.signal] : [])]);
   signal.throwIfAborted();
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const warnings: string[] = [];
   const work = Promise.all([
-    boundedJson(fetchImpl, `${FREE_BASE_URL}/models`, signal).then(parseFreeOpenRouterModels),
+    boundedJson(fetchImpl, options.modelsUrl ?? `${FREE_BASE_URL}/models`, signal).then(parseFreeOpenRouterModels),
     options.discovery === false ? [] : boundedJson(fetchImpl, FREE_DISCOVERY_URL, signal).then(parseFreeDiscovery).catch(() => {
       warnings.push("ClawLabsAI discovery unavailable; showing verified OpenRouter metadata only");
       return [];

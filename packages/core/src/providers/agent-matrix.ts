@@ -1,12 +1,12 @@
 import type { AgentTurnProvider } from "../agent-runtime";
-import { PROVIDER_IDS, PROVIDER_INFO, catalogPrices, isProviderId, type ProviderEnvironment, type ProviderId, type ProviderInfo } from "./provider-specs";
+import { PROVIDER_IDS, PROVIDER_INFO, catalogPrices, isProviderId, missingRequirements, type ProviderEnvironment, type ProviderId, type ProviderInfo } from "./provider-specs";
 import { tokenPrices, type Currency, type TokenPrices } from "../money";
 import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
 import { FreeAgentTurnProvider } from "./free-agent";
-import { isFreeModelId } from "./free-catalog";
+import { freeAccess, isFreeModelId } from "./free-catalog";
 
 /**
  * Which model providers Archymedes can drive, and what their tokens cost.
@@ -25,6 +25,7 @@ export {
   PROVIDER_INFO,
   catalogPrices,
   isProviderId,
+  missingRequirements,
   type ProviderEnvironment,
   type ProviderId,
   type ProviderInfo,
@@ -82,7 +83,7 @@ function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "
 export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   free: {
     ...PROVIDER_INFO.free,
-    create: (environment, model) => new FreeAgentTurnProvider({ apiKey: environment.OPENROUTER_API_KEY!.trim(), model }),
+    create: (environment, model) => new FreeAgentTurnProvider({ ...freeAccess(environment), model }),
   },
   anthropic: {
     ...PROVIDER_INFO.anthropic,
@@ -141,7 +142,7 @@ function optionalUnitInterval(value: string | undefined, fallback: number): numb
 
 /** Providers whose credentials are actually present, so the CLI can offer only what will work. */
 export function availableProviders(environment: ProviderEnvironment): ProviderSpec[] {
-  return PROVIDER_IDS.map((id) => PROVIDERS[id]).filter((spec) => spec.requires.every((name) => environment[name]?.trim()));
+  return PROVIDER_IDS.map((id) => PROVIDERS[id]).filter((spec) => missingRequirements(spec.id, environment).length === 0);
 }
 
 /**
@@ -154,7 +155,7 @@ export function availableProviders(environment: ProviderEnvironment): ProviderSp
  * still works; only the *unrequested* auto-pick excludes it.
  */
 function implicitlyAvailableProviders(environment: ProviderEnvironment): ProviderSpec[] {
-  return availableProviders(environment).filter((spec) => spec.requires.length > 0);
+  return availableProviders(environment).filter((spec) => spec.requires.length > 0 && spec.id !== "free");
 }
 
 export type ResolvedProvider = {
@@ -203,7 +204,7 @@ export function resolveProvider(
   if (!spec) {
     return { error: `No model provider is configured. Set one of: ${PROVIDER_IDS.map((id) => PROVIDERS[id].requires.join("+")).join(", ")}.` };
   }
-  const missing = spec.requires.filter((name) => !environment[name]?.trim());
+  const missing = missingRequirements(spec.id, environment);
   if (missing.length > 0) return { error: `${spec.label} needs ${missing.join(" and ")}.` };
 
   const model = options.model?.trim() || environment[`${providerEnvPrefix(spec.id)}_MODEL`]?.trim() || spec.defaultModel;
@@ -271,7 +272,7 @@ export type ProviderStatus = {
 export function describeProviders(environment: ProviderEnvironment): ProviderStatus[] {
   return PROVIDER_IDS.map((id) => {
     const spec = PROVIDERS[id];
-    const missing = spec.requires.filter((name) => !environment[name]?.trim());
+    const missing = missingRequirements(id, environment);
     const model = environment[`${providerEnvPrefix(id)}_MODEL`]?.trim() || spec.defaultModel;
     const overridden = id !== "free" && Number(environment.MODEL_INPUT_PER_MILLION) > 0
       && Number(environment.MODEL_OUTPUT_PER_MILLION) > 0

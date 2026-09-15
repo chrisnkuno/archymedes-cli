@@ -1,6 +1,7 @@
 # Free mode: implementation contract
 
-Status: implemented; live keyed tool round trip verified 2026-09-15 (WS-4.4). Updated 2026-09-15. Tracker: WS-4.
+Status: implemented; live keyed tool round trip verified 2026-09-15 (WS-4.4). Hosted gateway built
+and verified locally (WS-4.5); official deployment pending. Updated 2026-09-15. Tracker: WS-4.
 
 ## User outcome
 
@@ -99,3 +100,19 @@ WS-4.2: pure catalog policy and adapter, validated with injected responses.
 WS-4.3: integrate identity, discovery, settings and CLI journeys after the policy is tested.
 WS-4.4: configure the key locally, verify real model/tool behavior, then complete release checks.
 No dependency installation, publication or private-service change is required for preparation.
+
+## Hosted gateway (WS-4.5)
+
+The user decided (2026-09-15) against embedding a key in the CLI: anything shipped in the npm package
+can be extracted, drained and revoked for every user. Instead `packages/free-gateway` holds the key
+server-side and is deployed separately, like the Defensive Brain feed.
+
+- Access order in the CLI (`freeAccess`): the user's `OPENROUTER_API_KEY` goes direct; otherwise
+  `ARCHYMEDES_FREE_GATEWAY_URL`, otherwise the official `FREE_GATEWAY_URL` (empty until deployed).
+  The user's key is never sent to a gateway. Gateway URLs must be https, or http on localhost.
+- Free mode stays explicit: a reachable gateway makes `free` configured, but never auto-selected.
+- The gateway serves `/v1/models` in OpenRouter's shape, so the CLI verifies models with the same
+  parser, and rebuilds each `/v1/chat/completions` body from an allowlist with a zero price cap.
+- Limits: per-IP then global fixed windows (memory, or Upstash for several instances), failing closed.
+  `x-free-gateway-error` marks gateway-owned errors so the CLI router does not switch models on them.
+- Capacity is one OpenRouter account's free allowance shared by all users; see the package README.

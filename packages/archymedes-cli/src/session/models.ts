@@ -1,4 +1,4 @@
-import { PROVIDER_IDS, PROVIDERS, catalogPrices, isProviderId, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { PROVIDER_IDS, PROVIDERS, catalogPrices, isProviderId, missingRequirements, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { isFreeModelId } from "@archymedes/core/providers/free-catalog";
 import { formatMoney, money, type Currency, type TokenPrices } from "@archymedes/core/money";
@@ -78,7 +78,7 @@ export function buildModelCatalog(
 
   for (const provider of PROVIDER_IDS) {
     const spec = PROVIDERS[provider];
-    const missing = spec.requires.filter((name) => !environment[name]?.trim());
+    const missing = missingRequirements(provider, environment);
     if (missing.length > 0) {
       unconfigured.push({ provider, label: spec.label, missing });
       continue;

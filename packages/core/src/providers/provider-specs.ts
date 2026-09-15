@@ -19,7 +19,7 @@
 import { tokenPrices, type TokenPrices } from "../money";
 import { selectPrice, tokenPricesFor } from "../pricing";
 import { PRICE_CATALOG } from "./price-catalog";
-import { FREE_ROUTER, isFreeModelId } from "./free-catalog";
+import { FREE_ROUTER, freeAccess, isFreeModelId } from "./free-catalog";
 
 export type ProviderId =
   | "free"
@@ -67,6 +67,15 @@ export type ProviderInfo = {
   requires: readonly string[];
   defaultModel: string;
 };
+
+/**
+ * The settings still missing before `id` can run. Free mode is the one provider with two ways in:
+ * the user's own OpenRouter key, or a free gateway that needs nothing from them.
+ */
+export function missingRequirements(id: ProviderId, environment: ProviderEnvironment): string[] {
+  if (id === "free") return freeAccess(environment) ? [] : ["OPENROUTER_API_KEY"];
+  return PROVIDER_INFO[id].requires.filter((name) => !environment[name]?.trim());
+}
 
 /**
  * What the dated catalog says this provider's model costs on a given day.

@@ -1,4 +1,4 @@
-import { PROVIDER_IDS, PROVIDER_INFO, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { PROVIDER_IDS, PROVIDER_INFO, missingRequirements, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 
 /**
  * The network endpoints Archymedes depends on, in one place.
@@ -57,7 +57,7 @@ export function providerEndpoints(environment: ProviderEnvironment): ProviderEnd
       id,
       label: PROVIDER_INFO[id].label,
       baseUrl: providerBaseUrl(environment, id),
-      configured: PROVIDER_INFO[id].requires.every((name) => Boolean(environment[name]?.trim())),
+      configured: missingRequirements(id, environment).length === 0,
     };
   });
 }

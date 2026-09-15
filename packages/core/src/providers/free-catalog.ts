@@ -6,6 +6,12 @@
 /** Free-model discovery is data, not authority to call an arbitrary endpoint or spend money. */
 export const FREE_ROUTER = "openrouter/free";
 export const FREE_BASE_URL = "https://openrouter.ai/api/v1";
+/**
+ * The official hosted free gateway (`packages/free-gateway`). Empty until it is deployed: shipping a
+ * URL nobody operates would make `--free` fail for everyone with a network error instead of a clear
+ * setup message. `ARCHYMEDES_FREE_GATEWAY_URL` points at a staging or self-hosted gateway.
+ */
+export const FREE_GATEWAY_URL = "";
 export const FREE_DISCOVERY_URL = "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json";
 export const FREE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
 export const FREE_CATALOG_MAX_RECORDS = 10_000;
@@ -40,6 +46,26 @@ export type FreeModel = {
   /** Original third-party claims, kept separate from verified OpenRouter facts. */
   discovery?: Omit<FreeModel, "eligible" | "reason" | "discovery">;
 };
+
+/** How free mode reaches models: the user's own key goes direct; otherwise a gateway that holds one. */
+export type FreeAccess = { apiKey: string } | { gatewayUrl: string };
+
+function gatewayUrl(value: string | undefined): string | undefined {
+  try {
+    const url = new URL(value?.trim() ?? "");
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+    if (url.username || url.password || !(url.protocol === "https:" || (url.protocol === "http:" && local))) return undefined;
+    return url.href.replace(/\/+$/, "");
+  } catch { return undefined; }
+}
+
+export function freeAccess(environment: Record<string, string | undefined>): FreeAccess | undefined {
+  const apiKey = environment.OPENROUTER_API_KEY?.trim();
+  if (apiKey) return { apiKey };
+  const configured = environment.ARCHYMEDES_FREE_GATEWAY_URL?.trim();
+  const url = configured ? gatewayUrl(configured) : gatewayUrl(FREE_GATEWAY_URL);
+  return url ? { gatewayUrl: url } : undefined;
+}
 
 export type FreeCatalog = { fetchedAt: number; models: FreeModel[]; warnings: string[] };
 
