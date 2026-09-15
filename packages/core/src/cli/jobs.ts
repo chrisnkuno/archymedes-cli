@@ -31,6 +31,8 @@ export type JobLease = {
 };
 
 export type Job = {
+  /** Credential-free model access choice retained by detached and recurring work. */
+  modelSelection?: { provider: string; model: string };
   id: string;
   objective: string;
   status: JobStatus;
@@ -121,6 +123,7 @@ function replace(store: JobStore, job: Job): JobStore {
 }
 
 export type EnqueueOptions = {
+  modelSelection?: { provider: string; model: string };
   id: string;
   objective: string;
   cwd: string;
@@ -149,6 +152,7 @@ export function enqueue(store: JobStore, options: EnqueueOptions): { store: JobS
     ...(options.cadence ? { cadence: options.cadence } : {}),
     ...(options.runAt !== undefined ? { nextRunAt: options.runAt } : {}),
     ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+    ...(options.modelSelection ? { modelSelection: { provider: options.modelSelection.provider, model: options.modelSelection.model } } : {}),
   };
   return { store: { jobs: [...store.jobs, job] }, job };
 }

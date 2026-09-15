@@ -5,6 +5,18 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-4: Free model access preparation (2026-09-15)
+
+User authorizes a free mode with a supplied key and a root restructuring guide. WS-2.11 is
+concurrent work owned by the existing refactor; preserve its edits and task status.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-4.1 | Add restructuring entry point and concrete free-mode implementation contract | done | `restructure.md`, `docs/continuation/FREE_MODE.md`, handoff links | `bun run recheck`; documentation review; `git diff --check` | Documentation links resolve. Recheck passed: typecheck, 55 related unit files / 1,074 tests (selected by concurrent source edits); guards held at theme 0, layering 0, helpers 0, unwired 0, two large files. Initial recheck also passed. No runtime code changed by this task; PTY/full release checks deferred to implementation. Free-mode access remains unverified with a key |
+| WS-4.2 | Implement validated free catalog and OpenRouter-only adapter | done | `packages/core/src/providers/` | `bun run recheck` plus catalog/adapter tests | `free-catalog.ts` (parse/eligibility), `free-catalog-fetch.ts` (bounded, no redirects, no credentials), `free-agent.ts` (fixed host, zero `max_price`, `allow_fallbacks: false`, catalog re-check per 6h, nonzero reported cost stops before tools, distinct 401/402/404/429 errors). Free cache tests merged into `model-fetch.test.ts` to satisfy the orphan-test rule; module headers added; no new `as unknown as` |
+| WS-4.3 | Wire free selection, settings, model chooser, resume and headless paths | done | CLI `app/`, `platform/`, `session/`; thin entry call sites | `bun run recheck --pty --full` | `--free`/`--provider free` with conflict error; `OPENROUTER_API_KEY` secret + `FREE_MODEL` validated settings; `/model` filters to `:free` IDs; `app/session-provider.ts` restores free selection on resume, ACP and detached/recurring jobs (`Job.modelSelection`); `/fallback` disabled for free. README + guide updated. `recheck --pty --full`: 208 files / 3,020 tests (1 skipped), guards 0/0/0/0, package verified |
+| WS-4.4 | Verify live keyed tool turn and release package | todo | focused smoke fixture and release checks | `bun run recheck --full`; live completion and tool round trip | Requires locally configured key; local tests cannot prove account access |
+
 ## WS-3: Wire in built-but-unused components
 
 User request (2026-09-14): "that's exactly why this refactoring was needed, it's to detect unused

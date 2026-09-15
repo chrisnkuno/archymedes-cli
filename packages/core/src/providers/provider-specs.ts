@@ -19,8 +19,10 @@
 import { tokenPrices, type TokenPrices } from "../money";
 import { selectPrice, tokenPricesFor } from "../pricing";
 import { PRICE_CATALOG } from "./price-catalog";
+import { FREE_ROUTER, isFreeModelId } from "./free-catalog";
 
 export type ProviderId =
+  | "free"
   | "anthropic"
   | "openai"
   | "archymedes-cloud"
@@ -48,6 +50,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "groq",
   "ollama",
   "openai-compatible",
+  "free",
 ];
 
 export function isProviderId(value: string): value is ProviderId {
@@ -73,6 +76,7 @@ export type ProviderInfo = {
  * "unpriced" would understate confidence in a fact this build is actually certain of.
  */
 export function catalogPrices(provider: ProviderId, model: string, asOf?: string): TokenPrices | undefined {
+  if (provider === "free") return isFreeModelId(model) ? tokenPrices("USD", 0, 0, 0) : undefined;
   if (provider === "ollama") return tokenPrices("USD", 0, 0, 0);
   const record = selectPrice(PRICE_CATALOG, { provider, model, asOf });
   return record && record.billingUnit === "tokens" ? tokenPricesFor(record) : undefined;
@@ -87,6 +91,7 @@ export function catalogPrices(provider: ProviderId, model: string, asOf?: string
  * `openai-compatible` is the generic escape hatch for any other endpoint that does.
  */
 export const PROVIDER_INFO: Record<ProviderId, ProviderInfo> = {
+  free: { id: "free", label: "Free models (OpenRouter)", requires: ["OPENROUTER_API_KEY"], defaultModel: FREE_ROUTER },
   anthropic: { id: "anthropic", label: "Anthropic", requires: ["ANTHROPIC_API_KEY"], defaultModel: "claude-sonnet-5" },
   openai: { id: "openai", label: "OpenAI", requires: ["OPENAI_API_KEY"], defaultModel: "gpt-5.6-terra" },
   "archymedes-cloud": {

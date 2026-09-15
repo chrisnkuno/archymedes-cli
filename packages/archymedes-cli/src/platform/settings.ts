@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isFreeModelId } from "@archymedes/core/providers/free-catalog";
 import { CONTROL_LANGUAGES, controlLabel, resolveControlLanguage } from "./i18n";
 import { SUPPORTED_COUNTRIES, currencyForCountry, normalizeCountryCode } from "./local-currency";
 import { isCurrency } from "@archymedes/core/money";
@@ -107,6 +108,8 @@ export const SETTING_FIELDS = [
   { key: "OPENAI_COMPATIBLE_MODEL", label: "OpenAI-compatible model" },
   { key: "OLLAMA_BASE_URL", label: "Ollama base URL (default http://localhost:11434/v1)", url: true },
   { key: "OLLAMA_MODEL", label: "Ollama model" },
+  { key: "OPENROUTER_API_KEY", label: "Free mode — OpenRouter API key", secret: true },
+  { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)" },
   { key: "E2B_API_KEY", label: "E2B API key", secret: true },
   { key: "E2B_CODING_TEMPLATE", label: "E2B template" },
   { key: "EXA_API_KEY", label: "Exa search API key", secret: true },
@@ -196,6 +199,7 @@ export function validateSetting(key: SettingKey, raw: string): string {
   const value = raw.trim();
   const field = SETTING_FIELDS.find((candidate) => candidate.key === key)!;
   if (!value) throw new Error("Value cannot be empty. Enter - in the menu to clear it.");
+  if (key === "FREE_MODEL" && !isFreeModelId(value)) throw new Error("Choose openrouter/free or an exact publisher/model:free ID.");
   if ("url" in field && field.url) {
     let url: URL;
     try { url = new URL(value); } catch { throw new Error("Enter a complete URL, for example https://api.example.com/v1."); }
@@ -306,6 +310,7 @@ export type SettingsMenuOptions = {
  * provider's, and `/v1/models` is how it says which it has.
  */
 export const MODEL_FIELD_PROVIDER: Partial<Record<SettingKey, ProviderId>> = {
+  FREE_MODEL: "free",
   ANTHROPIC_MODEL: "anthropic",
   OPENAI_MODEL: "openai",
   ARCHYMEDES_CLOUD_MODEL: "archymedes-cloud",

@@ -8,6 +8,10 @@ Improve the routing intelligence, CLI capabilities, reliability, efficiency, and
 
 ## Read in order
 
+For code organization, start at [restructure.md](../../restructure.md), which points to the
+existing quality-pass workflow. Free model access (`--free`) is WS-4 in [FREE_MODE.md](FREE_MODE.md): implemented and
+locally tested; the live keyed smoke test is still pending.
+
 1. This file: current state and immediate closeout. For active work and how it is verified, read
    [TRACKER.md](TRACKER.md) and [WORKFLOW.md](WORKFLOW.md) (`bun run recheck`).
 2. [Architecture](ARCHITECTURE.md): responsibility and request flow.

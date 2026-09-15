@@ -63,6 +63,8 @@ function exactCapabilities(models: readonly string[], contextWindow: number, max
 }
 
 const KNOWN_CAPABILITIES: ReadonlyArray<CapabilityEntry> = [
+  // Free mode starts offline; live candidates are checked by its adapter (2026-09-15).
+  { prefix: "openrouter/free", match: "exact", capabilities: { contextWindow: 32_768, maxOutputTokens: 4_096, supportsEffort: false } },
   // Virtual model used by Archymedes Cloud before policy routing picks a concrete provider. It is
   // explicitly conservative because the client cannot know the selected model's limits yet.
   { prefix: "auto", match: "exact", capabilities: { ...CONSERVATIVE_CAPABILITIES } },

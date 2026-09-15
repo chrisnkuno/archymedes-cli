@@ -82,6 +82,8 @@ export type AgentModelRequest = {
 };
 
 export interface AgentTurnProvider {
+  /** Credential-free access choice to retain across session resume. */
+  readonly selection?: { provider: string; model: string };
   /** Opt-in only for providers that replay the same logical request without executing it twice. */
   readonly recoveryScope?: string;
   /** Reconcile existing work only; must never create a new reservation or provider invocation. */

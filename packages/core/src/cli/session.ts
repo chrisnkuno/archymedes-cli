@@ -27,6 +27,8 @@ export type SessionRecord = {
   messages: AgentMessage[];
   /** Permission posture to restore on resume; absent on sessions written before this field. */
   mode?: ArchymedesMode;
+  /** Explicit model access choice; never credentials or endpoints. */
+  modelSelection?: { provider: string; model: string };
   /** Durable-memory entries already present in this transcript, so resume does not bill them twice. */
   recalledMemoryKeys?: string[];
   /** Standing tool approvals, so a resumed session does not re-ask what was already decided. */

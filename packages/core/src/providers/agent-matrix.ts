@@ -5,6 +5,8 @@ import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
+import { FreeAgentTurnProvider } from "./free-agent";
+import { isFreeModelId } from "./free-catalog";
 
 /**
  * Which model providers Archymedes can drive, and what their tokens cost.
@@ -41,7 +43,7 @@ export type ProviderSpec = ProviderInfo & {
  * `<PROVIDER>_BASE_URL` variable overrides the default — for a regional endpoint, a proxy, or a
  * self-hosted gateway.
  */
-const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openai-compatible">, string> = {
+const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openai-compatible" | "free">, string> = {
   google: "https://generativelanguage.googleapis.com/v1beta/openai/",
   xai: "https://api.x.ai/v1",
   deepseek: "https://api.deepseek.com/v1",
@@ -56,7 +58,7 @@ export function providerEnvPrefix(id: ProviderId): string {
 }
 
 /** One spec for a provider reached over an OpenAI-compatible endpoint. */
-function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud">): ProviderSpec {
+function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "free">): ProviderSpec {
   const prefix = providerEnvPrefix(id);
   const fallbackBase = id === "openai-compatible" ? undefined : OPENAI_COMPATIBLE_BASE_URL[id];
   return {
@@ -78,6 +80,10 @@ function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "
  * definition and the two halves cannot drift into disagreeing about what a provider is called.
  */
 export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
+  free: {
+    ...PROVIDER_INFO.free,
+    create: (environment, model) => new FreeAgentTurnProvider({ apiKey: environment.OPENROUTER_API_KEY!.trim(), model }),
+  },
   anthropic: {
     ...PROVIDER_INFO.anthropic,
     create: (environment, model) =>
@@ -172,6 +178,7 @@ function rememberedProvider(environment: ProviderEnvironment): ProviderSpec | un
   const remembered = environment.ARCHYMEDES_PROVIDER?.trim();
   if (!remembered || !isProviderId(remembered)) return undefined;
   const spec = PROVIDERS[remembered];
+  if (remembered === "free") return spec; // Losing a free key must never auto-select a paid provider.
   return spec.requires.every((name) => environment[name]?.trim()) ? spec : undefined;
 }
 
@@ -200,6 +207,7 @@ export function resolveProvider(
   if (missing.length > 0) return { error: `${spec.label} needs ${missing.join(" and ")}.` };
 
   const model = options.model?.trim() || environment[`${providerEnvPrefix(spec.id)}_MODEL`]?.trim() || spec.defaultModel;
+  if (spec.id === "free" && !isFreeModelId(model)) return { error: "Free mode accepts openrouter/free or publisher/model:free only. Paid models are not allowed." };
   return { spec, model, provider: spec.create(environment, model), prices: resolvePrices(spec, model, environment) };
 }
 
@@ -231,6 +239,7 @@ function overrideApplies(spec: ProviderSpec, model: string, environment: Provide
  * because a provider whose catalog is not verified here still deserves accurate accounting.
  */
 export function resolvePrices(spec: ProviderSpec, model: string, environment: ProviderEnvironment, asOf?: string): TokenPrices | undefined {
+  if (spec.id === "free") return catalogPrices(spec.id, model);
   const currency = (environment.MODEL_PRICE_CURRENCY?.trim() as Currency | undefined) ?? "USD";
   const input = Number(environment.MODEL_INPUT_PER_MILLION);
   const output = Number(environment.MODEL_OUTPUT_PER_MILLION);
@@ -264,7 +273,7 @@ export function describeProviders(environment: ProviderEnvironment): ProviderSta
     const spec = PROVIDERS[id];
     const missing = spec.requires.filter((name) => !environment[name]?.trim());
     const model = environment[`${providerEnvPrefix(id)}_MODEL`]?.trim() || spec.defaultModel;
-    const overridden = Number(environment.MODEL_INPUT_PER_MILLION) > 0
+    const overridden = id !== "free" && Number(environment.MODEL_INPUT_PER_MILLION) > 0
       && Number(environment.MODEL_OUTPUT_PER_MILLION) > 0
       && overrideApplies(spec, model, environment);
     return {

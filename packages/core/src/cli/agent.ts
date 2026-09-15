@@ -226,6 +226,7 @@ export class ArchymedesAgent {
       title: "Untitled session",
       messages: [],
       mode: options.mode,
+      modelSelection: options.model.selection,
       recalledMemoryKeys: [],
       approvals: {},
       totalRwf: 0,
@@ -278,7 +279,7 @@ export class ArchymedesAgent {
   /** Restores a previous session's transcript and standing approvals. */
   resume(record: SessionRecord): void {
     if (this.ownershipReady) throw new Error("Relinquish the current agent before resuming another session");
-    this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode };
+    this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode, modelSelection: this.options.model.selection };
     this.messages = [...record.messages];
     this.recalledMemoryKeys.clear();
     for (const key of record.recalledMemoryKeys ?? []) this.recalledMemoryKeys.add(key);

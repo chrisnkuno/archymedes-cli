@@ -9,6 +9,7 @@
  */
 
 import type { ProviderId } from "./provider-specs";
+import { FREE_BASE_URL } from "./free-catalog";
 
 /**
  * Joins a base URL to the models path without doubling the version segment.
@@ -32,6 +33,7 @@ export function modelsUrl(base: string): string {
 export function modelsEndpoint(provider: ProviderId, environment: Record<string, string | undefined>): { url: string; headers: Record<string, string> } | undefined {
   const trimmed = (value: string | undefined) => value?.trim() || undefined;
   switch (provider) {
+    case "free": return { url: `${FREE_BASE_URL}/models`, headers: {} };
     case "archymedes-cloud":
       // The routed model is intentionally `auto`; the routing receipt names the concrete model.
       // A cloud-wide model inventory would bypass the account policy that decides what is usable.

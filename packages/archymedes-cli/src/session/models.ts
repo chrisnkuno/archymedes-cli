@@ -1,5 +1,6 @@
 import { PROVIDER_IDS, PROVIDERS, catalogPrices, isProviderId, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
+import { isFreeModelId } from "@archymedes/core/providers/free-catalog";
 import { formatMoney, money, type Currency, type TokenPrices } from "@archymedes/core/money";
 
 /**
@@ -84,7 +85,7 @@ export function buildModelCatalog(
     }
     const known = modelsForProvider(provider, asOf);
     const knownSet = new Set(known);
-    const extra = (live?.[provider] ?? []).filter((model) => !knownSet.has(model)).slice().sort();
+    const extra = (live?.[provider] ?? []).filter((model) => !knownSet.has(model) && (provider !== "free" || isFreeModelId(model))).slice().sort();
     for (const model of [...known, ...extra]) {
       choices.push({
         provider,

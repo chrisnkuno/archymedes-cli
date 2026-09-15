@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { runAcpServer } from "./acp-server";
 import { parseArgs } from "./app/args";
+import { resolveSessionProvider } from "./app/session-provider";
 import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
 import { runWatchCommand } from "./commands/watch-command";
@@ -189,7 +190,7 @@ async function main(): Promise<number> {
     return runAcpServer({
       input: process.stdin,
       write: (line) => process.stdout.write(line),
-      environment: processEnvironment,
+      environment, provider: args.provider, model: args.model,
       defaultRoot: args.root,
       mode: args.mode,
     });
@@ -376,13 +377,9 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  let resolved = resolveProvider(environment, { provider: args.provider, model: args.model });
-  // Nothing configured yet is the ordinary first run, not an error. Exporting a key into the shell
-  // leaves it in shell history and dies with the shell; Archymedes already stores keys itself, so the
-  // first run offers that instead of printing a variable name and quitting. Automation still gets
-  // the message-and-exit path, because a prompt no one can answer is a hang.
-  // Never in headless mode: an interactive menu has nobody to answer it when a program is driving.
-  if ("error" in resolved && !args.json && !args.provider && !args.model && process.stdin.isTTY && process.stdout.isTTY) {
+  let resolved = await resolveSessionProvider(environment, args);
+  // First-run setup also handles explicitly requested free access with a missing key.
+  if ("error" in resolved && !args.json && (!args.provider || args.provider === "free") && !args.model && process.stdin.isTTY && process.stdout.isTTY) {
     out.write(`${style.yellow(t(language, "firstRun.notConfigured"))} ${style.dim("It is saved for next time, so you never need to export it.")}\n`);
     const setupReadline = createInterface({ input: process.stdin, output: process.stdout });
     try {
@@ -410,7 +407,7 @@ async function main(): Promise<number> {
     for (const field of SETTING_FIELDS) delete environment[field.key];
     Object.assign(environment, mergedEnvironment(savedSettings, processEnvironment));
     language = resolveControlLanguage(args.language ?? environment.ARCHYMEDES_LANGUAGE ?? environment.LANG);
-    resolved = resolveProvider(environment, { provider: args.provider, model: args.model });
+    resolved = await resolveSessionProvider(environment, args);
     // Archimedes' word for the moment the missing piece is found: the key is in, the tool can run.
     if (!("error" in resolved)) {
       out.write(`${style.green(style.bold("Eureka."))} ${style.dim(`${resolved.spec.label} \u00b7 ${resolved.model}`)}
@@ -1239,7 +1236,7 @@ async function main(): Promise<number> {
     const warning = sandboxWarning(tabs.size > 0 ? tabs.active.payload.backend : args.backend);
     if (warning) out.write(`  ${style.yellow(warning)}\n`);
     const id = newJobId();
-    const job = await enqueueJob(args.root, { id, objective, logPath: jobLogPath(args.root, id) });
+    const job = await enqueueJob(args.root, { id, objective, logPath: jobLogPath(args.root, id), modelSelection: model.selection });
     await spawnJobWorker(args.root, job.id);
     // Watched from the moment it starts. A job you have to remember to subscribe to is a job whose
     // first minute — the part that usually explains the rest — is the part nobody ever sees.
@@ -1804,7 +1801,7 @@ async function main(): Promise<number> {
       } else {
         out.write(`${style.red("error")} ${message}\n`);
       }
-      const fallback = parseFallbackPreference(environment.ARCHYMEDES_FALLBACK_MODEL);
+      const fallback = spec.id === "free" ? null : parseFallbackPreference(environment.ARCHYMEDES_FALLBACK_MODEL);
       const transient = diagnosis && ["timeout", "dns", "refused", "reset", "unreachable", "rate_limit", "server_error"].includes(diagnosis.kind);
       // Cross-provider retry is safe only before visible output, tool execution, or file changes.
       // A specific target is explicit consent; `ask` merely offers the choice and never spends.
@@ -2902,7 +2899,7 @@ async function main(): Promise<number> {
         // detached worker process carries the whole schedule without needing a system cron entry.
         const id = newJobId();
         const objective = wanderJobObjective(wander);
-        const job = await enqueueJob(args.root, { id, objective, logPath: jobLogPath(args.root, id), cadence: wander.cadence, runAt: Date.now() });
+        const job = await enqueueJob(args.root, { id, objective, logPath: jobLogPath(args.root, id), cadence: wander.cadence, runAt: Date.now(), modelSelection: model.selection });
         await spawnJobWorker(args.root, job.id);
         out.write(`  ${style.cyan("scheduled")} — job ${job.id} runs now, then every ${wander.cadence === "daily" ? "day" : "week"} after the last one finishes.\n`);
         out.write(style.dim(`  /attach ${job.id} to watch it · /jobs cancel ${job.id} to stop it\n`));
@@ -3152,7 +3149,7 @@ async function main(): Promise<number> {
       await agent.relinquish();
       agent = await openClient();
       const id = newJobId();
-      const job = await enqueueJob(args.root, { id, objective: `Continue: ${input}`, logPath: jobLogPath(args.root, id), sessionId });
+      const job = await enqueueJob(args.root, { id, objective: `Continue: ${input}`, logPath: jobLogPath(args.root, id), sessionId, modelSelection: model.selection });
       await spawnJobWorker(args.root, job.id);
       out.write(`  ${style.cyan("sent to background")} — job ${job.id} continues it. /attach ${job.id} to watch.\n`);
     }

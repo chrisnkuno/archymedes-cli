@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { PROVIDER_INFO, type ProviderId } from "./provider-specs";
 import { isConversationalModel, modelsEndpoint, parseModelsResponse } from "./model-list";
+import { fetchFreeCatalog } from "./free-catalog-fetch";
+import type { FreeCatalog } from "./free-catalog";
 
 // Re-exported so every existing importer of this module goes on working unchanged.
 export { isConversationalModel, mergeModelLists, modelsEndpoint, modelsUrl, parseModelsResponse } from "./model-list";
@@ -33,6 +35,7 @@ export type FetchLike = (url: string, init?: { method?: string; headers?: Record
 }>;
 
 export type ModelFetchResult = {
+  freeCatalog?: FreeCatalog;
   provider: ProviderId;
   models: string[];
   /** Absent on success; a short reason otherwise, for the CLI to report without a stack trace. */
@@ -52,6 +55,13 @@ export async function fetchProviderModels(
   fetchImpl: FetchLike,
   timeoutMs = 4_000,
 ): Promise<ModelFetchResult> {
+  if (provider === "free") {
+    try {
+      const freeCatalog = await fetchFreeCatalog({ fetchImpl, timeoutMs });
+      return { provider, models: freeCatalog.models.filter((model) => model.eligible).map((model) => model.id), freeCatalog,
+        ...(freeCatalog.warnings.length ? { error: freeCatalog.warnings.join("; ") } : {}) };
+    } catch { return { provider, models: [], error: "Free model catalog unavailable; retry /models refresh. Cached entries may be stale." }; }
+  }
   const endpoint = modelsEndpoint(provider, environment);
   if (!endpoint) return { provider, models: [], error: "no key configured" };
 
@@ -71,6 +81,7 @@ export async function fetchProviderModels(
 }
 
 export type ModelCache = {
+  freeCatalog?: FreeCatalog;
   /** Epoch millis of the fetch. */
   fetchedAt: number;
   models: Partial<Record<ProviderId, string[]>>;
@@ -126,8 +137,9 @@ export async function loadLiveModels(
   options: { fetchImpl?: FetchLike; now?: number; refresh?: boolean } = {},
 ): Promise<{ models: Partial<Record<ProviderId, string[]>>; fromCache: boolean; errors: ModelFetchResult[] }> {
   const now = options.now ?? Date.now();
+  const previous = await readModelCache(environment);
   if (!options.refresh) {
-    const cached = await readModelCache(environment);
+    const cached = previous;
     if (isCacheFresh(cached, now)) return { models: cached!.models, fromCache: true, errors: [] };
   }
 
@@ -137,8 +149,12 @@ export async function loadLiveModels(
   const results = await Promise.all(providers.map((provider) => fetchProviderModels(provider, environment, fetchImpl)));
   const models: Partial<Record<ProviderId, string[]>> = {};
   for (const result of results) if (result.models.length > 0) models[result.provider] = result.models;
-
-  if (Object.keys(models).length > 0) await writeModelCache(environment, { fetchedAt: now, models });
+  const freeResult = results.find((result) => result.provider === "free");
+  // A failed refresh preserves the last good free catalog and its timestamp, never freshens it.
+  if (freeResult && !freeResult.freeCatalog && previous?.models.free) models.free = previous.models.free;
+  if (Object.keys(models).length > 0 && !(freeResult && !freeResult.freeCatalog)) {
+    await writeModelCache(environment, { fetchedAt: now, models, freeCatalog: freeResult?.freeCatalog ?? previous?.freeCatalog });
+  }
   return { models, fromCache: false, errors: results.filter((result) => result.error) };
 }
 

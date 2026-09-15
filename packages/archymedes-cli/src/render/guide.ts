@@ -112,6 +112,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       "Archymedes talks to several providers. The picker lists what you can use, with prices, and offers to save a key for anything you cannot use yet. Switching model keeps the conversation — you are changing who answers, not starting over.",
       "The list is the union of what this build knows the prices of and what each provider says it has today, so a model released last week is still offerable — it is simply shown without a price rather than hidden. The live half is cached for six hours; /models refresh asks again.",
       "A model switch applies to the tab you are in. Opening a tab with --model is how you compare two models on the same problem.",
+      "archymedes --free needs only an OpenRouter key. It accepts zero-priced tool models (openrouter/free or an exact model:free ID), sends a zero price cap with every request, and never falls back to a paid provider. Free quotas and rate limits still apply.",
     ],
     examples: [
       { input: "/models", effect: "the list, with prices" },

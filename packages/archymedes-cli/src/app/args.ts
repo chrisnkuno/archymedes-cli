@@ -115,6 +115,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     backend: "local", dockerImage: DEFAULT_DOCKER_IMAGE, upload: false, preset: undefined, sandboxMinutes: 30, budget: undefined, provider: undefined, model: undefined, currency: undefined, country: undefined, language: undefined, allowSensitive: false, json: false,
   };
   const rest: string[] = [];
+  let freeRequested = false;
+  let otherProviderRequested = false;
 
   for (let index = argv[0] === "update" || argv[0] === "settings" || argv[0] === "acp" || argv[0] === "gallery" || argv[0] === "doctor" || historyRequested ? 1 : 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -123,6 +125,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--build") { parsed.mode = "build"; parsed.modeExplicit = true; }
     else if (argument === "--defender") { parsed.mode = "defender"; parsed.modeExplicit = true; }
     else if (argument === "--help" || argument === "-h") parsed.help = true;
+    else if (argument === "--free") { freeRequested = true; parsed.provider = "free"; }
     else if (argument === "--version" || argument === "-v") parsed.version = true;
     else if (argument === "--settings") parsed.settings = true;
     else if (argument === "--acp") parsed.acp = true;
@@ -176,7 +179,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--sandbox-minutes") { parsed.sandboxMinutes = Number(argv[index + 1] ?? 30); index += 1; }
     else if (argument === "--docker-image") { parsed.dockerImage = argv[index + 1] ?? DEFAULT_DOCKER_IMAGE; index += 1; }
     else if (argument === "--budget" || argument === "--max-rwf") { parsed.budget = Number(argv[index + 1] ?? 0) || undefined; index += 1; }
-    else if (argument === "--provider") { parsed.provider = argv[index + 1]; index += 1; }
+    else if (argument === "--provider") {
+      parsed.provider = argv[++index];
+      if (parsed.provider === "free") freeRequested = true;
+      else otherProviderRequested = true;
+    }
     else if (argument === "--model") { parsed.model = argv[index + 1]; index += 1; }
     else if (argument === "--currency") {
       const value = (argv[index + 1] ?? "").toUpperCase();
@@ -187,6 +194,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--language" || argument === "--lang") { parsed.language = argv[index + 1]; index += 1; }
     else rest.push(argument);
   }
+  if (freeRequested && otherProviderRequested) throw new Error("--free/--provider free cannot be combined with another --provider.");
+  if (freeRequested) parsed.provider = "free";
   if (historyRequested) parsed.historyCommand = parseHistoryCommand(`/history ${rest.join(" ")}`);
   else if (rest.length > 0) parsed.prompt = rest.join(" ");
   return parsed;

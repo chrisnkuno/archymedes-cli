@@ -31,6 +31,7 @@ export type ProviderEndpoint = {
 
 /** The default API host for each provider, before any `<PROVIDER>_BASE_URL` override. */
 const DEFAULT_BASE_URL: Record<ProviderId, string> = {
+  free: "https://openrouter.ai/api/v1",
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com/v1",
   "archymedes-cloud": "",
@@ -44,6 +45,7 @@ const DEFAULT_BASE_URL: Record<ProviderId, string> = {
 };
 
 export function providerBaseUrl(environment: ProviderEnvironment, provider: ProviderId): string {
+  if (provider === "free") return DEFAULT_BASE_URL.free;
   const override = environment[`${providerEnvPrefix(provider)}_BASE_URL`]?.trim();
   return override || DEFAULT_BASE_URL[provider];
 }

@@ -3,7 +3,7 @@ import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { LocalWorkspace } from "@archymedes/core/cli/backends";
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { loadSession } from "@archymedes/core/cli/session";
-import { resolveProvider } from "@archymedes/core/providers/agent-matrix";
+import { resolveSessionProvider } from "./app/session-provider";
 import { createExaClient } from "@archymedes/core/providers/exa";
 
 /**
@@ -36,6 +36,8 @@ export function splitFrames(buffer: string): { messages: string[]; rest: string 
 }
 
 export type AcpServerOptions = {
+  provider?: string;
+  model?: string;
   input: NodeJS.ReadableStream;
   write: (line: string) => void;
   environment: Record<string, string | undefined>;
@@ -53,9 +55,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
   const connection = new AcpConnection({
     send,
     createSession: async ({ cwd, onEvent, approve, resumeSessionId }): Promise<AcpSession> => {
-      const resolved = resolveProvider(options.environment, {});
-      if ("error" in resolved) throw new Error(resolved.error);
       const root = cwd || options.defaultRoot;
+      const resolved = await resolveSessionProvider(options.environment, { root, resume: resumeSessionId, provider: options.provider, model: options.model });
+      if ("error" in resolved) throw new Error(resolved.error);
 
       // A mode change rebuilds the agent under the new capability set and carries the transcript
       // across, exactly as `/mode` does in the terminal. Anything less would be a lie: plan mode is

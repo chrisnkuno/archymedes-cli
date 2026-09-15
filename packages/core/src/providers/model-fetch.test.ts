@@ -275,3 +275,25 @@ describe("which providers are worth asking", () => {
     expect(fetchableProviders({ ARCHYMEDES_CLOUD_TOKEN: "t", ARCHYMEDES_CLOUD_BASE_URL: "https://cloud.example" }, ["archymedes-cloud"])).toEqual([]);
   });
 });
+
+describe("free discovery cache", () => {
+  it("preserves a dated last good catalog on failure, without marking stale entries fresh", async () => {
+    const env = { ...environment, OPENROUTER_API_KEY: "not-to-cache" };
+    await writeModelCache(env, { fetchedAt: 10, models: { free: ["lab/code:free"] } });
+    const result = await loadLiveModels(["free"], env, { refresh: true, now: 100, fetchImpl: async () => { throw new Error("offline"); } });
+    expect(result.models.free).toEqual(["lab/code:free"]);
+    expect(result.errors).toHaveLength(1);
+    expect((await readModelCache(env))?.fetchedAt).toBe(10);
+  });
+  it("stores normalized metadata and offers only verified free tool models", async () => {
+    const env = { ...environment, OPENROUTER_API_KEY: "not-to-cache" };
+    const result = await loadLiveModels(["free"], env, { refresh: true, fetchImpl: async (url) => ({ ok: true, status: 200, json: async () => url.includes("github") ? { models: [] } : { data: [
+      { id: "lab/code:free", name: "Code", context_length: 65536, top_provider: { max_completion_tokens: 8192 }, pricing: { prompt: "0", completion: "0" }, architecture: { output_modalities: ["text"] }, supported_parameters: ["tools"] },
+      { id: "lab/paid:free", pricing: { prompt: "1", completion: "1" } },
+    ] } }) });
+    expect(result.models.free).toEqual(["lab/code:free"]);
+    const cache = await readModelCache(env);
+    expect(cache?.freeCatalog?.models).toHaveLength(2);
+    expect(JSON.stringify(cache)).not.toContain("not-to-cache");
+  });
+});

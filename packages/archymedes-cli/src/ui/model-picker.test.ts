@@ -19,7 +19,7 @@ describe("the picker's rows", () => {
 
     expect(models.length).toBeGreaterThan(0);
     // One row for every unconfigured provider, plus the general settings row.
-    expect(settings).toHaveLength(9);
+    expect(settings).toHaveLength(10);
     expect(rows.at(-1)).toMatchObject({ kind: "settings" });
   });
 

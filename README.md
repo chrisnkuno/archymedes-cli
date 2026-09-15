@@ -28,8 +28,15 @@ capped request to the execution exchange, which selects the provider and returns
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
 | Ollama (local) | — | `llama3.1` |
 | OpenAI-compatible | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | your choice |
+| Free models (`--free`) | `OPENROUTER_API_KEY` | `openrouter/free` |
 
 Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and recorded once.
+
+`archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account. Only
+`openrouter/free` or exact `publisher/model:free` IDs that OpenRouter lists at zero price with tool
+support are accepted; every request carries a zero maximum price, and free mode never falls back to
+a paid provider. OpenRouter's free-tier rate limits and quotas still apply. Model discovery also
+reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
 
 ## Cost and balance
 

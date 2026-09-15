@@ -1,10 +1,10 @@
 import path from "node:path";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { screen } from "./transcript";
-import { resolveProvider } from "@archymedes/core/providers/agent-matrix";
+import { resolveSessionProvider } from "./session-provider";
 import { createExaClient } from "@archymedes/core/providers/exa";
 import { loadSettings, mergedEnvironment } from "../platform/settings";
-import { appendJobLog, finishJob, jobLogPath } from "@archymedes/core";
+import { appendJobLog, finishJob, getJob, jobLogPath } from "@archymedes/core";
 import { runJobWorkerForever, workerId } from "../job-worker";
 import { modelPriceCatalogFor } from "./providers";
 
@@ -52,7 +52,8 @@ export async function spawnJobWorker(root: string, jobId: string): Promise<numbe
 export async function runJobWorkerProcess(root: string, jobId: string): Promise<number> {
   const savedSettings = await loadSettings(process.env as Record<string, string | undefined>);
   const environment = mergedEnvironment(savedSettings, process.env as Record<string, string | undefined>);
-  const resolved = resolveProvider(environment, {});
+  const job = await getJob(root, jobId);
+  const resolved = await resolveSessionProvider(environment, { root, resume: job?.sessionId, ...job?.modelSelection });
   if ("error" in resolved) {
     await appendJobLog(root, jobId, `✗ ${resolved.error}`).catch(() => undefined);
     await finishJob(root, jobId, workerId(), "failed", { error: resolved.error }).catch(() => undefined);
