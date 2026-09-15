@@ -116,3 +116,7 @@ server-side and is deployed separately, like the Defensive Brain feed.
 - Limits: per-IP then global fixed windows (memory, or Upstash for several instances), failing closed.
   `x-free-gateway-error` marks gateway-owned errors so the CLI router does not switch models on them.
 - Capacity is one OpenRouter account's free allowance shared by all users; see the package README.
+
+Desktop (2026-09-15): Archymedes-desktop has a native port in `src/main/agent/free-adapter.ts`
+(it does not import `@archymedes/core`). Same access order, policy, preference list and gateway
+error header. When `FREE_GATEWAY_URL` is set here, set the desktop constant of the same name too.
