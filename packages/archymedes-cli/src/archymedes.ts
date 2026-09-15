@@ -8,6 +8,9 @@ import { runAcpServer } from "./acp-server";
 import { parseArgs } from "./app/args";
 import { describeLocation, type SandboxBackend } from "./session/location";
 import { runCat } from "./commands/cat";
+import { runUpdateCommand } from "./commands/update-command";
+import { runJobsCommand } from "./commands/jobs-runner";
+import { runBalanceCommand } from "./commands/balance-command";
 import { runMemoryCommand } from "./commands/memory-command";
 import { runGuideCommand } from "./commands/guide-command";
 import { runThemeCommand } from "./commands/theme-command";
@@ -41,8 +44,6 @@ import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { EXIT_CODES, HeadlessEmitter, exitCodeForStatus } from "./headless";
 import { buildModelCatalog, parseModelCommand } from "./session/models";
-import { INITIAL_TABLE_STATE, renderTable } from "./ui/table";
-import { buildJobsTable } from "./ui/tables";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./text/color-depth";
 import { writeIdentity } from "./render/identity";
@@ -86,7 +87,7 @@ import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
 import { WANDER_LAB_FILES } from "@archymedes/core/wander";
 import { cancelJob, enqueueJob, getJob, isTerminal, jobLogPath, listJobs, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
 import { parseAttachCommand, parseDetachCommand, parseJobsCommand } from "./commands/jobs-command";
-import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand, renderBalance, renderHostedBalance } from "./commands/balance";
+import { BalanceWatch, assessTaskBalance, formatBalance, parseManualBalanceCommand } from "./commands/balance";
 import type { CreditBalance as HostedCreditBalance } from "@archymedes/core/providers/credit-balance";
 import { CRITICAL_BALANCE_USD, LOW_BALANCE_USD, type Balance } from "@archymedes/core/cli/balance";
 import { IMPLICIT_SKILL_PROVIDER_ID } from "@archymedes/core";
@@ -2951,58 +2952,18 @@ async function main(): Promise<number> {
 
     const jobsCommand = parseJobsCommand(input);
     if (jobsCommand) {
-      try {
-        switch (jobsCommand.kind) {
-          case "invalid":
-            out.write(style.yellow(`  ${jobsCommand.reason}\n`));
-            break;
-          case "list": {
-            const jobs = await listJobs(args.root);
-            if (jobs.length === 0) {
-              out.write(style.dim("  no background jobs — /jobs run <task>, /detach <task>, or /wander daily to start one\n"));
-              break;
-            }
-            // A table rather than the padded line this printed before. The columns were always
-            // there — id, status, attempts, what it is waiting on — and `.padEnd(9)` only lined up
-            // the second of them, so a long objective pushed every following field somewhere new on
-            // each row and the one job that had failed was no easier to find than the rest.
-            const listed = buildJobsTable(jobs, { paint: surfacePaint, glyphs });
-            out.write(`${renderTable(listed.columns, listed.rows, INITIAL_TABLE_STATE, {
-              paint: surfacePaint, width: contentWidth(), glyphs, legend: "", cursor: false,
-            })}\n`);
-            break;
-          }
-          case "run": {
-            const job = await startBackgroundJob(jobsCommand.objective);
-            out.write(`  ${style.cyan("started")} job ${job.id} in the background. /attach ${job.id} to watch it.\n`);
-            break;
-          }
-          case "cancel": {
-            // The lease's owner (host:pid) is cleared the instant the store marks the job
-            // cancelled, so the pid to signal has to be read before that happens.
-            const before = await getJob(args.root, jobsCommand.id);
-            const { ok } = await cancelJob(args.root, jobsCommand.id);
-            if (!ok) { out.write(style.yellow(`  No job ${jobsCommand.id} to cancel — it may already be finished.\n`)); break; }
-            const pid = Number(before?.lease?.workerId.split(":").pop());
-            if (Number.isInteger(pid)) { try { process.kill(pid, "SIGTERM"); } catch { /* already gone */ } }
-            out.write(`  cancelled ${jobsCommand.id}.\n`);
-            break;
-          }
-          case "approve": {
-            // `/jobs approve <id>` names a job, not an action, so the action has to be read back
-            // and shown before the decision is bound to it — otherwise this authorizes whatever
-            // the job happens to be asking for now, which is the hole this whole path closes.
-            const pending = (await getJob(args.root, jobsCommand.id))?.pendingApproval;
-            if (!pending) { out.write(style.yellow(`  ${jobsCommand.id} has no pending approval.\n`)); break; }
-            out.write(style.dim(`  ${jobsCommand.decision === "deny" ? "denying" : "approving"}: ${pending.summary}\n`));
-            const ok = await resolveJobApproval(args.root, jobsCommand.id, jobsCommand.decision, pending.actionDigest);
-            out.write(ok ? `  delivered — the worker will pick it up shortly.\n` : style.yellow(`  that request changed before your answer arrived — nothing was authorized.\n`));
-            break;
-          }
-        }
-      } catch (error) {
-        out.write(style.yellow(`  ${error instanceof Error ? error.message : String(error)}\n`));
-      }
+      await runJobsCommand(jobsCommand, {
+        listJobs: () => listJobs(args.root),
+        getJob: (id) => getJob(args.root, id),
+        cancelJob: (id) => cancelJob(args.root, id),
+        resolveApproval: (id, decision, digest) => resolveJobApproval(args.root, id, decision, digest),
+        startJob: startBackgroundJob,
+        signalWorker: (pid) => { try { process.kill(pid, "SIGTERM"); } catch { /* already gone */ } },
+        write: (text) => out.write(text),
+        paint: { ...surfacePaint, yellow: style.yellow },
+        glyphs,
+        width: contentWidth(),
+      });
       continue;
     }
 
@@ -3185,115 +3146,40 @@ async function main(): Promise<number> {
       continue;
     }
     if (input === "/update" || input.startsWith("/update ")) {
-      const argument = input.slice("/update".length).trim().toLowerCase();
-      if (argument) {
-        // Setting the policy, not running an update. Persisted, so the answer survives the session
-        // that gave it — an update preference nobody remembers giving is worse than none.
-        const mode = argument === "auto" || argument === "install" || argument === "on" ? "install"
-          : argument === "off" || argument === "never" ? "off"
-          : argument === "check" || argument === "notify" ? "check"
-          : undefined;
-        if (!mode) {
-          out.write(style.yellow("  Say /update auto, /update check or /update off — or /update on its own to install now.\n"));
-          continue;
-        }
-        const saved = await saveSettings({ ...await loadSettings(environment), ARCHYMEDES_AUTO_UPDATE: mode }, environment).catch(() => undefined);
-        environment.ARCHYMEDES_AUTO_UPDATE = mode;
-        const described = mode === "install" ? "check daily and install automatically"
-          : mode === "check" ? "check daily and tell you" : "never check for updates";
-        out.write(`  ${style.green(glyphs.check)} Archymedes will ${described}.${saved ? "" : style.dim(" (not saved — settings are read-only here)")}\n`);
-        continue;
-      }
-
-      out.write(style.dim(`  checking for a newer Archymedes than ${ARCHYMEDES_CLI_VERSION}…\n`));
-      const latest = await fetchLatestVersion({ environment, timeoutMs: 10_000 }).catch(() => undefined);
-      if (!latest) {
-        out.write(style.yellow("  Could not reach the registry. Nothing was changed.\n"));
-        continue;
-      }
-      const versionOrder = compareVersions(ARCHYMEDES_CLI_VERSION, latest);
-      if (versionOrder === 0) {
-        out.write(`  ${style.green(glyphs.check)} Already on the newest version (${latest}).\n`);
-        continue;
-      }
-      if (versionOrder > 0) {
-        out.write(`  ${style.green(glyphs.check)} This Archymedes (${ARCHYMEDES_CLI_VERSION}) is newer than the registry release (${latest}); no downgrade offered.\n`);
-        continue;
-      }
-      statusBar.clear();
-      const confirmation = (await readline.question(`  ${style.yellow("?")} Install Archymedes ${style.bold(latest)}, replacing ${ARCHYMEDES_CLI_VERSION}? ${style.dim("[y/N]: ")}`)).trim().toLowerCase();
-      if (confirmation !== "y" && confirmation !== "yes") {
-        out.write(style.dim("  Left as it is.\n"));
-        continue;
-      }
-      // `yes` because the question above was the consent; a second prompt from inside the updater
-      // would be asking the same thing twice through a second readline on the same terminal.
-      const result = await runSelfUpdate({
-        yes: true,
-        interactive: false,
-        environment,
-        stdout: (text) => out.write(text),
-        stderr: (text) => out.write(style.yellow(text)),
+      await runUpdateCommand(input.slice("/update".length).trim().toLowerCase(), {
+        currentVersion: ARCHYMEDES_CLI_VERSION,
+        fetchLatest: () => fetchLatestVersion({ environment, timeoutMs: 10_000 }).catch(() => undefined),
+        compareVersions,
+        savePolicy: async (policy) => {
+          const saved = await saveSettings({ ...await loadSettings(environment), ARCHYMEDES_AUTO_UPDATE: policy }, environment).then(() => true, () => false);
+          environment.ARCHYMEDES_AUTO_UPDATE = policy;
+          return saved;
+        },
+        confirm: async (question) => { statusBar.clear(); return ["y", "yes"].includes((await readline.question(`  ${style.yellow("?")} ${question} ${style.dim("[y/N]: ")}`)).trim().toLowerCase()); },
+        // `yes` because the question above was the consent; the updater must not ask again on this terminal.
+        runUpdate: (stdout, stderr) => runSelfUpdate({ yes: true, interactive: false, environment, stdout, stderr }),
+        write: (text) => out.write(text),
+        paint: style,
+        glyphs,
       });
-      out.write(result.status === "updated"
-        ? `  ${style.green(glyphs.check)} Updated to ${result.latestVersion}. This session keeps running ${ARCHYMEDES_CLI_VERSION} until you restart.\n`
-        : style.yellow(`  Update did not complete (${result.status}).\n`));
       continue;
     }
 
     const manualBalanceCommand = parseManualBalanceCommand(input);
     if (manualBalanceCommand) {
-      if (manualBalanceCommand.kind === "invalid") {
-        out.write(style.yellow(`  ${manualBalanceCommand.reason}\n`));
-        continue;
-      }
-      if (manualBalanceCommand.kind === "set") {
-        const currency = manualBalanceCommand.currency ?? display;
-        const next: Balance = { amount: manualBalanceCommand.amount, currency, asOf: Date.now() };
-        const file = await persistManualBalance(next);
-        out.write(style.green(`  Balance set to ${formatBalance(next.amount, currency)}. Archymedes will subtract each turn's measured cost from it.\n`));
-        out.write(style.dim(`  This is a local estimate, not a provider statement. Saved to ${file}; /balance clear stops tracking.\n`));
-        continue;
-      }
-      if (manualBalanceCommand.kind === "clear") {
-        await persistManualBalance(undefined);
-        out.write(style.dim("  Balance tracking cleared. Set a new figure any time with /balance <amount>.\n"));
-        continue;
-      }
-      // On the exchange the account has a real ledger, and that — not a figure someone typed — is
-      // what the next turn reserves against. Read it first, and say plainly when it cannot be read
-      // rather than falling back to the local number as though it were the same thing.
       const hosted = model as typeof model & { creditBalance?: (signal?: AbortSignal) => Promise<HostedCreditBalance | null> };
-      if (typeof hosted.creditBalance === "function") {
-        const reading = new AbortController();
-        pendingReadAbort = reading;
-        try {
-          const credits = await hosted.creditBalance(reading.signal);
-          if (credits) {
-            for (const line of renderHostedBalance(credits, { localCurrency: display })) out.write(`  ${line}\n`);
-          } else {
-            out.write(style.yellow("  The exchange did not return a readable balance.\n"));
-          }
-        } catch (error) {
-          if (reading.signal.aborted) out.write(style.dim("  balance check cancelled\n"));
-          else out.write(style.yellow(`  Could not read the hosted balance — ${error instanceof Error ? error.message : String(error)}\n`));
-        } finally {
-          pendingReadAbort = undefined;
-        }
-        const localTracked = currentBalance();
-        if (localTracked) {
-          // Both exist, so both are shown — labelled, never summed.
-          out.write(style.dim(`  Separately, you are tracking ${formatBalance(localTracked.amount, localTracked.currency)} locally as a pacing limit.\n`));
-        }
-        continue;
-      }
-      const balance = currentBalance();
-      if (balance) {
-        for (const line of renderBalance(balance, criticalBalance, { sessionSpend: sessionSpend() })) out.write(`  ${line}\n`);
-        out.write(style.dim("  Local estimate: the figure you set minus Archymedes's measured token costs. /balance <amount> resets it.\n"));
-      } else {
-        out.write(style.dim("  No balance is being tracked. Use /balance <amount> [currency] to track one locally.\n"));
-      }
+      await runBalanceCommand(manualBalanceCommand, {
+        display,
+        ...(typeof hosted.creditBalance === "function" ? { readHostedBalance: (signal: AbortSignal) => hosted.creditBalance!(signal) } : {}),
+        onPendingRead: (controller) => { pendingReadAbort = controller; },
+        currentBalance,
+        persistBalance: persistManualBalance,
+        criticalBalance,
+        sessionSpend,
+        now: Date.now,
+        write: (text) => out.write(text),
+        paint: style,
+      });
       continue;
     }
 
