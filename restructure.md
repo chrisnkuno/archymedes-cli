@@ -42,4 +42,4 @@ Only ratchet improved counts after verifying the changes that produced them.
 
 WS-2.11 continues handler extraction. Free mode is a separate behavioral workstream, WS-4;
 its module plan, access contract and acceptance criteria are in
-[FREE_MODE.md](docs/continuation/FREE_MODE.md). Its live keyed verification (WS-4.4) is still pending.
+[FREE_MODE.md](docs/continuation/FREE_MODE.md). It is implemented and verified live (WS-4.4).

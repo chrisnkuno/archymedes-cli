@@ -9,6 +9,22 @@ export const FREE_BASE_URL = "https://openrouter.ai/api/v1";
 export const FREE_DISCOVERY_URL = "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json";
 export const FREE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
 export const FREE_CATALOG_MAX_RECORDS = 10_000;
+/**
+ * Order the free router tries verified candidates in. Probed 2026-09-15 with a real tool call:
+ * these answered with a structured call quickly. Largest-context-first chose gated (403 outside
+ * listed apps) and very slow models. Ordering only; eligibility still comes from the live listing,
+ * and unlisted eligible models follow by context size.
+ */
+export const FREE_ROUTER_PREFERENCE: readonly string[] = [
+  "cohere/north-mini-code:free",
+  "google/gemma-4-31b-it:free",
+  "dots-studio/dots-3-note-preview:free",
+  "nex-agi/nex-n2.5-pro:free",
+  "nvidia/nemotron-3.5-lightning:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "inclusionai/ling-3.0-flash-vl:free",
+  "poolside/laguna-xs-2.1:free",
+];
 
 export type FreeModel = {
   id: string;

@@ -1,6 +1,6 @@
 # Free mode: implementation contract
 
-Status: implemented and locally tested; live keyed smoke test (WS-4.4) pending. Updated 2026-09-15. Tracker: WS-4.
+Status: implemented; live keyed tool round trip verified 2026-09-15 (WS-4.4). Updated 2026-09-15. Tracker: WS-4.
 
 ## User outcome
 

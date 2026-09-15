@@ -84,4 +84,38 @@ describe("free-only model adapter", () => {
     await expect(provider.complete({ ...request, signal: abort.signal })).rejects.toThrow();
     expect(call).not.toHaveBeenCalled();
   });
+  describe("the free router", () => {
+    const big = { ...entry, id: "lab/gated:free", context_length: 1_000_000 };
+    const routed = () => Promise.resolve(mergeFreeCatalog(parseFreeOpenRouterModels({ data: [big, entry] }), [], Date.now()));
+    const refuse = (status: number) => Object.assign(new Error("gated"), { status });
+
+    it("moves past a gated model to the next verified one and stops asking the gated one", async () => {
+      const call = vi.fn(async (body: Record<string, unknown>) => { if (body.model === big.id) throw refuse(403); return response; });
+      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call, catalog: routed });
+      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
+      await provider.complete(request);
+      expect(call.mock.calls.map(([body]) => body.model)).toEqual([big.id, entry.id, entry.id]);
+    });
+    it("treats an empty HTTP 200 (upstream overload) as a refusal and tries the next model", async () => {
+      const empty = { ...response, usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+      const call = vi.fn(async (body: Record<string, unknown>) => body.model === big.id ? empty : response);
+      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call, catalog: routed });
+      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
+      expect(call).toHaveBeenCalledTimes(2);
+    });
+    it("never switches models after text has streamed, or for an explicitly chosen model", async () => {
+      async function* partial(): AsyncIterable<ChatStreamChunk> {
+        yield { id: "s", model: big.id, choices: [{ delta: { content: "Hel" } }] };
+        throw refuse(503);
+      }
+      const call = vi.fn(async () => partial());
+      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call, catalog: routed });
+      await expect(provider.complete({ ...request, onTextDelta: () => undefined })).rejects.toMatchObject({ status: 503 });
+      expect(call).toHaveBeenCalledTimes(1);
+      const pinned = vi.fn(async () => { throw refuse(429); });
+      const explicit = new FreeAgentTurnProvider({ apiKey: "k", model: big.id }, { call: pinned, catalog: routed });
+      await expect(explicit.complete(request)).rejects.toMatchObject({ status: 429 });
+      expect(pinned).toHaveBeenCalledTimes(1);
+    });
+  });
 });
