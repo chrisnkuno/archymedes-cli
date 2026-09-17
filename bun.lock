@@ -17,7 +17,7 @@
     },
     "packages/archymedes-cli": {
       "name": "archymedes-cli",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "bin": {
         "archymedes": "dist/archymedes.mjs",
       },
@@ -53,6 +53,10 @@
         "e2b",
       ],
     },
+    "packages/free-gateway": {
+      "name": "@archymedes/free-gateway",
+      "version": "0.1.0",
+    },
   },
   "packages": {
     "@ampproject/remapping": ["@ampproject/remapping@2.3.0", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw=="],
@@ -60,6 +64,8 @@
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.116.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1", "standardwebhooks": "^1.0.0" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-4UEapYQ+epLEMsAuLZDvW8ExVSOtHD8a7zTyLzhw0H9RXJ1eilPgmqhjwgcdg22diwx13spw6fJ4rONZ+bS7Ww=="],
 
     "@archymedes/core": ["@archymedes/core@workspace:packages/core"],
+
+    "@archymedes/free-gateway": ["@archymedes/free-gateway@workspace:packages/free-gateway"],
 
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
 
