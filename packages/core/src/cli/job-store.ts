@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { OwnershipHeldError, acquireFileOwnership } from "./file-ownership";
 import {
   cancel,
   claim,
@@ -9,6 +10,7 @@ import {
   enqueue,
   finish,
   heartbeat,
+  parseJobRecord,
   recoverStale,
   requestApproval,
   resolveApproval,
@@ -46,7 +48,13 @@ async function readStore(file: string): Promise<JobStore> {
   try {
     const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Partial<JobStore>;
     if (!Array.isArray(parsed?.jobs)) throw new Error('expected an object with a "jobs" array');
-    return { jobs: parsed.jobs as Job[] };
+    const jobs = parsed.jobs.map((job, index) => parseJobRecord(job, index));
+    const seen = new Set<string>();
+    for (const job of jobs) {
+      if (seen.has(job.id)) throw new Error(`duplicate job id ${job.id}`);
+      seen.add(job.id);
+    }
+    return { jobs };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyStore();
     // A corrupt store is not silently treated as empty — that would let a job vanish along with
@@ -56,26 +64,35 @@ async function readStore(file: string): Promise<JobStore> {
   }
 }
 
+/**
+ * The same crash-safe ownership lock sessions use: a dead holder is reclaimed at once, and a live one
+ * is waited for however long its write takes. The old lock deleted anything older than ten seconds,
+ * which is exactly how a slow but live writer (a stalled disk, a paused laptop) loses its update.
+ */
 async function acquireLock(lockFile: string): Promise<() => Promise<void>> {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
     try {
-      const handle = await fs.open(lockFile, "wx", 0o600);
-      await handle.writeFile(`${process.pid}\n`, "utf8");
-      await handle.close();
-      return async () => { await fs.unlink(lockFile).catch(() => undefined); };
+      return await acquireFileOwnership(lockFile);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      // A lock older than this is not a live contender — its holder crashed mid-write, and a lock
-      // that never expires would mean one dead process permanently wedges every job in the project.
-      const stat = await fs.stat(lockFile).catch(() => null);
-      if (stat && Date.now() - stat.mtimeMs > 10_000) {
-        await fs.unlink(lockFile).catch(() => undefined);
-        continue;
-      }
+      if (!(error instanceof OwnershipHeldError) && !(await reapLegacyLock(lockFile))) throw error;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
   throw new Error("Jobs file is busy — another Archymedes process is updating it");
+}
+
+/**
+ * A lock written by a version before ownership records held just a pid. It carries no liveness
+ * evidence, so it keeps the rule it was written under: stale after ten seconds. Returns whether the
+ * caller should retry.
+ */
+async function reapLegacyLock(lockFile: string): Promise<boolean> {
+  const content = await fs.readFile(lockFile, "utf8").catch(() => undefined);
+  if (content === undefined || !/^\d+\s*$/.test(content)) return false;
+  const stat = await fs.stat(lockFile).catch(() => null);
+  if (stat && Date.now() - stat.mtimeMs > 10_000) await fs.unlink(lockFile).catch(() => undefined);
+  return true;
 }
 
 /**

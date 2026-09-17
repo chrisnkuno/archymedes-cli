@@ -105,6 +105,60 @@ export type PendingApproval = {
 
 export type JobStore = { jobs: Job[] };
 
+const JOB_STATUSES: readonly JobStatus[] = ["queued", "running", "paused", "completed", "failed", "cancelled"];
+const DECISIONS: readonly ApprovalDecision[] = ["allow", "allow_always", "deny", "deny_always"];
+
+/**
+ * One stored job, checked field by field.
+ *
+ * The file is written by this code but read back after crashes, hand edits and version changes; a
+ * record that is only type-asserted lets a missing `status` or a string `attempts` reach the
+ * scheduler, which then makes decisions on garbage. Unknown extra fields are kept for forward
+ * compatibility. Throws with the record's index and field so the corrupt entry can be found.
+ */
+export function parseJobRecord(value: unknown, index: number): Job {
+  const where = `jobs[${index}]`;
+  const fail = (field: string, expected: string): never => { throw new Error(`${where}.${field} must be ${expected}`); };
+  const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+  if (!isObject(value)) fail("", "an object");
+  const job = value as Record<string, unknown>;
+  const text = (field: string, optional = false) => {
+    if (job[field] === undefined && optional) return;
+    if (typeof job[field] !== "string" || (!optional && !(job[field] as string))) fail(field, "a non-empty string");
+  };
+  const time = (field: string, optional = false) => {
+    if (job[field] === undefined && optional) return;
+    if (typeof job[field] !== "number" || !Number.isFinite(job[field])) fail(field, "a finite number");
+  };
+  text("id"); text("objective"); text("cwd"); text("logPath");
+  if (!JOB_STATUSES.includes(job.status as JobStatus)) fail("status", JOB_STATUSES.join(" | "));
+  time("createdAt"); time("updatedAt"); time("nextRunAt", true);
+  if (!Number.isSafeInteger(job.attempts) || (job.attempts as number) < 0) fail("attempts", "a non-negative integer");
+  text("lastError", true); text("sessionId", true);
+  if (job.cadence !== undefined && job.cadence !== "daily" && job.cadence !== "weekly") fail("cadence", "daily | weekly");
+  if (job.lease !== undefined && !(isObject(job.lease) && typeof job.lease.workerId === "string" && Number.isFinite(job.lease.expiresAt))) {
+    fail("lease", "{ workerId, expiresAt }");
+  }
+  if (job.modelSelection !== undefined && !(isObject(job.modelSelection) && typeof job.modelSelection.provider === "string" && typeof job.modelSelection.model === "string")) {
+    fail("modelSelection", "{ provider, model }");
+  }
+  const pending = job.pendingApproval;
+  if (pending !== undefined && !(isObject(pending)
+    && ["summary", "toolName", "toolCallId", "actionDigest", "scopeKey", "policyVersion", "capabilityId"].every((key) => typeof pending[key] === "string")
+    && ["none", "workspace", "external"].includes(pending.effect as string) && Number.isFinite(pending.requestedAt))) {
+    fail("pendingApproval", "a complete approval request");
+  }
+  const decision = job.approvalDecision;
+  if (decision !== undefined && !(isObject(decision) && DECISIONS.includes(decision.decision as ApprovalDecision)
+    && typeof decision.actionDigest === "string" && Number.isFinite(decision.decidedAt))) {
+    fail("approvalDecision", "{ decision, actionDigest, decidedAt }");
+  }
+  if (job.executedApprovals !== undefined && !(Array.isArray(job.executedApprovals) && job.executedApprovals.every((digest) => typeof digest === "string"))) {
+    fail("executedApprovals", "an array of strings");
+  }
+  return job as Job;
+}
+
 export const MAX_ATTEMPTS = 3;
 
 /** Terminal states never move again, and nothing may claim them. */

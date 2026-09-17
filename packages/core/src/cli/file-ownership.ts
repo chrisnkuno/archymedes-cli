@@ -9,6 +9,13 @@ import path from "node:path";
  */
 type Owner = { token: string; pid: number; host: string; started?: string };
 
+/** The file is held by a process that is still running. Callers that can wait retry on this one error. */
+export class OwnershipHeldError extends Error {
+  constructor(readonly pid: number) {
+    super(`Session is already owned by process ${pid}; close or detach the other writer first.`);
+  }
+}
+
 async function processStart(pid: number): Promise<string | undefined> {
   if (process.platform !== "linux") return undefined;
   try {
@@ -59,7 +66,7 @@ export async function acquireFileOwnership(file: string, depth = 0): Promise<() 
       }
       const current = await readOwner(file);
       if (!current) continue;
-      if (await isAlive(current)) throw new Error(`Session is already owned by process ${current.pid}; close or detach the other writer first.`);
+      if (await isAlive(current)) throw new OwnershipHeldError(current.pid);
       // Two contenders must not both unlink a dead owner's file and remove the winner's lock.
       // The guard uses the same crash-safe protocol, including recovery if its own owner died.
       const release = await acquireFileOwnership(`${file}.reap`, depth + 1);

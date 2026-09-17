@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { acquireFileOwnership } from "./file-ownership";
 import {
   appendJobLog,
   cancelJob,
@@ -59,6 +60,21 @@ describe("persisting across separate calls", () => {
     expect(await fs.readFile(jobStoreFile(root), "utf8")).toBe(malformed);
   });
 
+  it("rejects a malformed job record by index and field, and keeps the file intact", async () => {
+    const good = await enqueueJob(root, { id: newJobId(), objective: "fine", logPath: "l" });
+    const raw = JSON.parse(await fs.readFile(jobStoreFile(root), "utf8"));
+    raw.jobs.push({ ...raw.jobs[0], id: "broken", attempts: "3" });
+    const damaged = JSON.stringify(raw);
+    await fs.writeFile(jobStoreFile(root), damaged);
+    await expect(listJobs(root)).rejects.toThrow("jobs[1].attempts must be a non-negative integer");
+    await expect(enqueueJob(root, { id: newJobId(), objective: "more", logPath: "l" })).rejects.toThrow("corrupt");
+    expect(await fs.readFile(jobStoreFile(root), "utf8")).toBe(damaged);
+
+    raw.jobs[1] = { ...raw.jobs[0] };
+    await fs.writeFile(jobStoreFile(root), JSON.stringify(raw));
+    await expect(listJobs(root)).rejects.toThrow(`duplicate job id ${good.id}`);
+  });
+
   it("surfaces a corrupt store instead of quietly treating it as empty", async () => {
     await fs.mkdir(path.dirname(jobStoreFile(root)), { recursive: true });
     await fs.writeFile(jobStoreFile(root), "{ not json", "utf8");
@@ -84,6 +100,28 @@ describe("lock contention", () => {
     const listed = await listJobs(root);
     expect(listed).toHaveLength(10);
     expect(new Set(listed.map((job) => job.id)).size).toBe(10);
+  });
+
+  it("waits for a live writer however old its lock is, instead of evicting it", async () => {
+    const lockFile = `${jobStoreFile(root)}.lock`;
+    const release = await acquireFileOwnership(lockFile);
+    const old = new Date(Date.now() - 60_000);
+    await fs.utimes(lockFile, old, old);
+
+    let done = false;
+    const pending = enqueueJob(root, { id: newJobId(), objective: "after the writer", logPath: "l" }).then(() => { done = true; });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(done).toBe(false);
+    await release();
+    await pending;
+    expect(done).toBe(true);
+  });
+
+  it("reclaims an ownership lock whose process is gone", async () => {
+    const lockFile = `${jobStoreFile(root)}.lock`;
+    await fs.mkdir(path.dirname(lockFile), { recursive: true });
+    await fs.writeFile(lockFile, JSON.stringify({ token: "dead", pid: 2 ** 22 + 12345, host: os.hostname() }));
+    await expect(enqueueJob(root, { id: newJobId(), objective: "x", logPath: "l" })).resolves.toBeDefined();
   });
 
   it("recovers from a lock file left behind by a crashed process", async () => {
