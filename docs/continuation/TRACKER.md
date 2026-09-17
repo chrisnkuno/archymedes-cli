@@ -5,6 +5,24 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-5: Gap closure (2026-09-17)
+
+Gap study (docs, code, CI logs, competitor comparison) found the items below. User: "yes go for it and
+continue with the rest". Commits are local until GitHub HTTPS pushes stop being reset.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-5.1 | CI never green: frozen lockfile, and PTY screens hanging on Linux | done (push pending) | `bun.lock`, `terminal/screen-host.ts`, `pty/harness.ts` | `bun run recheck --pty` | Lockfile committed (macOS/Windows then passed). Root cause of the Linux hang: TermUI draws a static frame and reads no keys when `CI` is set; screens waited forever. `canDrawScreen` now refuses there (text fallback) and the harness clears `CI` for its real pty. Reproduced with `CI=true` before, 11/11 after, new PTY test |
+| WS-5.2 | Desktop ran model shell commands without approval | done (push pending) | Archymedes-desktop `main/agent`, IPC, agent panel, settings, 11 locales | desktop typecheck, 257 tests, lint 0 errors, build | `CommandApprovals`: cancel/workspace switch/quit deny; always-allow is exact command per workspace; setting ask (default) / auto |
+| WS-5.3 | Exact-reply prompts dropped all tools; change verbs like "update" got read-only tools | done | `core/cli/tool-profile.ts` | tool-profile tests | Found in the free-mode live test |
+| WS-5.4 | Multi-line paste submitted line by line | done | `terminal/bracketed-paste.ts`, REPL wiring | unit + PTY on installed binary | Placeholder `[Pasted N lines #k]`, expanded on submit; CRLF handled |
+| WS-5.5 | Job records type-asserted; jobs lock evicted live holders after 10 s | done | `core/cli/jobs.ts`, `job-store.ts`, `file-ownership.ts` | job-store tests | Field validation with index; ownership lock; legacy pid lock keeps its age rule |
+| WS-5.6 | Startup showed a benchmark measured on removed provider circuitnotion | done | `render/reliability-status.ts` | unit + PTY | Hidden until regenerated on a shipped provider |
+| WS-5.7 | Custom slash commands | done | `platform/prompt-commands.ts`, `commands/slash-input.ts` | unit + PTY | `.archymedes/commands/*.md` and user config; built-ins protected; `archymedes.ts` 3201 → 3199 |
+| WS-5.8 | Models could not receive images | done | `core/cli/image-attachments.ts`, serializers, agent | unit + agent end-to-end | @image mentions; 4 × 5 MB; history keeps a note, not base64. Hosted exchange acceptance unverified |
+| WS-5.9 | Unit suites time out or race under machine load | todo | `agent.test.ts`, `daemon.test.ts`, `session.test.ts`, `job-worker.test.ts`, `archymedes.test.ts` | repeated runs under load | At load ~8 on 4 cores, 1-4 different tests fail per run on an unmodified tree |
+| WS-5.10 | LSP diagnostics, mid-turn checkpointing, desktop parity (MCP/hooks/skills/web tools), free gateway deployment | todo (needs decisions) | — | — | See the gap report in the session summary |
+
 ## WS-4: Free model access preparation (2026-09-15)
 
 User authorizes a free mode with a supplied key and a root restructuring guide. WS-2.11 is
