@@ -83,7 +83,7 @@ import { TabSink, replayLines } from "./terminal/output";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { buildWorkspaceSnapshot, PaneActivity } from "./ui/workspace-model";
-import { explainScreenRefusal, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
+import { explainScreenRefusal, staticScreenReason, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
 import { parseGuideCommand } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
@@ -1035,6 +1035,7 @@ async function main(): Promise<number> {
     interactive: interactive && Boolean(process.stdout.isTTY),
     columns: process.stdout.columns ?? 80,
     rows: process.stdout.rows ?? 24,
+    staticOnly: staticScreenReason(process.env),
   });
 
   /**

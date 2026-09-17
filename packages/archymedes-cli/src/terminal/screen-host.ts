@@ -24,9 +24,24 @@ export type ScreenCapabilities = {
   interactive: boolean;
   columns: number;
   rows: number;
+  /** Set when the framework would only print a static frame here; see `staticScreenReason`. */
+  staticOnly?: string;
 };
 
-export type ScreenReason = "not-interactive" | "framework-missing" | "too-small";
+export type ScreenReason = "not-interactive" | "framework-missing" | "too-small" | "static-terminal";
+
+/**
+ * Why TermUI would draw one static frame and never read a key, or undefined when it will run.
+ *
+ * It mirrors TermUI's own fallback test (`CI` set, or `TERM=dumb`). Opening a screen there printed
+ * the frame, legend included, and then waited forever for a `q` nothing was listening for: the
+ * session hung, which is how GitHub Actions (where `CI=true`) found it.
+ */
+export function staticScreenReason(environment: Record<string, string | undefined>): string | undefined {
+  if (environment.CI) return "CI is set";
+  if (environment.TERM === "dumb") return "TERM is dumb";
+  return undefined;
+}
 
 export type ScreenOutcome =
   | { ok: true }
@@ -43,6 +58,7 @@ export const MINIMUM_SCREEN = { columns: 40, rows: 8 };
  */
 export function canDrawScreen(capabilities: ScreenCapabilities): ScreenOutcome {
   if (!capabilities.interactive) return { ok: false, reason: "not-interactive" };
+  if (capabilities.staticOnly) return { ok: false, reason: "static-terminal", detail: capabilities.staticOnly };
   if (capabilities.columns < MINIMUM_SCREEN.columns || capabilities.rows < MINIMUM_SCREEN.rows) {
     return {
       ok: false,
@@ -60,6 +76,8 @@ export function explainScreenRefusal(outcome: Extract<ScreenOutcome, { ok: false
       return "This needs an interactive terminal.";
     case "too-small":
       return `This needs a bigger window — ${outcome.detail}.`;
+    case "static-terminal":
+      return `Full-screen views are off because ${outcome.detail ?? "this terminal cannot run them"}; unset it to use them.`;
     case "framework-missing":
       return `The screen could not be loaded${outcome.detail ? `: ${outcome.detail}` : ""}.`;
   }

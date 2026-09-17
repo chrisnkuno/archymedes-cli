@@ -252,6 +252,22 @@ describe("what a tab keeps, under a real pty", () => {
     await p.waitFor(/No guide topic called/, { timeoutMs: 30_000, since: missing });
   }, 90_000);
 
+  it("refuses full-screen views where they would only draw a static frame, instead of hanging", async () => {
+    // TermUI never reads a key when CI is set; opening a screen there used to hang the session.
+    const p = boot({ env: { CI: "true" } });
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    const opening = p.output().length;
+    p.writeLine("/guide");
+    // The guide falls back to its printed form rather than a screen that cannot read keys.
+    await p.waitFor(/archymedes guide[\s\S]*Getting started/, { timeoutMs: 30_000, since: opening });
+
+    const after = p.output().length;
+    stub.enqueue({ kind: "text", text: "Still here after the refusal." });
+    p.writeLine("are you there");
+    await p.waitFor(/Still here after the refusal/, { timeoutMs: 30_000, since: after });
+  }, 90_000);
+
   it("opens the guide as a screen, and gives the terminal back", async () => {
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });

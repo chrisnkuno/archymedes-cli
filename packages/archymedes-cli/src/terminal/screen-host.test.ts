@@ -43,6 +43,16 @@ describe("whether a screen can be drawn", () => {
     expect(outcome.ok === false && outcome.detail).toContain("20×4");
   });
 
+  it("refuses where the framework would draw one static frame and never read a key", async () => {
+    const { staticScreenReason } = await import("./screen-host");
+    expect(staticScreenReason({ CI: "true" })).toBe("CI is set");
+    expect(staticScreenReason({ TERM: "dumb" })).toBe("TERM is dumb");
+    expect(staticScreenReason({ CI: "", TERM: "xterm-256color" })).toBeUndefined();
+    const outcome = canDrawScreen({ ...big, staticOnly: "CI is set" });
+    expect(outcome).toMatchObject({ ok: false, reason: "static-terminal" });
+    expect(outcome.ok === false && explainScreenRefusal(outcome)).toContain("CI is set");
+  });
+
   it("allows a terminal at exactly the minimum", () => {
     expect(canDrawScreen({ interactive: true, ...MINIMUM_SCREEN })).toEqual({ ok: true });
   });

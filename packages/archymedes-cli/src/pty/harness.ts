@@ -103,6 +103,9 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
         // adding nondeterministic network latency to tests that are about tabs, guides, or layout.
         // An update-specific test can still opt back in explicitly through options.env.
         ARCHYMEDES_AUTO_UPDATE: "off",
+        // The child runs in a real pty. Inheriting the runner's CI=true would put full-screen views
+        // into their static fallback; a test about CI behaviour can set it again through options.env.
+        CI: "",
         ...options.env,
       }).filter(([, value]) => value !== undefined),
     ) as Record<string, string>,
