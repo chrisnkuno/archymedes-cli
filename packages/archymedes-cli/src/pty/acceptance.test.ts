@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -160,5 +160,23 @@ describe("the installed binary in a real terminal", () => {
 
     expect(stub.requestCount()).toBe(1);
     expect(lastUserMessage(stub)).toContain("explain this:TypeError: x is undefined\n    at parse (a.ts:3)\n    at main (b.ts:9)");
+  }, 60_000);
+  it("runs a saved prompt from .archymedes/commands as the turn, with its arguments", async () => {
+    await mkdir(path.join(cwd, ".archymedes", "commands"), { recursive: true });
+    await writeFile(path.join(cwd, ".archymedes", "commands", "risk.md"), "---\ndescription: Risk review\n---\nReview $ARGUMENTS for data-loss risks.\n");
+    const p = boot();
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    stub.enqueue({ kind: "text", text: "reviewed" });
+    const mark = p.output().length;
+    p.writeLine("/risk the migration script");
+    await p.waitFor(/reviewed/, { timeoutMs: 20_000, since: mark });
+    expect(lastUserMessage(stub)).toContain("Review the migration script for data-loss risks.");
+    await p.waitFor(PROMPT, { timeoutMs: 20_000, since: p.output().length });
+
+    const typo = p.output().length;
+    p.writeLine("/rsik");
+    await p.waitFor(/Unknown command \/rsik\.[\s\S]*Custom: \/risk/, { timeoutMs: 20_000, since: typo });
+    expect(stub.requestCount()).toBe(1);
   }, 60_000);
 });

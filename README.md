@@ -40,6 +40,20 @@ support are accepted; every request carries a zero maximum price, and free mode 
 a paid provider. Free capacity is rate limited either way. Model discovery also
 reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
 
+## Custom commands
+
+Save a prompt you reuse as Markdown: `.archymedes/commands/review.md` becomes `/review` for the
+project, and `commands/review.md` in the Archymedes config directory is yours alone (the project
+file wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
+`description:` line in `---` front matter describes it. Built-in commands cannot be replaced.
+
+```markdown
+---
+description: Review a change for data-loss risks
+---
+Review $ARGUMENTS for data-loss risks. List each risk with the line it comes from.
+```
+
 ## Cost and balance
 
 For direct/BYOK providers, costs are shown in your local currency and `/balance` tracks a local

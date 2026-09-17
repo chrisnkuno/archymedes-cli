@@ -59,7 +59,7 @@ import { dropupRowBudget, renderDropup, type DropupEntry } from "./ui/dropup";
 import { visibleWidth } from "./text/text-width";
 import { PinnedScreen } from "./terminal/screen";
 import { renderMarkdown } from "./render/markdown";
-import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderKeyboardShortcuts, suggestCommand, suggestionsFor } from "./catalog/commands";
+import { completeInput, inlineCompletion, isKnownCommand, parseModeCommand, renderKeyboardShortcuts, suggestionsFor } from "./catalog/commands";
 import { KeyBindingRegistry, parseBindingOverrides } from "./terminal/keybindings";
 import { runChooser, type ChooserItem } from "./ui/chooser";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "./platform/doctor";
@@ -84,6 +84,7 @@ import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { buildWorkspaceSnapshot, PaneActivity } from "./ui/workspace-model";
 import { createPasteStore, installBracketedPaste } from "./terminal/bracketed-paste";
+import { resolveSlashInput } from "./commands/slash-input";
 import { currentScreenCapabilities, explainScreenRefusal, withFullScreen, type TerminalControls } from "./terminal/screen-host";
 import { parseGuideCommand } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
@@ -3128,12 +3129,9 @@ async function main(): Promise<number> {
       continue;
     }
     if (input.startsWith("/") && !isKnownCommand(input.split(/\s+/)[0])) {
-      // Without this the typo is simply sent to the model, which costs a round trip to be told
-      // it makes no sense.
-      const name = input.split(/\s+/)[0];
-      const suggestion = suggestCommand(name);
-      out.write(`  ${style.yellow(`Unknown command ${name}.`)}${style.dim(suggestion ? ` Did you mean ${suggestion}?` : " Type /help for the list.")}\n`);
-      continue;
+      const prompt = await resolveSlashInput(input, { root: args.root, environment, dim: (text) => out.write(`${style.dim(text)}\n`), warn: (headline, detail) => out.write(`  ${style.yellow(headline)}${style.dim(detail)}\n`) });
+      if (prompt === undefined) continue;
+      input = prompt;
     }
 
     await runTurn(input);
