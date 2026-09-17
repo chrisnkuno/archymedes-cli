@@ -145,4 +145,20 @@ describe("the installed binary in a real terminal", () => {
     expect(sent).toContain("run the migration against staging");
     expect(sent).not.toMatch(/200~|201~|\x1b\[20[01]~/);
   }, 60_000);
+  it("submits a multi-line paste as one message, with its line breaks", async () => {
+    const p = boot();
+    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
+
+    stub.enqueue({ kind: "text", text: "one message" });
+    const mark = p.output().length;
+    p.write("explain this:\x1b[200~TypeError: x is undefined\r\n    at parse (a.ts:3)\r\n    at main (b.ts:9)\x1b[201~");
+    // The prompt shows a one-line placeholder rather than submitting at the first pasted newline.
+    await p.waitFor(/\[Pasted 3 lines #1\]/, { timeoutMs: 20_000, since: mark });
+    expect(stub.requestCount()).toBe(0);
+    p.write("\r");
+    await p.waitFor(/one message/, { timeoutMs: 20_000, since: mark });
+
+    expect(stub.requestCount()).toBe(1);
+    expect(lastUserMessage(stub)).toContain("explain this:TypeError: x is undefined\n    at parse (a.ts:3)\n    at main (b.ts:9)");
+  }, 60_000);
 });

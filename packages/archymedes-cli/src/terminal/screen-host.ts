@@ -47,6 +47,20 @@ export type ScreenOutcome =
   | { ok: true }
   | { ok: false; reason: ScreenReason; detail?: string };
 
+/** What this process can draw right now: a real TTY for both ends, its size, and the framework's fallback test. */
+export function currentScreenCapabilities(
+  interactive: boolean,
+  stdout: { isTTY?: boolean; columns?: number; rows?: number },
+  environment: Record<string, string | undefined>,
+): ScreenCapabilities {
+  return {
+    interactive: interactive && Boolean(stdout.isTTY),
+    columns: stdout.columns ?? 80,
+    rows: stdout.rows ?? 24,
+    staticOnly: staticScreenReason(environment),
+  };
+}
+
 /** Terminals below this cannot hold a header, a body row and a legend without lying about it. */
 export const MINIMUM_SCREEN = { columns: 40, rows: 8 };
 

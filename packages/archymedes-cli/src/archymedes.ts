@@ -83,7 +83,8 @@ import { TabSink, replayLines } from "./terminal/output";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache } from "@archymedes/core/providers/model-fetch";
 import { JobStream, WatchRegistry, sandboxWarning } from "./terminal/job-stream";
 import { buildWorkspaceSnapshot, PaneActivity } from "./ui/workspace-model";
-import { explainScreenRefusal, staticScreenReason, withFullScreen, type ScreenCapabilities, type TerminalControls } from "./terminal/screen-host";
+import { createPasteStore, installBracketedPaste } from "./terminal/bracketed-paste";
+import { currentScreenCapabilities, explainScreenRefusal, withFullScreen, type TerminalControls } from "./terminal/screen-host";
 import { parseGuideCommand } from "./render/guide";
 import { DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, colorCode, detectPreferredTheme, findBuiltinTheme, parseThemeCommand, rainbowHex } from "./theme/theme";
 import { discoverThemes, findTheme, themeDirectory } from "./theme/theme-files";
@@ -500,6 +501,8 @@ async function main(): Promise<number> {
     },
   };
   let uninstallShortcuts = interactive ? installShortcuts(shortcutOptions) : () => {};
+  const pastes = createPasteStore();
+  const uninstallPaste = interactive && process.stdout.isTTY ? installBracketedPaste({ readline, output: process.stdout, store: pastes }) : () => {};
   const installShortcutsAgain = (): void => {
     if (interactive) uninstallShortcuts = installShortcuts(shortcutOptions);
   };
@@ -546,7 +549,7 @@ async function main(): Promise<number> {
    * one. A scroll region left set when the process exits is inherited by the user's own shell
    * afterward, which reads as the terminal being broken until they notice and reset it themselves.
    */
-  let exitCleanly = () => { screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  let exitCleanly = () => { screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); uninstallPaste(); readline.close(); abandonPrompt(); };
 
   /**
    * Ends the `await readline.question(...)` that the REPL is parked on when the session is closing.
@@ -1031,12 +1034,7 @@ async function main(): Promise<number> {
     restoreScreen: () => { screen?.enter(); if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu); bindFixedNavigation(); showIdleStatus(); },
   });
 
-  const screenCapabilities = (): ScreenCapabilities => ({
-    interactive: interactive && Boolean(process.stdout.isTTY),
-    columns: process.stdout.columns ?? 80,
-    rows: process.stdout.rows ?? 24,
-    staticOnly: staticScreenReason(process.env),
-  });
+  const screenCapabilities = () => currentScreenCapabilities(interactive, process.stdout, process.env);
 
   /**
    * One small, tool-less call to the session's own model to explain a file — the editor's AI tab.
@@ -1343,7 +1341,7 @@ async function main(): Promise<number> {
   const bindSigint = () => { process.on("SIGINT", handleSigint); readline.on("SIGINT", handleSigint); };
   const unbindSigint = () => { process.off("SIGINT", handleSigint); readline.off("SIGINT", handleSigint); };
   bindSigint();
-  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); readline.close(); abandonPrompt(); };
+  exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); uninstallPaste(); readline.close(); abandonPrompt(); };
 
   /** Set when the turn about to run is a wander lab, so its results chart is printed once, after it. */
   let wanderRunning = false;
@@ -2367,7 +2365,7 @@ async function main(): Promise<number> {
     // A search keeps reading history across `/find` steps; anything else returns to live output.
     if (screen instanceof WorkspaceFrame && screen.browsing && !parseFindCommand(rawInput.trim())) screen.scroll({ kind: "live" });
     screen?.parkInTranscript();
-    let input = rawInput.trim();
+    let input = pastes.expand(rawInput).trim();
     if (!input) continue;
 
     const layoutCommand = parseLayoutCommand(input, screen instanceof WorkspaceFrame ? "fixed" : "scrollback");

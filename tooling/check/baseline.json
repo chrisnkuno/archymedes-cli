@@ -1,7 +1,7 @@
 {
   "themeLeaks": {},
   "largeFiles": {
-    "packages/archymedes-cli/src/archymedes.ts": 3205,
+    "packages/archymedes-cli/src/archymedes.ts": 3201,
     "packages/archymedes-cli/src/render/tui.ts": 1356
   },
   "layering": {},
