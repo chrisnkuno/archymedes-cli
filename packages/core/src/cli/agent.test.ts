@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
-import { ArchymedesAgent, type ArchymedesEvent } from "./agent";
+import { ArchymedesAgent, INTERRUPTED_TURN_NOTE, type ArchymedesEvent } from "./agent";
 import { LocalWorkspace } from "./backends";
 import { readEventJournal } from "./protocol";
 import { loadSession } from "./session";
@@ -69,6 +69,53 @@ describe("ArchymedesAgent", () => {
 
     const toolEvents = events.filter((event) => event.type === "runtime" && event.event.type === "tool_result");
     expect(toolEvents).toHaveLength(3);
+  });
+
+  it("saves a turn after each tool step, so a crash mid-turn still resumes with the work done", async () => {
+    let failSecondCall!: (error: Error) => void;
+    const requests: AgentModelRequest[] = [];
+    const model: AgentTurnProvider = {
+      async complete(request) {
+        requests.push({ ...request, messages: [...request.messages] });
+        if (requests.length === 1) {
+          return { responseId: "r1", model: "m", finishReason: "tool_calls", content: "", usage,
+            toolCalls: [{ id: "w1", name: "write_file", arguments: { path: "notes.txt", content: "kept\n" } }] } as AgentModelTurn;
+        }
+        if (requests.length === 2) return new Promise<AgentModelTurn>((_resolve, reject) => { failSecondCall = reject; });
+        return { responseId: "r3", model: "m", finishReason: "stop", content: "Back.", toolCalls: [], usage } as AgentModelTurn;
+      },
+    };
+    const options = {
+      root, model, prices, mode: "auto" as const,
+      approve: async () => "allow" as const,
+      workspace: new LocalWorkspace(root),
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
+    };
+    const agent = new ArchymedesAgent(options);
+    const turn = agent.send("write notes.txt").catch((error: Error) => error);
+
+    // The model is still thinking about its second step: this is the moment a SIGKILL would land.
+    let saved = await loadSession(root, agent.sessionId);
+    for (let tries = 0; !saved?.messages.some((message) => message.role === "tool") && tries < 200; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      saved = await loadSession(root, agent.sessionId);
+    }
+    expect(saved?.messages.map((message) => message.role)).toEqual(["system", "user", "assistant", "tool"]);
+    expect(saved?.messages[1].content).toContain("write notes.txt");
+    expect(saved?.title).not.toBe("Untitled session");
+
+    // A new process resuming that record gets a well-formed transcript that says what happened.
+    const resumed = new ArchymedesAgent(options);
+    resumed.resume(saved!);
+    expect(resumed.snapshot().messages.at(-1)).toMatchObject({ role: "assistant", content: INTERRUPTED_TURN_NOTE });
+
+    // The same repair when the turn fails in-process after a mid-turn save.
+    failSecondCall(new Error("provider went away"));
+    expect(await turn).toBeInstanceOf(Error);
+    expect((await loadSession(root, agent.sessionId))?.messages.at(-1)).toMatchObject({ role: "assistant", content: INTERRUPTED_TURN_NOTE });
+    await agent.send("are you back?");
+    expect(requests[2].messages.slice(-3).map((message) => message.role)).toEqual(["tool", "assistant", "user"]);
+    await agent.relinquish();
   });
 
   it("surfaces a subdirectory's own instructions the moment a real turn reaches it", async () => {

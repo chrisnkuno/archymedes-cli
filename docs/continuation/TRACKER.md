@@ -21,7 +21,8 @@ continue with the rest". Pushed 2026-09-17 once GitHub HTTPS recovered.
 | WS-5.7 | Custom slash commands | done | `platform/prompt-commands.ts`, `commands/slash-input.ts` | unit + PTY | `.archymedes/commands/*.md` and user config; built-ins protected; `archymedes.ts` 3201 → 3199 |
 | WS-5.8 | Models could not receive images | done | `core/cli/image-attachments.ts`, serializers, agent | unit + agent end-to-end | @image mentions; 4 × 5 MB; history keeps a note, not base64. Hosted exchange acceptance unverified |
 | WS-5.9 | Unit suites timed out under machine load | done | `vitest.config.ts`, `archymedes.test.ts` | suspect suites twice under 4 busy-loop CPU hogs | Every failure was the 5 s default timeout, not a race. `--help` paid the whole-CLI import (3-5 s): now warmed in `beforeAll`. Unit `testTimeout` 15 s for tests that spawn git and processes. Under load: before 2-3 failures per run, after 184/184 twice. CI run 35251713387 green on Linux, macOS and Windows after WS-5.1 |
-| WS-5.10 | LSP diagnostics, mid-turn checkpointing, desktop parity (MCP/hooks/skills/web tools), free gateway deployment | todo (needs decisions) | — | — | See the gap report in the session summary |
+| WS-5.11 | Mid-turn checkpointing so `--resume` finds a turn killed mid-way | done | `agent-runtime.ts` (`checkpointMessages`), `cli/agent.ts` | `agent.test.ts`, `pty/recovery.test.ts` x3 | Saved after each tool step; `INTERRUPTED_TURN_NOTE` closes a transcript ending in tool results on resume and on in-process failure, so providers get alternating roles. PTY: after SIGKILL the resumed request history contains the interrupted request and its tool result |
+| WS-5.10 | LSP diagnostics, desktop parity (MCP/hooks/skills/web tools), free gateway deployment | todo (needs decisions) | — | — | See the gap report in the session summary |
 
 ## WS-4: Free model access preparation (2026-09-15)
 

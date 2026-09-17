@@ -125,6 +125,9 @@ export type ArchymedesTurnResult = AgentRuntimeResult & { checkpoint?: Checkpoin
 /** Which half of a checkpoint to restore. "both" is the historical, sole behaviour of `/undo`. */
 export type RestoreScope = "code" | "conversation" | "both";
 
+/** Closes a turn that was saved mid-way and never finished, so the next request is well formed. */
+export const INTERRUPTED_TURN_NOTE = "(This turn was interrupted before I replied. The tool results above were recorded; anything after them did not happen. I will check the current state before relying on it.)";
+
 export class ArchymedesAgent {
   private readonly todoList = new TodoList();
   /**
@@ -277,11 +280,25 @@ export class ArchymedesAgent {
     return structuredClone(this.session);
   }
 
+  /**
+   * A transcript that ends in tool results had its turn cut off before the model replied: a process
+   * that died after a mid-turn save, or a turn that failed after one. The note keeps roles
+   * alternating for providers that require it and tells the model what happened. Returns whether
+   * anything changed.
+   */
+  private closeInterruptedTurn(): boolean {
+    if (this.messages.at(-1)?.role !== "tool") return false;
+    this.messages = [...this.messages, { role: "assistant", content: INTERRUPTED_TURN_NOTE, internal: true }];
+    this.session = { ...this.session, messages: this.messages };
+    return true;
+  }
+
   /** Restores a previous session's transcript and standing approvals. */
   resume(record: SessionRecord): void {
     if (this.ownershipReady) throw new Error("Relinquish the current agent before resuming another session");
     this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode, modelSelection: this.options.model.selection };
     this.messages = [...record.messages];
+    this.closeInterruptedTurn();
     this.recalledMemoryKeys.clear();
     for (const key of record.recalledMemoryKeys ?? []) this.recalledMemoryKeys.add(key);
     // A resumed session may already have been compacted, in which case the earliest surviving user
@@ -774,6 +791,13 @@ export class ArchymedesAgent {
           heartbeat: async () => {},
           isCancellationRequested: async () => this.cancelled,
           isToolCallApproved: (call, tool) => this.permissions.decide(call, tool),
+          // Saved after every completed tool step, not only when the turn ends: a crash or SIGKILL
+          // mid-turn used to leave `--resume` without the request or the tool work already done.
+          checkpointMessages: async (messages) => {
+            this.messages = withoutImageData(messages);
+            this.session = { ...this.session, messages: this.messages, title: this.session.title === "Untitled session" ? titleFromObjective(objective) : this.session.title, updatedAt: Date.now() };
+            await saveSession(this.session);
+          },
           persistEvent: async (event) => {
             this.options.onEvent?.({ type: "runtime", event });
             if (event.type !== "assistant_delta") {
@@ -834,6 +858,7 @@ export class ArchymedesAgent {
       if (isActiveTurnStatus(turnStatus)) {
         await transition("failed", true).catch(() => undefined);
       }
+      if (this.closeInterruptedTurn()) await saveSession(this.session).catch(() => undefined);
       throw error;
     } finally {
       if (this.turnAbort === turnAbort) this.turnAbort = null;

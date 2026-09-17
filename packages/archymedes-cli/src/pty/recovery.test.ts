@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -109,6 +109,17 @@ describe("recovery from an unclean failure", () => {
       if (await stat(target).then(() => true, () => false)) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    // And until the mid-turn save that follows it has landed: the guarantee under test is that a
+    // saved tool step survives the kill, not a race against the few milliseconds before the save.
+    const sessions = path.join(cwd, ".archymedes", "sessions");
+    const saving = performance.now();
+    const savedStep = async () => {
+      for (const name of await readdir(sessions).catch(() => [] as string[])) {
+        if (name.endsWith(".json") && (await readFile(path.join(sessions, name), "utf8").catch(() => "")).includes("Wrote out.txt")) return true;
+      }
+      return false;
+    };
+    while (performance.now() - saving < 15_000 && !(await savedStep())) await new Promise((resolve) => setTimeout(resolve, 50));
     first.kill("SIGKILL");
     await first.waitForExit(8_000).catch(() => undefined);
 
@@ -116,10 +127,9 @@ describe("recovery from an unclean failure", () => {
     // once — no partial file, no duplicate from a half-applied edit.
     expect(await readFile(target, "utf8")).toBe("written once\n");
 
-    // Whether `--resume` then finds a session is timing-dependent — session records are
-    // turn-atomic, so it depends on whether the turn had been checkpointed at the instant the
-    // signal landed (see RELEASE_ASSESSMENT item 5). Either way the CLI comes back to a usable
-    // prompt, does not re-apply the write, and takes a new turn.
+    // The turn is saved after each tool step, so `--resume` finds this interrupted turn — request,
+    // tool call and result — rather than depending on when the signal landed. The CLI comes back to
+    // a usable prompt, does not re-apply the write, and takes a new turn with that history.
     const afterKill = boot({ args: ["--resume"] });
     await afterKill.waitFor(PROMPT, { timeoutMs: 30_000 });
     expect(await readFile(target, "utf8")).toBe("written once\n");
@@ -127,6 +137,11 @@ describe("recovery from an unclean failure", () => {
     const mark2 = afterKill.output().length;
     afterKill.writeLine("are you there?");
     await afterKill.waitFor(/recovered and responsive/, { timeoutMs: 30_000, since: mark2 });
+    const history = JSON.stringify(stub.requests().at(-1)?.messages ?? []);
+    // The interrupted request and its tool work are in the resumed conversation. (Whether the note
+    // closing it appears depends on whether the model's next step had also finished before the kill.)
+    expect(history).toContain("write out.txt");
+    expect(history).toContain("Wrote out.txt");
   }, 120_000);
 
   it("does not hang when interrupted twice in quick succession mid-turn", async () => {

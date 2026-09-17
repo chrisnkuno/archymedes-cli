@@ -77,8 +77,9 @@ pseudo-terminal coverage. Keep these foundations.
    write lands exactly once, always), and a double Ctrl+C mid-turn (no hang). Finding: the tool
    effect is exactly-once and durable, but conversation-state recovery is not — session records
    are turn-atomic, so whether `--resume` finds the interrupted session depends on whether the
-   turn had been checkpointed at the instant the process died. Deciding whether to checkpoint
-   mid-turn is the open design question. Interrupted-payment belongs with the hosted
+   turn had been checkpointed at the instant the process died. Resolved 2026-09-17: the session is saved after every completed tool step, and a transcript
+   ending in tool results is closed with an interruption note on resume or failure, so `--resume`
+   after a SIGKILL finds the interrupted turn. Interrupted-payment belongs with the hosted
    service (item 6), not the local CLI. Still to do: run these against a production-like remote
    deployment rather than a stub.
 6. **Keep hosted promises precise.** A public exchange client is not proof of live credits,

@@ -213,6 +213,11 @@ export type AgentRuntimeControl = {
   isCancellationRequested(): Promise<boolean>;
   isToolCallApproved(call: AgentToolCall, tool: AgentTool): Promise<boolean | "approved" | "denied" | "pending">;
   persistEvent(event: AgentRuntimeEvent): Promise<void>;
+  /**
+   * Called after each model step once every tool result for it is recorded — the points where the
+   * transcript is structurally complete — so a caller can save a turn that has not finished yet.
+   */
+  checkpointMessages?(messages: readonly AgentMessage[]): Promise<void>;
 };
 
 export type AgentRuntimeRequest = AgentToolContext & {
@@ -979,6 +984,7 @@ export class BoundedAgentRuntime {
         }
         await this.dependencies.control.persistEvent({ type: "tool_result", toolCallId: call.id, toolName: call.name, isError: result.isError ?? false, effect, content, ...(result.data ? { data: result.data } : {}), ...(artifact ? { artifact } : {}) });
       }
+      await this.dependencies.control.checkpointMessages?.(messages);
       if (totalToolResultChars >= request.maxTotalToolResultChars) return stop("iteration_limit", "Run reached its total tool-result context budget.", iteration);
     }
     return stop("iteration_limit", "Run reached its model iteration budget.", request.maxIterations);
