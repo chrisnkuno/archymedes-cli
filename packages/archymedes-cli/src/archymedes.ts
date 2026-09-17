@@ -1901,7 +1901,7 @@ async function main(): Promise<number> {
   const context = [
     renderReliabilityStatus(999, glyphs.middot),
     `costs ${display}${preference.countryCode ? ` ${glyphs.middot} location ${preference.countryCode}` : ""} (${preference.source === "location" ? "auto-detected" : preference.source})`,
-  ];
+  ].filter(Boolean);
   if (pace !== "off") context.push(`${paceBadge(pace, glyphs)} ${glyphs.middot} /slow off to lift`);
   if (memories.length > 0) context.push(`${memories.length} remembered fact${memories.length === 1 ? "" : "s"} ${glyphs.middot} /memory`);
   out.write(`${style.dim(`  ${context.join(`  ${glyphs.middot}  `)}`)}\n`);

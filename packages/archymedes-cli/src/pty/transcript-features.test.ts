@@ -62,12 +62,14 @@ describe("what the transcript shows, under a real pty", () => {
     return proc;
   }
 
-  it("shows the measured reliability direction on every interactive startup", async () => {
+  it("does not show a benchmark measured on a provider this build does not ship", async () => {
+    // reliability/latest.json scores circuitnotion, which was removed; a score is shown again once
+    // the report is regenerated on a shipped provider (see render/reliability-status.ts).
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
     const output = plain(p.output());
-    expect(output).toMatch(/bundled benchmark \d+\/100/);
-    expect(output).toMatch(/measured \d{4}-\d{2}-\d{2}/);
+    expect(output).not.toMatch(/benchmark \d+\/100/);
+    expect(output).toMatch(/costs USD/);
   }, 60_000);
 
   it("shows the code a write actually contained, not only that a write happened", async () => {
