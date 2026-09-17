@@ -8,8 +8,14 @@ import type { ModelCapabilities } from "./providers/model-capabilities";
 import type { RoutingReceipt } from "./providers/routing-receipt";
 import { createHash, randomUUID } from "node:crypto";
 
+/** An image sent with a user message, base64 encoded. Only for the turn it was attached to. */
+export type AgentImage = { path: string; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string };
+
+/** Roughly what a provider bills for one screenshot-sized image; used only for estimates. */
+export const IMAGE_TOKEN_ESTIMATE = 1_600;
+
 export type AgentMessage =
-  | { role: "system" | "user" | "assistant"; content: string; internal?: boolean }
+  | { role: "system" | "user" | "assistant"; content: string; internal?: boolean; images?: AgentImage[] }
   | { role: "assistant"; content: string; toolCalls: AgentToolCall[]; internal?: boolean }
   | { role: "tool"; content: string; toolCallId: string; name: string; internal?: boolean };
 
@@ -18,6 +24,8 @@ export type AgentToolCall = { id: string; name: string; arguments: unknown };
 /** Prompt-bearing parts of one message, including structured tool calls that are not in content. */
 export function agentMessagePromptParts(message: AgentMessage): string[] {
   const parts = [message.content ?? ""];
+  // Estimation measures characters; four per token stands in for each image's billed size.
+  if ("images" in message) for (const _image of message.images ?? []) parts.push(" ".repeat(IMAGE_TOKEN_ESTIMATE * 4));
   if ("toolCalls" in message && Array.isArray(message.toolCalls)) {
     for (const call of message.toolCalls) parts.push(call.id, call.name, JSON.stringify(call.arguments ?? {}));
   } else if (message.role === "tool") {
@@ -209,6 +217,8 @@ export type AgentRuntimeControl = {
 
 export type AgentRuntimeRequest = AgentToolContext & {
   objective: string;
+  /** Images attached to the objective's user message. */
+  images?: AgentImage[];
   systemPrompt: string;
   /**
    * Prior, structurally complete conversation items.
@@ -611,7 +621,7 @@ export class BoundedAgentRuntime {
     const messages: AgentMessage[] = [
       { role: "system", content: request.systemPrompt },
       ...(request.history ?? []),
-      { role: "user", content: request.objective },
+      { role: "user", content: request.objective, ...(request.images?.length ? { images: request.images } : {}) },
     ];
     let usage = { ...emptyUsage };
     let actualModelRwf = 0;

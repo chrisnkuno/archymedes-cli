@@ -166,6 +166,17 @@ export function toAnthropicMessages(messages: readonly AgentMessage[]): { system
       continue;
     }
 
+    if (message.role === "user" && "images" in message && message.images?.length) {
+      converted.push({
+        role: "user",
+        content: [
+          ...message.images.map((image) => ({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } })),
+          { type: "text", text: message.content.trim() || "(no content)" },
+        ],
+      });
+      continue;
+    }
+
     // A turn with no text at all is rejected; the runtime can produce one when a model answers
     // with tool calls only, and dropping it would orphan the tool results that follow.
     converted.push({ role: message.role, content: message.content.trim() || "(no content)" });

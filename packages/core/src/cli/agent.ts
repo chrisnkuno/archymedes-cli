@@ -1,3 +1,4 @@
+import { attachMentionedImages, objectiveWithImageProblems, withoutImageData } from "./image-attachments";
 import { HostedRecoveryStore } from "./hosted-recovery";
 import { mergeRoutingReceipts } from "../providers/routing-receipt";
 import type { RoutingPlan } from "../providers/routing-plan";
@@ -744,7 +745,9 @@ export class ArchymedesAgent {
        */
       const systemPrompt = buildArchymedesSystemPrompt(this.context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment());
       const memoryBlock = memoryPromptBlock(recalled);
-      const turnObjective = memoryBlock ? `${memoryBlock}\n\n${objective}` : objective;
+      const attached = await attachMentionedImages(this.workspace, objective);
+      const requested = objectiveWithImageProblems(objective, attached.problems);
+      const turnObjective = memoryBlock ? `${memoryBlock}\n\n${requested}` : requested;
 
       // Snapshot before the agent can touch anything, so `/undo` returns to the state the user saw
       // when they typed. Taken per turn rather than per tool call: a turn is the unit a person
@@ -792,6 +795,7 @@ export class ArchymedesAgent {
         stepId: `turn_${this.messages.length}`,
         // Carries this turn's recalled memory with it, so the cached system prefix stays byte-stable.
         objective: turnObjective,
+        images: attached.images,
         history: priorHistory,
         systemPrompt,
         allowedCapabilityIds: capabilities,
@@ -808,7 +812,7 @@ export class ArchymedesAgent {
 
       const combinedUsage = addModelUsage(compaction.usage, addModelUsage(result.usage, this.delegatedUsage));
       const combinedRwf = compaction.actualRwf + result.actualModelRwf + this.delegatedRwf;
-      this.messages = result.messages;
+      this.messages = withoutImageData(result.messages);
       this.session = {
         ...this.session,
         title: this.session.messages.length === 0 ? titleFromObjective(objective) : this.session.title,

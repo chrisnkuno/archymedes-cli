@@ -312,6 +312,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       "A prompt you type often can be saved as a command: `.archymedes/commands/review.md` becomes `/review`, shared with everyone on the project, and the same file in your config directory's `commands` folder is yours alone. `$ARGUMENTS` in the file is replaced by whatever you type after the name. Built-in commands cannot be replaced.",
       "Voice input records or transcribes a prompt you can edit before sending.",
       "The file picker is the project as a tree rather than a flat completion list: expand a folder, preview a file's contents, and pick one to drop an @mention into the line you're writing.",
+      "Mentioning an image — `what is wrong in @screenshots/bug.png?` — sends the picture itself with that request (PNG, JPEG, GIF or WebP, up to four, 5 MB each, from a local workspace). The model must accept images; the saved conversation keeps a note of the attachment rather than the image.",
       "`/edit <path>` opens a file in the built-in editor. It reads and writes through the workspace like every tool does, so it edits the sandbox's copy in a sandboxed session rather than a same-named file on this machine, and it only writes when you save — quitting really is a discard.",
     ],
     examples: [

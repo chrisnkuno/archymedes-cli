@@ -55,6 +55,15 @@ export function toWireMessage(message: AgentMessage): Record<string, unknown> {
       tool_calls: message.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.arguments) } })),
     };
   }
+  if (message.role === "user" && "images" in message && message.images?.length) {
+    return {
+      role: "user",
+      content: [
+        { type: "text", text: message.content },
+        ...message.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.data}` } })),
+      ],
+    };
+  }
   return { role: message.role, content: message.content };
 }
 
