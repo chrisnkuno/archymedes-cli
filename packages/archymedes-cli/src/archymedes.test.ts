@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Interface } from "node:readline/promises";
 import { visibleWidth } from "./text/text-width";
 import { readFxRates, renderProviders } from "./app/providers";
@@ -544,6 +544,11 @@ describe("main() — branches that resolve before any interactive input is neede
   const originalArgv = process.argv;
   const originalEnv = { ...process.env };
   let tmpRoot: string;
+
+  // Importing the entry point transforms the whole CLI graph once: 3-5 s on a busy machine. Paid here
+  // with its own budget instead of inside whichever test happens to run first (`--help`), which then
+  // looked slow and timed out for a reason that had nothing to do with help.
+  beforeAll(async () => { await import("./archymedes"); }, 60_000);
 
   beforeEach(async () => {
     const { mkdtemp } = await import("node:fs/promises");

@@ -8,7 +8,7 @@ has 5,100 lines and `tui.ts` has 1,364.
 ## WS-5: Gap closure (2026-09-17)
 
 Gap study (docs, code, CI logs, competitor comparison) found the items below. User: "yes go for it and
-continue with the rest". Commits are local until GitHub HTTPS pushes stop being reset.
+continue with the rest". Pushed 2026-09-17 once GitHub HTTPS recovered.
 
 | ID | Task | Status | Scope | Recheck | Evidence |
 | --- | --- | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ continue with the rest". Commits are local until GitHub HTTPS pushes stop being 
 | WS-5.6 | Startup showed a benchmark measured on removed provider circuitnotion | done | `render/reliability-status.ts` | unit + PTY | Hidden until regenerated on a shipped provider |
 | WS-5.7 | Custom slash commands | done | `platform/prompt-commands.ts`, `commands/slash-input.ts` | unit + PTY | `.archymedes/commands/*.md` and user config; built-ins protected; `archymedes.ts` 3201 → 3199 |
 | WS-5.8 | Models could not receive images | done | `core/cli/image-attachments.ts`, serializers, agent | unit + agent end-to-end | @image mentions; 4 × 5 MB; history keeps a note, not base64. Hosted exchange acceptance unverified |
-| WS-5.9 | Unit suites time out or race under machine load | todo | `agent.test.ts`, `daemon.test.ts`, `session.test.ts`, `job-worker.test.ts`, `archymedes.test.ts` | repeated runs under load | At load ~8 on 4 cores, 1-4 different tests fail per run on an unmodified tree |
+| WS-5.9 | Unit suites timed out under machine load | done | `vitest.config.ts`, `archymedes.test.ts` | suspect suites twice under 4 busy-loop CPU hogs | Every failure was the 5 s default timeout, not a race. `--help` paid the whole-CLI import (3-5 s): now warmed in `beforeAll`. Unit `testTimeout` 15 s for tests that spawn git and processes. Under load: before 2-3 failures per run, after 184/184 twice. CI run 35251713387 green on Linux, macOS and Windows after WS-5.1 |
 | WS-5.10 | LSP diagnostics, mid-turn checkpointing, desktop parity (MCP/hooks/skills/web tools), free gateway deployment | todo (needs decisions) | — | — | See the gap report in the session summary |
 
 ## WS-4: Free model access preparation (2026-09-15)

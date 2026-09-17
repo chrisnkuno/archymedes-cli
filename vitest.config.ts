@@ -72,6 +72,12 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
+          // Many unit tests do real work: git checkpoints, child processes, session files. At normal
+          // load the slowest take about a second, but at a load of 8-12 on four cores (measured
+          // 2026-09-17) they crossed vitest's 5 s default and failed at random, 1-4 per run. The
+          // assertions are unchanged; a test that truly hangs still fails, just after 15 s.
+          testTimeout: 15_000,
+          hookTimeout: 30_000,
           exclude: [
             ...configDefaults.exclude,
             ".claude/worktrees/**",
