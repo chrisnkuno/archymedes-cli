@@ -20,7 +20,7 @@ capped request to the execution exchange, which selects the provider and returns
 | --- | --- | --- |
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.6-terra` |
-| Archymedes Cloud | `ARCHYMEDES_CLOUD_TOKEN` + `ARCHYMEDES_CLOUD_BASE_URL` | `auto` (policy routed) |
+| Archymedes Cloud (not generally available) | `ARCHYMEDES_CLOUD_TOKEN` + `ARCHYMEDES_CLOUD_BASE_URL` | `auto` (policy routed) |
 | Google Gemini | `GOOGLE_API_KEY` | `gemini-2.5-pro` |
 | xAI Grok | `XAI_API_KEY` | `grok-4` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
@@ -28,13 +28,16 @@ capped request to the execution exchange, which selects the provider and returns
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
 | Ollama (local) | — | `llama3.1` |
 | OpenAI-compatible | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | your choice |
-| Free models (`--free`) | none via the free gateway, or `OPENROUTER_API_KEY` | `openrouter/free` |
+| Free models (`--free`) | `OPENROUTER_API_KEY`, or a self-hosted free gateway | `openrouter/free` |
 
 Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and recorded once.
 
-`archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account. Without a
-key it goes through the hosted [free gateway](packages/free-gateway/README.md), which holds the key
-server-side and rate limits requests; with your own `OPENROUTER_API_KEY` it goes to OpenRouter directly. Only
+`archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account and no
+paid fallback. With your own `OPENROUTER_API_KEY` it goes to OpenRouter directly; without a key it
+needs a [free gateway](packages/free-gateway/README.md) reachable at `ARCHYMEDES_FREE_GATEWAY_URL` —
+the gateway holds the key server-side and rate limits requests, and the hosted public gateway is not
+generally available yet, so today that means running your own (the `packages/free-gateway` package
+deploys standalone). Only
 `openrouter/free` or exact `publisher/model:free` IDs that OpenRouter lists at zero price with tool
 support are accepted; every request carries a zero maximum price, and free mode never falls back to
 a paid provider. Free capacity is rate limited either way. Model discovery also
@@ -57,7 +60,9 @@ Review $ARGUMENTS for data-loss risks. List each risk with the line it comes fro
 ## Cost and balance
 
 For direct/BYOK providers, costs are shown in your local currency and `/balance` tracks a local
-spend figure you set yourself. On `archymedes-cloud`, `/balance` instead reads the account's real
+spend figure you set yourself. Archymedes Cloud is not generally available: the client adapter
+ships, but accounts, credits, and the hosted exchange are private and gated. Once provisioned,
+`/balance` on `archymedes-cloud` reads the account's real
 credit ledger: what is available now, what is reserved against work in flight, and what has settled.
 The two are never combined — one is a pacing limit you chose, the other is money. Archymedes credits
 are closed-loop: usable for Archymedes services, not transferable and not withdrawable.
