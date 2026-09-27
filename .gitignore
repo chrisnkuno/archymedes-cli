@@ -15,6 +15,7 @@ test-results/
 .env
 .env.*
 !.env.example
+.npmrc
 
 # Nova CLI local state (sessions, checkpoint index, security brain)
 .nova/
