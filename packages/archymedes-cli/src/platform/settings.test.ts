@@ -66,6 +66,12 @@ describe("Archymedes settings", () => {
     expect(() => validateSetting("ARCHYMEDES_PROVIDER", "gemini")).toThrow("anthropic");
   });
 
+  it("accepts only on or off for the jev second opinion, normalised to lower case", () => {
+    expect(validateSetting("ARCHYMEDES_JEV", "OFF")).toBe("off");
+    expect(validateSetting("ARCHYMEDES_JEV", "on")).toBe("on");
+    expect(() => validateSetting("ARCHYMEDES_JEV", "sometimes")).toThrow("on or off");
+  });
+
   it("edits and clears values through the numbered menu without echoing secrets", async () => {
     // Derived, not hardcoded: the menu numbers a field by its position in SETTING_FIELDS, so
     // adding a setting renumbers every field below it and a literal "5" quietly starts editing a

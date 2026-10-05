@@ -110,6 +110,12 @@ describe("ArchymedesAgent", () => {
     expect(resumed.snapshot().messages.at(-1)).toMatchObject({ role: "assistant", content: INTERRUPTED_TURN_NOTE });
 
     // The same repair when the turn fails in-process after a mid-turn save.
+    // Polled, not assumed: the second model call starts just after the tool result is
+    // recorded, and on a loaded machine the test otherwise outruns it and calls a
+    // function that does not exist yet.
+    for (let tries = 0; typeof failSecondCall !== "function" && tries < 200; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     failSecondCall(new Error("provider went away"));
     expect(await turn).toBeInstanceOf(Error);
     expect((await loadSession(root, agent.sessionId))?.messages.at(-1)).toMatchObject({ role: "assistant", content: INTERRUPTED_TURN_NOTE });
@@ -220,6 +226,63 @@ describe("ArchymedesAgent", () => {
     const system = model.requests[0].messages.find((message) => message.role === "system");
     expect(system?.content).toContain("Always use tabs.");
     expect(system?.content).toContain("ARCHYMEDES.md");
+  });
+
+  it("emits a jev verdict after the turn when a key is configured", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "plan", approve: async () => "deny",
+      onEvent: (event) => events.push(event),
+      jev: {
+        apiKey: "ts-test",
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            model: "jev-1.13.0",
+            answers: {
+              outcome: { type: "choice", choice: "complete", confidence: 0.9, probabilities: { complete: 0.9, follow_up: 0.08, blocked: 0.02 } },
+              sensitive_action: { type: "noul", noul: 0.01 },
+            },
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        }),
+      },
+    });
+
+    const result = await agent.send("what does this project do?");
+    expect(result.status).toBe("completed");
+    const verdicts = events.filter((event) => event.type === "jev-verdict");
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]).toMatchObject({ verdict: { status: "verdict", outcome: "complete", sensitiveAction: 0.01 } });
+  });
+
+  it("completes the turn and reports unavailable when jev is down", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "plan", approve: async () => "deny",
+      onEvent: (event) => events.push(event),
+      jev: { apiKey: "ts-test", fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }) },
+    });
+
+    // Fail-open: the turn stands, and the transcript says the verdict is missing rather
+    // than failing after the fact.
+    const result = await agent.send("what does this project do?");
+    expect(result.status).toBe("completed");
+    const verdicts = events.filter((event) => event.type === "jev-verdict");
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]).toMatchObject({ verdict: { status: "unavailable" } });
+  });
+
+  it("emits no verdict without a key", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "deny", onEvent: (event) => events.push(event) });
+
+    await agent.send("what does this project do?");
+    expect(events.some((event) => event.type === "jev-verdict")).toBe(false);
   });
 
   it("indexes the security playbooks in defender mode, and offers the write/terminal/playbook tools", async () => {

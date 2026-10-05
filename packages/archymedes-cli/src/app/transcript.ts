@@ -372,6 +372,18 @@ export function renderEvent(event: ArchymedesEvent): void {
     out.write(style.dim(`  ${glyphs.elbow} compacted context (${event.messagesBefore} → ${event.messagesAfter} messages)\n`));
     return;
   }
+  if (event.type === "jev-verdict") {
+    // Advisory, so dim: a probability is information, not an instruction, and it must read
+    // quieter than the turn it judges.
+    forgetToolLines();
+    const verdict = event.verdict;
+    if (verdict.status === "unavailable") {
+      out.write(style.dim(`  ${glyphs.elbow} jev verdict unavailable: ${verdict.reason}\n`));
+      return;
+    }
+    out.write(style.dim(`  ${glyphs.elbow} jev: ${verdict.outcome} (${verdict.outcomeProbabilities[verdict.outcome]?.toFixed(2) ?? "?"}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}\n`));
+    return;
+  }
 
   const runtime = event.event;
   if (runtime.type === "provider_retry") {

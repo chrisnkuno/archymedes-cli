@@ -162,6 +162,13 @@ export class HeadlessEmitter {
       this.emit("compaction", { messagesBefore: event.messagesBefore, messagesAfter: event.messagesAfter });
       return;
     }
+    if (event.type === "jev-verdict") {
+      const verdict = event.verdict;
+      this.emit("jev_verdict", verdict.status === "unavailable"
+        ? { unavailable: verdict.reason }
+        : { model: verdict.model, outcome: verdict.outcome, probabilities: verdict.outcomeProbabilities, sensitiveAction: verdict.sensitiveAction });
+      return;
+    }
     const runtime = event.event;
     if (runtime.type === "assistant_delta") {
       this.emit("text", { text: runtime.text });

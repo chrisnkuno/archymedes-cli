@@ -42,6 +42,7 @@ import type { ReadResult, WorkspaceLimits } from "./workspace";
 import { DEFAULT_OUTPUT_CEILING } from "../providers/model-capabilities";
 import { DefenderBrain } from "./defender-brain";
 import { toolProfileForObjective, toolsForProfile } from "./tool-profile";
+import { createJevJudge, requestJevVerdict, turnVerdictState, verdictFromResponse, type JevFetch, type JevTurnVerdict } from "./jev";
 
 /**
  * Archymedes CLI's agent: the hosted `BoundedAgentRuntime`, hosted locally instead.
@@ -73,6 +74,13 @@ export type ArchymedesAgentOptions = {
   /** Reported when a tool spends money outside the model, so the ledger sees the whole bill. */
   onExpense?: (expense: Expense) => void;
   budgets?: Partial<ArchymedesBudgets>;
+  /**
+   * Jev (TypeSafe System One) second opinion, consulted after each turn and before each
+   * effectful tool call. Absent means off: no key, no calls, no behavior change. A blank
+   * key is treated the same as absent, so half-configuration degrades to off rather than
+   * to a failure on every turn.
+   */
+  jev?: { apiKey: string; model?: string; timeoutMs?: number; fetchImpl?: JevFetch };
 };
 
 export type ArchymedesEvent =
@@ -81,7 +89,15 @@ export type ArchymedesEvent =
   // `urgency` and `boundary` say *why* the transcript was compacted here rather than later, which
   // is the only interesting thing about a compaction from outside: at 70% because the work reached
   // a clean stopping point, or at 90% because it had to be.
-  | { type: "compaction"; tokensBefore: number; messagesBefore: number; messagesAfter: number; urgency?: CompactionUrgency; boundary?: CompactionBoundary };
+  | { type: "compaction"; tokensBefore: number; messagesBefore: number; messagesAfter: number; urgency?: CompactionUrgency; boundary?: CompactionBoundary }
+  /**
+   * Jev's post-turn verdict: where the turn landed, with probabilities.
+   *
+   * Advisory by design — displayed, never enforced — and fail-open: when Jev is
+   * unreachable the event still fires as `unavailable`, so the transcript says so
+   * instead of silently skipping the check it promised.
+   */
+  | { type: "jev-verdict"; verdict: JevTurnVerdict };
 
 export type ArchymedesBudgets = {
   maxIterations: number;
@@ -189,6 +205,8 @@ export class ArchymedesAgent {
   private delegatedRwf = 0;
   private delegatedUsage: ModelUsage = emptyModelUsage();
   private readonly defenderBrain: DefenderBrain;
+  /** Jev second-opinion configuration, normalized: undefined means the judge is off. Never persisted — the key lives in memory alone. */
+  private readonly jev: NonNullable<ArchymedesAgentOptions["jev"]> | undefined;
 
   /** The environment report for this session, probed on first use and cached. Never throws: a session that cannot describe its environment still runs, just without the section. */
   private loadEnvironment(): Promise<EnvironmentReport | undefined> {
@@ -237,6 +255,8 @@ export class ArchymedesAgent {
     };
     this.journal = new EventJournal(options.root, this.session.id);
     this.recovery = new HostedRecoveryStore(options.root, this.session.id);
+    // A blank key counts as absent: half-configuration degrades to off, not to a failure.
+    this.jev = options.jev && options.jev.apiKey.trim() ? options.jev : undefined;
     this.permissions = new PermissionLedger(options.mode, async (request) => {
       const turnId = this.activeTurnId ?? "turn_unbound";
       await this.activeTransition?.("waiting_approval", true);
@@ -258,7 +278,7 @@ export class ArchymedesAgent {
       await this.journal.append({ type: "approval_decided", turnId, actionDigest: request.actionDigest, decision }, { durable: true });
       if (decision === "allow" || decision === "allow_always") await this.activeTransition?.("running", true);
       return decision;
-    });
+    }, this.jev ? createJevJudge(this.jev) : undefined);
   }
 
   get sessionId(): string {
@@ -690,6 +710,8 @@ export class ArchymedesAgent {
       turnStatus = to;
     };
     this.activeTransition = transition;
+    let turnResult: ArchymedesTurnResult;
+    let priorCount = 0;
     try {
       // Recording start is ordered but not fsynced: no side effect has happened yet, so forcing a
       // disk barrier here would add latency without improving recovery. Tool calls and approvals
@@ -782,6 +804,8 @@ export class ArchymedesAgent {
 
       const compaction = await this.compactIfNeeded(turnId, objective, turnAbort.signal);
       compactionActualRwf = compaction.actualRwf;
+      // Fresh per turn: a judge reading the previous turn's task would misjudge this one's tools.
+      this.permissions.setTaskHint(objective);
       const runtime = new BoundedAgentRuntime({
         model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "main"),
         tools: scoped,
@@ -813,6 +837,7 @@ export class ArchymedesAgent {
       // The runtime owns one exchange; the CLI owns the conversation. Native messages preserve
       // provider tool-call structure and prompt caching across turns.
       const priorHistory = this.messages.filter((message) => message.role !== "system");
+      priorCount = priorHistory.length;
       const result = await runtime.execute({
         taskId: this.session.id,
         runId: this.session.id,
@@ -853,7 +878,7 @@ export class ArchymedesAgent {
       await this.recordHostedUsage();
       await saveSession(this.session);
       await this.recovery.cleanup(this.session.hostedRecoveryBatchId);
-      return { ...result, usage: combinedUsage, actualModelRwf: combinedRwf, checkpoint };
+      turnResult = { ...result, usage: combinedUsage, actualModelRwf: combinedRwf, checkpoint };
     } catch (error) {
       if (isActiveTurnStatus(turnStatus)) {
         await transition("failed", true).catch(() => undefined);
@@ -864,6 +889,45 @@ export class ArchymedesAgent {
       if (this.turnAbort === turnAbort) this.turnAbort = null;
       this.activeTurnId = null;
       this.activeTransition = null;
+    }
+    // The model has acted, the turn is saved and disarmed; now the judge speaks. Awaiting
+    // the verdict here keeps transcript order (verdict line before the next prompt), but the
+    // turn is already over: Ctrl+C during judgment exits instead of aborting finished work,
+    // and whatever Jev says — or its silence — changes nothing already decided.
+    await this.maybeJevVerdict({ objective, priorCount, messages: turnResult.messages });
+    return turnResult;
+  }
+
+  /**
+   * Asks Jev for a post-turn verdict and reports it as an event.
+   *
+   * Runs after the turn is saved, so a slow or failing judge can delay the transcript
+   * line but never the work itself. Skipped entirely without a key. Fail-open: a judge
+   * outage emits `unavailable` rather than throwing, because the turn it judges already
+   * finished — failing it after the fact would rewrite history, not protect anyone.
+   */
+  private async maybeJevVerdict(input: { objective: string; priorCount: number; messages: readonly AgentMessage[] }): Promise<void> {
+    if (!this.jev) return;
+    const toolNames: string[] = [];
+    let assistantText = "";
+    for (const message of input.messages.slice(input.priorCount)) {
+      if (message.role !== "assistant") continue;
+      if (message.content.trim()) assistantText = message.content;
+      if ("toolCalls" in message) for (const call of message.toolCalls) toolNames.push(call.name);
+    }
+    try {
+      const response = await requestJevVerdict({
+        apiKey: this.jev.apiKey,
+        ...(this.jev.model ? { model: this.jev.model } : {}),
+        ...(this.jev.timeoutMs !== undefined ? { timeoutMs: this.jev.timeoutMs } : {}),
+        ...(this.jev.fetchImpl ? { fetchImpl: this.jev.fetchImpl } : {}),
+        state: turnVerdictState({ objective: input.objective, assistantText, toolNames }),
+      });
+      this.options.onEvent?.({ type: "jev-verdict", verdict: verdictFromResponse(response) });
+    } catch (error) {
+      // The message carries no credential: requestJevVerdict never puts the key in one.
+      const reason = error instanceof Error ? error.message : String(error);
+      this.options.onEvent?.({ type: "jev-verdict", verdict: { status: "unavailable", reason: reason.slice(0, 200) } });
     }
   }
 

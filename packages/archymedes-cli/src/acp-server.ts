@@ -4,6 +4,7 @@ import { LocalWorkspace } from "@archymedes/core/cli/backends";
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { loadSession } from "@archymedes/core/cli/session";
 import { resolveSessionProvider } from "./app/session-provider";
+import { jevOptionsFromEnvironment } from "./app/jev";
 import { createExaClient } from "@archymedes/core/providers/exa";
 
 /**
@@ -74,6 +75,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
           workspace: new LocalWorkspace(root),
           search: createExaClient(options.environment),
           onEvent,
+          jev: jevOptionsFromEnvironment(options.environment),
           approve: async (request) =>
             approve({ toolName: request.tool.name, summary: request.summary, toolCallId: request.call.id }),
         });

@@ -111,6 +111,10 @@ export function stepJobLog(state: JobLogState, event: ArchymedesEvent): { state:
 
   if (event.type === "checkpoint") return { state, lines: [`✓ checkpoint: ${event.checkpoint.label}`] };
   if (event.type === "compaction") return { state, lines: [`… compacted ${event.messagesBefore} messages to ${event.messagesAfter}`] };
+  if (event.type === "jev-verdict") {
+    const verdict = event.verdict;
+    return { state, lines: [verdict.status === "unavailable" ? "… jev verdict unavailable" : `✓ jev: ${verdict.outcome} (${verdict.sensitiveAction.toFixed(2)} sensitive)`] };
+  }
 
   const inner = event.event;
   if (inner.type === "assistant_delta") return { state: { pendingText: state.pendingText + inner.text }, lines: [] };

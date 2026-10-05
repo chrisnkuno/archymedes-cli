@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AgentTool, AgentToolCall } from "../agent-runtime";
 import { assessToolSafety, type SafetyAssessment } from "./safety";
+import type { JevJudge, JevToolCheck } from "./jev";
 
 /**
  * Who decides whether a tool call runs.
@@ -82,6 +83,13 @@ export type ApprovalRequest = {
   policyVersion: typeof APPROVAL_POLICY_VERSION;
   /** Why auto mode did not silently approve this otherwise-workspace-local action. */
   safety: SafetyAssessment;
+  /**
+   * Jev's second opinion on the call, when a judge is configured and answered.
+   *
+   * Annotation, not authorization: it arrives with the prompt so the human reads it
+   * beside the rule-based screen, and a missing one changes nothing about the decision.
+   */
+  jev?: JevToolCheck;
 };
 
 export type ApprovalPrompt = (request: ApprovalRequest) => Promise<PermissionDecision>;
@@ -143,8 +151,15 @@ export class PermissionLedger {
   private readonly standing = new Map<string, "allow" | "deny">();
   /** Old broad denials remain safe; old broad allows are intentionally not migrated. */
   private readonly legacyDeniedTools = new Set<string>();
+  /** What the current turn is trying to do, in the user's own words — context for the Jev judge. */
+  private taskHint = "";
 
-  constructor(private readonly mode: ArchymedesMode, private readonly prompt: ApprovalPrompt) {}
+  constructor(private readonly mode: ArchymedesMode, private readonly prompt: ApprovalPrompt, private readonly judge?: JevJudge) {}
+
+  /** The turn's objective, set fresh per turn so a judge never reads a stale task. */
+  setTaskHint(hint: string): void {
+    this.taskHint = hint;
+  }
 
   /** Standing decisions made so far, for display and for session persistence. */
   snapshot(): Record<string, "allow" | "deny"> {
@@ -178,6 +193,26 @@ export class PermissionLedger {
     const standing = this.standing.get(scopeKey);
     if (standing) return standing === "allow" ? "approved" : "denied";
 
+    // The second opinion arrives with the prompt, never instead of it. Fast paths above
+    // already returned, so routine auto-approved edits never pay for a judgment call —
+    // only the decisions a human is about to make get annotated. Fail-open by contract:
+    // no opinion means the rules and the human decide exactly as before.
+    let jev: JevToolCheck | undefined;
+    if (this.judge) {
+      try {
+        jev = await this.judge.checkTool({
+          taskHint: this.taskHint,
+          toolName: tool.name,
+          toolDescription: tool.description,
+          toolArguments: call.arguments,
+        });
+      } catch {
+        // A judge that throws must not turn an approval into a failure; absence of an
+        // opinion is a defined state, not an error path.
+        jev = undefined;
+      }
+    }
+
     const decision = await this.prompt({
       call,
       tool,
@@ -186,6 +221,7 @@ export class PermissionLedger {
       scopeKey,
       policyVersion: APPROVAL_POLICY_VERSION,
       safety,
+      ...(jev ? { jev } : {}),
     });
     if (decision === "allow_always") this.standing.set(scopeKey, "allow");
     if (decision === "deny_always") this.standing.set(scopeKey, "deny");

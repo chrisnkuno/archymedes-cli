@@ -56,6 +56,10 @@ describe("the installed binary in a real terminal", () => {
         ANTHROPIC_BASE_URL: stub.url,
         ARCHYMEDES_CONFIG_DIR: configDir,
         ARCHYMEDES_FX_OFFLINE: "true",
+        // Hermetic: an ambient TYPESAFE_API_KEY would otherwise make every turn call the
+        // live judge — slow, billed, and network-dependent. Verdict logic is covered by
+        // stubbed unit tests; this suite tests the terminal, not the judge.
+        ARCHYMEDES_JEV: "off",
         TZ: "UTC",
         ...options.env,
       },
@@ -74,6 +78,8 @@ describe("the installed binary in a real terminal", () => {
       `ARCHYMEDES_FX_OFFLINE=true`,
       `TZ=UTC`,
       `ARCHYMEDES_AUTO_UPDATE=off`,
+      // Same hermeticity note as boot() below: no live judge in terminal tests.
+      `ARCHYMEDES_JEV=off`,
     ].flatMap((pair) => ["-e", pair]);
 
     const started = tmux(

@@ -164,6 +164,15 @@ describe("headless stream", () => {
     ]);
   });
 
+  it("forwards a jev verdict as its own record, probabilities included", () => {
+    const sink = capture();
+    sink.emitter.agentEvent({ type: "jev-verdict", verdict: { status: "verdict", model: "jev-1.13.0", outcome: "follow_up", outcomeProbabilities: { follow_up: 0.78 }, sensitiveAction: 0.05, usage: { inputTokens: 10, outputTokens: 5 } } });
+    sink.emitter.agentEvent({ type: "jev-verdict", verdict: { status: "unavailable", reason: "Jev returned HTTP 503" } });
+    const [verdict, missing] = sink.records();
+    expect(verdict).toMatchObject({ type: "jev_verdict", outcome: "follow_up", sensitiveAction: 0.05 });
+    expect(missing).toMatchObject({ type: "jev_verdict", unavailable: "Jev returned HTTP 503" });
+  });
+
   it("carries the exit code on turn_end, so a consumer need not re-derive it", () => {
     const sink = capture();
     sink.emitter.turnEnd({ status: "needs_verification", summary: "unverified", iterations: 3, toolCalls: 2, usage, cost: "$0.01", elapsedMs: 20 });

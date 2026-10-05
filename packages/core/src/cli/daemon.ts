@@ -5,6 +5,7 @@ import type { ArchymedesWorkspace } from "./backends";
 import type { AgentCostPrediction } from "./cost";
 import type { Checkpoint } from "./checkpoints";
 import type { ApprovalPrompt, ApprovalRequest, PermissionDecision } from "./permissions";
+import type { JevToolCheck } from "./jev";
 import type { SafetyAssessment } from "./safety";
 import type { SessionRecord } from "./session";
 import type { PlacedSecretFinding, TodoItem } from "./tools";
@@ -32,6 +33,14 @@ export type DaemonApprovalRequest = {
    * silently losing a safety signal the original terminal prompt always showed.
    */
   safety: SafetyAssessment;
+  /**
+   * Jev's second opinion on the call, when a judge is configured and answered.
+   *
+   * Carried through for the same reason as `safety`: a client rebuilt on the daemon
+   * must show the same annotation the in-process prompt does. Optional and additive,
+   * so the protocol version stands — older clients simply never see it.
+   */
+  jev?: JevToolCheck;
   /**
    * Exactly what a pending `write_file`/`edit_file` would change, so a client can show the real
    * diff before answering rather than just the one-line summary. Scoped to these two tools only —
@@ -145,6 +154,7 @@ export class ArchymedesSessionDaemon {
       capabilityId: request.tool.capabilityId,
       safety: request.safety,
       preview: previewFor(request),
+      ...(request.jev ? { jev: request.jev } : {}),
     };
     const live = this.requireSession(sessionId);
     for (const clientId of live.subscribers) {

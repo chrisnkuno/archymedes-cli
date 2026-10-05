@@ -103,6 +103,50 @@ describe("provenance in what the human is asked to approve", () => {
   });
 });
 
+describe("jev second opinion", () => {
+  const judgeOn = (fit = "proceed") => ({
+    checkTool: async () => ({ fit, fitProbabilities: { proceed: 0.9, reconsider: 0.08, stop: 0.02 }, model: "jev-1.13.0" }),
+  });
+
+  it("annotates the prompt with the judge's reading, while the human still decides", async () => {
+    const seen: Array<{ jev?: { fit: string } }> = [];
+    const ledger = new PermissionLedger("build", async (request) => { seen.push(request); return "deny"; }, judgeOn("reconsider"));
+    ledger.setTaskHint("Run the tests");
+    const outcome = await ledger.decide(call("run_command", { command: "bun test" }), tool({ name: "run_command", effect: "workspace" }));
+    expect(outcome).toBe("denied"); // the human said no — the annotation never overrides
+    expect(seen).toHaveLength(1);
+    expect(seen[0].jev?.fit).toBe("reconsider");
+  });
+
+  it("asks the human exactly as before when the judge throws", async () => {
+    const seen: unknown[] = [];
+    const ledger = new PermissionLedger("build", async (request) => { seen.push(request); return "allow"; }, {
+      checkTool: async () => { throw new Error("judge down"); },
+    });
+    const outcome = await ledger.decide(call("run_command", { command: "bun test" }), tool({ name: "run_command", effect: "workspace" }));
+    expect(outcome).toBe("approved");
+    // Asked once, with no opinion attached — a throwing judge must not fail or duplicate the prompt.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toHaveProperty("jev");
+  });
+
+  it("never consults the judge on paths that approve without asking", async () => {
+    let checks = 0;
+    const ledger = new PermissionLedger("auto", async () => "allow", { checkTool: async () => { checks += 1; return undefined; } });
+    // Workspace-local and rule-clean: auto mode's fast path approves, no human, no judge.
+    const outcome = await ledger.decide(call("write_file", { path: "notes.txt", content: "hello" }), tool({ name: "write_file", effect: "workspace" }));
+    expect(outcome).toBe("approved");
+    expect(checks).toBe(0);
+  });
+
+  it("leaves the prompt unannotated without a judge", async () => {
+    const seen: unknown[] = [];
+    const ledger = new PermissionLedger("build", async (request) => { seen.push(request); return "allow"; });
+    await ledger.decide(call("run_command", { command: "bun test" }), tool({ name: "run_command", effect: "workspace" }));
+    expect(seen[0]).not.toHaveProperty("jev");
+  });
+});
+
 describe("permission ledger", () => {
   it("never asks about tools that change nothing", async () => {
     let asked = 0;

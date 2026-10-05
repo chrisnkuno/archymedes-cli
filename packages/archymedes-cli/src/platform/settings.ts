@@ -57,6 +57,11 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+const JEV_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — judge turns and annotate approvals when TYPESAFE_API_KEY is set (default)" },
+  { value: "off", label: "Off — never call Jev, even with a key configured" },
+];
+
 const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label }));
 
 /**
@@ -108,7 +113,14 @@ export const SETTING_FIELDS = [
   { key: "OPENAI_COMPATIBLE_MODEL", label: "OpenAI-compatible model" },
   { key: "OLLAMA_BASE_URL", label: "Ollama base URL (default http://localhost:11434/v1)", url: true },
   { key: "OLLAMA_MODEL", label: "Ollama model" },
-  { key: "OPENROUTER_API_KEY", label: "Free mode — OpenRouter API key", secret: true },
+  { key: "OPENROUTER_API_KEY", label: "OpenRouter API key (direct + free mode)", secret: true },
+  { key: "OPENROUTER_MODEL", label: "OpenRouter model (default openrouter/auto; any publisher/model id)" },
+  { key: "OPENROUTER_BASE_URL", label: "OpenRouter base URL", url: true },
+  { key: "OPENROUTER_HTTP_REFERER", label: "OpenRouter app URL for rankings (optional)", url: true },
+  { key: "OPENROUTER_APP_TITLE", label: "OpenRouter app title for rankings (optional)" },
+  { key: "TYPESAFE_API_KEY", label: "TypeSafe API key for Jev verdicts (optional)", secret: true },
+  { key: "TYPESAFE_MODEL", label: "Jev model (default jev-latest)" },
+  { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
   { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)" },
   { key: "E2B_API_KEY", label: "E2B API key", secret: true },
   { key: "E2B_CODING_TEMPLATE", label: "E2B template" },
@@ -223,6 +235,8 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase())) throw new Error(`Choose one of: ${PROVIDER_IDS.join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
+  if (key === "ARCHYMEDES_JEV" && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
+  if (key === "ARCHYMEDES_JEV") return value.toLowerCase();
   if (key === "ARCHYMEDES_FALLBACK_MODEL" && value.toLowerCase() !== "ask") {
     const match = /^([a-z-]+)[:/]\S+$/i.exec(value);
     if (!match || !isProviderId(match[1].toLowerCase())) {
@@ -314,6 +328,7 @@ export const MODEL_FIELD_PROVIDER: Partial<Record<SettingKey, ProviderId>> = {
   ANTHROPIC_MODEL: "anthropic",
   OPENAI_MODEL: "openai",
   ARCHYMEDES_CLOUD_MODEL: "archymedes-cloud",
+  OPENROUTER_MODEL: "openrouter",
   GOOGLE_MODEL: "google",
   XAI_MODEL: "xai",
   DEEPSEEK_MODEL: "deepseek",

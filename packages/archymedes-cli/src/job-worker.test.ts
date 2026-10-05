@@ -78,6 +78,13 @@ describe("the log formatter", () => {
     expect(stepJobLog(emptyJobLogState(), { type: "compaction", tokensBefore: 0, messagesBefore: 40, messagesAfter: 10 }).lines).toEqual(["… compacted 40 messages to 10"]);
   });
 
+  it("writes a line for a jev verdict, or its absence", () => {
+    expect(stepJobLog(emptyJobLogState(), { type: "jev-verdict", verdict: { status: "verdict", model: "jev-1.13.0", outcome: "complete", outcomeProbabilities: { complete: 0.9 }, sensitiveAction: 0.01, usage: { inputTokens: 1, outputTokens: 1 } } }).lines)
+      .toEqual(["✓ jev: complete (0.01 sensitive)"]);
+    expect(stepJobLog(emptyJobLogState(), { type: "jev-verdict", verdict: { status: "unavailable", reason: "down" } }).lines)
+      .toEqual(["… jev verdict unavailable"]);
+  });
+
   it("says nothing for an empty stop, rather than an empty line", () => {
     const { lines } = stepJobLog(emptyJobLogState(), { type: "runtime", event: { type: "model_turn", iteration: 1, responseId: "r1", model: "m", toolCallCount: 0, usage } });
     expect(lines).toEqual([]);

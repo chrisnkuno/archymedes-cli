@@ -4,6 +4,7 @@ import { FOLD_AFTER_LINES, activity, endStreamedLine, glyphs, markdown, out, ren
 import { type DaemonApprovalRequest } from "@archymedes/core/cli/daemon";
 import type { PermissionDecision } from "@archymedes/core/cli/permissions";
 import { type SafetyAssessment } from "@archymedes/core/cli/safety";
+import { type JevToolCheck } from "@archymedes/core/cli/jev";
 import { openChooser } from "../ui/shortcuts";
 import { type SettingsPrompts } from "../platform/settings";
 import { renderFileChange } from "../render/code-view";
@@ -62,7 +63,10 @@ export function settingsChooser(readline: Interface): NonNullable<SettingsPrompt
       title: request.title,
       ...(request.filter ? { filter: true } : {}),
       ...(request.initialIndex === undefined ? {} : { initialIndex: request.initialIndex }),
-      height: 12,
+      // Fits the longest exactly-fitting list: the twelve providers plus the pinned
+      // "Clear this setting" row, with one spare. A shorter window would leave that
+      // escape hatch below the fold, where it renders never and reads as absent.
+      height: 14,
       // The real terminal, so rows are clipped rather than wrapped onto lines the repaint does
       // not know it drew.
       width: process.stdout.columns ?? 80,
@@ -92,7 +96,7 @@ export function renderApprovalPreview(preview: DaemonApprovalRequest["preview"])
 }
 
 export function createApprovalPrompt(readline: Interface, interactive: boolean, signal: () => AbortSignal | undefined) {
-  return async ({ summary, safety, preview }: { summary: string; safety?: SafetyAssessment; preview?: DaemonApprovalRequest["preview"] }): Promise<PermissionDecision> => {
+  return async ({ summary, safety, preview, jev }: { summary: string; safety?: SafetyAssessment; preview?: DaemonApprovalRequest["preview"]; jev?: JevToolCheck }): Promise<PermissionDecision> => {
     // Without a terminal there is nobody to ask, and a prompt written to a pipe would either hang
     // or read the next line of piped input as an answer. Denying is the only honest result — and
     // it is reported, so the run does not look like the model simply chose not to act.
@@ -115,6 +119,12 @@ export function createApprovalPrompt(readline: Interface, interactive: boolean, 
     const previewText = renderApprovalPreview(preview);
     if (previewText) out.write(`${previewText}\n`);
     if (safety?.sensitive) out.write(`    ${style.yellow("Safety guard:")} ${safety.reasons.join(", ")}\n`);
+    // A second opinion, not a second gate: the probability reads beside the rule-based
+    // screen so the human weighs both. Absence changes nothing about the decision.
+    if (jev) {
+      const confidence = jev.fitProbabilities[jev.fit];
+      out.write(`    ${style.dim(`Jev second opinion: ${jev.fit}${confidence !== undefined ? ` (${confidence.toFixed(2)})` : ""}`)}\n`);
+    }
     let answer: string;
     try {
       answer = (await readline.question(`    ${style.dim("[y]es / [n]o / [a]lways / [d]eny always: ")}`, { signal: signal() })).trim().toLowerCase();
