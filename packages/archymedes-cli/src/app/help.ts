@@ -61,6 +61,7 @@ ${style.bold(t(language, "help.files"))}
 
 ${style.bold(t(language, "help.model"))}
   archymedes --free               Free tool models: hosted gateway, or your OPENROUTER_API_KEY
+  archymedes --provider openrouter --model openrouter/auto   Any OpenRouter model on your own key (paid and free)
   archymedes --provider <name>    ${PROVIDER_IDS.join(" | ")}
   archymedes --model <id>         Model to run (defaults to the provider's)
   /model                    Pick a model from a list, with prices, keeping the transcript

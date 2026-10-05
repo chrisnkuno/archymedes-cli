@@ -26,6 +26,7 @@ export type ProviderId =
   | "anthropic"
   | "openai"
   | "archymedes-cloud"
+  | "openrouter"
   | "google"
   | "xai"
   | "deepseek"
@@ -43,6 +44,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "anthropic",
   "openai",
   "archymedes-cloud",
+  "openrouter",
   "google",
   "xai",
   "deepseek",
@@ -109,6 +111,15 @@ export const PROVIDER_INFO: Record<ProviderId, ProviderInfo> = {
     requires: ["ARCHYMEDES_CLOUD_TOKEN", "ARCHYMEDES_CLOUD_BASE_URL"],
     // `auto` is intentional: the exchange, rather than this client, selects the concrete model.
     defaultModel: "auto",
+  },
+  openrouter: {
+    id: "openrouter",
+    label: "OpenRouter",
+    requires: ["OPENROUTER_API_KEY"],
+    // OpenRouter's auto router: the gateway, not this client, picks the concrete model.
+    // Any explicit `publisher/model` id (or `publisher/model:free`) is also accepted — unlike
+    // the `free` provider, this path carries no zero-price cap.
+    defaultModel: "openrouter/auto",
   },
   google: { id: "google", label: "Google Gemini", requires: ["GOOGLE_API_KEY"], defaultModel: "gemini-2.5-pro" },
   xai: { id: "xai", label: "xAI Grok", requires: ["XAI_API_KEY"], defaultModel: "grok-4" },

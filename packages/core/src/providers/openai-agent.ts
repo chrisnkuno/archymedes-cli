@@ -11,9 +11,11 @@ import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
  * the message shape. Two copies of that translation is two places for a tool-call bug to hide.
  */
 
-export type OpenAIAgentOptions = { apiKey: string; model: string; baseURL?: string; timeoutMs?: number };
+export type OpenAIAgentOptions = { apiKey: string; model: string; baseURL?: string; timeoutMs?: number; defaultHeaders?: Record<string, string> };
 
-type ChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<ChatResponse | AsyncIterable<ChatStreamChunk>>;
+export type OpenAIChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<ChatResponse | AsyncIterable<ChatStreamChunk>>;
+
+type ChatCall = OpenAIChatCall;
 
 function usesInklingToolContract(model: string): boolean {
   return model === "thinkingmachines/inkling:free" || model === "thinkingmachines/inkling-small:free";
@@ -32,7 +34,7 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
     else {
       // Retry policy is centralized in BoundedAgentRuntime so attempt counts, cancellation and
       // messages stay truthful instead of being multiplied invisibly by the SDK.
-      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), maxRetries: 0 });
+      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}), maxRetries: 0 });
       this.call = async (body, signal) => (await client.chat.completions.create(body as never, { signal })) as unknown as ChatResponse | AsyncIterable<ChatStreamChunk>;
     }
   }

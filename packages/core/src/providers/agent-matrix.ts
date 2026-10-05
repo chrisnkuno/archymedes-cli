@@ -6,6 +6,7 @@ import { AnthropicAgentTurnProvider } from "./anthropic-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
 import { FreeAgentTurnProvider } from "./free-agent";
+import { OpenRouterAgentTurnProvider } from "./openrouter-agent";
 import { freeAccess, isFreeModelId } from "./free-catalog";
 
 /**
@@ -44,7 +45,7 @@ export type ProviderSpec = ProviderInfo & {
  * `<PROVIDER>_BASE_URL` variable overrides the default — for a regional endpoint, a proxy, or a
  * self-hosted gateway.
  */
-const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openai-compatible" | "free">, string> = {
+const OPENAI_COMPATIBLE_BASE_URL: Record<Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openrouter" | "openai-compatible" | "free">, string> = {
   google: "https://generativelanguage.googleapis.com/v1beta/openai/",
   xai: "https://api.x.ai/v1",
   deepseek: "https://api.deepseek.com/v1",
@@ -59,7 +60,7 @@ export function providerEnvPrefix(id: ProviderId): string {
 }
 
 /** One spec for a provider reached over an OpenAI-compatible endpoint. */
-function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "free">): ProviderSpec {
+function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "archymedes-cloud" | "openrouter" | "free">): ProviderSpec {
   const prefix = providerEnvPrefix(id);
   const fallbackBase = id === "openai-compatible" ? undefined : OPENAI_COMPATIBLE_BASE_URL[id];
   return {
@@ -115,6 +116,16 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
       dataPolicy: environment.ARCHYMEDES_CLOUD_DATA_POLICY?.trim() || "standard",
       qualityFloor: optionalUnitInterval(environment.ARCHYMEDES_CLOUD_QUALITY_FLOOR, 0),
       taskKind: environment.ARCHYMEDES_CLOUD_TASK_KIND?.trim() || undefined,
+    }),
+  },
+  openrouter: {
+    ...PROVIDER_INFO.openrouter,
+    create: (environment, model) => new OpenRouterAgentTurnProvider({
+      apiKey: environment.OPENROUTER_API_KEY!.trim(),
+      model,
+      baseURL: environment.OPENROUTER_BASE_URL?.trim() || undefined,
+      httpReferer: environment.OPENROUTER_HTTP_REFERER?.trim() || undefined,
+      appTitle: environment.OPENROUTER_APP_TITLE?.trim() || undefined,
     }),
   },
   google: openAiCompatibleSpec("google"),

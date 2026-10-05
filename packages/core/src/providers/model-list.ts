@@ -34,6 +34,12 @@ export function modelsEndpoint(provider: ProviderId, environment: Record<string,
   const trimmed = (value: string | undefined) => value?.trim() || undefined;
   switch (provider) {
     case "free": return { url: `${FREE_BASE_URL}/models`, headers: {} };
+    case "openrouter": {
+      const key = trimmed(environment.OPENROUTER_API_KEY);
+      if (!key) return undefined;
+      const base = trimmed(environment.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1";
+      return { url: modelsUrl(base), headers: { authorization: `Bearer ${key}` } };
+    }
     case "archymedes-cloud":
       // The routed model is intentionally `auto`; the routing receipt names the concrete model.
       // A cloud-wide model inventory would bypass the account policy that decides what is usable.

@@ -66,7 +66,7 @@ describe("where a provider's list lives", () => {
     const withKeys = {
       ...environment,
       ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", GOOGLE_API_KEY: "k", XAI_API_KEY: "k",
-      DEEPSEEK_API_KEY: "k", MISTRAL_API_KEY: "k", GROQ_API_KEY: "k",
+      DEEPSEEK_API_KEY: "k", MISTRAL_API_KEY: "k", GROQ_API_KEY: "k", OPENROUTER_API_KEY: "k",
       OPENAI_COMPATIBLE_API_KEY: "k", OPENAI_COMPATIBLE_BASE_URL: "https://gw.example/v1",
     };
     for (const provider of PROVIDER_IDS) {

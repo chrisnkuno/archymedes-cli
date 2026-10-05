@@ -26,8 +26,9 @@ describe("the catalog as a whole", () => {
   });
 
 
-  it("reports OpenAI and generic openai-compatible as unpriced", () => {
+  it("reports OpenAI, OpenRouter and generic openai-compatible as unpriced", () => {
     expect(UNPRICED_PROVIDERS).toContain("openai");
+    expect(UNPRICED_PROVIDERS).toContain("openrouter");
     expect(UNPRICED_PROVIDERS).toContain("openai-compatible");
   });
 });

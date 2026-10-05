@@ -41,6 +41,7 @@ export function renderProviders(environment: Record<string, string | undefined>,
   ]);
   const lines: string[] = [table(["", "provider", "status"], rows, { depth, glyphs })];
   lines.push("  --free uses your OPENROUTER_API_KEY directly, otherwise the Archymedes free gateway. Free capacity is rate limited; other services may charge.");
+  lines.push("  --provider openrouter uses the same OPENROUTER_API_KEY directly, for any model (paid or :free) with no zero-price cap.");
 
   const unpriced = statuses.filter((status) => status.configured && status.pricing === "unknown");
   if (unpriced.length > 0) {

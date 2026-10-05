@@ -35,6 +35,7 @@ const DEFAULT_BASE_URL: Record<ProviderId, string> = {
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com/v1",
   "archymedes-cloud": "",
+  openrouter: "https://openrouter.ai/api/v1",
   google: "https://generativelanguage.googleapis.com/v1beta/openai",
   xai: "https://api.x.ai/v1",
   deepseek: "https://api.deepseek.com/v1",
