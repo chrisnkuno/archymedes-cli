@@ -132,6 +132,23 @@ describe("the turn summary Jev judges", () => {
   it("says plainly when no tools ran", () => {
     expect(turnVerdictState({ objective: "hi", assistantText: "hello", toolNames: [] })).toContain("No tools used");
   });
+
+  it("tells the judge which commands ran and how they exited — including the failures", () => {
+    // The benchmark produced a judge that could not see tests exiting 1, while the CLI
+    // box reported success. The verdict state must carry the test evidence, not just
+    // the names of the tools.
+    const state = turnVerdictState({
+      objective: "Add tests", assistantText: "Done.", toolNames: ["write_file", "run_command"],
+      evidence: [
+        { tool: "write_file", isError: false },
+        { tool: "run_command", command: "bun test", exitCode: 1, isError: true },
+        { tool: "run_command", command: "bun test", exitCode: 0, kind: "tests", isError: false },
+      ],
+    });
+    expect(state).toContain('"bun test" → exit 1');
+    expect(state).toContain('"bun test" → exit 0 (tests)');
+    expect(state.length).toBeLessThanOrEqual(JEV_MAX_STATE_CHARS);
+  });
 });
 
 describe("the standing question set", () => {

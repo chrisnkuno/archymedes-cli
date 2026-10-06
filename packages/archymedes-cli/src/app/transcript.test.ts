@@ -66,6 +66,22 @@ describe("renderEvent", () => {
     expect(text).toContain("0.05");
   });
 
+  it("warns when the judge calls the turn blocked instead of printing it quietly", () => {
+    const { writes, restore } = captureStdout();
+    renderEvent({
+      type: "jev-verdict",
+      verdict: {
+        status: "verdict", model: "jev-1.13.0", outcome: "blocked",
+        outcomeProbabilities: { complete: 0.05, follow_up: 0.2, blocked: 0.75 },
+        sensitiveAction: 0.4, usage: { inputTokens: 10, outputTokens: 5 },
+      },
+    });
+    restore();
+    const text = writes.join("");
+    expect(text).toContain("jev: blocked");
+    expect(text).toContain("/undo");
+  });
+
   it("admits a missing jev verdict instead of printing nothing", () => {
     const { writes, restore } = captureStdout();
     renderEvent({ type: "jev-verdict", verdict: { status: "unavailable", reason: "Jev returned HTTP 503" } });

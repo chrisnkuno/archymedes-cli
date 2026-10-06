@@ -113,7 +113,7 @@ export function stepJobLog(state: JobLogState, event: ArchymedesEvent): { state:
   if (event.type === "compaction") return { state, lines: [`… compacted ${event.messagesBefore} messages to ${event.messagesAfter}`] };
   if (event.type === "jev-verdict") {
     const verdict = event.verdict;
-    return { state, lines: [verdict.status === "unavailable" ? "… jev verdict unavailable" : `✓ jev: ${verdict.outcome} (${verdict.sensitiveAction.toFixed(2)} sensitive)`] };
+    return { state, lines: [verdict.status === "unavailable" ? "… jev verdict unavailable" : verdict.outcome === "blocked" ? `! jev: blocked (${verdict.sensitiveAction.toFixed(2)} sensitive) — review before building on this` : `✓ jev: ${verdict.outcome} (${verdict.sensitiveAction.toFixed(2)} sensitive)`] };
   }
 
   const inner = event.event;

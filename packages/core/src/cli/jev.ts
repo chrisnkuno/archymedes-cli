@@ -293,6 +293,16 @@ export async function requestJevVerdict(options: {
   }
 }
 
+/** One observed tool execution, for the judge's "what actually ran" picture. */
+export type TurnEvidence = {
+  tool: string;
+  command?: string;
+  exitCode?: number;
+  /** The verification rung the runtime credited the command with, when it passed. */
+  kind?: string;
+  isError: boolean;
+};
+
 /**
  * The state Jev judges: what was asked, what the model said last, and which tools it
  * reached for — bounded and free of tool outputs.
@@ -302,13 +312,25 @@ export async function requestJevVerdict(options: {
  * full output. What leaves the machine is a summary, and it only leaves at all when a
  * key is configured.
  */
-export function turnVerdictState(input: { objective: string; assistantText: string; toolNames: readonly string[] }): string {
+export function turnVerdictState(input: { objective: string; assistantText: string; toolNames: readonly string[]; evidence?: readonly TurnEvidence[] }): string {
   const tools = input.toolNames.length > 0 ? `Tools used: ${[...new Set(input.toolNames)].join(", ")}.` : "No tools used.";
-  return [
+  const lines = [
     `Task: ${input.objective.trim()}`,
     `Final answer: ${input.assistantText.trim()}`,
     tools,
-  ].join("\n").slice(0, JEV_MAX_STATE_CHARS);
+  ];
+  if (input.evidence && input.evidence.length > 0) {
+    // The most recent executions say the most about where the turn landed: a judge
+    // reading "17 file writes, ls" but not "the last `bun test` exited 1" learns
+    // stability from the wrong row. Bounded hard — twelve lines is a verdict's worth.
+    const recent = input.evidence.slice(-12);
+    lines.push(`Execution evidence: ${recent.map((event) => {
+      const what = event.command ? `"${event.command.slice(0, 80)}"` : event.tool;
+      const verdict = event.exitCode !== undefined ? `exit ${event.exitCode}` : event.isError ? "failed" : "ok";
+      return `${event.command ? `${event.tool} ${what}` : event.tool} → ${verdict}${event.kind ? ` (${event.kind})` : ""}`;
+    }).join("; ")}`);
+  }
+  return lines.join("\n").slice(0, JEV_MAX_STATE_CHARS);
 }
 
 /** Reads one System One response as the transcript's verdict shape. */

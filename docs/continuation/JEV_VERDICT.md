@@ -37,9 +37,10 @@ This integration never tries: the model provider selection is untouched.
 - The judge is consulted only where a human is about to decide: auto-mode fast paths
   that approve without asking never pay for a judgment call. Reads (`effect: "none"`)
   never consult it.
-- Bounded payloads: the turn state carries the objective, the last assistant text and
-  tool names — never tool outputs. Tool-check arguments are truncated to 1,500 chars.
-  What leaves the machine is a summary, and only when a key is configured.
+- Bounded payloads: the turn state carries the objective, the last assistant text,
+  tool names, and a bounded execution-evidence digest (recent commands, exit codes,
+  verification rung — never tool outputs). Tool-check arguments are truncated to 1,500
+  chars. What leaves the machine is a summary, and only when a key is configured.
 
 ## Modules and dependencies
 

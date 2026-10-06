@@ -1209,6 +1209,26 @@ const SMOKE_COMMAND = /\b(smoke|healthcheck|health[-_ ]?check|curl|wget|httpie|\
 /** Commands that normally stay alive until somebody stops them. */
 const PERSISTENT_COMMAND = /(?:^|(?:&&|;|\|)\s*)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve)(?:\s|$)|(?:vite|next\s+dev|webpack\s+serve)(?:\s|$)|bun\s+run\s+--hot\b)|(?:^|\s)(?:--watch|-w)(?:\s|$)/i;
 
+/**
+ * Directory-changing prefixes, matched before classification.
+ *
+ * A `cd <dir> &&` prefix is not part of what is being verified — but it was being
+ * matched, so `cd …/arch-e2e && bun test` classified as `behavior` (the "e2e" in the
+ * path) and a bare `ls` gained a verification badge purely from the path it ran in.
+ * Anything whose strongest signal is a directory name must be stripped first.
+ */
+const CD_PREFIX = /^\s*cd\s+(?:[^&\n|;]|\&(?!\&))+&&\s*/;
+
+/** The part of a command that classifies: with `cd <dir> &&` prefixes peeled off. */
+export function verificationTarget(command: string): string {
+  let target = command;
+  for (;;) {
+    const stripped = target.replace(CD_PREFIX, "");
+    if (stripped === target) return stripped;
+    target = stripped;
+  }
+}
+
 /** A persistent process is acceptable only when the same command proves it will be bounded. */
 function hasPersistentCommandBoundary(command: string): boolean {
   if (/(?:^|\s)(?:timeout|gtimeout)\s+\d/i.test(command)) return true;
@@ -1229,7 +1249,7 @@ export function rejectedVerificationReason(
   result: { stdout: string; stderr: string },
 ): string | null {
   const output = `${result.stdout}\n${result.stderr}`.trim();
-  if (/^\s*(?:echo|printf)\b/i.test(command)) return "the command only prints text";
+  if (/^\s*(?:echo|printf)\b/i.test(verificationTarget(command))) return "the command only prints text";
   if (/\b(?:no (?:automated )?tests?(?: found| configured| available)?|0 tests? (?:run|executed|passed)|no build step (?:needed|required|configured)|nothing to (?:test|build|check))\b/i.test(output)) {
     return "the command reported that no real build or test ran";
   }
@@ -1238,12 +1258,13 @@ export function rejectedVerificationReason(
 
 /** The strongest kind of evidence a command provides, or null when it verifies nothing. */
 export function classifyVerification(command: string): VerificationKind | null {
+  const target = verificationTarget(command);
   // Strongest first: a command that matches several patterns is credited with the strongest claim
   // it actually supports, and `npm run e2e` matching both "e2e" and "test" is the normal case.
-  if (BEHAVIOR_COMMAND.test(command)) return "behavior";
-  if (SMOKE_COMMAND.test(command)) return "smoke";
-  if (TEST_COMMAND.test(command)) return "tests";
-  if (CHECK_COMMAND.test(command)) return "check";
+  if (BEHAVIOR_COMMAND.test(target)) return "behavior";
+  if (SMOKE_COMMAND.test(target)) return "smoke";
+  if (TEST_COMMAND.test(target)) return "tests";
+  if (CHECK_COMMAND.test(target)) return "check";
   return null;
 }
 

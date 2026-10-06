@@ -373,15 +373,23 @@ export function renderEvent(event: ArchymedesEvent): void {
     return;
   }
   if (event.type === "jev-verdict") {
-    // Advisory, so dim: a probability is information, not an instruction, and it must read
-    // quieter than the turn it judges.
     forgetToolLines();
     const verdict = event.verdict;
     if (verdict.status === "unavailable") {
       out.write(style.dim(`  ${glyphs.elbow} jev verdict unavailable: ${verdict.reason}\n`));
       return;
     }
-    out.write(style.dim(`  ${glyphs.elbow} jev: ${verdict.outcome} (${verdict.outcomeProbabilities[verdict.outcome]?.toFixed(2) ?? "?"}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}\n`));
+    const probability = verdict.outcomeProbabilities[verdict.outcome]?.toFixed(2) ?? "?";
+    if (verdict.outcome === "blocked") {
+      // The benchmark produced a turn the CLI called completed and the judge called
+      // blocked — exactly the case where a dim line gets skimmed past. Still advisory,
+      // but it has to read louder than the turn it contradicts.
+      out.write(style.yellow(`  ${glyphs.elbow} jev: blocked (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)} — review before building on this turn; /undo restores the checkpoint\n`));
+      return;
+    }
+    // Advisory, so dim: a probability is information, not an instruction, and it must read
+    // quieter than the turn it judges.
+    out.write(style.dim(`  ${glyphs.elbow} jev: ${verdict.outcome} (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}\n`));
     return;
   }
 

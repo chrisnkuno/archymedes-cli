@@ -686,6 +686,18 @@ describe("verification detection", () => {
     expect(classifyVerification("echo hello")).toBeNull();
   });
 
+  it("does not read a keyword out of the directory a command ran in", () => {
+    // Observed in the token-bucket benchmark: an agent in a path containing "arch-e2e"
+    // had its `ls` counted as a behavior verification, and `bun test` mislabeled —
+    // because the classifier matched the "e2e" inside the `cd` prefix. Verification is
+    // the command's *target*: strip the directory change before classifying.
+    expect(classifyVerification("cd /tmp/arch-e2e && ls -la")).toBeNull();
+    expect(classifyVerification("cd /tmp/arch-e2e && bun test")).toBe("tests");
+    expect(classifyVerification("cd ../proj && cd src && pytest -q")).toBe("tests");
+    expect(classifyVerification("cd /tmp/check && npm run build")).toBe("check");
+    expect(classifyVerification("cd /tmp/check && timeout 5 npm run dev")).toBeNull();
+  });
+
   /**
    * The two rungs above unit tests. Both answer a question units cannot: whether the pieces were
    * assembled into something that runs at all.

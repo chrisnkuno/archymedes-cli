@@ -42,7 +42,7 @@ import type { ReadResult, WorkspaceLimits } from "./workspace";
 import { DEFAULT_OUTPUT_CEILING } from "../providers/model-capabilities";
 import { DefenderBrain } from "./defender-brain";
 import { toolProfileForObjective, toolsForProfile } from "./tool-profile";
-import { createJevJudge, requestJevVerdict, turnVerdictState, verdictFromResponse, type JevFetch, type JevTurnVerdict } from "./jev";
+import { createJevJudge, requestJevVerdict, turnVerdictState, verdictFromResponse, type JevFetch, type JevTurnVerdict, type TurnEvidence } from "./jev";
 
 /**
  * Archymedes CLI's agent: the hosted `BoundedAgentRuntime`, hosted locally instead.
@@ -694,6 +694,11 @@ export class ArchymedesAgent {
     this.cancelled = false;
     const turnAbort = new AbortController();
     this.turnAbort = turnAbort;
+    // What actually ran this turn, for the judge to read afterwards. Reset every turn:
+    // the verdict after turn two must not contain turn one's history. Declared outside
+    // the try, which the post-turn verdict is: it reads what the turn ran, after
+    // the fact, once the workspace is already disarmed.
+    const turnEvidence: TurnEvidence[] = [];
     try {
       await this.recoverPending(turnAbort.signal);
       turnAbort.signal.throwIfAborted();
@@ -823,6 +828,16 @@ export class ArchymedesAgent {
             await saveSession(this.session);
           },
           persistEvent: async (event) => {
+            if (event.type === "tool_result") {
+              const data = event.data;
+              turnEvidence.push({
+                tool: event.toolName,
+                ...(typeof data?.command === "string" ? { command: data.command } : {}),
+                ...(typeof data?.exitCode === "number" ? { exitCode: data.exitCode } : {}),
+                ...(typeof data?.verificationKind === "string" ? { kind: data.verificationKind } : {}),
+                isError: event.isError,
+              });
+            }
             this.options.onEvent?.({ type: "runtime", event });
             if (event.type !== "assistant_delta") {
               await this.journal.append(
@@ -894,7 +909,7 @@ export class ArchymedesAgent {
     // the verdict here keeps transcript order (verdict line before the next prompt), but the
     // turn is already over: Ctrl+C during judgment exits instead of aborting finished work,
     // and whatever Jev says — or its silence — changes nothing already decided.
-    await this.maybeJevVerdict({ objective, priorCount, messages: turnResult.messages });
+    await this.maybeJevVerdict({ objective, priorCount, messages: turnResult.messages, evidence: turnEvidence });
     return turnResult;
   }
 
@@ -906,7 +921,7 @@ export class ArchymedesAgent {
    * outage emits `unavailable` rather than throwing, because the turn it judges already
    * finished — failing it after the fact would rewrite history, not protect anyone.
    */
-  private async maybeJevVerdict(input: { objective: string; priorCount: number; messages: readonly AgentMessage[] }): Promise<void> {
+  private async maybeJevVerdict(input: { objective: string; priorCount: number; messages: readonly AgentMessage[]; evidence?: readonly TurnEvidence[] }): Promise<void> {
     if (!this.jev) return;
     const toolNames: string[] = [];
     let assistantText = "";
@@ -921,7 +936,7 @@ export class ArchymedesAgent {
         ...(this.jev.model ? { model: this.jev.model } : {}),
         ...(this.jev.timeoutMs !== undefined ? { timeoutMs: this.jev.timeoutMs } : {}),
         ...(this.jev.fetchImpl ? { fetchImpl: this.jev.fetchImpl } : {}),
-        state: turnVerdictState({ objective: input.objective, assistantText, toolNames }),
+        state: turnVerdictState({ objective: input.objective, assistantText, toolNames, ...(input.evidence ? { evidence: input.evidence } : {}) }),
       });
       this.options.onEvent?.({ type: "jev-verdict", verdict: verdictFromResponse(response) });
     } catch (error) {
