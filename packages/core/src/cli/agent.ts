@@ -80,7 +80,7 @@ export type ArchymedesAgentOptions = {
    * key is treated the same as absent, so half-configuration degrades to off rather than
    * to a failure on every turn.
    */
-  jev?: { apiKey: string; model?: string; timeoutMs?: number; fetchImpl?: JevFetch };
+  jev?: { apiKey: string; model?: string; timeoutMs?: number; fetchImpl?: JevFetch; /** Auto-correct on a bad verdict (default true; `ARCHYMEDES_JEV_REVIEW=off` disables). */ review?: boolean };
 };
 
 export type ArchymedesEvent =
@@ -97,7 +97,13 @@ export type ArchymedesEvent =
    * unreachable the event still fires as `unavailable`, so the transcript says so
    * instead of silently skipping the check it promised.
    */
-  | { type: "jev-verdict"; verdict: JevTurnVerdict };
+  | { type: "jev-verdict"; verdict: JevTurnVerdict }
+  /**
+   * The judge's verdict disagreed with the turn's status, so the agent is
+   * re-invoked once with the evidence attached. Bounded by one correction
+   * per turn, so a judge that always says blocked cannot loop.
+   */
+  | { type: "jev-review"; outcome: string; probability: number; reason: string };
 
 export type ArchymedesBudgets = {
   maxIterations: number;
@@ -909,7 +915,17 @@ export class ArchymedesAgent {
     // the verdict here keeps transcript order (verdict line before the next prompt), but the
     // turn is already over: Ctrl+C during judgment exits instead of aborting finished work,
     // and whatever Jev says — or its silence — changes nothing already decided.
-    await this.maybeJevVerdict({ objective, priorCount, messages: turnResult.messages, evidence: turnEvidence });
+    const verdict = await this.maybeJevVerdict({ objective, priorCount, messages: turnResult.messages, evidence: turnEvidence });
+    if (this.shouldAutoReview(verdict, turnResult)) {
+      const probability = verdict && verdict.status === "verdict" ? (verdict.outcomeProbabilities[verdict.outcome] ?? 0) : 0;
+      this.options.onEvent?.({ type: "jev-review", outcome: verdict && verdict.status === "verdict" ? verdict.outcome : "unknown", probability, reason: "judge disagreed with the turn's status" });
+      this.jevCorrectionDepth += 1;
+      try {
+        return await this.send(await this.correctivePrompt(objective, verdict as JevTurnVerdict & { status: "verdict" }, turnEvidence));
+      } finally {
+        this.jevCorrectionDepth -= 1;
+      }
+    }
     return turnResult;
   }
 
@@ -921,8 +937,8 @@ export class ArchymedesAgent {
    * outage emits `unavailable` rather than throwing, because the turn it judges already
    * finished — failing it after the fact would rewrite history, not protect anyone.
    */
-  private async maybeJevVerdict(input: { objective: string; priorCount: number; messages: readonly AgentMessage[]; evidence?: readonly TurnEvidence[] }): Promise<void> {
-    if (!this.jev) return;
+  private async maybeJevVerdict(input: { objective: string; priorCount: number; messages: readonly AgentMessage[]; evidence?: readonly TurnEvidence[] }): Promise<JevTurnVerdict | undefined> {
+    if (!this.jev) return undefined;
     const toolNames: string[] = [];
     let assistantText = "";
     for (const message of input.messages.slice(input.priorCount)) {
@@ -938,12 +954,48 @@ export class ArchymedesAgent {
         ...(this.jev.fetchImpl ? { fetchImpl: this.jev.fetchImpl } : {}),
         state: turnVerdictState({ objective: input.objective, assistantText, toolNames, ...(input.evidence ? { evidence: input.evidence } : {}) }),
       });
-      this.options.onEvent?.({ type: "jev-verdict", verdict: verdictFromResponse(response) });
+      const verdict = verdictFromResponse(response);
+      this.options.onEvent?.({ type: "jev-verdict", verdict });
+      return verdict;
     } catch (error) {
       // The message carries no credential: requestJevVerdict never puts the key in one.
       const reason = error instanceof Error ? error.message : String(error);
-      this.options.onEvent?.({ type: "jev-verdict", verdict: { status: "unavailable", reason: reason.slice(0, 200) } });
+      const verdict = { status: "unavailable", reason: reason.slice(0, 200) } as const;
+      this.options.onEvent?.({ type: "jev-verdict", verdict });
+      return verdict;
     }
+  }
+
+  /**
+   * A verdict of `follow_up`/`blocked` on a turn that closed `completed` means the
+   * runtime's own evidence and the judge's read disagree — and on the benchmark run
+   * the runtime was the wrong one (`ls` credited as a behavior verification while
+   * `bun test` failed 17/17). Rather than printing the disagreement and leaving it,
+   * re-invoke the model once with the evidence attached. Bounded two ways: one
+   * correction per user turn, and only when the review is not disabled. The second
+   * verdict stands — the judge gets heard, not obeyed.
+   */
+  private shouldAutoReview(verdict: JevTurnVerdict | undefined, turnResult: ArchymedesTurnResult): boolean {
+    if (!verdict || verdict.status !== "verdict") return false;
+    if (this.jevCorrectionDepth > 0) return false;
+    if (this.cancelled) return false;
+    if (this.options.jev?.review === false) return false;
+    if (turnResult.status !== "completed") return false;
+    if (verdict.outcome === "complete") return false;
+    return (verdict.outcomeProbabilities[verdict.outcome] ?? 0) >= 0.5;
+  }
+
+  private jevCorrectionDepth = 0;
+
+  private async correctivePrompt(objective: string, verdict: JevTurnVerdict & { status: "verdict" }, evidence: readonly TurnEvidence[]): Promise<string> {
+    const failures = evidence.filter((entry) => entry.exitCode !== undefined && entry.exitCode !== 0).slice(-6);
+    const failureLine = failures.length > 0
+      ? `Failing commands from the last turn: ${failures.map((entry) => `\`${entry.command ?? entry.tool}\` exited ${entry.exitCode}`).join("; ")}.`
+      : "The last turn produced no passing verification evidence.";
+    return [
+      `Jev (second-opinion judge) marked the previous turn as "${verdict.outcome}" (confidence ${(verdict.outcomeProbabilities[verdict.outcome] ?? 0).toFixed(2)}). ${failureLine}`,
+      "Diagnose first: read the failing output instead of rewriting whole files. Make the smallest fix that addresses the failure, then re-run the verification commands until they pass. Original task: " + objective,
+    ].join("\n\n");
   }
 
   /**

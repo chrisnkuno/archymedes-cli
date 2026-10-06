@@ -276,6 +276,84 @@ describe("ArchymedesAgent", () => {
     expect(verdicts[0]).toMatchObject({ verdict: { status: "unavailable" } });
   });
 
+  it("re-invokes the model once when the judge calls a completed turn blocked", async () => {
+    // The benchmark that motivated this: the CLI's own gate said completed (a badge-wearing
+    // 'ls'), the judge said blocked, and nothing happened. The auto-review converts that
+    // disagreement into one corrective turn, evidence attached.
+    const model = scriptedModel([{ finishReason: "stop", content: "All green." }]);
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "plan", approve: async () => "deny",
+      onEvent: (event) => events.push(event),
+      jev: {
+        apiKey: "ts-test",
+        fetchImpl: async () => ({
+          ok: true, status: 200,
+          json: async () => ({
+            model: "jev-1.13.0",
+            answers: {
+              outcome: { type: "choice", choice: "blocked", confidence: 0.9, probabilities: { complete: 0.05, follow_up: 0.1, blocked: 0.85 } },
+              sensitive_action: { type: "noul", noul: 0.01 },
+            },
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        }),
+      },
+    });
+
+    await agent.send("ship it");
+    expect(agent["jevCorrectionDepth" as keyof ArchymedesAgent]).toBe(0);
+    expect(model.requests.length).toBeGreaterThan(1);
+    const corrective = model.requests.at(-1)!.messages.at(-1)!;
+    expect(String(corrective.content)).toContain("Jev (second-opinion judge)");
+    expect(events.filter((event) => event.type === "jev-review")).toHaveLength(1);
+  });
+
+  it("does not auto-review on a complete verdict or when review is disabled", async () => {
+    const complete = scriptedModel([{ finishReason: "stop", content: "Fine." }]);
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({
+      root, model: complete, prices, mode: "plan", approve: async () => "deny", onEvent: (event) => events.push(event),
+      jev: {
+        apiKey: "ts-test",
+        fetchImpl: async () => ({
+          ok: true, status: 200,
+          json: async () => ({
+            model: "jev-1.13.0",
+            answers: {
+              outcome: { type: "choice", choice: "complete", confidence: 0.95, probabilities: { complete: 0.95, follow_up: 0.03, blocked: 0.02 } },
+              sensitive_action: { type: "noul", noul: 0.01 },
+            },
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        }),
+      },
+    });
+    await agent.send("hi");
+    expect(complete.requests).toHaveLength(1);
+
+    const blockedModel = scriptedModel([{ finishReason: "stop", content: "Fine." }]);
+    const disabled = new ArchymedesAgent({
+      root, model: blockedModel, prices, mode: "plan", approve: async () => "deny",
+      jev: {
+        apiKey: "ts-test", review: false,
+        fetchImpl: async () => ({
+          ok: true, status: 200,
+          json: async () => ({
+            model: "jev-1.13.0",
+            answers: {
+              outcome: { type: "choice", choice: "blocked", confidence: 0.9, probabilities: { complete: 0.05, follow_up: 0.1, blocked: 0.85 } },
+              sensitive_action: { type: "noul", noul: 0.01 },
+            },
+            usage: { input_tokens: 10, output_tokens: 5 },
+          }),
+        }),
+      },
+    });
+    await disabled.send("hi");
+    expect(blockedModel.requests).toHaveLength(1);
+  });
+
   it("emits no verdict without a key", async () => {
     const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
     const events: ArchymedesEvent[] = [];

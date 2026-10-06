@@ -15,5 +15,5 @@ export function jevOptionsFromEnvironment(
   const apiKey = environment.TYPESAFE_API_KEY?.trim();
   if (!apiKey) return undefined;
   const model = environment.TYPESAFE_MODEL?.trim();
-  return { apiKey, ...(model ? { model } : {}) };
+  return { apiKey, ...(model ? { model } : {}), ...(environment.ARCHYMEDES_JEV_REVIEW?.trim().toLowerCase() === "off" ? { review: false } : {}) };
 }

@@ -392,7 +392,13 @@ export function renderEvent(event: ArchymedesEvent): void {
     out.write(style.dim(`  ${glyphs.elbow} jev: ${verdict.outcome} (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}\n`));
     return;
   }
+  if (event.type === "jev-review") {
+    forgetToolLines();
+    out.write(style.dim(`  ${glyphs.elbow} jev review (${event.outcome}, p=${event.probability.toFixed(2)}): re-invoking with the evidence\n`));
+    return;
+  }
 
+  if (event.type !== "runtime") return;
   const runtime = event.event;
   if (runtime.type === "provider_retry") {
     forgetToolLines();

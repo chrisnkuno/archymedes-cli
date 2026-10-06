@@ -169,6 +169,11 @@ export class HeadlessEmitter {
         : { model: verdict.model, outcome: verdict.outcome, probabilities: verdict.outcomeProbabilities, sensitiveAction: verdict.sensitiveAction });
       return;
     }
+    if (event.type === "jev-review") {
+      this.emit("jev_review", { outcome: event.outcome, probability: event.probability, reason: event.reason });
+      return;
+    }
+    if (event.type !== "runtime") return;
     const runtime = event.event;
     if (runtime.type === "assistant_delta") {
       this.emit("text", { text: runtime.text });

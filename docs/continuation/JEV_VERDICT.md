@@ -41,6 +41,11 @@ This integration never tries: the model provider selection is untouched.
   tool names, and a bounded execution-evidence digest (recent commands, exit codes,
   verification rung — never tool outputs). Tool-check arguments are truncated to 1,500
   chars. What leaves the machine is a summary, and only when a key is configured.
+- Auto review: when the verdict on a completed turn is `follow_up` or `blocked` at
+  ≥ 0.5 probability, the agent re-invokes the model once with the failing-command
+  digest and instructions to diagnose minimally. One correction per turn, then the
+  second verdict stands. `ARCHYMEDES_JEV_REVIEW=off` disables. The judge is heard,
+  not obeyed — it never blocks or replaces the runtime's own gates.
 
 ## Modules and dependencies
 

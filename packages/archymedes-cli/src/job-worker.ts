@@ -115,7 +115,11 @@ export function stepJobLog(state: JobLogState, event: ArchymedesEvent): { state:
     const verdict = event.verdict;
     return { state, lines: [verdict.status === "unavailable" ? "… jev verdict unavailable" : verdict.outcome === "blocked" ? `! jev: blocked (${verdict.sensitiveAction.toFixed(2)} sensitive) — review before building on this` : `✓ jev: ${verdict.outcome} (${verdict.sensitiveAction.toFixed(2)} sensitive)`] };
   }
+  if (event.type === "jev-review") {
+    return { state, lines: [`↻ jev review (${event.outcome}, p=${event.probability.toFixed(2)}) — re-invoking the model with the evidence`] };
+  }
 
+  if (event.type !== "runtime") return { state, lines: [] };
   const inner = event.event;
   if (inner.type === "assistant_delta") return { state: { pendingText: state.pendingText + inner.text }, lines: [] };
   if (inner.type === "tool_call") {
