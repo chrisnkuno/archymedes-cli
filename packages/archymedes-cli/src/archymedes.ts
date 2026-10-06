@@ -109,6 +109,7 @@ import { CliStateHistory } from "./session/state-history";
 import { type ReadlineInternals, confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, hiddenQuestion, isReadlineExit, settingsChooser } from "./app/prompts";
 import { helpText } from "./app/help";
 import { modelChoicesForSettingsField, modelPriceCatalogFor, readFxRates, renderProviders } from "./app/providers";
+import { jevOptionsFromEnvironment } from "./app/jev";
 import { runJobWorkerProcess, spawnJobWorker } from "./app/job-launch";
 
 /**
@@ -828,7 +829,7 @@ async function main(): Promise<number> {
       onNotification: handleDaemonNotification,
       // The daemon's approval type is the flattened cross-boundary shape; the terminal prompt reads
       // `summary`, `safety` and (for a pending write/edit) `preview` off it.
-      approve: (request) => approvalPrompt({ summary: request.summary, safety: request.safety, preview: request.preview }),
+      approve: (request) => approvalPrompt({ summary: request.summary, safety: request.safety, preview: request.preview, jev: request.jev }),
     });
     await client.open(({ onEvent, approve }) => new ArchymedesAgent({
       root: args.root,
@@ -849,6 +850,7 @@ async function main(): Promise<number> {
       search: createExaClient(environment),
       onExpense: (expense) => ledger.recordExpense(expense),
       onEvent,
+      jev: jevOptionsFromEnvironment(environment),
     }), record);
     return client;
   };
