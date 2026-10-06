@@ -439,6 +439,7 @@ describe("web_fetch", () => {
       workspace: new LocalWorkspace(root),
       todos: new TodoList(),
       fetchImpl: (async () => new Response(page, { status: 200 })) as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
       search: {
         search: async () => ({ requestId: "r", results: [] }),
         contents: async () => ({ requestId: "r", results: [{ title: "T", url: "https://a.test", highlights: [], publishedDate: null, author: null, text: "extracted body" }], statuses: [{ url: "https://a.test", status: "success", errorTag: null }], costDollars: 0.001 }),
@@ -455,6 +456,7 @@ describe("web_fetch", () => {
       workspace: new LocalWorkspace(root),
       todos: new TodoList(),
       fetchImpl: (async () => new Response(page, { status: 200 })) as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
       search: {
         search: async () => ({ requestId: "r", results: [] }),
         contents: async (_urls: string[], options: { text: { maxCharacters: number } }) => {
@@ -473,6 +475,7 @@ describe("web_fetch", () => {
       workspace: new LocalWorkspace(root),
       todos: new TodoList(),
       fetchImpl: (async () => new Response(page, { status: 200 })) as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
       search: {
         search: async () => ({ requestId: "r", results: [] }),
         contents: async () => { throw new Error("extractor down"); },
@@ -488,6 +491,7 @@ describe("web_fetch", () => {
       workspace: new LocalWorkspace(root),
       todos: new TodoList(),
       fetchImpl: (async () => new Response(page, { status: 200 })) as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
       search: {
         search: async () => ({ requestId: "r", results: [] }),
         contents: async () => ({ requestId: "r", results: [], statuses: [{ url: "https://a.test", status: "error", errorTag: "CRAWL_NOT_FOUND" }], costDollars: null }),
@@ -497,11 +501,32 @@ describe("web_fetch", () => {
     expect(result.data?.via).toBe("fetch");
   });
 
+  it("refuses private and local destinations before any extractor or fetch sees them", async () => {
+    let fetched = 0;
+    let extracted = 0;
+    const tools = await createArchymedesTools({
+      workspace: new LocalWorkspace(root),
+      todos: new TodoList(),
+      allowPrivateWebFetch: false,
+      fetchImpl: (async () => { fetched += 1; return new Response(page, { status: 200 }); }) as unknown as typeof fetch,
+      resolveHost: async (host) => (host === "intranet.test" ? ["10.0.0.5"] : ["93.184.216.34"]),
+      search: { search: async () => ({ requestId: "r", results: [] }), contents: async () => { extracted += 1; throw new Error("no"); } } as never,
+    });
+    for (const url of ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:8080/admin", "https://intranet.test/wiki", "http://[::1]/"]) {
+      const result = await toolNamed(tools, "web_fetch").execute({ url }, context);
+      expect(result, url).toMatchObject({ isError: true });
+      expect(result.content).toContain("private or local address");
+    }
+    expect(fetched).toBe(0);
+    expect(extracted).toBe(0);
+  });
+
   it("still refuses a non-http url", async () => {
     const tools = await createArchymedesTools({
       workspace: new LocalWorkspace(root),
       todos: new TodoList(),
       fetchImpl: (async () => new Response(page, { status: 200 })) as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
     });
     await expect(toolNamed(tools, "web_fetch").execute({ url: "file:///etc/passwd" }, context)).rejects.toThrow("http or https");
   });
@@ -579,6 +604,7 @@ describe("web_fetch", () => {
     const tools = await createArchymedesTools({
       workspace: new LocalWorkspace(root), todos: new TodoList(),
       fetchImpl: async () => new Response("not found", { status: 404 }),
+      resolveHost: async () => ["93.184.216.34"],
     });
     const result = await toolNamed(tools, "web_fetch").execute({ url: "https://example.com/missing" }, context);
     expect(result.isError).toBe(true);
@@ -590,11 +616,24 @@ describe("web_fetch", () => {
     const tools = await createArchymedesTools({
       workspace: new LocalWorkspace(root), todos: new TodoList(),
       fetchImpl: async () => new Response(html, { status: 200 }),
+      resolveHost: async () => ["93.184.216.34"],
     });
     const result = await toolNamed(tools, "web_fetch").execute({ url: "https://example.com/page" }, context);
     expect(result.content).toBe("Fish & Chips <3");
     expect(result.content).not.toContain("evil()");
     expect(result.content).not.toContain("color:red");
+  });
+
+  it("tells the model when the page was cut, so a truncated body is not read as a short one", async () => {
+    const tools = await createArchymedesTools({
+      workspace: new LocalWorkspace(root), todos: new TodoList(),
+      fetchImpl: async () => new Response("a".repeat(20_000), { status: 200 }),
+      resolveHost: async () => ["93.184.216.34"],
+    });
+    const result = await toolNamed(tools, "web_fetch").execute({ url: "https://example.com/long" }, context);
+    expect(result.content).toContain("[... text truncated at 16000 characters]");
+    expect(result.content).not.toContain("a".repeat(16_001));
+    expect(result.data).toMatchObject({ truncated: true });
   });
 });
 

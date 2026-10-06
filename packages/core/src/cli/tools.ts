@@ -1,3 +1,4 @@
+import { checkDestination, fetchPublicText, type ResolveHost } from "./safe-fetch";
 import type { AgentTool } from "../agent-runtime";
 import type { ExaCategory, ExaSearchClient, ExaSearchHit } from "../providers/exa";
 import type { Expense } from "./cost";
@@ -96,6 +97,10 @@ export type ArchymedesToolOptions = {
    */
   onExpense?: (expense: Expense) => void;
   fetchImpl?: typeof fetch;
+  /** DNS for web_fetch's public-address check; tests supply one. */
+  resolveHost?: ResolveHost;
+  /** Lets web_fetch reach private and local addresses (ARCHYMEDES_WEB_FETCH_ALLOW_PRIVATE=1). */
+  allowPrivateWebFetch?: boolean;
   /** Ceiling for a single `run_command` call. */
   commandTimeoutMs?: number;
   /** Surfaces a directory's own instructions the first time a tool reaches it. See nested-instructions.ts. */
@@ -798,7 +803,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
   }
 
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (fetchImpl) {
+  if (typeof fetchImpl === "function") {
     tools.push({
       name: "web_fetch",
       description: "Fetch a URL and return its text, for documentation pages found by web_search.",
@@ -810,6 +815,11 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       async execute(args) {
         const url = requiredString(args.url, "url");
         if (!/^https?:\/\//i.test(url)) throw new Error("url must be http or https");
+        // Checked before either route: the extractor below fetches server-side, but a private URL
+        // is refused for what it names, not only for who would connect to it.
+        const guard = { fetchImpl, resolveHost: options.resolveHost, allowPrivate: options.allowPrivateWebFetch ?? process.env.ARCHYMEDES_WEB_FETCH_ALLOW_PRIVATE === "1" };
+        const refused = await checkDestination(new URL(url), guard);
+        if (refused) return { content: `Not fetched: ${refused}.`, isError: true };
         // Exa's extractor first when it is configured: it renders JavaScript pages and parses PDFs,
         // neither of which a raw fetch plus tag-stripping can do at all — those come back as an
         // empty shell or as binary noise, and the model cannot tell either from a page that simply
@@ -836,10 +846,20 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
             // provider-selection detail as a tool error would read as the fetch itself failing.
           }
         }
-        const response = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
-        if (!response.ok) return { content: `Fetch failed with status ${response.status}.`, isError: true };
-        const text = await response.text();
-        return { content: stripMarkup(text).slice(0, 16_000), data: { url, via: "fetch" } };
+        const fetched = await fetchPublicText(url, guard);
+        if (!fetched.ok) return { content: `Not fetched: ${fetched.error}.`, isError: true };
+        if (fetched.status < 200 || fetched.status >= 300) return { content: `Fetch failed with status ${fetched.status}.`, isError: true };
+        // Two different caps can bite: the fetch's byte cap and the character slice
+        // below. The model has to know it is reading a cut page — a silently
+        // truncated body reads as a short one.
+        const stripped = stripMarkup(fetched.text);
+        const sliced = stripped.length > 16_000;
+        return {
+          content: sliced || fetched.truncated
+            ? `${stripped.slice(0, 16_000)}\n[... ${fetched.truncated ? "response truncated at the 2 MB fetch cap" : "text truncated at 16000 characters"}]`
+            : stripped,
+          data: { url: fetched.url, via: "fetch", truncated: fetched.truncated || sliced },
+        };
       },
     });
   }
