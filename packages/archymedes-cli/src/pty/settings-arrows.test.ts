@@ -69,10 +69,9 @@ describe("settings under a real pty", () => {
     // Location is the second row; one Down from the top, then open it.
     const opened = p.output().length;
     p.write(`${DOWN}${ENTER}`);
-    const list = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: opened });
-    // Sorted by name, so the window opens on the A's — Rwanda is below the fold, which is exactly
-    // why the list filters rather than expecting anyone to page to it.
-    expect(list.slice(opened)).toMatch(/Australia \(AU\) — AUD/);
+    // The country list, not the field list: both now advertise filtering in their legends, so
+    // wait for a row only the country list can show.
+    const list = await p.waitFor(/Australia \(AU\) — AUD/, { timeoutMs: 15_000, since: opened });
 
     // Type to narrow, then take it.
     const filtered = p.output().length;
@@ -107,7 +106,8 @@ describe("settings under a real pty", () => {
     await p.waitFor(/❯/, { timeoutMs: 15_000, since: jumped });
     p.write(ENTER);
     // Row 2 is Location, so typing its number opened the same list arrowing to it would have.
-    const seen = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: jumped });
+    // The field list itself now advertises filtering too, so only a country row proves the open.
+    const seen = await p.waitFor(/Australia \(AU\)/, { timeoutMs: 15_000, since: jumped });
     expect(seen.slice(jumped)).toContain("Location");
     p.kill();
   }, 90_000);

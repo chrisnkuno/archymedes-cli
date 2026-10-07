@@ -1,6 +1,7 @@
 import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
+import { DEFAULT_STREAM_TIMEOUTS, fetchWithStreamTimeouts, type StreamTimeouts } from "./stream-fetch";
 
 /**
  * Anthropic Messages API adapter.
@@ -19,6 +20,10 @@ export type AnthropicAgentOptions = {
   model: string;
   baseURL?: string;
   timeoutMs?: number;
+  /** Underlying fetch, wrapped with byte-level stream timeouts. Defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+  /** TTFB/idle/total budget for the stream. `timeoutMs` remains the total cap when unset here. */
+  streamTimeouts?: StreamTimeouts;
 };
 
 type AnthropicMessage = { role: "user" | "assistant"; content: unknown };
@@ -275,8 +280,16 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
             throw new Error("The Anthropic provider needs the @anthropic-ai/sdk package. Install it with: npm install @anthropic-ai/sdk");
           });
           // Retry policy is centralized in BoundedAgentRuntime; hidden SDK retries would make its
-          // bounded attempt count and live progress messages inaccurate.
-          client = new Anthropic({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), maxRetries: 0 }) as never;
+          // bounded attempt count and live progress messages inaccurate. Timeouts are byte-level
+          // (first byte, silence between events, total) rather than one wall-clock timer, so a
+          // slow-but-alive stream is never killed mid-sentence. The SDK's own timeout sits a
+          // minute past the total so the descriptive byte-level error always wins the race.
+          const totalMs = options.streamTimeouts?.totalMs ?? options.timeoutMs;
+          const streamFetch = fetchWithStreamTimeouts(options.fetchImpl ?? globalThis.fetch, {
+            ...options.streamTimeouts,
+            ...(totalMs !== undefined ? { totalMs } : {}),
+          });
+          client = new Anthropic({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), maxRetries: 0, timeout: (totalMs ?? DEFAULT_STREAM_TIMEOUTS.totalMs) + 60_000, fetch: streamFetch }) as never;
         }
         return (await client!.messages.create(body as never, { signal })) as AnthropicResponse | AsyncIterable<AnthropicStreamEvent>;
       };
@@ -285,6 +298,9 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
 
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
     if (!request.safetyIdentifier.trim()) throw new Error("safetyIdentifier is required");
+    // Cancellation comes from the caller alone; liveness (first byte, stall, total) is enforced
+    // byte-by-byte in the fetch wrapper, which can tell a slow stream from a stuck one.
+    const signal = request.signal ?? AbortSignal.any([]);
     const converted = toAnthropicMessages(request.messages);
     const { system, messages, tools } = withCacheBreakpoints(
       converted.system,
@@ -311,10 +327,7 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
       // is lost. A caller that passes no `onTextDelta` simply gets the collected turn, exactly as
       // before; nothing above this line can tell the difference.
       stream: true,
-    }, AbortSignal.any([
-      AbortSignal.timeout(this.options.timeoutMs ?? 180_000),
-      ...(request.signal ? [request.signal] : []),
-    ]));
+    }, signal);
 
     const response = Symbol.asyncIterator in Object(raw)
       ? await collectAnthropicStream(raw as AsyncIterable<AnthropicStreamEvent>, request.onTextDelta)

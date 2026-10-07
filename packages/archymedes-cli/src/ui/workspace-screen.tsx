@@ -7,6 +7,7 @@ import {
   keyToAction,
   type WorkspaceSnapshot,
 } from "./workspace-model";
+import { exitTopTermUIApp } from "../terminal/screen-host";
 
 /**
  * The control panel, drawn.
@@ -110,6 +111,7 @@ export async function runWorkspace(host: WorkspaceHost): Promise<void> {
     const finish = () => {
       if (settled) return;
       settled = true;
+      exitTopTermUIApp();
       host.onExit?.();
       resolve();
     };

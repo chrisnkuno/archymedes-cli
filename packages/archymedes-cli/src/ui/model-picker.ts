@@ -155,13 +155,17 @@ export function renderModelPicker(frame: { rows: readonly PickerRow[]; selected:
     const fadingOut = !active && start + offset === options.transitionFrom;
     const cursor = active ? paint.green(glyphs.prompt) : fadingOut ? paint.dim(glyphs.prompt) : " ";
     const number = offset < 9 ? `${offset + 1}.` : "  ";
+    // The label-only fallback when even the narrowest full row would overflow: measured on the
+    // final painted row, because furniture arithmetic drifts (and has — a clipped label still
+    // beats a wrapped one, which would corrupt the repaint that reserved exactly one row).
+    const narrow = (text: string) => active ? paint.green(clipTo(`${glyphs.prompt}${text}`, columns)) : clipTo(text, columns);
     if (columns < 9) {
-      const label = row.kind === "model" ? row.choice.model : row.label;
-      lines.push(active ? paint.green(clipTo(`${glyphs.prompt}${label}`, columns)) : clipTo(label, columns));
+      lines.push(narrow(row.kind === "model" ? row.choice.model : row.label));
       continue;
     }
     if (row.kind === "settings") {
-      lines.push(`  ${cursor} ${paint.dim(number)} ${paint.yellow(clipTo(row.label, columns - 7))}`);
+      const full = `  ${cursor} ${paint.dim(number)} ${paint.yellow(clipTo(row.label, Math.max(0, columns - 7)))}`;
+      lines.push(visibleWidth(full) <= columns ? full : narrow(row.label));
       continue;
     }
     const isCurrent = row.choice.provider === options.current.provider && row.choice.model === options.current.model;
@@ -176,7 +180,8 @@ export function renderModelPicker(frame: { rows: readonly PickerRow[]; selected:
       : padded;
     const tail = `${options.price(row.choice)}${tags ? `  (${tags})` : ""}`;
     const room = Math.max(0, columns - visibleWidth(`  ${active ? glyphs.prompt : " "} ${number} ${isCurrent ? glyphs.circleFull : " "} ${padded}  `));
-    lines.push(`  ${cursor} ${paint.dim(number)} ${isCurrent ? paint.green(glyphs.circleFull) : " "} ${label}  ${paint.dim(clipTo(tail, room))}`);
+    const full = `  ${cursor} ${paint.dim(number)} ${isCurrent ? paint.green(glyphs.circleFull) : " "} ${label}  ${paint.dim(clipTo(tail, room))}`;
+    lines.push(visibleWidth(full) <= columns ? full : narrow(row.choice.model));
   }
   lines.push(paint.dim(clipTo(`  ${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} t table ${glyphs.middot} type to filter ${glyphs.middot} Esc cancel`, columns)));
   return lines.join("\n");
@@ -203,6 +208,9 @@ export function advanceModelPicker(state: PickerState, rows: readonly PickerRow[
   const last = Math.max(0, visible.length - 1);
   const height = Math.max(1, options.height ?? 10);
   const clamp = (index: number) => Math.max(0, Math.min(last, index));
+  // Normalized once, up front: a selection left over from a longer or differently-filtered list
+  // can never be handed back, rendered, or resolved against rows that no longer have it.
+  state = { ...state, selected: clamp(state.selected) };
 
   if (name === "escape" || (input.key.ctrl && (name === "c" || name === "g"))) {
     // Escape undoes the filter before it abandons the menu, which is what every editor

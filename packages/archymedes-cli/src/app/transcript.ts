@@ -407,7 +407,8 @@ export function renderEvent(event: ArchymedesEvent): void {
       : runtime.reason === "network" ? "connection failed"
       : runtime.reason === "timeout" ? "request timed out"
       : "temporary provider failure";
-    out.write(style.yellow(`  ${glyphs.elbow} ${reason}; retrying model request ${runtime.nextAttempt}/${runtime.maxAttempts} in ${runtime.delayMs}ms\n`));
+    const wait = runtime.delayMs >= 1000 ? `${(runtime.delayMs / 1000).toFixed(runtime.delayMs % 1000 === 0 ? 0 : 1)}s` : `${runtime.delayMs}ms`;
+    out.write(style.yellow(`  ${glyphs.elbow} ${reason}; retrying model request ${runtime.nextAttempt}/${runtime.maxAttempts} in ${wait}\n`));
     return;
   }
   if (runtime.type === "model_turn") {

@@ -97,6 +97,19 @@ export function explainScreenRefusal(outcome: Extract<ScreenOutcome, { ok: false
   }
 }
 
+/**
+ * Closes the most recently mounted TermUI app, if any.
+ *
+ * `renderApp` resolves only after the app has already exited, so a screen that resolves its own
+ * `onExit` would otherwise leave TermUI mounted: the frame stays on screen, the alternate buffer
+ * is never left, and every later keypress keeps going to the dead app instead of readline. Closing
+ * here — synchronously inside `onExit`, not on a later tick — tears the app down while its own key
+ * path is still unwinding, which is the only moment the close is guaranteed to run.
+ */
+export function exitTopTermUIApp(): void {
+  (globalThis as { __termuijs_apps?: Array<{ exit(code?: number): void }> }).__termuijs_apps?.at(-1)?.exit(0);
+}
+
 export type TerminalControls = {
   /** Erase anything the transcript renderer has drawn below the cursor. */
   clearStatus(): void;
@@ -110,6 +123,14 @@ export type TerminalControls = {
   resumeInput(): void;
   /** Re-establish the pinned region and redraw the idle status line. */
   restoreScreen(): void;
+  /**
+   * Repair CLI input handling the framework clobbered on its way out.
+   *
+   * TermUI's `terminal.restore()` runs inside its unmount — *after* the app's own cleanup — so
+   * its bracketed-paste disable lands last. Without this the CLI's paste handler stays replaced
+   * by a dead one after every screen, and multi-line pastes submit line-by-line again.
+   */
+  restoreInput?(): void;
 };
 
 /**
@@ -141,5 +162,9 @@ export async function withFullScreen(
     controls.resumeInput();
     controls.installShortcuts();
     controls.restoreScreen();
+    // TermUI's `terminal.restore()` runs inside the unmount — *after* the app's own cleanup — so
+    // its bracketed-paste disable lands last. Reinstalling the CLI's own paste handling here
+    // re-enables the mode after every screen, not only at exit.
+    controls.restoreInput?.();
   }
 }

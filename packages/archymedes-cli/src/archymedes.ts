@@ -504,7 +504,15 @@ async function main(): Promise<number> {
   };
   let uninstallShortcuts = interactive ? installShortcuts(shortcutOptions) : () => {};
   const pastes = createPasteStore();
-  const uninstallPaste = interactive && process.stdout.isTTY ? installBracketedPaste({ readline, output: process.stdout, store: pastes }) : () => {};
+  // Mutable: a fullscreen's own teardown disables bracketed-paste mode on the way out (TermUI's
+  // `restore()` writes its disable sequence), so the CLI's handler must be reinstalled after
+  // every screen, not merely uninstalled at exit.
+  let uninstallPaste = interactive && process.stdout.isTTY ? installBracketedPaste({ readline, output: process.stdout, store: pastes }) : () => {};
+  const reinstallPaste = (): void => {
+    if (!interactive || !process.stdout.isTTY) return;
+    uninstallPaste();
+    uninstallPaste = installBracketedPaste({ readline, output: process.stdout, store: pastes });
+  };
   const installShortcutsAgain = (): void => {
     if (interactive) uninstallShortcuts = installShortcuts(shortcutOptions);
   };
@@ -1026,15 +1034,45 @@ async function main(): Promise<number> {
   /**
    * How a full-screen view borrows the terminal. One definition, used by every screen, because the
    * six steps have to happen in the same order every time and a missed one leaves a dead prompt.
+   *
+   * `detachedKeypress` holds keypress listeners detached while a fullscreen owns the keyboard (see
+   * `pauseInput` below). Screens never nest — each runs to close before the loop continues — so one
+   * slot suffices.
    */
+  let detachedKeypress: Array<(...args: never[]) => unknown> | undefined;
   const terminalControls = (): TerminalControls => ({
     clearStatus: () => statusBar.clear(),
     releaseScreen: () => { screen?.exit(); setWorkspaceMenu(undefined); },
     uninstallShortcuts: () => uninstallShortcuts(),
     installShortcuts: () => installShortcutsAgain(),
-    pauseInput: () => readline.pause(),
-    resumeInput: () => readline.resume(),
+    pauseInput: () => {
+      // readline's own keypress listener stays attached across `pause()` — pausing only stops the
+      // data — and TermUI resumes the stream for itself, so every screen key would also land in
+      // readline's idle line buffer (a `q` that closed /files reappears typed at the next prompt;
+      // arrows move the history index the next recall reads). Detaching all keypress listeners for
+      // the duration, the way the borrowed-keyboard choosers already do, keeps the two keyboards
+      // from sharing keystrokes. Screens only ever open between turns, so no pending question can
+      // be starved by this.
+      detachedKeypress = [...process.stdin.listeners("keypress")] as Array<(...args: never[]) => unknown>;
+      for (const listener of detachedKeypress) process.stdin.off("keypress", listener as (...args: unknown[]) => void);
+      readline.pause();
+    },
+    resumeInput: () => {
+      readline.resume();
+      const listeners = detachedKeypress;
+      detachedKeypress = undefined;
+      if (listeners) {
+        for (const listener of listeners) process.stdin.on("keypress", listener as (...args: unknown[]) => void);
+      }
+    },
     restoreScreen: () => { screen?.enter(); if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu); bindFixedNavigation(); showIdleStatus(); },
+    // TermUI's own restore runs inside its unmount, after the app's cleanup — its bracketed-paste
+    // disable lands last. Reinstalling the CLI's handler here re-enables the mode after every
+    // screen, not only at exit.
+    restoreInput: () => {
+      if (turnActive) return;
+      reinstallPaste();
+    },
   });
 
   const screenCapabilities = () => currentScreenCapabilities(interactive, process.stdout, process.env);
@@ -1344,6 +1382,13 @@ async function main(): Promise<number> {
   const bindSigint = () => { process.on("SIGINT", handleSigint); readline.on("SIGINT", handleSigint); };
   const unbindSigint = () => { process.off("SIGINT", handleSigint); readline.off("SIGINT", handleSigint); };
   bindSigint();
+  // Bun's `readline/promises` never settles a pending `question()` on Ctrl+D — no resolve, no
+  // rejection — so without this the session sits on a dead prompt, or the loop drains and the
+  // process exits 0 with no goodbye, no history save and no sandbox cleanup. Node rejects with
+  // AbortError, which `isReadlineExit` already turns into the same break. Ending the parked
+  // question with the close message reaches that break on both runtimes; after it runs
+  // `rejectPrompt` is cleared, so the `readline.close()` inside `exitCleanly` cannot re-fire it.
+  readline.on("close", () => abandonPrompt());
   exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); uninstallPaste(); readline.close(); abandonPrompt(); };
 
   /** Set when the turn about to run is a wander lab, so its results chart is printed once, after it. */

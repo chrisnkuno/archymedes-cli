@@ -369,6 +369,10 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
       const chosen = await prompts.choose({
         title: `Archymedes ${controlLabel(language, "settings")}`,
         items,
+        // Filterable: sixty rows is not a menu you arrow through to row fifty, and the value
+        // lists already filter — the field list refusing typed queries while they do would be
+        // the one screen where typing does nothing.
+        filter: true,
         // Reopens where the user was, not at the top. Setting three things in a row otherwise means
         // scrolling back down twice, and the list is long enough for that to be the whole cost of
         // using it.

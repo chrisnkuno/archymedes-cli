@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
+import { isRetryableProviderError, providerFailureKind } from "../agent-runtime";
 import type { ChatResponse } from "./openai-compatible";
 
 const usage = {
@@ -147,6 +148,42 @@ describe("OpenAI agent adapter", () => {
     // which the test never does. This just proves the real, non-test construction path works.
     expect(() => new OpenAIAgentTurnProvider({ apiKey: "sk-test", model: "gpt-5.6-terra" })).not.toThrow();
     expect(() => new OpenAIAgentTurnProvider({ apiKey: "sk-test", model: "gpt-5.6-terra", baseURL: "https://example.com/v1" })).not.toThrow();
+  });
+
+  it("streams through the SDK's own transport and the byte-level timeouts together", async () => {
+    // No `call` injected: the OpenAI SDK performs the request through `fetchImpl`, wrapped by
+    // the TTFB/idle/total timeouts. A healthy stream must pass through untouched — the wrapper
+    // may only abort dead connections, never slow ones.
+    const chunk = (delta: unknown, finish: string | null = null) =>
+      `data: ${JSON.stringify({ id: "chatcmpl_1", model: "gpt-5.6-terra", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+    const body = [
+      chunk({ content: "Hel" }),
+      chunk({ content: "lo." }, "stop"),
+      `data: ${JSON.stringify({ id: "chatcmpl_1", model: "gpt-5.6-terra", choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } })}\n\n`,
+      "data: [DONE]\n\n",
+    ].join("");
+    const fetchImpl = (async () => new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+    const provider = new OpenAIAgentTurnProvider({ apiKey: "sk-test", model: "gpt-5.6-terra", fetchImpl });
+    const seen: string[] = [];
+    const turn = await provider.complete({ ...request, onTextDelta: (text) => seen.push(text) });
+    expect(seen).toEqual(["Hel", "lo."]);
+    expect(turn).toMatchObject({ finishReason: "stop", content: "Hello.", usage: { totalTokens: 15 } });
+  });
+
+  it("turns a byte-level timeout through the real SDK into a retryable timeout", async () => {
+    // The SDK wraps transport failures in its own error shape and drops the cause; what must
+    // survive is the retry contract — retryable, kind timeout — or a stalled provider silently
+    // stops being retried after an SDK upgrade.
+    const hanging = ((_input: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    })) as typeof fetch;
+    const provider = new OpenAIAgentTurnProvider({
+      apiKey: "sk-test", model: "gpt-5.6-terra", fetchImpl: hanging, streamTimeouts: { ttfbMs: 30, idleMs: 50, totalMs: 200 },
+    });
+    const error = await provider.complete(request).then(() => null, (error: unknown) => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(isRetryableProviderError(error)).toBe(true);
+    expect(providerFailureKind(error)).toBe("timeout");
   });
 
   it("collects a streamed response the same way the buffered one is read", async () => {

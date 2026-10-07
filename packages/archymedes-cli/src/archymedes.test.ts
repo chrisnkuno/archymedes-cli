@@ -55,6 +55,18 @@ describe("argument parsing", () => {
     expect(parseArgs(["--plan", "why", "is", "it", "slow"])).toMatchObject({ mode: "plan", prompt: "why is it slow" });
   });
 
+  it("refuses unknown flags instead of spending a model turn on them", () => {
+    // A mistyped flag used to join the prompt: `--badflag` billed a turn on "--badflag".
+    expect(() => parseArgs(["--badflag"])).toThrow("Unknown flag --badflag");
+    expect(() => parseArgs(["--json", "--badflag", "go"])).toThrow("Unknown flag --badflag");
+    expect(() => parseArgs(["-x"])).toThrow("Unknown flag -x");
+    // -- separates flags from a request that legitimately starts with a dash.
+    expect(parseArgs(["--", "-5", "stars"]).prompt).toBe("-5 stars");
+    expect(parseArgs(["--", "--help"]).prompt).toBe("--help");
+    // A lone dash is prompt text, not a flag.
+    expect(parseArgs(["-", "a", "b"]).prompt).toBe("- a b");
+  });
+
   it("takes the sandbox flag with or without an explicit backend", () => {
     expect(parseArgs(["--sandbox"]).backend).toBe("e2b");
     expect(parseArgs(["--sandbox", "e2b"]).backend).toBe("e2b");

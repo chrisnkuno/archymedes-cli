@@ -232,6 +232,9 @@ export function advanceTable(
   const height = Math.max(1, options.height ?? 10);
   const columnCount = Math.max(1, options.columns ?? 1);
   const clamp = (index: number) => Math.max(0, Math.min(last, index));
+  // Normalized once, up front: a selection left over from a longer row set can never be handed
+  // back, rendered, or resolved against rows that no longer have it.
+  state = { ...state, selected: clamp(state.selected) };
 
   // Ctrl+C leaves from anywhere, focused or not: a blurred table must not be able to trap the
   // keyboard somewhere the usual escape hatch has stopped working.

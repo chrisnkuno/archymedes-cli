@@ -18,6 +18,7 @@ import {
   type ExplainPanelState,
 } from "./explain-view";
 import { NO_COLOR_PALETTE, type Palette } from "../theme/theme";
+import { exitTopTermUIApp } from "../terminal/screen-host";
 
 /**
  * The editor, as a screen — now with an explainable view alongside it.
@@ -152,6 +153,7 @@ export async function runEditorScreen(options: {
     const finish = (saved: string | undefined) => {
       if (settled) return;
       settled = true;
+      exitTopTermUIApp();
       resolve(saved);
     };
     void renderApp(EditorScreen as never, {

@@ -149,6 +149,10 @@ export function advanceChooser<T>(state: ChooserState, items: readonly ChooserIt
   const last = Math.max(0, visible.length - 1);
   const page = options.page ?? 8;
   const clamp = (index: number) => Math.max(0, Math.min(last, index));
+  // Normalized once, up front: a selection left over from a longer or differently-filtered list
+  // (or handed in stale by a caller) is clamped before any branch reads it, so no path can hand
+  // back, render, or resolve an index the visible list does not have.
+  state = { ...state, selected: clamp(state.selected) };
 
   // Escape closes the *inner* thing first: a typed filter is undone before the menu is abandoned,
   // which is what every editor has trained. Ctrl-C always leaves outright.
@@ -293,7 +297,11 @@ export function renderChooser<T>(state: ChooserState, items: readonly ChooserIte
     // the terminal has left. The label is clipped first and the tail takes the remainder, so a long
     // label cannot push a row past the edge and a long description cannot hide the label.
     const furniture = visibleWidth(`  ${active ? ">" : " "} ${number} `) + 2;
-    if (width < furniture) {
+    // A label needs at least one column: below that the full row cannot fit by construction
+    // (the `max(1, …)` floor below would push it past the edge), so the label-only row is the
+    // only honest rendering — and a clipped label still beats a wrapped one, which would corrupt
+    // the repaint that reserved exactly one row for this.
+    if (width < furniture + 1) {
       lines.push(active ? paint.green(clip(`${glyphs.prompt}${item.label}`, width)) : clip(item.label, width));
       continue;
     }

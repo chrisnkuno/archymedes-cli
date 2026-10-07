@@ -1,6 +1,7 @@
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { OpenAIAgentTurnProvider, type OpenAIChatCall } from "./openai-agent";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
+import type { StreamTimeouts } from "./stream-fetch";
 
 /**
  * Direct OpenRouter provider: the user's own key against OpenRouter's API, for any model.
@@ -29,6 +30,8 @@ export type OpenRouterAgentOptions = {
   /** Optional site title for OpenRouter rankings. Sent as `X-Title`. */
   appTitle?: string;
   timeoutMs?: number;
+  /** TTFB/idle/total budget for the stream, forwarded to the shared adapter. */
+  streamTimeouts?: StreamTimeouts;
 };
 
 export class OpenRouterAgentTurnProvider implements AgentTurnProvider {
@@ -52,6 +55,7 @@ export class OpenRouterAgentTurnProvider implements AgentTurnProvider {
         "X-Title": options.appTitle?.trim() || "Archymedes CLI",
       },
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.streamTimeouts !== undefined ? { streamTimeouts: options.streamTimeouts } : {}),
     }, call);
   }
 

@@ -192,6 +192,16 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
     else if (argument === "--location" || argument === "--country") { parsed.country = argv[index + 1]?.toUpperCase(); index += 1; }
     else if (argument === "--language" || argument === "--lang") { parsed.language = argv[index + 1]; index += 1; }
+    else if (argument === "--") {
+      // Everything after is the request, even when it looks like a flag: `archymedes -- -5 stars`.
+      rest.push(...argv.slice(index + 1));
+      break;
+    } else if (argument.startsWith("-") && argument !== "-" && !historyRequested) {
+      // A mistyped flag must fail here, not become the request: without this `--badflag` silently
+      // spends a model turn on the literal text "--badflag". History search keeps dash words as
+      // query text — a search costs nothing, so there is nothing to protect there.
+      throw new Error(`Unknown flag ${argument}. See archymedes --help, or put -- before a request that starts with a dash.`);
+    }
     else rest.push(argument);
   }
   if (freeRequested && otherProviderRequested) throw new Error("--free/--provider free cannot be combined with another --provider.");

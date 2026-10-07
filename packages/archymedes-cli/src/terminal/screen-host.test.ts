@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MINIMUM_SCREEN,
   canDrawScreen,
+  exitTopTermUIApp,
   explainScreenRefusal,
   withFullScreen,
   type TerminalControls,
@@ -109,5 +110,37 @@ describe("taking the terminal and giving it back", () => {
     });
     expect(terminal.calls).toContain("resumeInput");
     expect(terminal.calls).toContain("restoreScreen");
+  });
+
+  it("repairs input handling after the screen, last of all", async () => {
+    const terminal = { ...controls(), restoreInput: vi.fn() };
+    await withFullScreen(big, terminal, async () => {});
+    expect(terminal.restoreInput).toHaveBeenCalledTimes(1);
+    expect(terminal.calls.at(-1)).toBe("restoreScreen");
+  });
+
+  it("stays compatible with callers that predate input repair", async () => {
+    // `restoreInput` is optional: older control sets simply skip the step.
+    const outcome = await withFullScreen(big, controls(), async () => {});
+    expect(outcome).toEqual({ ok: true });
+  });
+});
+
+describe("closing the mounted app", () => {
+  it("exits the most recently mounted TermUI app", () => {
+    const first = { exit: vi.fn() };
+    const second = { exit: vi.fn() };
+    (globalThis as { __termuijs_apps?: unknown[] }).__termuijs_apps = [first, second];
+    try {
+      exitTopTermUIApp();
+      expect(first.exit).not.toHaveBeenCalled();
+      expect(second.exit).toHaveBeenCalledWith(0);
+    } finally {
+      delete (globalThis as { __termuijs_apps?: unknown }).__termuijs_apps;
+    }
+  });
+
+  it("is a no-op when no app registry exists", () => {
+    expect(() => exitTopTermUIApp()).not.toThrow();
   });
 });

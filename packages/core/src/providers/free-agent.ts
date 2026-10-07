@@ -10,6 +10,9 @@ import { approximateInputTokens } from "../model-cost";
 import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, type FreeCatalog } from "./free-catalog";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
 import { capabilitiesFor } from "./model-capabilities";
+import { fetchWithStreamTimeouts, DEFAULT_STREAM_TIMEOUTS } from "./stream-fetch";
+import { providerRetryAfterMs } from "../agent-runtime";
+import { RequestPacer } from "./request-pacer";
 import { collectChatStream, toWireMessages, turnFromChatResponse, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
 
 type ChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>;
@@ -21,6 +24,9 @@ function rank(id: string): number {
   const index = FREE_ROUTER_PREFERENCE.indexOf(id);
   return index === -1 ? FREE_ROUTER_PREFERENCE.length : index;
 }
+
+/** A model that failed with 429/5xx stays deprioritized this long, so retries try a different model instead of reconnecting to the one that just failed. */
+const MODEL_COOLDOWN_MS = 60_000;
 
 class FreeAccessError extends Error {
   constructor(message: string, readonly status = 400, readonly retryable = false, readonly retryAfterMs?: number) { super(message); }
@@ -35,29 +41,47 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   private catalog?: FreeCatalog;
   /** Models OpenRouter refused (403/404) for this key; skipped by the router for this process. */
   private readonly refused = new Set<string>();
+  /** Models that failed with 429/5xx, with the epoch-ms when they may be tried again. Unlike `refused` this expires: the outage, not the model, is the problem. */
+  private readonly cooling = new Map<string, number>();
+
+  /** Learned request pacing for the free tier: survives across turns so a session that hit the limiter keeps spacing its requests. */
+  private readonly pacer: RequestPacer;
 
   private readonly baseUrl: string;
   private readonly viaGateway: boolean;
 
   constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number }, private readonly dependencies: {
-    call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number;
+    call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number; pacer?: RequestPacer;
   } = {}) {
     this.selection = { provider: "free", model: options.model };
+    this.pacer = dependencies.pacer ?? new RequestPacer();
     const apiKey = options.apiKey?.trim();
     this.viaGateway = !apiKey && Boolean(options.gatewayUrl);
     if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode needs OPENROUTER_API_KEY, or a free gateway in ARCHYMEDES_FREE_GATEWAY_URL. Configure the key in archymedes settings.");
     if (!isFreeModelId(options.model)) throw new FreeAccessError("Free mode accepts openrouter/free or an exact publisher/model:free ID; paid models are not allowed.");
     this.baseUrl = this.viaGateway ? `${options.gatewayUrl}/v1` : FREE_BASE_URL;
+    // Timeouts are byte-level (first byte, silence between chunks, total) rather than one
+    // wall-clock timer, so a slow-but-alive free-tier stream is never killed mid-sentence.
+    // `timeoutMs` remains the total cap. Redirects stay refused: a 3xx from either endpoint is
+    // a configuration or interception signal, not a detour to follow with a credential.
+    const streamFetch = fetchWithStreamTimeouts(
+      ((input, init) => globalThis.fetch(input, { ...init, redirect: "error" })) as typeof fetch,
+      { ...(this.options.timeoutMs !== undefined ? { totalMs: this.options.timeoutMs } : {}) },
+    );
     const client = dependencies.call ? undefined : new OpenAI({
       // The gateway ignores Authorization; the placeholder only satisfies the SDK.
       apiKey: apiKey ?? "archymedes-free-gateway", baseURL: this.baseUrl, maxRetries: 0,
-      fetch: (input, init) => globalThis.fetch(input, { ...init, redirect: "error" }),
+      // A minute past the byte-level total so the descriptive timeout always wins the race.
+      timeout: (this.options.timeoutMs ?? DEFAULT_STREAM_TIMEOUTS.totalMs) + 60_000,
+      fetch: streamFetch,
     });
     this.call = dependencies.call ?? (async (body, signal) => await client!.chat.completions.create(body as never, { signal }));
   }
 
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
-    const signal = AbortSignal.any([AbortSignal.timeout(this.options.timeoutMs ?? 180_000), ...(request.signal ? [request.signal] : [])]);
+    // Cancellation comes from the caller alone here; liveness (first byte, stall, total) is
+    // enforced byte-by-byte in the fetch wrapper, which can tell a slow stream from a stuck one.
+    const signal = request.signal ?? AbortSignal.any([]);
     try {
       signal.throwIfAborted();
       if (!request.safetyIdentifier.trim()) throw new FreeAccessError("safetyIdentifier is required");
@@ -82,22 +106,44 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       // OpenRouter pick an unverified model. Some zero-priced models are gated to listed apps (403) or
       // briefly rate-limited upstream (429), so a refusal moves to the next candidate — only before
       // any text has streamed, and never to anything outside the verified free list.
+      // A model that just failed with 429/5xx sorts last while its cooldown runs, so the next
+      // attempt — the runtime's retry of this same turn, or the user's next turn — tries a model
+      // that has not just failed instead of reconnecting to the outage. When every candidate is
+      // cooling the router still tries them, earliest-recovered first: a slow chance beats none.
+      const coolUntil = (id: string): number => {
+        const until = this.cooling.get(id);
+        if (until === undefined) return 0;
+        if (until <= now) { this.cooling.delete(id); return 0; }
+        return until;
+      };
       const ordered = this.options.model === FREE_ROUTER
-        ? fitting.filter((model) => !this.refused.has(model.id)).sort((a, b) => rank(a.id) - rank(b.id) || (b.context_window ?? 0) - (a.context_window ?? 0) || a.id.localeCompare(b.id))
+        ? fitting.filter((model) => !this.refused.has(model.id)).sort((a, b) => (coolUntil(a.id) ? 1 : 0) - (coolUntil(b.id) ? 1 : 0) || coolUntil(a.id) - coolUntil(b.id) || rank(a.id) - rank(b.id) || (b.context_window ?? 0) - (a.context_window ?? 0) || a.id.localeCompare(b.id))
         : fitting;
       if (!ordered.length) throw new FreeAccessError("Every free model refused this key. Choose a specific model with /model or try again later.", 403);
       let streamed = false;
       const onTextDelta = request.onTextDelta && ((text: string) => { streamed = true; request.onTextDelta!(text); });
       for (const [attempt, candidate] of ordered.slice(0, MAX_ROUTER_ATTEMPTS).entries()) {
+        // Space upstream requests by the learned pace: firing four candidates back-to-back is
+        // exactly the burst shape that trips the free tier's limiter.
+        await this.pacer.wait(signal);
         try {
-          return await this.attempt(candidate.id, messages, output, request, onTextDelta, signal);
+          const turn = await this.attempt(candidate.id, messages, output, request, onTextDelta, signal);
+          this.pacer.reportSuccess();
+          return turn;
         } catch (error) {
           const status = (error as { status?: unknown })?.status;
+          // A 429 teaches the pacer: the next request waits out the limiter instead of racing it.
+          if (status === 429) this.pacer.reportRateLimited(providerRetryAfterMs(error));
           // A gateway's own limit or outage applies to every model behind it; switching would only spend more of it.
           const gatewayOwned = this.viaGateway && Boolean((error as { headers?: Headers })?.headers?.get?.("x-free-gateway-error"));
           const switchable = this.options.model === FREE_ROUTER && !streamed && !signal.aborted && !gatewayOwned && (!(error instanceof FreeAccessError) || status === 502)
             && (status === 403 || status === 404 || status === 429 || (typeof status === "number" && status >= 500));
-          if (this.options.model === FREE_ROUTER && !streamed && (status === 403 || status === 404)) this.refused.add(candidate.id);
+          if (this.options.model === FREE_ROUTER && !streamed) {
+            if (status === 403 || status === 404) this.refused.add(candidate.id);
+            // Remember rate limits and server errors briefly: without this the runtime's
+            // retry of the same turn reconnects to the model that just failed.
+            else if (status === 429 || (typeof status === "number" && status >= 500)) this.cooling.set(candidate.id, now + MODEL_COOLDOWN_MS);
+          }
           if (!switchable || attempt === Math.min(ordered.length, MAX_ROUTER_ATTEMPTS) - 1) throw error;
         }
       }
@@ -117,8 +163,8 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
         : status === 429 ? "OpenRouter free-model rate limit reached. Wait before retrying."
         : status === 404 ? "This free model is unavailable. Run /models refresh."
         : "Free model request failed. Check OpenRouter availability or refresh /models; no paid fallback was attempted.";
-      const retryAfter = Number((error as { headers?: Headers })?.headers?.get?.("retry-after"));
-      throw new FreeAccessError(hint, status, status === 429 || status >= 500, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
+      const retryAfterMs = providerRetryAfterMs(error);
+      throw new FreeAccessError(hint, status, status === 429 || status >= 500, retryAfterMs);
     }
   }
 
