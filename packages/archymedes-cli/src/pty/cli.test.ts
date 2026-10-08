@@ -252,8 +252,8 @@ describe("archymedes CLI under a real pty", () => {
       p.writeLine("recover from the provider failure");
 
       const output = await p.waitFor("Recovered cleanly.", { timeoutMs: 15_000, since: before });
-      expect(output.slice(before)).toContain("rate limited; retrying model request 2/3");
-      expect(output.slice(before)).toContain("rate limited; retrying model request 3/3");
+      expect(output.slice(before)).toContain("rate limited; retrying model request 2/6");
+      expect(output.slice(before)).toContain("rate limited; retrying model request 3/6");
       expect(stub.requestCount()).toBe(3);
     }, 45_000);
 

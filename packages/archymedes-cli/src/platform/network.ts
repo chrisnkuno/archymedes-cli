@@ -85,6 +85,27 @@ function unwrap(error: unknown): unknown {
   return current;
 }
 
+/**
+ * The timeout phase a stream deadline recorded on its error (`StreamTimeoutError` in core), as a
+ * clause for the diagnosis. Read structurally, anywhere in the cause chain, so wrapping by the
+ * retry layer or an SDK cannot hide it.
+ */
+function streamTimeoutDetail(error: unknown): string | undefined {
+  let current = error;
+  for (let depth = 0; depth < 5 && current !== null && typeof current === "object"; depth += 1) {
+    const { phase, timeoutMs, cause } = current as { phase?: unknown; timeoutMs?: unknown; cause?: unknown };
+    if (typeof timeoutMs === "number" && Number.isFinite(timeoutMs)) {
+      const seconds = Math.round(timeoutMs / 1000);
+      if (phase === "first_byte") return `the provider sent nothing within ${seconds}s, so it never started answering`;
+      if (phase === "idle") return `the response stalled: no data for ${seconds}s after it started`;
+      if (phase === "total") return `the response ran past the ${seconds}s overall limit`;
+    }
+    if (!cause || cause === current) break;
+    current = cause;
+  }
+  return undefined;
+}
+
 function codeOf(error: unknown): string | undefined {
   if (error === null || typeof error !== "object") return undefined;
   const code = (error as NodeJS.ErrnoException).code;
@@ -232,12 +253,17 @@ export function classifyNetworkError(error: unknown, options: ClassifyOptions = 
   // difference between waiting (503) and switching models (502/504).
   const status = statusOf(error) ?? statusOf(raw);
   if (status !== undefined) context.status = status;
-  // The transport's own timeout wording names the phase that failed. Lift it out so the
-  // timeout diagnosis can say "waiting for response headers" instead of "slow or blocked".
+  // Which phase of the stream timed out, and after how long. The stream deadline says so in
+  // fields (`phase`, `timeoutMs`); that answers whether the provider never started answering or
+  // died mid-answer, which need different next steps.
+  const streamPhase = streamTimeoutDetail(error);
+  if (streamPhase && !context.detail) context.detail = streamPhase;
+  // Otherwise the transport's own timeout wording names the phase that failed. Lift it out so
+  // the timeout diagnosis can say "waiting for response headers" instead of "slow or blocked".
   // Matched narrowly: the retry wrapper's own "(timeout error) … Provider message:" text must
   // never become the detail.
   const phase = /timed?\s*out[:\s]+([^.]{1,160})/i.exec(message)?.[1]?.trim().replace(/\s+/g, " ");
-  if (phase && !context.detail && /\b(waiting|headers?|first byte|no data|stalled?|without completing|exceeded|silence|idle)\b/i.test(phase)
+  if (phase && !context.detail && /\b(waiting|headers?|first byte|no (?:data|response)|stalled?|without completing|exceeded|silence|idle)\b/i.test(phase)
     && !/\battempt|retry|provider message/i.test(phase)) {
     context.detail = phase.replace(/[.\s]+$/, "");
   }

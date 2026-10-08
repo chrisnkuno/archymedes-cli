@@ -6,6 +6,8 @@
  */
 import OpenAI, { APIConnectionError } from "openai";
 import type { AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider } from "../agent-runtime";
+import { providerRetryAfterMs } from "../agent-runtime";
+import { RequestPacer } from "./request-pacer";
 import { approximateInputTokens } from "../model-cost";
 import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, type FreeCatalog, type FreeModel } from "./free-catalog";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
@@ -121,6 +123,12 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   private readonly health?: FreeHealthTracker;
   /** OpenRouter's own figures for the user's key (daily free requests, credits); never with the gateway. */
   private readonly keyInfo?: OpenRouterKeyInfoCache;
+  /**
+   * Learned request pacing for the free tier's per-key rate limit. Lives as long as the provider, so
+   * a session that hit the limiter keeps spacing its requests across turns instead of re-forming the
+   * burst that tripped it (the router trying models back-to-back, the runtime retrying on top).
+   */
+  private readonly pacer: RequestPacer;
 
   /**
    * `timeoutMs` is the stream's idle timeout (see `streamTimeoutsFor`); `firstByteTimeoutMs` is the
@@ -142,8 +150,11 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     health?: FreeHealthTracker | null;
     /** OpenRouter key info for the user's own key. Same defaulting as `usage`; never used via the gateway. */
     keyInfo?: OpenRouterKeyInfoCache | null;
+    /** Request pacing; a fresh, unthrottled pacer by default. */
+    pacer?: RequestPacer;
   } = {}) {
     this.selection = { provider: "free", model: options.model };
+    this.pacer = dependencies.pacer ?? new RequestPacer();
     this.tokenSaver = options.tokenSaver ?? true;
     // Only a fully real provider writes the user's config directory: one with an injected call or
     // catalog is a test, and must not add to anyone's daily count.
@@ -254,6 +265,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       const timeouts = streamTimeoutsFor(this.options.timeoutMs);
       for (const [attempt, candidate] of attempts.entries()) {
         const last = attempt === attempts.length - 1;
+        // Paced before the deadline starts, so time spent waiting out the limiter is never counted
+        // against the stream. A pacer that has never seen a 429 returns at once.
+        await this.pacer.wait(userSignal);
         // A short first-byte deadline only where another candidate can take over; the last (or an
         // explicitly chosen) model gets the full allowance, since giving up early gains nothing.
         const deadline = createStreamDeadline({
@@ -264,6 +278,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
         try {
           const turn = await this.attempt(candidate.id, messages, output, request, onTextDelta, onOutputProgress, deadline);
           void this.health?.record(candidate.id, { ok: true });
+          this.pacer.reportSuccess();
           return turn;
         } catch (caught) {
           // The SDK reports a deadline abort as its own abort error; the deadline is the real cause.
@@ -281,6 +296,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
           // OpenRouter's daily free cap is per account: every other free model would refuse too.
           const accountDaily = !this.viaGateway && status === 429
             && (isOpenRouterDailyLimit((error as { headers?: HeaderBag })?.headers, now) || this.keyInfo?.peek()?.freeDailyRequests?.remaining === 0);
+          // A per-minute 429 teaches the pacer, so the next request waits out the limiter instead of
+          // racing it. The daily cap is not taught: no spacing within today gets past it.
+          if (status === 429 && !accountDaily && !gatewayOwned) this.pacer.reportRateLimited(providerRetryAfterMs(error));
           const switchable = router && !streamed && !userSignal?.aborted && !gatewayOwned && !accountDaily && (silent || refusedStatus);
           // A model's own failure counts against it; a user abort or an account/gateway limit does not.
           if (!userSignal?.aborted && !gatewayOwned && !accountDaily && (silent || refusedStatus || error instanceof FreeAccessError)) {

@@ -336,15 +336,7 @@ export type AgentRuntimeResult = {
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 1;
-/** Provider calls are safe to retry here because no tool from the returned turn has run yet. */
-const MAX_PROVIDER_RETRIES = 2;
-/**
- * A timed-out request is retried at most once. Timeouts are now measured against the stream
- * (first byte, idle, overall cap), so one firing means minutes already spent; repeating that
- * several times would leave the user staring at a frozen turn for most of an hour.
- */
-const MAX_TIMEOUT_RETRIES = 1;
-/** Exponential backoff: 1s, 2s, 4s, ... capped here. */
+/** Exponential backoff when no failure-specific policy applies: 1s, 2s, 4s, ... capped here. */
 const PROVIDER_BACKOFF_BASE_MS = 1_000;
 const PROVIDER_BACKOFF_CAP_MS = 30_000;
 /** A server's own `retry-after` is honoured up to this; beyond it the user is better told now. */
@@ -355,24 +347,65 @@ const MAX_TOOL_TURN_RECOVERIES = 2;
 export type ProviderFailureKind = "timeout" | "rate_limit" | "server" | "network" | "unknown";
 
 /**
+ * How many attempts a provider call gets, and how long it waits between them, by failure class.
+ *
+ * Provider calls are safe to retry here because no tool from the returned turn has run yet. What is
+ * not safe is treating every failure alike: a connection reset wants a quick second try, while a
+ * 5xx from a saturated provider — the free tier's shared capacity in particular — wants longer waits
+ * and more of them. Retrying a 503 three times inside a few seconds is a burst, not a retry policy,
+ * and it is how "remained unavailable after 3 attempts" gets reported for an outage that cleared a
+ * moment later.
+ */
+export type ProviderRetryPolicy = {
+  /** Attempts allowed in total, including the first. */
+  maxAttempts: number;
+  /** Wait before the second attempt; doubles per attempt until `maxDelayMs`. */
+  baseDelayMs: number;
+  maxDelayMs: number;
+};
+
+export const RETRY_POLICIES: Record<ProviderFailureKind, ProviderRetryPolicy> = {
+  server: { maxAttempts: 4, baseDelayMs: 1_000, maxDelayMs: 15_000 },
+  // Rate limits are the one failure where waiting longer beats failing fast: the request is still
+  // valid and the window always reopens, so making the user babysit a `/retry` is the process
+  // stopping for something it could have slept through. Six attempts with doubling waits ride out
+  // a minute-boundary limit; an explicit `Retry-After` is honoured first.
+  rate_limit: { maxAttempts: 6, baseDelayMs: 2_000, maxDelayMs: 60_000 },
+  // A timed-out request is retried at most once. Timeouts are measured against the stream (first
+  // byte, idle, overall cap), so one firing means minutes already spent; repeating that several
+  // times would leave the user staring at a frozen turn for most of an hour.
+  timeout: { maxAttempts: 2, baseDelayMs: 1_000, maxDelayMs: 8_000 },
+  network: { maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 4_000 },
+  unknown: { maxAttempts: 3, baseDelayMs: 1_000, maxDelayMs: 8_000 },
+};
+
+/**
  * Adds retry context without discarding the provider's original error shape.
  *
- * The cause remains available to the CLI's HTTP/network classifier, while `attempts` explains why
- * Archymedes stopped and `retrySuppressed` explains the important partial-stream case where repeating a
- * request could duplicate paid output or tool intent.
+ * The cause remains available to the CLI's HTTP/network classifier, while `attempts`, `kind` and
+ * `waitedMs` explain why Archymedes stopped — a 300ms blip and a 40s outage read differently — and
+ * `retrySuppressed` explains the important partial-stream case where repeating a request could
+ * duplicate paid output or tool intent.
  */
 export class ProviderRequestError extends Error {
   readonly attempts: number;
+  readonly kind?: ProviderFailureKind;
+  /** Total time spent waiting between attempts before giving up. */
+  readonly waitedMs?: number;
   readonly retrySuppressed: "output_started" | null;
 
-  constructor(cause: unknown, options: { attempts: number; retrySuppressed?: "output_started" }) {
+  constructor(cause: unknown, options: { attempts: number; kind?: ProviderFailureKind; waitedMs?: number; retrySuppressed?: "output_started" }) {
     const original = cause instanceof Error ? cause.message : String(cause);
+    const kind = options.kind ? ` (${options.kind.replace("_", " ")} error)` : "";
+    const waited = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(1)}s of retries` : "";
     const detail = options.retrySuppressed === "output_started"
       ? "The model connection failed after output began, so Archymedes did not retry to avoid duplicated output, charges, or tool actions."
-      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}.`;
+      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}${kind}${waited}.`;
     super(`${detail} Provider message: ${original}`, { cause });
     this.name = "ProviderRequestError";
     this.attempts = options.attempts;
+    if (options.kind) this.kind = options.kind;
+    if (options.waitedMs !== undefined) this.waitedMs = options.waitedMs;
     this.retrySuppressed = options.retrySuppressed ?? null;
   }
 }
@@ -491,18 +524,56 @@ export function providerFailureKind(error: unknown): ProviderFailureKind {
 /**
  * How long to wait before retry number `attempt + 1`.
  *
- * Exponential (1s, 2s, 4s, ... capped at 30s) with +/-25% jitter, so many clients that failed
- * together (a provider blip, a shared rate limit) do not all come back in the same instant. A
- * `retry-after` the server sent is honoured up to 60s and never undercut by the backoff.
- * `random` is injectable so tests and logs can be deterministic; 0.5 yields the un-jittered value.
+ * Exponential from the policy's base (default 1s, 2s, 4s, ... capped at 30s) with +/-25% jitter, so
+ * many clients that failed together (a provider blip, a shared rate limit) do not all come back in
+ * the same instant. A wait the server asked for (see `providerRetryAfterMs`) is honoured up to 60s
+ * and never undercut by the backoff. `random` is injectable so tests and logs can be deterministic;
+ * 0.5 yields the un-jittered value.
  */
-export function providerRetryDelayMs(error: unknown, attempt: number, random: () => number = Math.random): number {
-  const retryAfter = errorRecord(error)?.retryAfterMs;
-  const base = Math.min(PROVIDER_BACKOFF_CAP_MS, PROVIDER_BACKOFF_BASE_MS * 2 ** Math.min(10, Math.max(0, attempt)));
+export function providerRetryDelayMs(
+  error: unknown,
+  attempt: number,
+  random: () => number = Math.random,
+  policy: Pick<ProviderRetryPolicy, "baseDelayMs" | "maxDelayMs"> = { baseDelayMs: PROVIDER_BACKOFF_BASE_MS, maxDelayMs: PROVIDER_BACKOFF_CAP_MS },
+): number {
+  const retryAfter = providerRetryAfterMs(error);
+  const base = Math.min(policy.maxDelayMs, policy.baseDelayMs * 2 ** Math.min(10, Math.max(0, attempt)));
   const jitter = 0.75 + 0.5 * Math.min(1, Math.max(0, random()));
-  const backoff = Math.min(PROVIDER_BACKOFF_CAP_MS, Math.round(base * jitter));
-  return typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0
-    ? Math.max(backoff, Math.min(PROVIDER_RETRY_AFTER_CAP_MS, Math.round(retryAfter))) : backoff;
+  const backoff = Math.min(policy.maxDelayMs, Math.round(base * jitter));
+  return retryAfter !== undefined ? Math.max(backoff, Math.min(PROVIDER_RETRY_AFTER_CAP_MS, Math.round(retryAfter))) : backoff;
+}
+
+/**
+ * How long the provider asked us to wait, in milliseconds.
+ *
+ * Read from an explicit `retryAfterMs` first (adapters that already parsed it), then from the
+ * response's `retry-after` header — the form Anthropic and OpenAI actually send on a 429 (`"120"`
+ * seconds, or an HTTP date). SDK errors carry the headers; causes are checked too, because
+ * transports wrap. Undefined when the provider named no wait, so callers fall back to backoff
+ * rather than inventing one.
+ */
+export function providerRetryAfterMs(error: unknown): number | undefined {
+  let current: unknown = error;
+  const visited = new Set<unknown>();
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null && !visited.has(current); depth += 1) {
+    visited.add(current);
+    const record = errorRecord(current);
+    if (!record) break;
+    const explicit = record.retryAfterMs;
+    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) return explicit;
+    const headers = record.headers as { get?: (name: string) => string | null } | Record<string, unknown> | undefined;
+    const raw = typeof headers?.get === "function"
+      ? headers.get("retry-after")
+      : (headers as Record<string, unknown> | undefined)?.["retry-after"];
+    if (typeof raw === "string" && raw.trim() !== "") {
+      const text = raw.trim();
+      if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text) * 1000;
+      const at = Date.parse(text);
+      if (Number.isFinite(at)) return Math.max(0, at - Date.now());
+    }
+    current = record.cause;
+  }
+  return undefined;
 }
 
 function providerRetryDelay(delayMs: number, signal?: AbortSignal): Promise<boolean> {
@@ -890,8 +961,10 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         onTextDelta: (text) => void this.dependencies.control.persistEvent({ type: "assistant_delta", iteration, text }),
       };
       let turn: AgentModelTurn | undefined;
-      let timeoutRetries = 0;
-      for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt += 1) {
+      // Total time spent waiting between provider retries, named in the error that finally
+      // surfaces, so a user can tell a 300ms blip from a 40s outage.
+      let waitedMs = 0;
+      for (let attempt = 0; ; attempt += 1) {
         // Any streamed output (text, reasoning or a tool-call fragment) makes the attempt visible
         // and billed; only an attempt that produced nothing at all may be sent again.
         let emittedOutput = false;
@@ -913,18 +986,20 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           // retry is safe only while the failed attempt has remained completely invisible.
           if (emittedOutput) throw new ProviderRequestError(error, { attempts: attempt + 1, retrySuppressed: "output_started" });
           if (!isRetryableProviderError(error)) throw error;
+          // The failure class picks the budget: a rate limit gets more attempts and longer waits
+          // than a connection reset, because the two have different causes and recovery times.
           const reason = providerFailureKind(error);
-          if (attempt >= MAX_PROVIDER_RETRIES || (reason === "timeout" && timeoutRetries >= MAX_TIMEOUT_RETRIES)) {
-            throw new ProviderRequestError(error, { attempts: attempt + 1 });
+          const policy = RETRY_POLICIES[reason];
+          if (attempt + 1 >= policy.maxAttempts) {
+            throw new ProviderRequestError(error, { attempts: attempt + 1, kind: reason, waitedMs });
           }
-          if (reason === "timeout") timeoutRetries += 1;
-          const delayMs = providerRetryDelayMs(error, attempt, this.dependencies.retry?.random);
+          const delayMs = providerRetryDelayMs(error, attempt, this.dependencies.retry?.random, policy);
+          waitedMs += delayMs;
           await this.dependencies.control.persistEvent({
             type: "provider_retry",
             iteration,
             nextAttempt: attempt + 2,
-            // A timeout gets one retry, so the attempt after it is the last one.
-            maxAttempts: reason === "timeout" ? attempt + 2 : MAX_PROVIDER_RETRIES + 1,
+            maxAttempts: policy.maxAttempts,
             delayMs,
             reason,
           });

@@ -5,6 +5,7 @@ import { FreeUsageMeter } from "./free-usage";
 import { FreeInstallToken, type StoredInstall } from "./free-install";
 import { FreeHealthTracker, recordFreeOutcome, type FreeHealthRecords } from "./free-health";
 import { OpenRouterKeyInfoCache } from "./openrouter-key-info";
+import { RequestPacer } from "./request-pacer";
 import { mergeFreeCatalog, parseFreeOpenRouterModels } from "./free-catalog";
 import type { ChatResponse, ChatStreamChunk } from "./openai-compatible";
 import { availableProviders, missingRequirements, resolveProvider } from "./agent-matrix";
@@ -118,6 +119,29 @@ describe("free-only model adapter", () => {
       const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call, catalog: routed });
       expect(await provider.complete(request)).toMatchObject({ content: "Done" });
       expect(call).toHaveBeenCalledTimes(2);
+    });
+    it("paces requests after a 429, honouring the provider's retry-after, and relaxes on success", async () => {
+      let now = 1_000_000;
+      const slept: number[] = [];
+      const pacer = new RequestPacer({ now: () => now, sleep: async (ms) => { slept.push(ms); now += ms; } });
+      const limited = Object.assign(new Error("limited"), { status: 429, headers: new Headers({ "retry-after": "30" }) });
+      const call = vi.fn(async (body: Record<string, unknown>) => { if (body.model === big.id) throw limited; return response; });
+      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call, catalog: routed, now: () => now, pacer });
+      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
+      expect(call.mock.calls.map(([body]) => body.model)).toEqual([big.id, entry.id]);
+      // The switch to the next model waited out the 30s the provider asked for instead of firing
+      // into the limiter again, and the success that followed relaxed the pace by one step.
+      expect(slept).toEqual([30_000]);
+      expect(pacer.paceMs).toBe(29_500);
+    });
+    it("starts unthrottled: a provider that never sees a 429 never waits", async () => {
+      const slept: number[] = [];
+      const pacer = new RequestPacer({ sleep: async (ms) => { slept.push(ms); } });
+      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call: async () => response, catalog: routed, pacer });
+      await provider.complete(request);
+      await provider.complete(request);
+      expect(slept).toEqual([]);
+      expect(pacer.paceMs).toBe(0);
     });
     it("never switches models after text has streamed, or for an explicitly chosen model", async () => {
       async function* partial(): AsyncIterable<ChatStreamChunk> {

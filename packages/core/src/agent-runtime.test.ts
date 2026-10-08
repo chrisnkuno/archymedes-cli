@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { agentMessagePromptParts, BoundedAgentRuntime, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryDelayMs, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
 import type { RoutingReceipt } from "./providers/routing-receipt";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
@@ -136,22 +136,56 @@ describe("bounded agent runtime", () => {
       expect(ids[1]).toBe(ids[0]);
       expect(value.events.filter((event) => event.type === "model_turn")).toHaveLength(1);
       expect(value.events.find((event) => event.type === "provider_retry")).toMatchObject({
-        nextAttempt: 2, maxAttempts: 3, delayMs: 1_000, reason: "server",
+        nextAttempt: 2, maxAttempts: 4, delayMs: 1_000, reason: "server",
       });
       expect(value.sleeps).toEqual([1_000]);
     });
 
-    it("uses two retries at most and then surfaces the original provider failure", async () => {
+    it("gives a server error four attempts, then surfaces it with the kind and the time waited", async () => {
       let calls = 0;
       const failure = Object.assign(new Error("upstream overloaded"), { statusCode: 503 });
       const value = runtimeWithProvider(async () => { calls += 1; throw failure; });
       await expect(value.runtime.execute(baseRequest)).rejects.toMatchObject({
-        name: "ProviderRequestError", attempts: 3, retrySuppressed: null, cause: failure,
+        name: "ProviderRequestError", attempts: 4, kind: "server", waitedMs: 7_000, retrySuppressed: null, cause: failure,
       });
-      expect(calls).toBe(3);
-      expect(value.events.filter((event) => event.type === "provider_retry")).toHaveLength(2);
-      // Exponential: 1s, then 2s.
-      expect(value.sleeps).toEqual([1_000, 2_000]);
+      expect(calls).toBe(4);
+      const retries = value.events.filter((event) => event.type === "provider_retry");
+      expect(retries).toHaveLength(3);
+      expect(retries.every((event) => event.maxAttempts === 4)).toBe(true);
+      // Exponential: 1s, 2s, then 4s.
+      expect(value.sleeps).toEqual([1_000, 2_000, 4_000]);
+    });
+
+    it("rides out a rate limit with six attempts and longer waits", async () => {
+      let calls = 0;
+      const failure = Object.assign(new Error("too many requests"), { status: 429 });
+      const value = runtimeWithProvider(async () => { calls += 1; throw failure; });
+      await expect(value.runtime.execute(baseRequest)).rejects.toMatchObject({
+        name: "ProviderRequestError", attempts: 6, kind: "rate_limit", waitedMs: 62_000, cause: failure,
+      });
+      expect(calls).toBe(6);
+      const retries = value.events.filter((event) => event.type === "provider_retry");
+      expect(retries.every((event) => event.maxAttempts === 6 && event.reason === "rate_limit")).toBe(true);
+      expect(value.sleeps).toEqual([2_000, 4_000, 8_000, 16_000, 32_000]);
+    });
+
+    it("waits as long as the provider's Retry-After header asks", async () => {
+      let calls = 0;
+      const value = runtimeWithProvider(async () => {
+        calls += 1;
+        if (calls === 1) throw Object.assign(new Error("too many requests"), { status: 429, headers: new Headers({ "retry-after": "7" }) });
+        return turn({ content: "done" });
+      });
+      await expect(value.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "completed" });
+      expect(value.sleeps).toEqual([7_000]);
+    });
+
+    it("names the failure kind and the time spent retrying in the final message", () => {
+      const error = new ProviderRequestError(new Error("bad gateway"), { attempts: 4, kind: "server", waitedMs: 7_000 });
+      expect(error.message).toContain("failed after 4 attempts (server error) over 7.0s of retries");
+      expect(error.kind).toBe("server");
+      expect(error.waitedMs).toBe(7_000);
+      expect(new ProviderRequestError(new Error("x"), { attempts: 6, kind: "rate_limit" }).message).toContain("(rate limit error)");
     });
 
     it("retries a timeout at most once", async () => {
@@ -952,6 +986,10 @@ it("backs off exponentially with jitter, honours retry-after up to 60s, and hono
   expect(providerRetryDelayMs({}, 2, () => 0)).toBe(3_000);
   expect(providerRetryDelayMs({}, 2, () => 1)).toBe(5_000);
   expect(providerRetryDelayMs({}, 9, () => 1)).toBe(30_000);
+  // A policy sets the base and the cap; an explicit Retry-After still wins up to 60s.
+  expect(providerRetryDelayMs({}, 0, even, RETRY_POLICIES.rate_limit)).toBe(2_000);
+  expect(providerRetryDelayMs({}, 9, even, RETRY_POLICIES.server)).toBe(15_000);
+  expect(providerRetryDelayMs({ retryAfterMs: 45_000 }, 0, even, RETRY_POLICIES.network)).toBe(45_000);
   for (let index = 0; index < 50; index += 1) {
     const delay = providerRetryDelayMs({}, 0);
     expect(delay).toBeGreaterThanOrEqual(750);
@@ -1083,4 +1121,18 @@ describe("tool results that carry images", () => {
     expect(compactedToolResult("view_image", 0, undefined, [image("x.png"), image("y.png")]))
       .toBe("[elided: 2 images (x.png, y.png) from earlier view_image output, to keep the conversation within its context budget; view them again if you need to]");
   });
+});
+
+it("reads the wait a provider asked for from retryAfterMs or the retry-after header", () => {
+  expect(providerRetryAfterMs({ retryAfterMs: 2500 })).toBe(2500);
+  expect(providerRetryAfterMs({ retryAfterMs: NaN })).toBeUndefined();
+  expect(providerRetryAfterMs({ headers: new Headers({ "retry-after": "120" }) })).toBe(120_000);
+  expect(providerRetryAfterMs({ headers: { "retry-after": "5" } })).toBe(5_000);
+  // Transports wrap: the header on the cause still counts.
+  expect(providerRetryAfterMs(new Error("wrapped", { cause: { headers: { "retry-after": "3" } } }))).toBe(3_000);
+  const at = providerRetryAfterMs({ headers: { "retry-after": new Date(Date.now() + 10_000).toUTCString() } })!;
+  expect(at).toBeGreaterThan(8_000);
+  expect(at).toBeLessThanOrEqual(10_000);
+  expect(providerRetryAfterMs({ headers: { "retry-after": "soon" } })).toBeUndefined();
+  expect(providerRetryAfterMs({})).toBeUndefined();
 });
