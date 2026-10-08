@@ -8,6 +8,7 @@ import { PinnedScreen } from "../terminal/screen";
 import { describeToolCall, summarizeToolResult } from "../render/transcript";
 import { OutputRouter, terminalStream } from "../terminal/output";
 import { RESET } from "../text/ansi";
+import { visibleWidth } from "../text/text-width";
 import { ANSI_PALETTE, EXTERNAL_MARK, NO_COLOR_PALETTE, type Palette } from "../theme/theme";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import { GUTTER, panel, rule, type SectionStyle } from "../render/sections";
@@ -116,6 +117,20 @@ export const expandables = new ExpandableStore();
 export function contentWidth(): number {
   return screen?.current.contentWidth ?? (process.stdout.columns ?? 80);
 }
+/**
+ * A one-line note, word-wrapped to the terminal with its continuation lines aligned under the text.
+ *
+ * Status notes (the cost estimate, the judge's verdict) are often wider than the terminal, and the
+ * terminal's own wrapping breaks them mid-word at the edge — "about 4 model" / " turns". Wrapping at
+ * word boundaries before writing, with a hanging indent, keeps them readable at any width.
+ */
+export function wrapNote(lead: string, text: string): string {
+  const columns = screen?.current.columns ?? process.stdout.columns ?? 80;
+  const indent = " ".repeat(visibleWidth(lead));
+  const lines = wrapPlain(text, Math.max(20, columns - indent.length - 1));
+  return lines.map((line, index) => `${index === 0 ? lead : indent}${line}`).join("\n");
+}
+
 /**
  * `allowance` is the newest daily-allowance snapshot a model call reported (free mode). Unlike the
  * per-turn counts it is never reset at a turn boundary: the day's meter outlives the turn.
@@ -389,12 +404,12 @@ export function renderEvent(event: ArchymedesEvent): void {
       // The benchmark produced a turn the CLI called completed and the judge called
       // blocked — exactly the case where a dim line gets skimmed past. Still advisory,
       // but it has to read louder than the turn it contradicts.
-      out.write(style.yellow(`  ${glyphs.elbow} jev: blocked (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)} — review before building on this turn; /undo restores the checkpoint\n`));
+      out.write(style.yellow(`${wrapNote(`  ${glyphs.elbow} `, `jev: blocked (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)} — review before building on this turn; /undo restores the checkpoint`)}\n`));
       return;
     }
     // Advisory, so dim: a probability is information, not an instruction, and it must read
     // quieter than the turn it judges.
-    out.write(style.dim(`  ${glyphs.elbow} jev: ${verdict.outcome} (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}\n`));
+    out.write(style.dim(`${wrapNote(`  ${glyphs.elbow} `, `jev: ${verdict.outcome} (${probability}) · sensitive action ${verdict.sensitiveAction.toFixed(2)}`)}\n`));
     return;
   }
   if (event.type === "jev-review") {

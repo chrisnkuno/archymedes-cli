@@ -53,6 +53,8 @@ export type TurnContext = {
   stateHistory: CliStateHistory;
   /** Lines the loop runs next as though typed; a provider fallback queues `/retry` here. */
   queuedInput: string[];
+  /** The input box during a turn (see `turn-composer.ts`); absent when nobody is typing. */
+  composer?: { begin(): void; end(): void };
   /** Kept behind an object because a turn mutates it from an async closure. */
   recoveryState: { last: RecoverableTurn | null };
   state: SessionState;
@@ -117,6 +119,9 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
       state.sessionRequest ??= request; // the opening ask, kept for `/task`
       state.streamedAnswer = false;
       if (screen) {
+        // A queued message starts without a keystroke, so the previous turn's suggestion rows are
+        // still up; the request's bubble would be drawn across them.
+        screen.clearSuggestions();
         screen.parkInTranscript();
         // The bubble already carries its own "you" label on the box border — a rule printed above
         // it duplicated that label as a second, redundant divider (a leftover from before the two
@@ -178,6 +183,7 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
       }
       state.turnActive = true;
       state.currentTurnAbort = new AbortController();
+      context.composer?.begin();
       // Recorded only once the request is about to contact the model. A task rejected by safety,
       // balance or budget preflight was never attempted and must not become a misleading /retry.
       recoveryState.last = { request, status: "failed", toolCalls: 0, changedFiles: 0 };
@@ -338,6 +344,7 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
       } catch (error) {
         return await handleTurnFailure(error, request, context);
       } finally {
+        context.composer?.end();
         state.turnActive = false;
         state.currentTurnAbort = undefined;
         state.lastTurnEndedAt = Date.now();

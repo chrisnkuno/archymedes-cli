@@ -159,6 +159,17 @@ export class PinnedScreen {
     this.stream.write(`\x1b7\x1b[?25l\x1b[${this.layout.promptBottomRow};1H\x1b[2K${text}\x1b8\x1b[?25h`);
   }
 
+  /**
+   * Repaints the input row with `text` and puts the cursor back where it was.
+   *
+   * For while a turn runs: the agent's output is streaming in the transcript, so the cursor belongs
+   * there, and the input row shows the draft of the next message (or a hint) without taking it.
+   */
+  renderInput(text: string): void {
+    if (!this.holdRegion || !this.layout.inputRow) return;
+    this.stream.write(`\x1b7\x1b[?25l\x1b[${this.layout.inputRow};1H\x1b[2K${text}\x1b8\x1b[?25h`);
+  }
+
   /** Clears the input row and parks the cursor there. Call immediately before `readline.question()`. */
   positionInput(): void {
     if (!this.holdRegion || !this.layout.inputRow) return;

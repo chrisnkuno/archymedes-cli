@@ -12,7 +12,7 @@ import { exceedsPace, paceBadge, remainingCooldown } from "../commands/pacing";
 import { CountdownTimer, formatCountdown, progressBar, SpringAnimator } from "../render/tui";
 import { confirmSensitiveTask } from "./prompts";
 import type { TurnContext } from "./turn-runner";
-import { forgetToolLines, glyphs, out, renderDepth, statusBar, style, toolLines } from "./transcript";
+import { forgetToolLines, glyphs, out, renderDepth, statusBar, style, toolLines, wrapNote } from "./transcript";
 
 export async function runTurnPreflight(request: string, context: TurnContext): Promise<boolean> {
   const { args, readline, interactive, approvedBudget, rates, state } = context;
@@ -64,7 +64,7 @@ export async function runTurnPreflight(request: string, context: TurnContext): P
   }
   try {
     const prediction = await state.agent.estimate(request);
-    out.write(style.dim(`  ${state.ledger.formatPrediction(prediction)}\n`));
+    out.write(style.dim(`${wrapNote("  ", state.ledger.formatPrediction(prediction))}\n`));
     const trackedBalance = currentBalance();
     if (trackedBalance && state.prices) {
       const alert = balanceWatch.observe(trackedBalance, {

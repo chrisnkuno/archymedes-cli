@@ -30,6 +30,8 @@ import { KeyBindingRegistry, escapeCodeTimeoutMs, parseBindingOverrides } from "
 import { resolveCurrencyPreference } from "./platform/local-currency";
 import { loadSettings, mergedEnvironment, saveSettings } from "./platform/settings";
 import { runFreeModeSetup } from "./app/free-setup";
+import { createTurnComposer, turnComposerHint } from "./app/turn-composer";
+import { visibleWidth } from "./text/text-width";
 import { loadHistory, saveHistory } from "./session/history";
 import { WorkspaceController } from "./session/tabs";
 import { TabSink } from "./terminal/output";
@@ -592,7 +594,25 @@ async function main(): Promise<number> {
    * thing that runs rather than the thing after whatever the user types next.
    */
   const queuedInput: string[] = [];
+  // The input box while a turn runs: emptied on submit, drafting the next message, Enter queues it.
+  const composer = interactive && ttyMode ? createTurnComposer({
+    readline, input: process.stdin, queued: queuedInput,
+    interrupt: () => { readline.emit("SIGINT"); },
+    escapeTaken: () => screen instanceof WorkspaceFrame && screen.browsing,
+    paint: (draft, queued) => {
+      if (!screen?.pinned) return;
+      // `›` means "your turn"; while the agent works the marker is an ellipsis, so busy and ready
+      // never look alike — the draft is for later, not a message the agent is waiting on.
+      const prefix = promptFrame(idleStatusLine()).prefix.replace(glyphs.caret, glyphs.ellipsis);
+      const room = Math.max(8, screen.current.columns - visibleWidth(prefix) - 2);
+      // An input field scrolls to keep the cursor end in view rather than wrapping off its row.
+      const shown = draft.length > room ? `…${draft.slice(-(room - 1))}` : draft;
+      screen.renderInput(`${prefix}${shown || style.dim(turnComposerHint(queued))}`);
+    },
+  }) : undefined;
+
   const runTurn = createTurnRunner({
+    composer,
     args, environment, readline, interactive, ttyMode, depth, rates, approvedBudget, headless, stateHistory, queuedInput, recoveryState, state,
     balance: { currentBalance, balanceWatch, sessionSpend, persistManualBalance, checkBalance, balanceHeader },
     status: { showStatus, statusRoomFor },
@@ -663,10 +683,16 @@ async function main(): Promise<number> {
     screen?.positionInput();
     let rawInput: string;
     const queued = queuedInput.shift();
-    if (queued !== undefined) {
-      // Echoed, because work that starts without anyone typing it must still be visible as a
-      // request in the transcript — otherwise the next answer has no question above it.
+    // Echoed, because work that starts without anyone typing it must still be visible as a
+    // request in the transcript — otherwise the next answer has no question above it. A turn on a
+    // pinned screen echoes its own request (see the turn runner), so only commands need it there.
+    if (queued !== undefined && (!screen || queued.trimStart().startsWith("/"))) {
       out.write(`${renderUserTurn(queued)}\n`);
+    } else if (queued !== undefined) {
+      // A typed message ends with readline's own newline, which is what moves the transcript to a
+      // fresh row; a queued one never had an Enter, so it gets the equivalent here.
+      screen?.parkInTranscript();
+      out.write("\n");
     }
     try {
       // With a pinned footer the prompt is the input bar's left border, so readline redraws it as
