@@ -99,3 +99,12 @@ describe("approval preview", () => {
     expect(text).not.toContain("edit 1/1");
   });
 });
+
+describe("the masked echo of a hidden answer", () => {
+  it("shows one bullet per character and caps long keys with their length", async () => {
+    const { maskedEcho } = await import("./prompts");
+    expect(maskedEcho(0)).toBe("");
+    expect(maskedEcho(5)).toBe("•••••");
+    expect(maskedEcho(73)).toBe(`${"•".repeat(24)} 73 characters`);
+  });
+});

@@ -127,8 +127,9 @@ describe("the themes that ship", () => {
     }
   });
 
-  it("defaults to Archymedes", () => {
-    expect(DEFAULT_THEME_NAME).toBe("archymedes");
+  it("defaults to Archymedes blue, and keeps the bronze Archymedes theme", () => {
+    expect(DEFAULT_THEME_NAME).toBe("archymedes-blue");
+    expect(findBuiltinTheme("archymedes")).toBeDefined();
     expect(findBuiltinTheme("blueprint")).toBeDefined();
     expect(findBuiltinTheme("BLUEPRINT")).toBeDefined();
     expect(findBuiltinTheme("no-such-theme")).toBeUndefined();
@@ -187,9 +188,9 @@ describe("choosing a theme for the terminal", () => {
   });
 
   it("assumes dark, the commoner case and the safer mistake", () => {
-    expect(detectPreferredTheme({})).toBe("archymedes");
-    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("archymedes");
-    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("archymedes");
+    expect(detectPreferredTheme({})).toBe("archymedes-blue");
+    expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("archymedes-blue");
+    expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("archymedes-blue");
   });
 });
 
@@ -246,3 +247,32 @@ describe("the rainbow wheel", () => {
     expect(rainbowText("hello", "none")).toBe("hello");
   });
 });
+
+describe("archymedes blue stays readable", () => {
+  /** WCAG relative luminance and contrast ratio. */
+  const luminance = (hex: string) => {
+    const channel = (value: number) => { const c = value / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+    const n = Number.parseInt(hex.slice(1), 16);
+    return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+  };
+  const contrast = (a: string, b: string) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x! + 0.05) / (y! + 0.05); };
+  const theme = findBuiltinTheme("archymedes-blue")!;
+
+  it("is Solarized Dark's palette", () => {
+    expect(theme.tokens).toMatchObject({ primary: "#268bd2", secondary: "#2aa198", bg: "#002b36", surface: "#073642", error: "#dc322f" });
+  });
+
+  // The CLI paints foreground only, on whatever ground the terminal has: Solarized's own base03, or
+  // plain black. Text the user reads or types must clear WCAG's 4.5:1 on both; hints and accents 3:1.
+  for (const ground of ["#002b36", "#000000"]) {
+    it(`keeps body text at 4.5:1 or better on ${ground}`, () => {
+      expect(contrast(theme.tokens.text, ground)).toBeGreaterThanOrEqual(4.5);
+    });
+    it(`keeps every role at 3:1 or better on ${ground}`, () => {
+      for (const role of ["primary", "secondary", "accent", "textMuted", "success", "warning", "error", "borderFocus"] as const) {
+        expect(contrast(theme.tokens[role], ground), role).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+});
+

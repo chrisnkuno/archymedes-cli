@@ -239,10 +239,34 @@ export function isReadlineExit(error: unknown): boolean {
 }
 
 /** Reads a secret through readline without echoing pasted credentials to the terminal or history. */
+/**
+ * What a hidden answer shows while it is typed: one bullet per character, never the characters.
+ *
+ * Echoing nothing at all is how a secret prompt reads as frozen — a pasted key gives no sign it
+ * landed, a typed one no sign the keyboard works. A masked echo (the password mode every TUI input
+ * has, Bubble Tea's `EchoPassword` among them) answers "is it taking my input, and how much?"
+ * without revealing any of it. Long keys stop growing the row at a cap and say their length.
+ */
+export function maskedEcho(length: number, cap = 24): string {
+  if (length <= 0) return "";
+  return length <= cap ? "•".repeat(length) : `${"•".repeat(cap)} ${length} characters`;
+}
+
 export async function hiddenQuestion(readline: Interface, question: string, signal?: AbortSignal): Promise<string> {
-  process.stdout.write(`${question}${style.dim("[input hidden] ")}`);
+  const hint = style.dim("(input hidden) ");
+  process.stdout.write(`${question}${hint}`);
   const stdout = process.stdout as typeof process.stdout & { write: typeof process.stdout.write };
   const original = stdout.write;
+  // Readline's own echo is suppressed (it would print the secret); this redraws the row with the
+  // mask instead, after readline has applied each key to its line.
+  let shown = -1;
+  const redraw = () => setImmediate(() => {
+    const length = (readline as Interface & { line?: string }).line?.length ?? 0;
+    if (length === shown) return;
+    shown = length;
+    original.call(process.stdout, `\r\x1b[K${question}${hint}${style.dim(maskedEcho(length))}`);
+  });
+  process.stdin.on("keypress", redraw);
   try {
     stdout.write = (() => true) as typeof process.stdout.write;
     const answer = await readline.question("", signal ? { signal } : {});
@@ -254,6 +278,7 @@ export async function hiddenQuestion(readline: Interface, question: string, sign
     }
     return answer;
   } finally {
+    process.stdin.off("keypress", redraw);
     stdout.write = original;
     original.call(process.stdout, "\n");
   }

@@ -90,6 +90,8 @@ describe("keys and menus", () => {
     await p.waitFor(/paste hidden/i, { timeoutMs: 10_000, since: m });
     const secret = "sk-ant-probe-secret-xyz";
     p.write(secret);
+    // Typing gets feedback — one bullet per character — so the prompt never looks frozen.
+    await p.waitFor(/•{23}/, { timeoutMs: 10_000, since: m });
     p.write(ENTER);
     await p.waitFor(/saved in this menu/i, { timeoutMs: 10_000, since: m });
     p.write(ESC);

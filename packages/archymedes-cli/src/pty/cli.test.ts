@@ -413,11 +413,11 @@ describe("archymedes CLI under a real pty", () => {
       // It is drawn as a bubble titled "you", the same box the input bar is: the title is what
       // makes the transcript read as two speakers rather than as an undifferentiated log.
       expect(turn).toMatch(/what port does the app use/);
-      expect(turn).toMatch(/┌─ .*you/);
+      expect(turn).toMatch(/[┌╭]─ .*you/);
       expect(turn).toMatch(/──.*Archymedes/);
       // The assistant's own marker must come after the user's, not before — same order a reader
       // would expect a chat transcript to read in.
-      expect(turn.search(/┌─ .*you/)).toBeLessThan(turn.search(/──.*Archymedes/));
+      expect(turn.search(/[┌╭]─ .*you/)).toBeLessThan(turn.search(/──.*Archymedes/));
     }, 30_000);
 
     it.skipIf(CONPTY)("draws the input bar's three rows onto the reserved footer, not into the transcript", async () => {
@@ -428,11 +428,11 @@ describe("archymedes CLI under a real pty", () => {
       // rows=30, footer=3 → the top border on row 28, the closing border on row 30. Absolute
       // cursor addressing is the proof the bar is painted onto the footer rather than printed
       // inline, which is what would push it into scrollback a line at a time.
-      expect(output).toMatch(/\x1b\[28;1H\x1b\[2K[^\n]*┌─/);
-      expect(output).toMatch(/\x1b\[30;1H\x1b\[2K[^\n]*└/);
+      expect(output).toMatch(/\x1b\[28;1H\x1b\[2K[^\n]*[┌╭]─/);
+      expect(output).toMatch(/\x1b\[30;1H\x1b\[2K[^\n]*[└╰]/);
       // The status rides on the top border rather than on a row of its own — the whole reason the
       // bar costs one row more than the plain status line it replaced, not three.
-      expect(output).toMatch(/┌─[^\n]*archymedes[^\n]*build[^\n]*┐/);
+      expect(output).toMatch(/[┌╭]─[^\n]*archymedes[^\n]*build[^\n]*[┐╮]/);
     }, 30_000);
 
     it.skipIf(CONPTY)("reissues the scroll region at the new size on resize, not the stale one", async () => {

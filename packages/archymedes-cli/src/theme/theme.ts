@@ -136,7 +136,8 @@ const HIGH_CONTRAST = `
  * The instrument on the workbench, not the blueprint pinned above it: bronze for the drawn line
  * that is live, limestone-white for ordinary text, an olive accent for what is settled, all on
  * charcoal. Status colours are warmed to match — a clay red rather than a terminal red — so a
- * failure reads as part of the same surface. This is the default; `blueprint` and the others stay.
+ * failure reads as part of the same surface. It was the default until `archymedes-blue`; it stays
+ * for anyone who chose it.
  */
 export const ARCHYMEDES = `
 /* Bronze instruments, limestone ink and olive accents on charcoal — Archymedes's own. */
@@ -154,6 +155,43 @@ export const ARCHYMEDES = `
     --border: single;
     --border-color: #736956;
     --border-focus: #e7bb78;
+}
+`;
+
+/**
+ * Archymedes blue: the default, built on Solarized Dark.
+ *
+ * Ethan Schoonover's Solarized is the best-tested terminal palette there is: sixteen colours chosen
+ * in CIELAB so the accents keep the same contrast against the ground, which is why it still reads
+ * after a decade of use. This takes its hues as they are — blue as the brand colour for the live
+ * line, cyan beside it, yellow for attention, the standard green/orange/red for status — and makes
+ * two deliberate departures for a CLI that paints foreground only, on whatever background the
+ * terminal already has:
+ *
+ * - Body text is base1 rather than Solarized's base0, one step brighter, so typed and printed text
+ *   stays crisp on plain black as well as on Solarized's own base03.
+ * - Muted text is base00 rather than base01. base01 is Solarized's comment colour and is meant to
+ *   recede; on a black ground it recedes past legibility, and muted here carries legends and hints
+ *   that must stay readable.
+ *
+ * `bg`/`surface` are Solarized's base03/base02, for any surface that owns its cells.
+ */
+export const ARCHYMEDES_BLUE = `
+/* Solarized Dark with an Archymedes-blue line — calm, high-contrast hues; the default. */
+@theme archymedes-blue {
+    --primary: #268bd2;
+    --secondary: #2aa198;
+    --accent: #b58900;
+    --bg: #002b36;
+    --surface: #073642;
+    --text: #93a1a1;
+    --text-muted: #657b83;
+    --success: #859900;
+    --warning: #cb4b16;
+    --error: #dc322f;
+    --border: round;
+    --border-color: #586e75;
+    --border-focus: #268bd2;
 }
 `;
 
@@ -189,6 +227,7 @@ const RAINBOW = `
 `;
 
 export const BUILTIN_THEME_SOURCES: Record<string, string> = {
+  "archymedes-blue": ARCHYMEDES_BLUE,
   "archymedes": ARCHYMEDES,
   "blueprint": BLUEPRINT,
   "parchment": PARCHMENT,
@@ -197,7 +236,7 @@ export const BUILTIN_THEME_SOURCES: Record<string, string> = {
   "rainbow": RAINBOW,
 };
 
-export const DEFAULT_THEME_NAME = "archymedes";
+export const DEFAULT_THEME_NAME = "archymedes-blue";
 
 /** The 16 names ANSI defines, in the order the codes run. */
 const NAMED_COLORS: Record<string, number> = {
