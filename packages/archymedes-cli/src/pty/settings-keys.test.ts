@@ -1,4 +1,4 @@
-/** Key setup and menu navigation, against the real CLI: first run, /settings save, add-a-key, secrets hygiene. */
+/** Key setup and menu navigation, against the real CLI: /settings save, add-a-key, secrets hygiene. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -63,7 +63,10 @@ describe("keys and menus", () => {
     await promptHealthy();
     const m = since(); p.write("/settings"); p.write(ENTER);
     await p.waitFor(/Control language/i, { timeoutMs: 20_000, since: m });
-    // Row 0 is the language field: Enter opens its value list, typing narrows it.
+    // Filter to the language field rather than counting rows: the menu is sectioned and its order
+    // is not part of this contract. Enter opens its value list, typing narrows that too.
+    p.write("control language");
+    await sleep(800);
     p.write(ENTER);
     await sleep(800);
     p.write("deut");
@@ -80,8 +83,9 @@ describe("keys and menus", () => {
     await promptHealthy();
     const m = since(); p.write("/settings"); p.write(ENTER);
     await p.waitFor(/Control language/i, { timeoutMs: 20_000, since: m });
-    // Row 5 is the Anthropic key: five downs from the top of the full list.
-    for (let i = 0; i < 5; i += 1) { p.write(DOWN); await sleep(250); }
+    // Filtered to the Anthropic key, so the test does not depend on where the field sits.
+    p.write("anthropic api key");
+    await sleep(800);
     p.write(ENTER);
     await p.waitFor(/paste hidden/i, { timeoutMs: 10_000, since: m });
     const secret = "sk-ant-probe-secret-xyz";
@@ -104,11 +108,12 @@ describe("keys and menus", () => {
     const before: Record<string, string> = await settingsFile().catch(() => ({}));
     const m = since(); p.write("/settings"); p.write(ENTER);
     await p.waitFor(/Control language/i, { timeoutMs: 20_000, since: m });
-    // Row 7 is the Anthropic base URL; the ask prompt below proves the cursor landed there —
+    // Filtered to the Anthropic base URL; the ask prompt below proves the cursor landed there —
     // the row text alone is already on screen from the menu list and proves nothing.
-    for (let i = 0; i < 6; i += 1) { p.write(DOWN); await sleep(400); }
+    p.write("anthropic base");
+    await sleep(800);
     p.write(ENTER);
-    await p.waitFor(/Anthropic base URL \(- clears\)/i, { timeoutMs: 10_000, since: m });
+    await p.waitFor(/Anthropic base URL \(- clears/i, { timeoutMs: 10_000, since: m });
     p.write("not-a-url");
     p.write(ENTER);
     await p.waitFor(/complete URL|HTTPS/i, { timeoutMs: 10_000, since: m });
@@ -128,7 +133,8 @@ describe("keys and menus", () => {
     p.write(DOWN);
     await sleep(400);
     p.write(ENTER);
-    await p.waitFor(/Control language/i, { timeoutMs: 20_000, since: m });
+    // The add-a-key row opens the focused provider-key list, not the full menu.
+    await p.waitFor(/Groq API key/i, { timeoutMs: 20_000, since: m });
     p.write(ESC);
     await p.waitFor(/settings saved/i, { timeoutMs: 15_000, since: m });
     await promptHealthy();
@@ -150,7 +156,7 @@ describe("keys and menus", () => {
     // The only row left matching is the base-URL field: Enter opens its ask prompt, which the
     // unfiltered list could never land on first try.
     p.write(ENTER);
-    await p.waitFor(/Anthropic base URL \(- clears\)/i, { timeoutMs: 10_000, since: m });
+    await p.waitFor(/Anthropic base URL \(- clears/i, { timeoutMs: 10_000, since: m });
     // Leave without changing anything: clear is a no-op on an unset field.
     p.write("-");
     p.write(ENTER);
@@ -203,34 +209,3 @@ describe("archymedes settings subcommand", () => {
   }, 120_000);
 });
 
-describe("first run with no keys", () => {  it("asks for a provider key, saves it, and starts the session", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "archymedes-firstrun-"));
-    const cfg = await mkdtemp(path.join(os.tmpdir(), "archymedes-firstruncfg-"));
-    const session = spawnArchymedes({ cwd: dir, rows: 30, args: ["--layout", "scrollback", "--currency", "USD"], env: {
-      ANTHROPIC_BASE_URL: stub.url,
-      ARCHYMEDES_CONFIG_DIR: cfg, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC",
-    }});
-    try {
-      // No key anywhere: the setup menu opens on the provider keys, cursor on row 0.
-      await session.waitFor(/Anthropic API key/i, { timeoutMs: 60_000 });
-      session.write(ENTER);
-      await session.waitFor(/paste hidden/i, { timeoutMs: 15_000 });
-      session.write("sk-ant-first-run");
-      session.write(ENTER);
-      await session.waitFor(/saved in this menu/i, { timeoutMs: 15_000 });
-      session.write(ESC);
-      // Saved, session starts on the stubbed provider, and a turn works end to end.
-      await session.waitFor(/›/, { timeoutMs: 30_000 });
-      expect(JSON.parse(await readFile(path.join(cfg, "settings.json"), "utf8")).ANTHROPIC_API_KEY).toBe("sk-ant-first-run");
-      stub.enqueue({ kind: "text", text: "first run works" });
-      const m = session.output().length;
-      session.write("say hello");
-      session.write(ENTER);
-      await session.waitFor(/first run works/, { timeoutMs: 30_000, since: m });
-    } finally {
-      try { session.kill(); } catch { /* exited */ }
-      await rm(dir, { recursive: true, force: true });
-      await rm(cfg, { recursive: true, force: true });
-    }
-  }, 180_000);
-});

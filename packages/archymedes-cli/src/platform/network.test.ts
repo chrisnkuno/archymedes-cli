@@ -48,7 +48,7 @@ describe("network error classification", () => {
   });
 
   it("names the HTTP status of the server error that exhausted retries", () => {
-    const serverError = new ProviderRequestError(Object.assign(new Error("upstream overloaded"), { status: 503 }), { attempts: 4, kind: "server", waitedMs: 7000 });
+    const serverError = Object.assign(new ProviderRequestError(Object.assign(new Error("upstream overloaded"), { status: 503 }), { attempts: 4 }), { waitedMs: 7000 });
     const diagnosis = classifyNetworkError(serverError, { host: "openrouter.ai", purpose: "the model API (Free models (OpenRouter))" });
     expect(diagnosis?.kind).toBe("server_error");
     expect(diagnosis?.message).toContain("HTTP 503");
@@ -56,7 +56,7 @@ describe("network error classification", () => {
     expect(diagnosis?.message).toContain("over 7s of retries");
     expect(diagnosis?.hint).toContain("/model");
     // A provider error with no status still classifies, without inventing one.
-    const vague = classifyNetworkError(new ProviderRequestError(new Error("bad gateway"), { attempts: 3, kind: "server" }), { host: "openrouter.ai" });
+    const vague = classifyNetworkError(new ProviderRequestError(new Error("bad gateway"), { attempts: 3 }), { host: "openrouter.ai" });
     expect(vague?.kind).toBe("server_error");
     expect(vague?.message).not.toContain("HTTP");
   });
@@ -87,25 +87,25 @@ describe("network error classification", () => {
     expect(classifyNetworkError(aborted, { host: "api.openai.com" })?.kind).toBe("timeout");
   });
 
-  it("names the timeout phase instead of blaming a slow network", () => {    const stalled = new ProviderRequestError(new Error("Provider connection timed out: no data received for 120s (stream stalled)"), { attempts: 2, kind: "timeout" });
+  it("names the timeout phase instead of blaming a slow network", () => {    const stalled = new ProviderRequestError(new Error("Provider connection timed out: no data received for 120s (stream stalled)"), { attempts: 2 });
     const stalledDiagnosis = classifyNetworkError(stalled, { host: "openrouter.ai", purpose: "the model API" });
     expect(stalledDiagnosis?.kind).toBe("timeout");
     expect(stalledDiagnosis?.message).toContain("no data received for 120s");
     expect(stalledDiagnosis?.message).not.toContain("slow, or the network is blocking");
 
-    const ttfb = new ProviderRequestError(new Error("Provider timed out waiting for response headers (no first byte within 120s)"), { attempts: 1, kind: "timeout" });
+    const ttfb = new ProviderRequestError(new Error("Provider timed out waiting for response headers (no first byte within 120s)"), { attempts: 1 });
     expect(classifyNetworkError(ttfb, { host: "openrouter.ai", purpose: "the model API" })?.message)
       .toContain("waiting for response headers");
 
     // The retry wrapper's own bookkeeping never becomes the detail.
-    const wrapped = new ProviderRequestError(new Error("socket timed out"), { attempts: 4, kind: "timeout", waitedMs: 7000 });
+    const wrapped = Object.assign(new ProviderRequestError(new Error("socket timed out"), { attempts: 4 }), { waitedMs: 7000 });
     const wrappedDiagnosis = classifyNetworkError(wrapped, { host: "openrouter.ai", purpose: "the model API" });
     expect(wrappedDiagnosis?.kind).toBe("timeout");
     expect(wrappedDiagnosis?.message).toContain("is slow, or the network is blocking it");
   });
 
   it("reports how long a rate limit was waited out before giving up", () => {
-    const limited = new ProviderRequestError(Object.assign(new Error("too many requests"), { status: 429 }), { attempts: 6, kind: "rate_limit", waitedMs: 62000 });
+    const limited = Object.assign(new ProviderRequestError(Object.assign(new Error("too many requests"), { status: 429 }), { attempts: 6 }), { waitedMs: 62000 });
     const diagnosis = classifyNetworkError(limited, { host: "openrouter.ai", purpose: "the model API" });
     expect(diagnosis?.kind).toBe("rate_limit");
     expect(diagnosis?.message).toContain("after 6 attempts");

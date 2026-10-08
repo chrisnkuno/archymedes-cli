@@ -27,7 +27,7 @@ export function createStatusLine(options: {
   ttyMode: boolean;
   readline: Interface;
   /** The keyboard hooks as they are at call time: each is reinstalled while the session runs. */
-  keyboard: { uninstallShortcuts: () => void; installShortcuts: () => void; bindFixedNavigation: () => void };
+  keyboard: { uninstallShortcuts: () => void; installShortcuts: () => void; bindFixedNavigation: () => void; reinstallPaste: () => void };
 }) {
   const { state, tabs, depth, readline } = options;
 
@@ -63,15 +63,45 @@ export function createStatusLine(options: {
   /**
    * How a full-screen view borrows the terminal. One definition, used by every screen, because the
    * six steps have to happen in the same order every time and a missed one leaves a dead prompt.
+   *
+   * `detachedKeypress` holds keypress listeners detached while a fullscreen owns the keyboard (see
+   * `pauseInput` below). Screens never nest — each runs to close before the loop continues — so one
+   * slot suffices.
    */
+  let detachedKeypress: Array<(...args: never[]) => unknown> | undefined;
   const terminalControls = (): TerminalControls => ({
     clearStatus: () => statusBar.clear(),
     releaseScreen: () => { screen?.exit(); setWorkspaceMenu(undefined); },
     uninstallShortcuts: () => options.keyboard.uninstallShortcuts(),
     installShortcuts: () => options.keyboard.installShortcuts(),
-    pauseInput: () => readline.pause(),
-    resumeInput: () => readline.resume(),
+    pauseInput: () => {
+      // readline's own keypress listener stays attached across `pause()` — pausing only stops the
+      // data — and TermUI resumes the stream for itself, so every screen key would also land in
+      // readline's idle line buffer (a `q` that closed /files reappears typed at the next prompt;
+      // arrows move the history index the next recall reads). Detaching all keypress listeners for
+      // the duration, the way the borrowed-keyboard choosers already do, keeps the two keyboards
+      // from sharing keystrokes. Screens only ever open between turns, so no pending question can
+      // be starved by this.
+      detachedKeypress = [...process.stdin.listeners("keypress")] as Array<(...args: never[]) => unknown>;
+      for (const listener of detachedKeypress) process.stdin.off("keypress", listener as (...args: unknown[]) => void);
+      readline.pause();
+    },
+    resumeInput: () => {
+      readline.resume();
+      const listeners = detachedKeypress;
+      detachedKeypress = undefined;
+      if (listeners) {
+        for (const listener of listeners) process.stdin.on("keypress", listener as (...args: unknown[]) => void);
+      }
+    },
     restoreScreen: () => { screen?.enter(); if (screen instanceof WorkspaceFrame) setWorkspaceMenu(screen.menu); options.keyboard.bindFixedNavigation(); showIdleStatus(); },
+    // TermUI's own restore runs inside its unmount, after the app's cleanup — its bracketed-paste
+    // disable lands last. Reinstalling the CLI's handler here re-enables the mode after every
+    // screen, not only at exit.
+    restoreInput: () => {
+      if (state.turnActive) return;
+      options.keyboard.reinstallPaste();
+    },
   });
 
   const screenCapabilities = () => currentScreenCapabilities(options.interactive, process.stdout, process.env);

@@ -170,7 +170,8 @@ async function runOnce(journey: JourneyName, repoDir: string): Promise<number> {
       await first.dispose();
     }
     const t0 = performance.now();
-    const second = await boot(repoDir, ["--resume"], sharedConfigDir);
+    // `latest` explicitly: a bare `--resume` in a terminal opens the session picker instead.
+    const second = await boot(repoDir, ["--resume", "latest"], sharedConfigDir);
     try {
       await second.proc.waitFor(PROMPT, { timeoutMs: 40_000 });
       // Resume is only real if the earlier turn came back with it.

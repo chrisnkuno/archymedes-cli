@@ -355,38 +355,6 @@ const MAX_TOOL_TURN_RECOVERIES = 2;
 export type ProviderFailureKind = "timeout" | "rate_limit" | "server" | "network" | "unknown";
 
 /**
- * How many attempts a provider call gets, and how long it waits between them,
- * by failure class.
- *
- * Provider calls are safe to retry here because no tool from the returned turn
- * has run yet. What is not safe is treating every failure alike: a single
- * connection reset wants a quick second try, while a 5xx from the provider —
- * the free tier's shared capacity in particular is saturated for seconds at a
- * time — wants longer waits and more of them. Retrying a 503 three times in
- * 300ms is a burst, not a retry policy, and it is how "remained unavailable
- * after 3 attempts" gets reported for an outage that cleared a second later.
- */
-export type ProviderRetryPolicy = {
-  /** Attempts allowed in total, including the first. */
-  maxAttempts: number;
-  /** Wait before the second attempt; doubles per attempt until `maxDelayMs`. */
-  baseDelayMs: number;
-  maxDelayMs: number;
-};
-
-export const RETRY_POLICIES: Record<ProviderFailureKind, ProviderRetryPolicy> = {
-  server: { maxAttempts: 4, baseDelayMs: 1_000, maxDelayMs: 15_000 },
-  // Rate limits are the one failure where waiting longer beats failing fast: the request is
-  // still valid, the window always reopens, and forcing the user to babysit a `/retry` is the
-  // process stopping for something it could have slept through. Six attempts with doubling
-  // waits ride out a minute-boundary limit; an explicit `Retry-After` is honored first.
-  rate_limit: { maxAttempts: 6, baseDelayMs: 2_000, maxDelayMs: 60_000 },
-  timeout: { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8_000 },
-  network: { maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 4_000 },
-  unknown: { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8_000 },
-};
-
-/**
  * Adds retry context without discarding the provider's original error shape.
  *
  * The cause remains available to the CLI's HTTP/network classifier, while `attempts` explains why
@@ -395,22 +363,16 @@ export const RETRY_POLICIES: Record<ProviderFailureKind, ProviderRetryPolicy> = 
  */
 export class ProviderRequestError extends Error {
   readonly attempts: number;
-  readonly kind?: ProviderFailureKind;
-  readonly waitedMs?: number;
   readonly retrySuppressed: "output_started" | null;
 
-  constructor(cause: unknown, options: { attempts: number; kind?: ProviderFailureKind; waitedMs?: number; retrySuppressed?: "output_started" }) {
+  constructor(cause: unknown, options: { attempts: number; retrySuppressed?: "output_started" }) {
     const original = cause instanceof Error ? cause.message : String(cause);
-    const kind = options.kind ? ` (${options.kind} error)` : "";
-    const waited = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(1)}s of retries` : "";
     const detail = options.retrySuppressed === "output_started"
       ? "The model connection failed after output began, so Archymedes did not retry to avoid duplicated output, charges, or tool actions."
-      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}${kind}${waited}.`;
+      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}.`;
     super(`${detail} Provider message: ${original}`, { cause });
     this.name = "ProviderRequestError";
     this.attempts = options.attempts;
-    this.kind = options.kind;
-    this.waitedMs = options.waitedMs;
     this.retrySuppressed = options.retrySuppressed ?? null;
   }
 }

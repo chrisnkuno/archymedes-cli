@@ -16,8 +16,9 @@ import { spawnArchymedes } from "./harness";
  */
 
 const ENTER = "\r";
-/** Menu rows are numbered by position in SETTING_FIELDS; deriving it survives new settings. */
-const position = (key: string) => String(SETTING_FIELDS.findIndex((field) => field.key === key) + 1);
+/** The field list filters as you type and ranks a label that starts with the query first, so typing
+ * a field's own label always lands on it — wherever sections and new settings put the row. */
+const label = (key: string) => SETTING_FIELDS.find((field) => field.key === key)!.label;
 
 let stub: AnthropicStub; let cwd: string;
 beforeAll(async () => {
@@ -44,21 +45,23 @@ const ESCAPE = String.fromCharCode(27);
 /**
  * Opens settings, picks one enumerated field's value from its list, and leaves.
  *
- * Driven the way a person does it now: jump to the row by its number, Enter to open the value list,
- * type enough to narrow it, Enter to take it, Escape to close the menu.
+ * Driven the way a person does it now: type to find the field, Enter to open the value list, type
+ * enough to narrow it, Enter to take it, Escape to close the menu.
  */
 async function setField(p: Awaited<ReturnType<typeof boot>>["p"], key: string, filter: string) {
   p.write(`/settings${ENTER}`);
-  await p.waitFor(/Enter choose/, { timeoutMs: 15_000 });
+  await p.waitFor(/Enter edit/, { timeoutMs: 15_000 });
   const mark = p.output().length;
-  p.write(`${position(key)}${ENTER}`);
-  // The field list itself now filters, so its legend is no longer proof a value list opened —
-  // only a country row (or a different field's own values) is.
-  await p.waitFor(/\(AU\)|English|install|On —|Off —/, { timeoutMs: 15_000, since: mark });
+  p.write(label(key));
+  p.write(ENTER);
+  // The field list's legend says "Enter edit" and a value list's says "Enter choose", so the legend
+  // proves the value list opened. Row text cannot: field hints such as "install daily by default"
+  // match value words, and typing before the list is listening loses the keys with the old one.
+  await p.waitFor(/Enter choose/, { timeoutMs: 15_000, since: mark });
   p.write(filter);
   const narrowed = p.output().length;
   p.write(ENTER);
-  await p.waitFor(/Enter choose/, { timeoutMs: 15_000, since: narrowed });
+  await p.waitFor(/Enter edit/, { timeoutMs: 15_000, since: narrowed });
   p.write(ESCAPE);
 }
 
@@ -115,9 +118,10 @@ describe("choosing a location under a real pty", () => {
     // validator still guards the typed path and is covered in settings.test.ts.
     const { p } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 15_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 15_000 });
     const mark = p.output().length;
-    p.write(`${position("ARCHYMEDES_COUNTRY")}${ENTER}`);
+    p.write(label("ARCHYMEDES_COUNTRY"));
+    p.write(ENTER);
     await p.waitFor(/\(AU\)/, { timeoutMs: 15_000, since: mark });
 
     const searched = p.output().length;

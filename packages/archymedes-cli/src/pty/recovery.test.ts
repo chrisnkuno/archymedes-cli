@@ -130,7 +130,8 @@ describe("recovery from an unclean failure", () => {
     // The turn is saved after each tool step, so `--resume` finds this interrupted turn — request,
     // tool call and result — rather than depending on when the signal landed. The CLI comes back to
     // a usable prompt, does not re-apply the write, and takes a new turn with that history.
-    const afterKill = boot({ args: ["--resume"] });
+    // `latest` explicitly: a bare `--resume` in a terminal opens the session picker instead.
+    const afterKill = boot({ args: ["--resume", "latest"] });
     await afterKill.waitFor(PROMPT, { timeoutMs: 30_000 });
     expect(await readFile(target, "utf8")).toBe("written once\n");
     stub.enqueue({ kind: "text", text: "recovered and responsive" });

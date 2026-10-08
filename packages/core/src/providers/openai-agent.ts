@@ -39,17 +39,8 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
     if (call) this.call = call;
     else {
       // Retry policy is centralized in BoundedAgentRuntime so attempt counts, cancellation and
-      // messages stay truthful instead of being multiplied invisibly by the SDK. Timeouts are
-      // byte-level (time-to-first-byte, silence between chunks, total) rather than one wall-clock
-      // timer over the whole stream, so a slow-but-alive response is never mistaken for a stuck
-      // one and killed mid-sentence. The SDK's own timeout sits a minute past the total so the
-      // descriptive byte-level error always wins the race.
-      const totalMs = options.streamTimeouts?.totalMs ?? options.timeoutMs;
-      const streamFetch = fetchWithStreamTimeouts(options.fetchImpl ?? globalThis.fetch, {
-        ...options.streamTimeouts,
-        ...(totalMs !== undefined ? { totalMs } : {}),
-      });
-      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}), maxRetries: 0, timeout: (totalMs ?? DEFAULT_STREAM_TIMEOUTS.totalMs) + 60_000, fetch: streamFetch });
+      // messages stay truthful instead of being multiplied invisibly by the SDK.
+      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}), maxRetries: 0 });
       this.call = async (body, signal) => (await client.chat.completions.create(body as never, { signal })) as unknown as ChatResponse | AsyncIterable<ChatStreamChunk>;
     }
   }

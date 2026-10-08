@@ -119,47 +119,8 @@ describe("free-only model adapter", () => {
       expect(await provider.complete(request)).toMatchObject({ content: "Done" });
       expect(call).toHaveBeenCalledTimes(2);
     });
-    it("paces upstream requests after a 429 and honors the provider's retry-after", async () => {
-      let now = 1_000_000;
-      const slept: number[] = [];
-      const { RequestPacer } = await import("./request-pacer");
-      const pacer = new RequestPacer({ now: () => now, sleep: async (ms) => { slept.push(ms); now += ms; } });
-      const limited = (status: number, retryAfter?: string) => Object.assign(new Error("limited"), {
-        status, headers: new Headers({ ...(retryAfter ? { "retry-after": retryAfter } : {}) }),
-      });
-      const flaky = vi.fn(async (body: Record<string, unknown>) => {
-        if (body.model === big.id) throw limited(429, "30");
-        return response;
-      });
-      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call: flaky, catalog: routed, now: () => now, pacer });
-      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
-      expect(flaky.mock.calls.map(([body]) => body.model)).toEqual([big.id, entry.id]);
-      // The 429 adopted the 30s retry-after, so the switch to the next model waited it out
-      // instead of firing into the limiter again; the success that followed relaxed it by one step.
-      expect(slept).toEqual([30_000]);
-      expect(pacer.paceMs).toBe(29_500);
-    });
-    it("cools down a model that failed with 5xx instead of reconnecting to it on the next call", async () => {
-      let now = 1_000_000;
-      const flaky = vi.fn(async (body: Record<string, unknown>) => {
-        if (body.model === big.id) throw refuse(503);
-        return response;
-      });
-      const provider = new FreeAgentTurnProvider({ apiKey: "k", model: "openrouter/free" }, { call: flaky, catalog: routed, now: () => now });
-      // First turn: tries the broken model, then moves past it.
-      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
-      expect(flaky.mock.calls.map(([body]) => body.model)).toEqual([big.id, entry.id]);
-      // Second turn: the broken model is still cooling, so no reconnect is attempted.
-      flaky.mockClear();
-      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
-      expect(flaky.mock.calls.map(([body]) => body.model)).toEqual([entry.id]);
-      // After the cooldown expires the model is eligible again.
-      now += 61_000;
-      flaky.mockClear();
-      expect(await provider.complete(request)).toMatchObject({ content: "Done" });
-      expect(flaky.mock.calls.map(([body]) => body.model)).toEqual([big.id, entry.id]);
-    });
-    it("never switches models after text has streamed, or for an explicitly chosen model", async () => {      async function* partial(): AsyncIterable<ChatStreamChunk> {
+    it("never switches models after text has streamed, or for an explicitly chosen model", async () => {
+      async function* partial(): AsyncIterable<ChatStreamChunk> {
         yield { id: "s", model: big.id, choices: [{ delta: { content: "Hel" } }] };
         throw refuse(503);
       }

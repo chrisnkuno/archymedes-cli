@@ -501,6 +501,7 @@ async function main(): Promise<number> {
       uninstallShortcuts: () => uninstallShortcuts(),
       installShortcuts: () => installShortcutsAgain(),
       bindFixedNavigation: () => bindFixedNavigation(),
+      reinstallPaste: () => reinstallPaste(),
     },
   });
   const { editFile } = createFileEditing({ state, screenCapabilities, terminalControls, autosave: () => environment.ARCHYMEDES_EDITOR_AUTOSAVE?.trim().toLowerCase() === "on" });

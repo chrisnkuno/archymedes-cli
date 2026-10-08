@@ -112,11 +112,6 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   private catalog?: FreeCatalog;
   /** Models OpenRouter refused (403/404) for this key; skipped by the router for this process. */
   private readonly refused = new Set<string>();
-  /** Models that failed with 429/5xx, with the epoch-ms when they may be tried again. Unlike `refused` this expires: the outage, not the model, is the problem. */
-  private readonly cooling = new Map<string, number>();
-
-  /** Learned request pacing for the free tier: survives across turns so a session that hit the limiter keeps spacing its requests. */
-  private readonly pacer: RequestPacer;
 
   private readonly baseUrl: string;
   private readonly viaGateway: boolean;
@@ -166,20 +161,10 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode is not configured: point ARCHYMEDES_FREE_GATEWAY_URL at a free gateway, or save your own OPENROUTER_API_KEY (archymedes settings). Free mode never falls back to a paid provider.");
     if (!isFreeModelId(options.model)) throw new FreeAccessError("Free mode accepts openrouter/free or an exact publisher/model:free ID; paid models are not allowed.");
     this.baseUrl = this.viaGateway ? `${options.gatewayUrl}/v1` : FREE_BASE_URL;
-    // Timeouts are byte-level (first byte, silence between chunks, total) rather than one
-    // wall-clock timer, so a slow-but-alive free-tier stream is never killed mid-sentence.
-    // `timeoutMs` remains the total cap. Redirects stay refused: a 3xx from either endpoint is
-    // a configuration or interception signal, not a detour to follow with a credential.
-    const streamFetch = fetchWithStreamTimeouts(
-      ((input, init) => globalThis.fetch(input, { ...init, redirect: "error" })) as typeof fetch,
-      { ...(this.options.timeoutMs !== undefined ? { totalMs: this.options.timeoutMs } : {}) },
-    );
     const client = dependencies.call ? undefined : new OpenAI({
       // The gateway ignores Authorization; the placeholder only satisfies the SDK.
       apiKey: apiKey ?? "archymedes-free-gateway", baseURL: this.baseUrl, maxRetries: 0,
-      // A minute past the byte-level total so the descriptive timeout always wins the race.
-      timeout: (this.options.timeoutMs ?? DEFAULT_STREAM_TIMEOUTS.totalMs) + 60_000,
-      fetch: streamFetch,
+      fetch: (input, init) => globalThis.fetch(input, { ...init, redirect: "error" }),
     });
     if (apiKey) {
       const keyInfo = dependencies.keyInfo === undefined

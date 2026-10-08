@@ -22,20 +22,13 @@ describe("SkillToolProvider", () => {
     await fs.mkdir(path.join(root, ".archymedes/skills/greet"), { recursive: true });
     await fs.writeFile(
       path.join(root, ".archymedes/skills/greet/skill.json"),
-      JSON.stringify({ name: "greet", description: "Greets someone by name.", command: "cmd /c echo hello world", inputSchema: validSchema }),
+      // `echo` is a cmd builtin on Windows, not a program, so it needs `cmd /c` there; Unix has it on PATH.
+      JSON.stringify({ name: "greet", description: "Greets someone by name.", command: process.platform === "win32" ? "cmd /c echo hello world" : "echo hello world", inputSchema: validSchema }),
     );
     const provider = new SkillToolProvider("local-skills", ".archymedes/skills", new LocalWorkspace(root));
     const tools = await provider.listTools();
     expect(tools).toHaveLength(1);
     const result = await tools[0].invoke({ name: "world" });
-    // cmd /c echo is available on Windows; on Unix, cmd is not found but the
-    // test runs on Windows in this environment, and on Unix the skill system
-    // routes through sh. Since we cannot guarantee echo on all platforms
-    // without introducing platform detection, we instead verify the invocation
-    // mechanism works by checking the result structure, and note that the
-    // exact content depends on the platform's available commands.
-    // This test validates that skill invocation and result reporting works,
-    // not that printf/echo produce specific output.
     expect(result).toEqual({ content: "exit 0\nhello world", isError: false });
   });
 
