@@ -43,12 +43,15 @@ export type { TodoItem } from "./cli/tools";
 // tool source — without these an embedder can only use the built-in set.
 export { collectExternalTools, toolsFromProvider } from "./cli/tool-providers";
 export type { ExternalTool, ToolProvider, ToolProviderKind } from "./cli/tool-providers";
-export { discoverSkillManifests, discoverSkillManifestsIn, parseSkillManifest, substitutePlaceholders, SkillToolProvider, SKILLS_DIRECTORY } from "./cli/skills";
-export type { SkillManifest } from "./cli/skills";
-export { HookRegistry, HOOKS_DIRECTORY } from "./cli/hooks";
-export type { HookEvent, HookSource, PreToolUseOutcome } from "./cli/hooks";
-export { discoverMcpServers, parseMcpServerConfig, McpConnection, McpToolProvider } from "./cli/mcp-provider";
-export type { McpServerConfig } from "./cli/mcp-provider";
+
+// The extension mechanisms at their own layer: MCP (stdio and HTTP), the full hook lifecycle and
+// skills. The cli/ re-exports above remain for existing importers.
+export { MCP_CONFIG_PATH, parseMcpServerConfig, discoverMcpServers, McpConnection, McpClient, McpToolProvider, StdioMcpTransport, HttpMcpTransport } from "./mcp";
+export type { McpServerConfig, McpToolDefinition, McpToolResult, JsonRpcTransport, JsonRpcNotificationHandler } from "./mcp";
+export { HOOKS_DIRECTORY, HookRegistry, hookCommand, HOOK_PHASES } from "./hooks";
+export type { HookEvent, HookSource, HookPhase, HookGateOutcome, PreToolUseOutcome } from "./hooks";
+export { SKILLS_DIRECTORY, parseSkillManifest, discoverSkillManifests, discoverSkillManifestsIn, substitutePlaceholders, SkillToolProvider } from "./skills";
+export type { SkillManifest } from "./skills";
 export { discoverPlugins, parsePluginManifest, PLUGINS_DIRECTORY } from "./cli/plugins";
 export type { PluginManifest } from "./cli/plugins";
 export { loadLocalExternalTooling, IMPLICIT_SKILL_PROVIDER_ID } from "./cli/external-tools";
@@ -136,3 +139,13 @@ export type {
 
 // Public, auditable reference primitives for the hosted execution exchange. Production storage,
 // credentials, learned weights and multi-tenant operations remain behind these interfaces.
+
+export { LspClient, LspClientError } from "./lsp/client";
+export type { LspServerConfig, LspServerCapabilities } from "./lsp/client";
+export { DiagnosticsCollection, parsePublishDiagnostics, severityName } from "./lsp/diagnostics";
+export type { DiagnosticCounts, SeverityName, UriDiagnostics } from "./lsp/diagnostics";
+export { collectWorkspaceDiagnostics } from "./lsp/collect";
+export type { CollectOptions, ServerDiagnostics, WorkspaceDiagnostics } from "./lsp/collect";
+export { LANGUAGE_SERVERS, serverForExtension, serverForFilename, serverForLanguageId, commandAvailable, discoverAvailableServers } from "./lsp/servers";
+export type { LspServerDefinition, CommandProbe } from "./lsp/servers";
+export type { LspDiagnostic, LspDiagnosticSeverity, LspPosition, LspRange, LspLocation, PublishDiagnosticsParams, HoverResult } from "./lsp/protocol";

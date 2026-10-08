@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import os from "node:os";
 import { promises as fs } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { DefenderBrain, defenderKnowledgeCandidates } from "./defender-brain";
 import type { DefenderBrainHit, DefenderBrainReport } from "./state-client";
 
@@ -14,10 +15,12 @@ const hit: DefenderBrainHit = {
 describe("DefenderBrain", () => {
   const corpus = path.resolve("packages/archymedes-state/defender-knowledge");
   it("resolves source and bundled corpus layouts without using cwd", () => {
-    const candidates = defenderKnowledgeCandidates("file:///repo/packages/core/src/cli/defender-brain.ts");
+    // Built from a real absolute path so the URL is valid on every platform (Windows needs a drive).
+    const repo = path.resolve(os.tmpdir(), "repo");
+    const candidates = defenderKnowledgeCandidates(pathToFileURL(path.join(repo, "packages/core/src/cli/defender-brain.ts")).href);
     expect(candidates).toEqual([
-      "/repo/packages/core/src/cli/defender-knowledge",
-      "/repo/packages/archymedes-state/defender-knowledge",
+      path.join(repo, "packages/core/src/cli/defender-knowledge"),
+      path.join(repo, "packages/archymedes-state/defender-knowledge"),
     ]);
   });
 

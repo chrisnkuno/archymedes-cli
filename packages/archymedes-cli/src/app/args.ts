@@ -15,6 +15,11 @@ export type ParsedArgs = {
   gallery: boolean;
   prompt: string | null;
   resume: string | null;
+  /**
+   * `--resume` with no id: an interactive terminal gets the session picker rather than whichever
+   * chat happens to be newest. `resume` is still "latest" so a one-shot or a pipe behaves as before.
+   */
+  resumePick?: boolean;
   historyCommand: HistoryCommand | null;
   listSessions: boolean;
   listProviders: boolean;
@@ -166,7 +171,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       // the test"` silently treats the request as an id, resumes nothing, and drops into the REPL.
       const next = argv[index + 1];
       if (next && (next === "latest" || SESSION_ID.test(next))) { parsed.resume = next; index += 1; }
-      else parsed.resume = "latest";
+      else { parsed.resume = "latest"; parsed.resumePick = true; }
     }
     else if (argument === "--cwd") { parsed.root = path.resolve(argv[index + 1] ?? "."); index += 1; }
     else if (argument === "--sandbox") {
@@ -206,7 +211,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }
   if (freeRequested && otherProviderRequested) throw new Error("--free/--provider free cannot be combined with another --provider.");
   if (freeRequested) parsed.provider = "free";
-  if (historyRequested) parsed.historyCommand = parseHistoryCommand(`/history ${rest.join(" ")}`);
+  if (historyRequested) {
+    // Outside a session, bare `archymedes history` prints the list; `archymedes history resume` is
+    // the way into the picker.
+    const command = parseHistoryCommand(`/history ${rest.join(" ")}`);
+    parsed.historyCommand = command?.kind === "browse" ? { kind: "list" } : command;
+  }
   else if (rest.length > 0) parsed.prompt = rest.join(" ");
   return parsed;
 }

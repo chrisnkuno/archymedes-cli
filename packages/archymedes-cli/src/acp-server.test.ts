@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Readable } from "node:stream";
-import { runAcpServer, splitFrames } from "./acp-server";
+import { LocalWorkspace } from "@archymedes/core/cli/backends";
+import { acpEditDiagnostics, runAcpServer, splitFrames } from "./acp-server";
 
 describe("acp stdio framing", () => {
   it("emits only complete messages and keeps the partial tail for the next chunk", () => {
@@ -77,5 +78,15 @@ describe("acp server over a pipe", () => {
 
     expect(warnings).toHaveLength(1);
     expect(written.map((line) => JSON.parse(line))).toMatchObject([{ id: 9, result: { protocolVersion: 1 } }]);
+  });
+});
+
+describe("acp edit diagnostics", () => {
+  it("wires the LSP hook for a local workspace only, and honours ARCHYMEDES_EDIT_DIAGNOSTICS=off", () => {
+    const local = new LocalWorkspace(process.cwd());
+    expect(acpEditDiagnostics(process.cwd(), local, {})).toBeTypeOf("function");
+    expect(acpEditDiagnostics(process.cwd(), local, { ARCHYMEDES_EDIT_DIAGNOSTICS: "off" })).toBeUndefined();
+    expect(acpEditDiagnostics(process.cwd(), local, { ARCHYMEDES_EDIT_DIAGNOSTICS: " Off " })).toBeUndefined();
+    expect(acpEditDiagnostics(process.cwd(), { kind: "e2b" }, {})).toBeUndefined();
   });
 });

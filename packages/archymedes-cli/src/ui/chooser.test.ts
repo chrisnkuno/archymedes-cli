@@ -201,6 +201,26 @@ describe("driving a chooser end to end", () => {
     expect(await runChooser(keys([press("down")]), items, () => {}, { paint })).toBeUndefined();
   });
 
+  it("deletes the highlighted row on Del only after a y, and keeps it on anything else", async () => {
+    const deleted: unknown[] = [];
+    const frames: string[] = [];
+    const onDelete = async (item: ChooserItem<unknown>) => { deleted.push(item.value); return { deleted: true as const }; };
+    const chosen = await runChooser(keys([press("delete"), press("n", {}, "n"), press("delete"), press("y", {}, "y"), press("return")]), items, (frame) => frames.push(frame), { paint, onDelete });
+    expect(deleted).toEqual([items[0].value]);
+    expect(frames.some((frame) => frame.includes(`Delete "${items[0].label}"? y/n`))).toBe(true);
+    expect(frames.some((frame) => frame.includes("kept"))).toBe(true);
+    // The deleted row is gone, so Return takes the one that moved up into its place.
+    expect(chosen).toBe(items[1].value);
+  });
+
+  it("shows a refusal instead of removing the row", async () => {
+    const frames: string[] = [];
+    const chosen = await runChooser(keys([press("d", { ctrl: true }), press("y", {}, "y"), press("return")]), items, (frame) => frames.push(frame),
+      { paint, onDelete: async () => ({ deleted: false as const, reason: "That is the chat you are in" }) });
+    expect(frames.at(-1)).toContain("That is the chat you are in");
+    expect(chosen).toBe(items[0].value);
+  });
+
   it("repaints once per keystroke, plus the opening frame", async () => {
     const frames: string[] = [];
     await runChooser(keys([press("down"), press("down"), press("return")]), items, (frame) => frames.push(frame), { paint });
@@ -307,8 +327,8 @@ describe("the bugs that made menus feel broken", () => {
   });
 
   it("tells the reader that Escape clears a filter before it cancels", () => {
-    expect(plain(renderChooser({ selected: 0, query: "" }, many, { paint, filter: true }))).toContain("Esc clear/cancel");
-    expect(plain(renderChooser({ selected: 0, query: "" }, many, { paint }))).toContain("Esc cancel");
+    expect(plain(renderChooser({ selected: 0, query: "" }, many, { paint, filter: true }))).toContain("Esc clear/back");
+    expect(plain(renderChooser({ selected: 0, query: "" }, many, { paint }))).toContain("Esc back");
   });
 
   it("clips the complete filtered status row, including its no-match suffix", () => {

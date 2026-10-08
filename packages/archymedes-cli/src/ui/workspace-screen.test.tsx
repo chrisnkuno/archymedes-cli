@@ -78,7 +78,7 @@ describe("the workspace, rendered", () => {
 
   it("offers the keys, since a full-screen view with no legend is a guessing game", () => {
     const panel = open(snapshot());
-    expect(panel.frame()).toContain("q leave");
+    expect(panel.frame()).toContain("Esc back");
     panel.view.unmount();
   });
 

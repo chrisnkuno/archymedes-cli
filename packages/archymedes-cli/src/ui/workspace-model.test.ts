@@ -196,7 +196,7 @@ describe("the frame", () => {
     // A pane with far more lines than fit is the case that used to push the legend into the middle
     // of the transcript, because each section was sized on its own and then overlapped.
     const frame = composeFrame(snapshot([pane("a", 200)], { rows: 40 }));
-    const legendRows = frame.map((row, index) => ({ row, index })).filter(({ row }) => row.text.includes("q leave"));
+    const legendRows = frame.map((row, index) => ({ row, index })).filter(({ row }) => row.text.includes("Esc back"));
     expect(legendRows).toHaveLength(1);
     expect(legendRows[0].index).toBe(39);
     expect(frame[39].text).toContain(WORKSPACE_LEGEND);
@@ -248,7 +248,7 @@ describe("the frame", () => {
   it("survives a window too short to hold its own chrome", () => {
     const frame = composeFrame(snapshot([pane("a", 5)], { rows: 2 }));
     expect(frame).toHaveLength(2);
-    expect(frame[frame.length - 1].text).toContain("q leave");
+    expect(frame[frame.length - 1].text).toContain("Esc back");
   });
 
   it("clips every finished row instead of letting TermUI wrap and displace the footer", () => {

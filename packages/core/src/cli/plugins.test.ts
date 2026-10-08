@@ -36,7 +36,8 @@ describe("parsePluginManifest", () => {
 
   it("names the exact bad field for a malformed server entry", () => {
     expect(() => parsePluginManifest("plugin.json", JSON.stringify({ name: "p", mcpServers: [{ command: "x" }] }))).toThrow(/mcpServers\[0\]\.id/);
-    expect(() => parsePluginManifest("plugin.json", JSON.stringify({ name: "p", mcpServers: [{ id: "a" }] }))).toThrow(/mcpServers\[0\]\.command/);
+    expect(() => parsePluginManifest("plugin.json", JSON.stringify({ name: "p", mcpServers: [{ id: "a" }] }))).toThrow(/mcpServers\[0\] must declare exactly one of "command"/);
+    expect(() => parsePluginManifest("plugin.json", JSON.stringify({ name: "p", mcpServers: [{ id: "a", command: "" }] }))).toThrow(/mcpServers\[0\]\.command/);
     expect(() => parsePluginManifest("plugin.json", JSON.stringify({ name: "p", mcpServers: [{ id: "a", command: "x", args: "not-array" }] }))).toThrow(/mcpServers\[0\]\.args/);
   });
 

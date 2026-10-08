@@ -8,16 +8,27 @@ import type { ModelCapabilities } from "./providers/model-capabilities";
 import type { RoutingReceipt } from "./providers/routing-receipt";
 import { createHash, randomUUID } from "node:crypto";
 
-/** An image sent with a user message, base64 encoded. Only for the turn it was attached to. */
+/**
+ * An image in the conversation, base64 encoded: attached to a user message, or returned by a tool
+ * (`view_image`). Either way it is turn-scoped — `withoutImageData` swaps it for a note before save.
+ */
 export type AgentImage = { path: string; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string };
 
 /** Roughly what a provider bills for one screenshot-sized image; used only for estimates. */
 export const IMAGE_TOKEN_ESTIMATE = 1_600;
 
+/**
+ * What one image is charged against the tool-result character budget: its token estimate at the
+ * four-characters-per-token rate every other estimate here uses. Without a charge, a run of
+ * `view_image` calls would grow the prompt by thousands of tokens each while the budget that drives
+ * in-turn compaction saw only their one-line captions.
+ */
+export const IMAGE_CHAR_ESTIMATE = IMAGE_TOKEN_ESTIMATE * 4;
+
 export type AgentMessage =
   | { role: "system" | "user" | "assistant"; content: string; internal?: boolean; images?: AgentImage[] }
   | { role: "assistant"; content: string; toolCalls: AgentToolCall[]; internal?: boolean }
-  | { role: "tool"; content: string; toolCallId: string; name: string; internal?: boolean };
+  | { role: "tool"; content: string; toolCallId: string; name: string; internal?: boolean; images?: AgentImage[] };
 
 export type AgentToolCall = { id: string; name: string; arguments: unknown };
 
@@ -25,7 +36,7 @@ export type AgentToolCall = { id: string; name: string; arguments: unknown };
 export function agentMessagePromptParts(message: AgentMessage): string[] {
   const parts = [message.content ?? ""];
   // Estimation measures characters; four per token stands in for each image's billed size.
-  if ("images" in message) for (const _image of message.images ?? []) parts.push(" ".repeat(IMAGE_TOKEN_ESTIMATE * 4));
+  if ("images" in message) for (const _image of message.images ?? []) parts.push(" ".repeat(IMAGE_CHAR_ESTIMATE));
   if ("toolCalls" in message && Array.isArray(message.toolCalls)) {
     for (const call of message.toolCalls) parts.push(call.id, call.name, JSON.stringify(call.arguments ?? {}));
   } else if (message.role === "tool") {
@@ -54,7 +65,43 @@ export type AgentModelTurn = {
   usage: ModelUsage;
   /** Set only by the hosted exchange: which model it routed this model call to, and why. */
   routingReceipt?: RoutingReceipt;
+  /** Set only by a provider with a daily token allowance (free mode): where the day stands after this call. */
+  allowance?: ModelAllowance;
 };
+
+/**
+ * A daily token allowance, as it stands after one model call.
+ *
+ * Free mode runs on a gateway that grants each install a fixed number of tokens a day, and an agent
+ * turn spends them several requests at a time — so the number worth showing is not this request's
+ * cost (always zero) but how much of the day is left. `usedTokens` is counted on this machine and
+ * is always present; the rest comes from the gateway's own headers and is absent with the user's
+ * own key, where there is no gateway to ask. A provider without a daily allowance never sets it.
+ */
+export type ModelAllowance = {
+  /** The UTC calendar day (`YYYY-MM-DD`) the local count belongs to. */
+  date: string;
+  /** Tokens this machine has spent on the allowance today, this call included. */
+  usedTokens: number;
+  /** What the gateway says is left after this call, when it said anything. */
+  remainingTokens?: number;
+  /** When the gateway's allowance resets, as an ISO timestamp. */
+  resetsAt?: string;
+  /** The gateway's own warning that the allowance is nearly spent. */
+  warning?: string;
+  /**
+   * Free-model requests left today after this call: the gateway's `x-free-remaining-requests`, or
+   * OpenRouter's own `free_model_daily_requests.remaining` for the user's key.
+   */
+  remainingRequests?: number;
+  /** The day's free-model request limit, when the source states one (OpenRouter's key info). */
+  requestLimit?: number;
+  /** Credits left under the user's own key limit, when OpenRouter reports one. */
+  creditsRemaining?: number;
+};
+
+/** What kind of streamed output a provider received; see `AgentModelRequest.onOutputProgress`. */
+export type AgentOutputKind = "text" | "reasoning" | "tool_call";
 
 /** How hard the model should think, where the provider's model supports being told. */
 export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -77,6 +124,15 @@ export type AgentModelRequest = {
    * conditions all read the completed turn exactly as before.
    */
   onTextDelta?: (text: string) => void;
+  /**
+   * Called whenever the provider receives *any* model output from the stream: visible text, but
+   * also reasoning and tool-call fragments that never surface through `onTextDelta`.
+   *
+   * The runtime reads it as "this attempt has produced (billed) output", which is what decides
+   * whether a failed attempt may be transparently re-sent. Optional; a provider that cannot tell
+   * simply never calls it, and text deltas alone are then the signal, as before.
+   */
+  onOutputProgress?: (kind: AgentOutputKind) => void;
   /**
    * How hard the model should think about this particular request.
    *
@@ -105,6 +161,15 @@ export interface AgentTurnProvider {
    * conservative default", which is what every caller did before the field existed.
    */
   readonly capabilities?: ModelCapabilities;
+  /**
+   * Whether the session should spend as few tokens per request as it can.
+   *
+   * Set by a provider whose requests are rationed rather than billed — free mode, where a whole day
+   * is a hundred thousand tokens and every request resends the system prompt, the tool schemas and
+   * the transcript. A session reading it trims all three (see `cli/token-saver.ts`). Absent means
+   * no: a paid provider's sessions are never quietly given less context than they paid for.
+   */
+  readonly tokenSaver?: boolean;
 }
 
 export type ToolEffect = "none" | "workspace" | "external";
@@ -164,6 +229,11 @@ export type AgentToolResult = {
    * Optional: a tool whose result has no structure worth naming — a fetched web page — omits it.
    */
   data?: Record<string, unknown>;
+  /**
+   * Images for the model to see alongside `content` (e.g. `view_image`). Carried onto the tool
+   * message untouched — never truncated as text — and charged against the budget per image.
+   */
+  images?: AgentImage[];
 };
 
 export type AgentToolContext = { taskId: string; runId: string; stepId: string; signal?: AbortSignal };
@@ -196,7 +266,7 @@ export type AgentRuntimeEvent =
   | { type: "provider_retry"; iteration: number; nextAttempt: number; maxAttempts: number; delayMs: number; reason: ProviderFailureKind }
   // Usage rides along so a front end can show spend accruing during the turn. Waiting for the
   // final result means the number only appears once the money is already gone.
-  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage }
+  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage; allowance?: ModelAllowance }
   // Emitted immediately before a tool runs, so a front end can say what is happening while it
   // happens rather than only what happened. The result alone cannot carry this: by the time it
   // arrives the interesting part — which file, which command — is already over.
@@ -266,6 +336,19 @@ export type AgentRuntimeResult = {
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 1;
+/** Provider calls are safe to retry here because no tool from the returned turn has run yet. */
+const MAX_PROVIDER_RETRIES = 2;
+/**
+ * A timed-out request is retried at most once. Timeouts are now measured against the stream
+ * (first byte, idle, overall cap), so one firing means minutes already spent; repeating that
+ * several times would leave the user staring at a frozen turn for most of an hour.
+ */
+const MAX_TIMEOUT_RETRIES = 1;
+/** Exponential backoff: 1s, 2s, 4s, ... capped here. */
+const PROVIDER_BACKOFF_BASE_MS = 1_000;
+const PROVIDER_BACKOFF_CAP_MS = 30_000;
+/** A server's own `retry-after` is honoured up to this; beyond it the user is better told now. */
+const PROVIDER_RETRY_AFTER_CAP_MS = 60_000;
 /** A malformed tool turn is model output, so let the model repair it before failing the run. */
 const MAX_TOOL_TURN_RECOVERIES = 2;
 
@@ -443,55 +526,26 @@ export function providerFailureKind(error: unknown): ProviderFailureKind {
   return "unknown";
 }
 
-export function providerRetryDelayMs(
-  error: unknown,
-  attempt: number,
-  policy: ProviderRetryPolicy = RETRY_POLICIES.unknown,
-  random: () => number = Math.random,
-): number {
-  const retryAfter = providerRetryAfterMs(error);
-  const backoff = Math.min(policy.maxDelayMs, policy.baseDelayMs * 2 ** Math.min(6, Math.max(0, attempt)));
-  // ±20% jitter: identical clients retrying in lockstep hit an already
-  // saturated endpoint at the same instants — the retry storm that turns
-  // one provider's blip into an outage for everyone.
-  const jittered = backoff * (0.8 + 0.4 * random());
-  return typeof retryAfter === "number"
-    ? Math.max(jittered, Math.min(policy.maxDelayMs, retryAfter)) : jittered;
-}
-
 /**
- * How long the provider asked us to wait, in milliseconds.
+ * How long to wait before retry number `attempt + 1`.
  *
- * Read from an explicit `retryAfterMs` first, then from the response's `retry-after` header —
- * the form Anthropic and OpenAI actually send on a 429 (`"120"` seconds, or an HTTP date). SDK
- * errors carry the headers; the cause is checked too, because transports wrap. Undefined when
- * the provider named no wait, so callers fall back to backoff rather than inventing one.
+ * Exponential (1s, 2s, 4s, ... capped at 30s) with +/-25% jitter, so many clients that failed
+ * together (a provider blip, a shared rate limit) do not all come back in the same instant. A
+ * `retry-after` the server sent is honoured up to 60s and never undercut by the backoff.
+ * `random` is injectable so tests and logs can be deterministic; 0.5 yields the un-jittered value.
  */
-export function providerRetryAfterMs(error: unknown): number | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 2 && current !== undefined && current !== null; depth += 1) {
-    const record = errorRecord(current);
-    if (!record) break;
-    const explicit = record.retryAfterMs;
-    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) return explicit;
-    const headers = record.headers as { get?: (name: string) => string | null } | Record<string, unknown> | undefined;
-    const raw = typeof headers?.get === "function"
-      ? headers.get("retry-after")
-      : (headers as Record<string, unknown> | undefined)?.["retry-after"] ?? (headers as Record<string, unknown> | undefined)?.["retryAfter"];
-    if (typeof raw === "string" && raw.trim() !== "") {
-      const text = raw.trim();
-      if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text) * 1000;
-      const at = Date.parse(text);
-      if (Number.isFinite(at)) return Math.max(0, at - Date.now());
-    }
-    current = record.cause;
-  }
-  return undefined;
+export function providerRetryDelayMs(error: unknown, attempt: number, random: () => number = Math.random): number {
+  const retryAfter = errorRecord(error)?.retryAfterMs;
+  const base = Math.min(PROVIDER_BACKOFF_CAP_MS, PROVIDER_BACKOFF_BASE_MS * 2 ** Math.min(10, Math.max(0, attempt)));
+  const jitter = 0.75 + 0.5 * Math.min(1, Math.max(0, random()));
+  const backoff = Math.min(PROVIDER_BACKOFF_CAP_MS, Math.round(base * jitter));
+  return typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0
+    ? Math.max(backoff, Math.min(PROVIDER_RETRY_AFTER_CAP_MS, Math.round(retryAfter))) : backoff;
 }
 
 function providerRetryDelay(delayMs: number, signal?: AbortSignal): Promise<boolean> {
-  // Deterministic exponential backoff keeps tests and logs reproducible. The abort listener is
-  // what makes Ctrl+C immediate while Archymedes is between attempts instead of waiting for a timer.
+  // The abort listener is what makes Ctrl+C immediate while Archymedes is between attempts
+  // instead of waiting for a timer.
   if (signal?.aborted) return Promise.resolve(false);
   return new Promise((resolve) => {
     const abort = () => finish(false);
@@ -575,6 +629,40 @@ function truncate(value: string, maximum: number): string {
   if (maximum <= 0) return "";
   if (maximum <= 32) return value.slice(0, maximum);
   return value.length <= maximum ? value : `${value.slice(0, Math.max(0, maximum - 32))}\n...[tool result truncated]`;
+}
+
+/** One tool result this run appended, tracked so in-turn compaction can find and shorten it. */
+type RunToolResult = {
+  /** Position in the run's message list; stable, since messages are only ever appended. */
+  index: number;
+  iteration: number;
+  toolCallId: string;
+  name: string;
+  /** Characters currently charged against the total tool-result budget. */
+  chars: number;
+  compacted: boolean;
+  artifactPath?: string;
+  digest?: string;
+  /** Images the result carried, still in the transcript until compaction drops them. */
+  images: number;
+};
+
+/** In-turn compactions allowed per run before the total tool-result budget stops it as before. */
+const MAX_IN_TURN_COMPACTIONS = 8;
+
+/** Results shorter than this are left alone: a stub would save next to nothing. */
+const COMPACTION_MIN_CHARS = 400;
+
+/** The stub an older tool result is replaced with when the turn runs out of tool-result budget. */
+export function compactedToolResult(toolName: string, chars: number, artifactPath?: string, images: readonly AgentImage[] = []): string {
+  if (images.length > 0) {
+    const note = `[elided: ${images.length} image${images.length === 1 ? "" : "s"} (${images.map((image) => image.path).join(", ")}) from earlier ${toolName} output, to keep the conversation within its context budget; view ${images.length === 1 ? "it" : "them"} again if you need to]`;
+    return chars > 0 ? `${compactedToolResult(toolName, chars, artifactPath)}
+${note}` : note;
+  }
+  return artifactPath
+    ? `[elided: ${chars} chars of earlier ${toolName} output, to keep the conversation within its context budget; see artifact ${artifactPath} (read it with read_file if you need it again)]`
+    : `[elided: ${chars} chars of earlier ${toolName} output, to keep the conversation within its context budget; run the tool again if you need it]`;
 }
 
 /** Where an oversized tool result was put, as the model and the front end both need to see it. */
@@ -684,10 +772,11 @@ export class BoundedAgentRuntime {
   constructor(
     private readonly dependencies: {
       model: AgentTurnProvider; tools: AgentTool[]; control: AgentRuntimeControl; prices: ModelPriceCatalog; artifacts?: ToolResultArtifactStore;
-      /** Injectable so tests are deterministic; production leaves retry jitter to Math.random. */
-      random?: () => number;
-      /** Injectable so tests do not wait out real backoff; defaults to the abort-aware delay. */
-      sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean>;
+      /**
+       * Retry timing seams, for tests and embedders. `sleep` resolves false when cancelled; `random`
+       * drives backoff jitter. Both default to the real thing.
+       */
+      retry?: { sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean>; random?: () => number };
     },
   ) {
     this.toolsByName = new Map();
@@ -715,6 +804,9 @@ export class BoundedAgentRuntime {
     let totalToolResultChars = 0;
     /** Digest → the call that first carried it, so an identical result is referenced rather than repeated. */
     const sentResults = new Map<string, { toolName: string; path?: string }>();
+    /** Every tool result this run added, by transcript position, so older ones can be compacted in-turn. */
+    const runToolResults: RunToolResult[] = [];
+    let inTurnCompactions = 0;
     let workspaceNeedsVerification = false;
     let verificationNudges = 0;
     let unavailableToolRecoveries = 0;
@@ -729,10 +821,75 @@ export class BoundedAgentRuntime {
     // One per model call the hosted exchange routed; stays empty for direct/BYOK providers.
     const routingReceipts: RoutingReceipt[] = [];
     // Measured once per part, not once per iteration: `messages` only ever grows inside this loop,
-    // so a message already measured cannot change. The tool definitions are constant for the run
-    // and are folded in first, which is why `measured` starts at zero rather than tracking them.
-    const promptTotals = addPart(newPartTotals(), JSON.stringify(definitions));
+    // so a message already measured cannot change — except through in-turn compaction, which
+    // resets both to re-measure the shortened transcript. The tool definitions are constant for the
+    // run and are folded in first, which is why `measured` starts at zero rather than tracking them.
+    let promptTotals = addPart(newPartTotals(), JSON.stringify(definitions));
     let measured = 0;
+
+    /**
+     * Frees tool-result budget mid-turn by replacing older results with short stubs.
+     *
+     * Without this, a long turn that read and ran a lot simply stopped with `iteration_limit` once
+     * the total tool-result allowance was spent, even though most of that allowance was old output
+     * the model had already acted on. Compaction keeps the conversation structurally identical (every
+     * tool call still has its result, so no provider rejects it) and only shortens the *bodies* of
+     * the oldest results, never anything from the iteration that just ran. Where an artifact store
+     * is configured, a result that was not already saved is saved first, so the stub can point to
+     * the full text; otherwise the stub says how to get it back.
+     *
+     * Conservative by construction: it only runs when the total budget is exhausted or the results
+     * about to be added would not fit, it compacts down to half the budget (or just enough room for
+     * those results) and no further, it skips results too small to be worth a stub, and it
+     * is bounded per run — past that, the old `iteration_limit` stop still applies.
+     */
+    const compactOlderToolResults = async (currentIteration: number, incoming = 0): Promise<boolean> => {
+      if (inTurnCompactions >= MAX_IN_TURN_COMPACTIONS) return false;
+      const target = Math.min(Math.floor(request.maxTotalToolResultChars / 2), request.maxTotalToolResultChars - incoming);
+      let changed = false;
+      for (const entry of runToolResults) {
+        if (totalToolResultChars <= target) break;
+        if (entry.compacted || entry.iteration >= currentIteration || entry.chars < COMPACTION_MIN_CHARS) continue;
+        const message = messages[entry.index];
+        if (message?.role !== "tool" || message.toolCallId !== entry.toolCallId) continue;
+        const images = message.images ?? [];
+        // A short caption is kept as-is beside the image note; only long text is worth stubbing.
+        const stubText = message.content.length >= COMPACTION_MIN_CHARS;
+        let path = entry.artifactPath;
+        if (stubText && !path && this.dependencies.artifacts) {
+          path = (await this.dependencies.artifacts
+            .put({ toolName: entry.name, toolCallId: entry.toolCallId, content: message.content })
+            .catch(() => undefined))?.path;
+        }
+        const stub = images.length > 0
+          ? `${stubText ? compactedToolResult(entry.name, message.content.length, path) : message.content}
+${compactedToolResult(entry.name, 0, undefined, images)}`
+          : compactedToolResult(entry.name, message.content.length, path);
+        if (images.length === 0 && stub.length >= message.content.length) continue;
+        const { images: _dropped, ...withoutImages } = message;
+        messages[entry.index] = { ...withoutImages, content: stub };
+        totalToolResultChars -= entry.chars - stub.length;
+        entry.chars = stub.length;
+        entry.images = 0;
+        entry.compacted = true;
+        changed = true;
+        // A later identical result must not be told "identical to the earlier one" when the earlier
+        // one is now only a stub: point it at the saved copy, or forget the earlier one entirely.
+        if (entry.digest) {
+          const sent = sentResults.get(entry.digest);
+          if (sent && !sent.path) {
+            if (path) sentResults.set(entry.digest, { ...sent, path });
+            else sentResults.delete(entry.digest);
+          }
+        }
+      }
+      if (changed) {
+        inTurnCompactions += 1;
+        promptTotals = addPart(newPartTotals(), JSON.stringify(definitions));
+        measured = 0;
+      }
+      return changed;
+    };
 
     const stop = async (status: AgentRuntimeResult["status"], summary: string, iterations: number): Promise<AgentRuntimeResult> => {
       await this.dependencies.control.persistEvent({ type: "runtime_stop", status, summary });
@@ -771,16 +928,17 @@ export class BoundedAgentRuntime {
         onTextDelta: (text) => void this.dependencies.control.persistEvent({ type: "assistant_delta", iteration, text }),
       };
       let turn: AgentModelTurn | undefined;
-      // Total time spent waiting between provider retries, named in the error that
-      // finally surfaces, so a user can tell a 300ms blip from a 15s outage.
-      let waitedMs = 0;
-      for (let attempt = 0; ; attempt += 1) {
+      let timeoutRetries = 0;
+      for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt += 1) {
+        // Any streamed output (text, reasoning or a tool-call fragment) makes the attempt visible
+        // and billed; only an attempt that produced nothing at all may be sent again.
         let emittedOutput = false;
         const attemptRequest: AgentModelRequest = {
           ...modelRequest,
           onTextDelta: modelRequest.onTextDelta
             ? (text) => { emittedOutput = true; modelRequest.onTextDelta!(text); }
             : undefined,
+          onOutputProgress: (kind) => { emittedOutput = true; modelRequest.onOutputProgress?.(kind); },
         };
         try {
           turn = await this.dependencies.model.complete(attemptRequest);
@@ -793,24 +951,22 @@ export class BoundedAgentRuntime {
           // retry is safe only while the failed attempt has remained completely invisible.
           if (emittedOutput) throw new ProviderRequestError(error, { attempts: attempt + 1, retrySuppressed: "output_started" });
           if (!isRetryableProviderError(error)) throw error;
-          // The failure class picks the budget: a 5xx gets more attempts and longer
-          // waits than a connection reset, because the two have different causes and
-          // different recovery times.
-          const kind = providerFailureKind(error);
-          const policy = RETRY_POLICIES[kind];
-          if (attempt + 1 >= policy.maxAttempts) throw new ProviderRequestError(error, { attempts: attempt + 1, kind, waitedMs });
-          const delayMs = providerRetryDelayMs(error, attempt, policy, this.dependencies.random);
-          waitedMs += delayMs;
+          const reason = providerFailureKind(error);
+          if (attempt >= MAX_PROVIDER_RETRIES || (reason === "timeout" && timeoutRetries >= MAX_TIMEOUT_RETRIES)) {
+            throw new ProviderRequestError(error, { attempts: attempt + 1 });
+          }
+          if (reason === "timeout") timeoutRetries += 1;
+          const delayMs = providerRetryDelayMs(error, attempt, this.dependencies.retry?.random);
           await this.dependencies.control.persistEvent({
             type: "provider_retry",
             iteration,
             nextAttempt: attempt + 2,
-            maxAttempts: policy.maxAttempts,
+            // A timeout gets one retry, so the attempt after it is the last one.
+            maxAttempts: reason === "timeout" ? attempt + 2 : MAX_PROVIDER_RETRIES + 1,
             delayMs,
-            reason: kind,
+            reason,
           });
-          const sleep = this.dependencies.sleep ?? providerRetryDelay;
-          if (!await sleep(delayMs, request.signal)) {
+          if (!await (this.dependencies.retry?.sleep ?? providerRetryDelay)(delayMs, request.signal)) {
             return stop("cancelled", "Run cancelled while waiting to retry the model provider.", iteration - 1);
           }
           if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) {
@@ -824,7 +980,7 @@ export class BoundedAgentRuntime {
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");
-      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage });
+      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage, ...(turn.allowance ? { allowance: turn.allowance } : {}) });
 
       if (turn.finishReason === "refusal") return stop("blocked", turn.refusal?.trim() || "Model refused the task.", iteration);
       if (turn.finishReason === "length") {
@@ -897,8 +1053,8 @@ export class BoundedAgentRuntime {
       });
       if (malformed) {
         if (recoverToolTurn(
-          "Your previous tool-call response was malformed; no tools were executed.",
-          "Retry with a unique non-empty id for every call and a JSON object for every arguments value.",
+          `Your previous tool-call response was malformed (the ${JSON.stringify(malformed.name).slice(0, 80)} call); no tools were executed.`,
+          "Retry with a unique non-empty id for every call and a JSON object for every arguments value, for example {\"path\": \"src/a.ts\"}: double quotes, no trailing commas, no code fences.",
         )) continue;
         return stop("failed", "Model repeatedly returned malformed tool calls.", iteration);
       }
@@ -999,6 +1155,10 @@ export class BoundedAgentRuntime {
        */
       const iterationCharBudget = Math.max(request.maxToolResultChars, Math.floor(request.maxTotalToolResultChars / 4));
       let iterationChars = 0;
+      // Make room before adding, not after: results that arrive to a nearly spent budget are cut to
+      // whatever is left, so compacting afterwards would keep the stale output and lose the new.
+      const incoming = Math.min(iterationCharBudget, results.reduce((sum, { result }) => sum + Math.min((result.content || " ").length, request.maxToolResultChars) + (result.images?.length ?? 0) * IMAGE_CHAR_ESTIMATE, 0));
+      if (totalToolResultChars + incoming > request.maxTotalToolResultChars) await compactOlderToolResults(iteration, incoming);
 
       for (const { call, tool, result } of results) {
         toolCallsExecuted += 1;
@@ -1041,7 +1201,9 @@ export class BoundedAgentRuntime {
          * A digest it already has is a pointer, not a payload. Only worth doing for results big
          * enough that the pointer is smaller than the thing: below that the reference is the cost.
          */
-        const digest = raw.length >= DEDUPE_MIN_CHARS ? createHash("sha256").update(raw).digest("hex") : undefined;
+        const images = result.images?.length ? result.images : undefined;
+        // Text alongside an image is a caption for it: identical captions are not identical results.
+        const digest = !images && raw.length >= DEDUPE_MIN_CHARS ? createHash("sha256").update(raw).digest("hex") : undefined;
         const alreadySent = digest ? sentResults.get(digest) : undefined;
         if (alreadySent) {
           content = `[Identical to the earlier ${alreadySent.toolName} result in this conversation${alreadySent.path ? `, saved at ${alreadySent.path}` : ""}. Unchanged since then; re-read it there if you need it again.]`;
@@ -1061,9 +1223,11 @@ export class BoundedAgentRuntime {
           }
         }
         if (digest && !alreadySent) sentResults.set(digest, { toolName: call.name, path: artifact?.path });
-        totalToolResultChars += content.length;
-        iterationChars += content.length;
-        messages.push({ role: "tool", content, toolCallId: call.id, name: call.name });
+        const imageChars = (images?.length ?? 0) * IMAGE_CHAR_ESTIMATE;
+        totalToolResultChars += content.length + imageChars;
+        iterationChars += content.length + imageChars;
+        runToolResults.push({ index: messages.length, iteration, toolCallId: call.id, name: call.name, chars: content.length + imageChars, compacted: false, images: images?.length ?? 0, ...(artifact ? { artifactPath: artifact.path } : {}), ...(digest ? { digest } : {}) });
+        messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         const effect = tool.effect === "external" ? "external" : result.effect ?? tool.effect;
         if (!result.isError && effect === "workspace") workspaceNeedsVerification = true;
         if (!result.isError && result.verification?.passed) {
@@ -1075,6 +1239,8 @@ export class BoundedAgentRuntime {
         }
         await this.dependencies.control.persistEvent({ type: "tool_result", toolCallId: call.id, toolName: call.name, isError: result.isError ?? false, effect, content, ...(result.data ? { data: result.data } : {}), ...(artifact ? { artifact } : {}) });
       }
+      // Out of tool-result budget: shorten older results and carry on rather than ending the turn.
+      if (totalToolResultChars >= request.maxTotalToolResultChars) await compactOlderToolResults(iteration);
       await this.dependencies.control.checkpointMessages?.(messages);
       if (totalToolResultChars >= request.maxTotalToolResultChars) return stop("iteration_limit", "Run reached its total tool-result context budget.", iteration);
     }

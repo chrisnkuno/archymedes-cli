@@ -6,10 +6,12 @@ import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "@arch
 import type { ArchymedesEvent } from "@archymedes/core/cli/agent";
 import { enqueueJob, getJob, newJobId, readJobLog, resolveJobApproval } from "@archymedes/core";
 import { saveSession, newSessionId } from "@archymedes/core/cli/session";
+import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import {
   CONTINUATION_OBJECTIVE,
   describeJobForHuman,
   detachedApprovalPrompt,
+  editDiagnosticsFor,
   emptyJobLogState,
   runJobWorkerForever,
   runJobWorkerOnce,
@@ -214,6 +216,62 @@ describe("the detached approval prompt directly", () => {
     const prompt = detachedApprovalPrompt({ root, jobId: job.id, ownerId: "worker-1", pollMs: 1, timeoutMs: 10 });
     const decision = await prompt({ call: { id: "c1", name: "run_command", arguments: {} }, tool: { name: "run_command", description: "", inputSchema: { type: "object" }, capabilityId: "workspace.terminal", effect: "workspace", parallelSafe: false, requiresApproval: true, execute: async () => ({ content: "" }) }, summary: "run rm -rf /", actionDigest: "d", scopeKey: "s", policyVersion: "archymedes-approval-v2", safety: { sensitive: false, categories: [], reasons: [] } });
     expect(decision).toBe("deny");
+  });
+
+  it("forwards the offered pattern to the job record and returns allow_pattern when that is the answer", async () => {
+    const job = await enqueueJob(root, { id: newJobId(), objective: "x", logPath: "l" });
+    await import("@archymedes/core").then((core) => core.claimJob(root, "worker-1", 60_000));
+    const pattern = { kind: "command-prefix" as const, prefix: "npm test", label: "always allow commands starting with \"npm test\"" };
+    let parkedPattern: unknown;
+    const resolving = (async () => {
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const current = await getJob(root, job.id);
+        if (current?.pendingApproval) {
+          parkedPattern = current.pendingApproval.pattern;
+          await resolveJobApproval(root, job.id, "allow_pattern", current.pendingApproval.actionDigest);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error("approval request never arrived");
+    })();
+    const prompt = detachedApprovalPrompt({ root, jobId: job.id, ownerId: "worker-1", pollMs: 5, timeoutMs: 5_000 });
+    const [decision] = await Promise.all([
+      prompt({ call: { id: "c1", name: "run_command", arguments: { command: "npm test" } }, tool: { name: "run_command", description: "", inputSchema: { type: "object" }, capabilityId: "workspace.terminal", effect: "workspace", parallelSafe: false, requiresApproval: true, execute: async () => ({ content: "" }) }, summary: "run npm test", actionDigest: "d-npm", scopeKey: "s", policyVersion: "archymedes-approval-v2", safety: { sensitive: false, categories: [], reasons: [] }, pattern }),
+      resolving,
+    ]);
+    expect(parkedPattern).toEqual(pattern);
+    expect(decision).toBe("allow_pattern");
+  });
+});
+
+describe("edit diagnostics in the worker", () => {
+  it("wires afterEdit only for a local workspace, and honours ARCHYMEDES_EDIT_DIAGNOSTICS=off", () => {
+    const hook = async () => undefined;
+    const local = new LocalWorkspace(root);
+    expect(editDiagnosticsFor({ root, environment: {}, afterEdit: hook }, local)).toBe(hook);
+    expect(editDiagnosticsFor({ root, environment: {} }, local)).toBeTypeOf("function");
+    expect(editDiagnosticsFor({ root, environment: { ARCHYMEDES_EDIT_DIAGNOSTICS: " OFF " }, afterEdit: hook }, local)).toBeUndefined();
+    expect(editDiagnosticsFor({ root, environment: {}, afterEdit: null }, local)).toBeUndefined();
+    const remote = { kind: "e2b" } as unknown as ArchymedesWorkspace;
+    expect(editDiagnosticsFor({ root, environment: {}, afterEdit: hook }, remote)).toBeUndefined();
+  });
+
+  it("appends the hook's diagnostics to an edit result the model sees", async () => {
+    const edited: string[] = [];
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "e1", name: "edit_file", arguments: { path: "app.ts", oldText: "3000", newText: "8080" } }] },
+      { finishReason: "stop", content: "Edited." },
+    ]);
+    const job = await enqueueJob(root, { id: newJobId(), objective: "change the port", logPath: "l" });
+    const outcome = await runJobWorkerOnce({
+      root, jobId: job.id, provider: model, prices, environment: {},
+      afterEdit: async (file) => { edited.push(file); return "app.ts:1:1 error made-up diagnostic"; },
+    });
+    expect(outcome.outcome).not.toBe("not-claimed");
+    expect(edited).toEqual(["app.ts"]);
+    const toolMessage = model.requests[1]?.messages.find((message) => message.role === "tool");
+    expect(String(toolMessage?.content)).toContain("made-up diagnostic");
   });
 });
 

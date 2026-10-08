@@ -63,6 +63,7 @@ export const runGit: GitRunner = (args, options) =>
 
 export class CheckpointStore {
   private readonly checkpoints: Checkpoint[] = [];
+  private seedAttempted = false;
 
   constructor(
     private readonly root: string,
@@ -93,7 +94,13 @@ export class CheckpointStore {
     // turn where a user is most likely to want it.
     await fs.mkdir(path.dirname(this.indexFile), { recursive: true }).catch(() => undefined);
     const env = { GIT_INDEX_FILE: this.indexFile };
-    const added = await this.git(["add", "--all", "--", ...EXCLUDE_ARCHYMEDES], { cwd: this.root, env });
+    const seeded = await this.seedIndex(env);
+    let added = await this.git(["add", "--all", "--", ...EXCLUDE_ARCHYMEDES], { cwd: this.root, env });
+    if (added.exitCode !== 0 && seeded) {
+      // A seeded index git cannot use (split index, an unexpected format): start from empty instead.
+      await fs.unlink(this.indexFile).catch(() => undefined);
+      added = await this.git(["add", "--all", "--", ...EXCLUDE_ARCHYMEDES], { cwd: this.root, env });
+    }
     if (added.exitCode !== 0) return undefined;
     const tree = await this.git(["write-tree"], { cwd: this.root, env });
     if (tree.exitCode !== 0) return undefined;
@@ -101,6 +108,35 @@ export class CheckpointStore {
     if (!checkpoint.tree) return undefined;
     this.checkpoints.push(checkpoint);
     return checkpoint;
+  }
+
+  /**
+   * Makes the first capture incremental too.
+   *
+   * The private index is reused across turns, so from the second capture on `git add --all` only
+   * re-hashes files whose stat data changed. The *first* capture used to start from an empty index
+   * and hash every file in the workspace. Copying the repository's own index gives it the stat
+   * cache git already maintains, so only files that differ from it are hashed; `add --all` then
+   * brings every entry to the working tree, so the resulting tree is the same as from empty.
+   * Done with the filesystem (no git call) and only for a plain `.git` directory; anything else
+   * (worktrees, a missing index) keeps the original cold start. Returns whether it seeded.
+   */
+  private async seedIndex(env: Record<string, string>): Promise<boolean> {
+    if (this.seedAttempted) return false;
+    this.seedAttempted = true;
+    if (await fs.stat(this.indexFile).then(() => true, () => false)) return false;
+    try {
+      await fs.copyFile(path.join(this.root, ".git", "index"), this.indexFile);
+    } catch {
+      return false;
+    }
+    // The user's index may track Archymedes's own state; the snapshot never includes it.
+    const removed = await this.git(["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ".archymedes"], { cwd: this.root, env });
+    if (removed.exitCode !== 0) {
+      await fs.unlink(this.indexFile).catch(() => undefined);
+      return false;
+    }
+    return true;
   }
 
   /**

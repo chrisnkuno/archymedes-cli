@@ -95,4 +95,37 @@ describe("sending images to providers", () => {
     expect(saved).toContain("image attached: shots/bug.png");
     await agent.dispose();
   }, 20_000);
+
+  it("strips images a tool returned before saving, too", () => {
+    expect(withoutImageData([{ role: "tool", toolCallId: "v1", name: "view_image", content: "Image", images: [image] }]))
+      .toEqual([{ role: "tool", toolCallId: "v1", name: "view_image", content: "Image\n\n[image viewed, not kept: shots/bug.png]" }]);
+  });
+
+  it("lets the model view an image with a tool, end to end, and saves the session without its data", async () => {
+    const requests: AgentModelRequest[] = [];
+    const usage = { inputTokens: 100, outputTokens: 5, totalTokens: 105, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
+    const model: AgentTurnProvider = {
+      async complete(request) {
+        requests.push({ ...request, messages: [...request.messages] });
+        return requests.length === 1
+          ? { responseId: "r1", model: "m", finishReason: "tool_calls", content: "", toolCalls: [{ id: "v1", name: "view_image", arguments: { path: "shots/bug.png" } }], usage }
+          : { responseId: "r2", model: "m", finishReason: "stop", content: "The button overlaps.", toolCalls: [], usage };
+      },
+    };
+    const agent = new ArchymedesAgent({
+      root, model, prices: { inputRatePerMillion: 2_000, outputRatePerMillion: 8_000 }, mode: "build",
+      approve: async () => "allow",
+      workspace: new LocalWorkspace(root),
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
+    });
+    await agent.send("look at the screenshot in shots");
+    expect(requests[0].tools.map((tool) => tool.name)).toContain("view_image");
+    const tool = requests[1].messages.find((message) => message.role === "tool")!;
+    expect(tool).toMatchObject({ role: "tool", name: "view_image", images: [{ path: "shots/bug.png", mediaType: "image/png", data: Buffer.from(PNG).toString("base64") }] });
+
+    const saved = JSON.stringify(await loadSession(root, agent.sessionId));
+    expect(saved).not.toContain(Buffer.from(PNG).toString("base64"));
+    expect(saved).toContain("image viewed, not kept: shots/bug.png");
+    await agent.dispose();
+  }, 20_000);
 });

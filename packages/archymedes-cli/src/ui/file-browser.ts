@@ -254,7 +254,7 @@ export function composeFileFrame(state: FileBrowserState, preview: FilePreview, 
   const overflow = rows.length > height ? `  ${paginator(selectedIndex < 0 ? 0 : selectedIndex, rows.length)}` : "";
   const footer = state.searching
     ? `search: ${state.query}▏  Enter open · Esc done`
-    : `↑↓ move · →/l open · ←/h close · Enter pick a file · / search · q leave${state.query ? `   filter: ${state.query}` : ""}${overflow}`;
+    : `↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back${state.query ? `   filter: ${state.query}` : ""}${overflow}`;
   out.push({ text: pad(` ${footer}`, columns), dim: true, color: theme.textMuted });
   return out;
 }

@@ -63,4 +63,57 @@ describe("/history", () => {
     expect(dismissed.resumed).toEqual([]);
     expect(dismissed.written.at(-1)).toContain("no session chosen");
   });
+
+  it("deletes from the picker when deleting is wired, and says so in its legend", async () => {
+    const removed: string[] = [];
+    let legend: string | undefined;
+    const picker = context({
+      remove: async (id) => { removed.push(id); return { deleted: true }; },
+      removeAll: async () => ({ deleted: 0 }),
+      choose: async (items, extras) => {
+        legend = extras?.legend;
+        await extras?.onDelete?.(items.find((item) => item.label === "add a health check")!);
+        return undefined;
+      },
+    });
+    await runHistoryCommand({ kind: "browse" }, picker.ctx);
+    expect(removed).toEqual([B]);
+    expect(legend).toContain("Del delete");
+    expect(legend).toContain("Esc back");
+  });
+
+  it("deletes by id, and deletes all only after a yes", async () => {
+    const one = context({ remove: async () => ({ deleted: true }), removeAll: async () => ({ deleted: 0 }) });
+    await runHistoryCommand({ kind: "delete", id: B }, one.ctx);
+    expect(one.written.join("")).toContain(`deleted ${B}`);
+
+    const refused = context({ remove: async () => ({ deleted: false, reason: "That is the chat you are in" }), removeAll: async () => ({ deleted: 0 }) });
+    await runHistoryCommand({ kind: "delete", id: A }, refused.ctx);
+    expect(refused.written.join("")).toContain("chat you are in");
+
+    let wiped = 0;
+    const declined = context({ remove: async () => ({ deleted: true }), removeAll: async () => { wiped += 1; return { deleted: 1 }; }, confirm: async () => false });
+    await runHistoryCommand({ kind: "delete", all: true }, declined.ctx);
+    expect(wiped).toBe(0);
+    expect(declined.written.join("")).toContain("nothing deleted");
+
+    const accepted = context({ remove: async () => ({ deleted: true }), removeAll: async () => { wiped += 1; return { deleted: 1 }; }, confirm: async (question) => question.includes("1 other chat") });
+    await runHistoryCommand({ kind: "delete", all: true }, accepted.ctx);
+    expect(wiped).toBe(1);
+    expect(accepted.written.join("")).toContain("deleted 1 chat");
+
+    const unconfirmable = context({ remove: async () => ({ deleted: true }), removeAll: async () => { wiped += 1; return { deleted: 1 }; } });
+    await runHistoryCommand({ kind: "delete", all: true }, unconfirmable.ctx);
+    expect(wiped).toBe(1);
+  });
+
+  it("opens the picker on a bare /history, and prints the list where nobody can pick", async () => {
+    const picking = context({ choose: async (items) => items.find((item) => item.label === "fix the parser")?.value });
+    await runHistoryCommand({ kind: "browse" }, picking.ctx);
+    expect(picking.resumed).toEqual([A]);
+    const piped = context();
+    await runHistoryCommand({ kind: "browse" }, piped.ctx);
+    expect(piped.resumed).toEqual([]);
+    expect(piped.written.join("")).toContain("fix the parser");
+  });
 });

@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
-import { spawnArchymedes } from "./harness";
+import { CONPTY, spawnArchymedes } from "./harness";
 
 /**
  * The suggestion dropup and the Ctrl chord layer, against a real terminal.
@@ -99,7 +99,7 @@ describe("the suggestion dropup, without a pinned footer", () => {
     p.kill();
   }, 60_000);
 
-  it("takes the list down again when the line stops being a command", async () => {
+  it.skipIf(CONPTY)("takes the list down again when the line stops being a command", async () => {
     // Backspacing out of "/" must reclaim the rows, or the bar is left sitting on a stale menu.
     const p = await boot();
     const mark = p.output().length;

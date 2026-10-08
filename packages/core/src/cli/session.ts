@@ -108,7 +108,8 @@ export async function saveSession(record: SessionRecord): Promise<string> {
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
     const fileExists = await fs.stat(file).then(() => true).catch(() => false);
-    const current = await loadSession(record.root, record.id);
+    // The snapshot alone answers the revision question; replaying the journal here would be wasted work.
+    const current = (await loadSnapshot(record.root, record.id))?.record;
     if (fileExists && !current) throw new Error("Existing session is corrupt or incompatible; refusing to overwrite it");
     if (current && current.revision !== record.revision) {
       throw new Error(`Session revision conflict: expected ${record.revision}, found ${current.revision}`);
@@ -122,8 +123,10 @@ export async function saveSession(record: SessionRecord): Promise<string> {
     delete (withoutIntegrity as Partial<SessionRecord>).integrity;
     const next: SessionRecord = { ...withoutIntegrity, integrity: integrityFor(withoutIntegrity) };
     const handle = await fs.open(temporary, "wx", 0o600);
+    // Compact JSON: the snapshot is a machine file, and indentation was ~30% of its bytes.
+    const serialized = `${JSON.stringify(next)}\n`;
     try {
-      await handle.writeFile(`${JSON.stringify(next, null, 2)}\n`, "utf8");
+      await handle.writeFile(serialized, "utf8");
       await handle.sync();
     } finally {
       await handle.close();
@@ -134,6 +137,18 @@ export async function saveSession(record: SessionRecord): Promise<string> {
       await directoryHandle.sync().catch(() => undefined);
       await directoryHandle.close();
     }
+    // The snapshot now contains everything the journal held. Removing it is cleanup, not
+    // correctness: lines for the old revision are ignored by `loadSession` either way.
+    const journalRemoved = await fs.rm(sessionJournalPath(record.root, record.id), { force: true }).then(() => true, () => false);
+    durableStates.set(stateKey(record.root, record.id), {
+      revision: next.revision,
+      messageCount: next.messages.length,
+      lastFingerprint: messageFingerprint(next.messages.at(-1)),
+      seq: 0,
+      journalBytes: 0,
+      snapshotBytes: Buffer.byteLength(serialized, "utf8"),
+      ...(journalRemoved ? {} : { truncateTo: 0 }),
+    });
     Object.assign(record, next);
     return file;
   } finally {
@@ -142,10 +157,214 @@ export async function saveSession(record: SessionRecord): Promise<string> {
   }
 }
 
-export async function loadSession(root: string, id: string): Promise<SessionRecord | null> {
+/**
+ * The per-step journal: between full snapshots, each completed tool step appends one line.
+ *
+ * Rewriting the whole snapshot after every tool step made a session's persistence O(n²) in its
+ * length — step 200 of a long session re-serialized, re-hashed, fsynced and re-read (for the
+ * conflict check) everything steps 1–199 had already written. A step now appends only the
+ * messages it added, and a full snapshot is written at turn end (and every
+ * `JOURNAL_COMPACT_EVERY` steps, or when the journal grows past the snapshot's size), which then
+ * empties the journal.
+ *
+ * Each line names the snapshot revision it extends (`base`) and its position (`seq`), and carries
+ * a SHA-256 over itself. `loadSession` applies the lines that extend the snapshot it read, in
+ * order, and stops at the first line that is torn, corrupt, out of sequence or for another
+ * revision: a crash mid-append loses at most that one step, never the session.
+ */
+type JournalEntry = {
+  base: number;
+  seq: number;
+  /** Index in `messages` where `append` begins (the count already durable before this step). */
+  from: number;
+  append: AgentMessage[];
+  title: string;
+  updatedAt: number;
+  hash?: string;
+};
+
+const JOURNAL_COMPACT_EVERY = 64;
+
+export function sessionJournalPath(root: string, id: string): string {
+  assertSessionId(id);
+  return path.join(sessionDirectory(root), `${id}.steps.jsonl`);
+}
+
+function journalEntryHash(entry: Omit<JournalEntry, "hash">): string {
+  return createHash("sha256").update(JSON.stringify(entry)).digest("hex");
+}
+
+function messageFingerprint(message: AgentMessage | undefined): string {
+  return message === undefined ? "" : createHash("sha256").update(JSON.stringify(message)).digest("hex");
+}
+
+/** What is durable on disk for one session file, as this process last wrote or read it. */
+type DurableState = {
+  revision: number;
+  messageCount: number;
+  /** Fingerprint of the last durable message, to detect a transcript rewritten rather than extended. */
+  lastFingerprint: string;
+  seq: number;
+  journalBytes: number;
+  snapshotBytes: number;
+  /**
+   * When the journal on disk holds bytes past its last valid entry (a torn line from a crash, or
+   * stale lines a failed cleanup left), the length to cut it back to before the next append.
+   * Otherwise a new line would land after the garbage, and the reader stops at the garbage.
+   */
+  truncateTo?: number;
+};
+
+const durableStates = new Map<string, DurableState>();
+const journalQueues = new Map<string, Promise<unknown>>();
+
+function stateKey(root: string, id: string): string {
+  const key = path.resolve(root, id);
+  return process.platform === "win32" ? key.toLowerCase() : key;
+}
+
+/**
+ * Persists one completed step cheaply: appends the messages added since the last durable write.
+ *
+ * Only `messages`, `title` and `updatedAt` travel in the journal — the fields a mid-turn step
+ * changes. Anything else (approvals, spend, receipts) is persisted by the full `saveSession` at
+ * turn end. Falls back to a full `saveSession` when there is no durable baseline in this process
+ * yet, when the transcript was rewritten instead of extended, or when it is time to compact.
+ */
+export async function appendSessionStep(record: SessionRecord): Promise<void> {
+  assertSessionId(record.id);
+  const key = stateKey(record.root, record.id);
+  const previous = journalQueues.get(key) ?? Promise.resolve();
+  const operation = previous.catch(() => undefined).then(() => appendSessionStepNow(record, key));
+  journalQueues.set(key, operation);
+  try {
+    await operation;
+  } finally {
+    if (journalQueues.get(key) === operation) journalQueues.delete(key);
+  }
+}
+
+async function appendSessionStepNow(record: SessionRecord, key: string): Promise<void> {
+  const state = durableStates.get(key);
+  const extendsDurable = state
+    && state.revision === record.revision
+    && record.messages.length >= state.messageCount
+    && messageFingerprint(record.messages[state.messageCount - 1]) === state.lastFingerprint;
+  if (!state || !extendsDurable || state.seq >= JOURNAL_COMPACT_EVERY || state.journalBytes > Math.max(256 * 1024, state.snapshotBytes)) {
+    await saveSession(record);
+    return;
+  }
+  const file = sessionJournalPath(record.root, record.id);
+  if (state.truncateTo !== undefined) {
+    await fs.truncate(file, state.truncateTo).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; });
+    state.journalBytes = state.truncateTo;
+    state.truncateTo = undefined;
+  }
+  const withoutHash: Omit<JournalEntry, "hash"> = {
+    base: state.revision,
+    seq: state.seq + 1,
+    from: state.messageCount,
+    append: record.messages.slice(state.messageCount),
+    title: record.title,
+    updatedAt: record.updatedAt,
+  };
+  const line = `${JSON.stringify({ ...withoutHash, hash: journalEntryHash(withoutHash) })}\n`;
+  const handle = await fs.open(file, "a", 0o600);
+  try {
+    await handle.write(line);
+    await handle.datasync();
+  } finally {
+    await handle.close();
+  }
+  state.seq += 1;
+  state.journalBytes += Buffer.byteLength(line, "utf8");
+  state.messageCount = record.messages.length;
+  state.lastFingerprint = messageFingerprint(record.messages.at(-1));
+}
+
+/** Snapshot-only read: what `saveSession`'s conflict check needs, without replaying the journal. */
+async function loadSnapshot(root: string, id: string): Promise<{ record: SessionRecord; bytes: number } | null> {
   try {
     assertSessionId(id);
-    const parsed = JSON.parse(await fs.readFile(path.join(sessionDirectory(root), `${id}.json`), "utf8")) as Partial<SessionRecord>;
+    const text = await fs.readFile(path.join(sessionDirectory(root), `${id}.json`), "utf8");
+    const record = await parseSnapshot(text, id, root);
+    return record ? { record, bytes: Buffer.byteLength(text, "utf8") } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The journal entries that extend snapshot revision `base`, in order, and the byte length of that
+ * valid prefix. Leading lines for an older revision (left when a compaction could not delete the
+ * journal) are skipped; after the first matching line, anything torn, corrupt or out of sequence
+ * ends the read.
+ */
+async function readJournal(root: string, id: string, base: number): Promise<{ entries: JournalEntry[]; bytes: number; validBytes: number }> {
+  let text: string;
+  try {
+    text = await fs.readFile(sessionJournalPath(root, id), "utf8");
+  } catch {
+    return { entries: [], bytes: 0, validBytes: 0 };
+  }
+  const entries: JournalEntry[] = [];
+  let offset = 0;
+  let validBytes = 0;
+  while (offset < text.length) {
+    const newline = text.indexOf("\n", offset);
+    if (newline === -1) break; // torn final line: the append that wrote it never completed
+    const line = text.slice(offset, newline);
+    offset = newline + 1;
+    let entry: JournalEntry;
+    try { entry = JSON.parse(line) as JournalEntry; } catch { break; }
+    const { hash, ...withoutHash } = entry;
+    if (hash !== journalEntryHash(withoutHash) || !Array.isArray(entry.append) || !Number.isSafeInteger(entry.from) || entry.from < 0) break;
+    if (entries.length === 0 && entry.base < base) continue;
+    if (entry.base !== base || entry.seq !== entries.length + 1) break;
+    entries.push(entry);
+    validBytes = Buffer.byteLength(text.slice(0, offset), "utf8");
+  }
+  return { entries, bytes: Buffer.byteLength(text, "utf8"), validBytes };
+}
+
+export async function loadSession(root: string, id: string): Promise<SessionRecord | null> {
+  const key = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id) ? stateKey(root, id) : undefined;
+  // An append in flight would make the journal read below race its own writer.
+  if (key) await journalQueues.get(key)?.catch(() => undefined);
+  const snapshot = await loadSnapshot(root, id);
+  if (!snapshot) return null;
+  let record = snapshot.record;
+  const journal = await readJournal(root, id, record.revision);
+  let applied = 0;
+  for (const entry of journal.entries) {
+    if (entry.from > record.messages.length) break;
+    record = { ...record, messages: [...record.messages.slice(0, entry.from), ...entry.append], title: entry.title, updatedAt: entry.updatedAt };
+    applied += 1;
+  }
+  // The snapshot's checksum covers the snapshot, not the replayed record; the next full save recomputes it.
+  if (applied > 0) delete record.integrity;
+  const known = durableStates.get(key!);
+  // Re-seeded whenever the disk disagrees with what this process believes it wrote (another
+  // writer, or a crash that left a torn line), so the next append starts from the disk's truth.
+  if (!known || known.revision !== record.revision || known.seq !== applied || known.journalBytes !== journal.bytes || known.truncateTo !== undefined) {
+    const validBytes = applied === journal.entries.length ? journal.validBytes : undefined;
+    durableStates.set(key!, {
+      revision: record.revision,
+      messageCount: record.messages.length,
+      lastFingerprint: messageFingerprint(record.messages.at(-1)),
+      // An entry that could not be applied makes everything from it on unusable: compact instead.
+      seq: validBytes === undefined ? JOURNAL_COMPACT_EVERY : applied,
+      journalBytes: journal.bytes,
+      snapshotBytes: snapshot.bytes,
+      ...(validBytes !== undefined && validBytes !== journal.bytes ? { truncateTo: validBytes } : {}),
+    });
+  }
+  return record;
+}
+
+async function parseSnapshot(text: string, id: string, root: string): Promise<SessionRecord | null> {
+  try {
+    const parsed = JSON.parse(text) as Partial<SessionRecord>;
     if (!parsed || typeof parsed !== "object" || parsed.id !== id || typeof parsed.root !== "string") return null;
     const [storedRoot, requestedRoot] = await Promise.all(
       [parsed.root, root].map(async (candidate) => fs.realpath(path.resolve(candidate)).catch(() => path.resolve(candidate))),

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { bunExecutable } from "./pty/bun-executable";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -48,7 +49,7 @@ describe("resuming a past session", () => {
 
   function run(args: string[]): Promise<RunResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn("bun", ["run", ARCHYMEDES_ENTRY, "--currency", "USD", ...args], {
+      const child = spawn(bunExecutable(), ["run", ARCHYMEDES_ENTRY, "--currency", "USD", ...args], {
         cwd,
         env: {
           ...process.env,

@@ -20,6 +20,33 @@ describe("gateway catalog cache", () => {
     expect([...(await eligible()).keys()]).toEqual(["lab/a:free"]);
   });
 
+  it("serves a stale list immediately while one background refresh replaces it, backing off after failures", async () => {
+    let now = 0;
+    let release!: () => void;
+    const load = vi.fn(async () => catalog([row("lab/a:free")]));
+    const eligible = cachedEligibleModels({ load, ttlMs: 100, retryMs: 30, now: () => now });
+    await eligible();
+    now = 150;
+    load.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve(catalog([row("lab/b:free")])); }));
+    // Stale: answered from the cache without waiting, and concurrent callers share one refresh.
+    expect([...(await eligible()).keys()]).toEqual(["lab/a:free"]);
+    expect([...(await eligible()).keys()]).toEqual(["lab/a:free"]);
+    expect(load).toHaveBeenCalledTimes(2);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect([...(await eligible()).keys()]).toEqual(["lab/b:free"]);
+    // A failed refresh keeps the last list and is not retried on every request.
+    now = 300;
+    load.mockRejectedValueOnce(new Error("offline"));
+    await eligible();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await eligible();
+    expect(load).toHaveBeenCalledTimes(3);
+    now = 340; // past the retry delay
+    await eligible();
+    expect(load).toHaveBeenCalledTimes(4);
+  });
+
   it("fails when nothing verified has ever loaded", async () => {
     await expect(cachedEligibleModels({ load: async () => catalog([row("lab/paid:free", { pricing: { prompt: "1", completion: "0" } })]) })()).rejects.toThrow();
   });

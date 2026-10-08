@@ -1,5 +1,5 @@
 /** @jsxImportSource @termuijs/jsx */
-import { useInput, useState } from "@termuijs/jsx";
+import { useEffect, useInput, useRef, useState } from "@termuijs/jsx";
 import { Box, Text } from "@termuijs/widgets";
 import {
   applyEditorAction,
@@ -47,6 +47,13 @@ export type EditorScreenProps = {
   palette?: Palette;
   /** Asks the model to explain the file as it stands. Omitted, the AI tab says so instead of failing. */
   explain?: (content: string, path: string) => Promise<string>;
+  /**
+   * Writes the file without leaving the editor, about a second after typing stops
+   * (`ARCHYMEDES_EDITOR_AUTOSAVE=on`). Omitted, nothing is written until Ctrl+S.
+   */
+  autosave?: (content: string) => Promise<void>;
+  /** Idle time before an auto-save, in milliseconds. */
+  autosaveDelayMs?: number;
 };
 
 /** Two rows of chrome — status above, key bar below — leaving the rest for text. */
@@ -60,8 +67,23 @@ function panelWidthFor(columns: number): number {
   return Math.min(MAX_PANEL_COLUMNS, Math.floor(columns * 0.38), columns - MIN_CODE_COLUMNS);
 }
 
-export function EditorScreen({ columns, rows, path, content, onExit, palette = NO_COLOR_PALETTE, explain }: EditorScreenProps) {
+export function EditorScreen({ columns, rows, path, content, onExit, palette = NO_COLOR_PALETTE, explain, autosave, autosaveDelayMs = 1000 }: EditorScreenProps) {
   const [state, setState] = useState<EditorState>(() => initialEditorState(path, content, Math.max(1, rows - CHROME_ROWS)));
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Auto-save: restarted by every change, fired once typing has been idle for the delay. Keyed on
+  // the document text so cursor moves alone never schedule a write.
+  const text = editorContent(state);
+  useEffect(() => {
+    if (!autosave || !state.dirty || state.confirmLeave) return undefined;
+    const pending = text;
+    timer.current = setTimeout(() => {
+      void autosave(pending).then(
+        () => setState((current) => applyEditorAction(current, { kind: "autosaved", content: pending }).state),
+        () => setState((current) => ({ ...current, message: "auto-save failed — Ctrl+S to retry" })),
+      );
+    }, autosaveDelayMs);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [text, state.dirty, state.confirmLeave]);
   const [panel, setPanel] = useState<ExplainPanelState>(() => initialExplainPanelState());
   const panelWidth = panel.open ? panelWidthFor(columns) : 0;
   const codeWidth = panelWidth > 0 ? columns - panelWidth - 1 : columns;
@@ -146,6 +168,7 @@ export async function runEditorScreen(options: {
   content: string;
   palette?: Palette;
   explain?: (content: string, path: string) => Promise<string>;
+  autosave?: (content: string) => Promise<void>;
 }): Promise<string | undefined> {
   const { renderApp } = await import("@termuijs/jsx");
   return new Promise<string | undefined>((resolve) => {
@@ -163,6 +186,7 @@ export async function runEditorScreen(options: {
       content: options.content,
       palette: options.palette,
       explain: options.explain,
+      autosave: options.autosave,
       onExit: finish,
       fullscreen: true,
     } as never).catch(() => finish(undefined));

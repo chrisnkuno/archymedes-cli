@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   ARCHYMEDES_CREDENTIAL_ENV_NAMES,
   hasShellSyntax,
+  joinCmdLines,
   resetProcessContainmentProbe,
   runLocalCommand,
   sanitizeCommandEnvironment,
@@ -41,7 +42,7 @@ describe("local command executor", () => {
     expect(result).toMatchObject({ exitCode: 0, stdout: "firstsecond" });
   });
 
-  it("expands quoted variables, globs, assignments and multiline commands", async () => {
+  it.skipIf(process.platform === "win32")("expands quoted variables, globs, assignments and multiline commands", async () => {
     await fs.writeFile(path.join(root, "one.audit"), "");
     await fs.writeFile(path.join(root, "two.audit"), "");
     for (const [command, stdout] of [
@@ -57,10 +58,20 @@ describe("local command executor", () => {
     expect(tokenizeCommand(String.raw`printf '%s' "a\qb"`)).toEqual(["printf", "%s", String.raw`a\qb`]);
   });
 
+  it.runIf(process.platform === "win32")("expands %VAR% and runs every line of a multiline command through cmd.exe", async () => {
+    expect(await runLocalCommand("echo %CD%", { cwd: root, timeoutMs: 5_000 })).toMatchObject({ exitCode: 0 });
+    expect((await runLocalCommand("echo %CD%", { cwd: root, timeoutMs: 5_000 })).stdout.trim()).toBe(await fs.realpath(root));
+    expect(await runLocalCommand("set AUDIT_VALUE=ready&& node -e \"process.stdout.write(process.env.AUDIT_VALUE)\"", { cwd: root, timeoutMs: 5_000 }))
+      .toMatchObject({ exitCode: 0, stdout: "ready" });
+    expect(await runLocalCommand(`node -e "process.stdout.write('first')"\nnode -e "process.stdout.write('second')"`, { cwd: root, timeoutMs: 5_000 }))
+      .toMatchObject({ exitCode: 0, stdout: "firstsecond" });
+  });
+
   it("reports a process killed by a signal as failure", async () => {
     await fs.writeFile(path.join(root, "signal.cjs"), 'process.kill(process.pid, "SIGTERM");');
     const result = await runLocalCommand("node signal.cjs", { cwd: root, timeoutMs: 5_000, containProcessTree: false });
-    expect(result.exitCode).toBe(143);
+    // POSIX reports 128 + SIGTERM. Windows has no signals: the process is terminated with exit code 1.
+    expect(result.exitCode).toBe(process.platform === "win32" ? 1 : 143);
   });
 
   it("terminates a timed-out process with a classified exit code", async () => {
@@ -90,6 +101,21 @@ describe("local command executor", () => {
     const result = await runLocalCommand("touch should-not-exist", { cwd: root, timeoutMs: 5_000, signal: controller.signal });
     expect(result.exitCode).toBe(130);
     await expect(fs.access(path.join(root, "should-not-exist"))).rejects.toThrow();
+  });
+});
+
+describe("shell syntax by platform", () => {
+  it("treats %VAR% as shell syntax only where cmd.exe would expand it", () => {
+    expect(hasShellSyntax("echo %PATH%", "win32")).toBe(true);
+    expect(hasShellSyntax("echo %PATH%", "linux")).toBe(false);
+    expect(hasShellSyntax("printf 50%", "win32")).toBe(false);
+  });
+
+  it("joins a multiline command with & for cmd.exe, leaving quoted newlines and blank lines alone", () => {
+    expect(joinCmdLines("npm test\nnpm run lint")).toBe("npm test & npm run lint");
+    expect(joinCmdLines("a\r\n\r\nb\n")).toBe("a & b");
+    expect(joinCmdLines('node -e "a\nb"\nnext')).toBe('node -e "a\nb" & next');
+    expect(joinCmdLines("single")).toBe("single");
   });
 });
 

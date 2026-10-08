@@ -195,7 +195,7 @@ describe("the frame", () => {
   });
 
   it("offers the keys, and shows the filter while it is being typed", () => {
-    expect(composeGuideFrame(state()).at(-1)!.text).toContain("q leave");
+    expect(composeGuideFrame(state()).at(-1)!.text).toContain("Esc back");
     expect(composeGuideFrame(state({ searching: true, query: "tab" })).at(-1)!.text).toContain("search: tab");
   });
 

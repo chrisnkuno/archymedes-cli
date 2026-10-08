@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "../agent-runtime";
 import { priceUsage, toUnits } from "../money";
-import { availableProviders, catalogPrices, isProviderId, PROVIDERS, resolveProvider, resolvePrices } from "./agent-matrix";
+import { availableProviders, catalogPrices, isProviderId, keylessFreeModeAvailable, PROVIDERS, resolveProvider, resolvePrices } from "./agent-matrix";
 import { AnthropicAgentTurnProvider, toAnthropicMessages } from "./anthropic-agent";
 
 describe("provider matrix", () => {
@@ -17,6 +17,42 @@ describe("provider matrix", () => {
     expect(resolveProvider({ ANTHROPIC_API_KEY: "k" }, { provider: "openai" })).toEqual({ error: "OpenAI needs OPENAI_API_KEY." });
     expect(resolveProvider({}, { provider: "wat" })).toMatchObject({ error: expect.stringContaining("Unknown provider") });
     expect(resolveProvider({})).toMatchObject({ error: expect.stringContaining("No model provider is configured") });
+  });
+
+  describe("keyless default", () => {
+    const gateway = { ARCHYMEDES_FREE_GATEWAY_URL: "https://free-gateway.test" };
+
+    it("falls back to free mode through a gateway when nothing else is configured", () => {
+      const resolved = resolveProvider(gateway);
+      expect("error" in resolved ? resolved.error : resolved.spec.id).toBe("free");
+      expect(keylessFreeModeAvailable(gateway)).toBe(true);
+    });
+
+    it("never prefers the keyless fallback over a provider the user configured a key for", () => {
+      const resolved = resolveProvider({ ...gateway, ANTHROPIC_API_KEY: "k" });
+      expect("error" in resolved ? resolved.error : resolved.spec.id).toBe("anthropic");
+      // An OpenRouter key is a paid-provider key first; free mode on it stays opt-in (--free).
+      const openrouter = resolveProvider({ OPENROUTER_API_KEY: "k" });
+      expect("error" in openrouter ? openrouter.error : openrouter.spec.id).toBe("openrouter");
+    });
+
+    it("still honours an explicit provider over the keyless fallback", () => {
+      expect(resolveProvider(gateway, { provider: "openai" })).toEqual({ error: "OpenAI needs OPENAI_API_KEY." });
+    });
+
+    it("has nothing to fall back to without a gateway URL, and says how to provide one", () => {
+      // FREE_GATEWAY_URL ships empty until the hosted gateway is deployed.
+      expect(keylessFreeModeAvailable({})).toBe(false);
+      expect(keylessFreeModeAvailable({ ARCHYMEDES_FREE_GATEWAY_URL: "not a url" })).toBe(false);
+      const resolved = resolveProvider({});
+      expect(resolved).toMatchObject({ error: expect.stringContaining("ARCHYMEDES_FREE_GATEWAY_URL") });
+      expect("error" in resolved && resolved.error).not.toMatch(/, ,|OPENROUTER_API_KEY, OPENROUTER_API_KEY/);
+    });
+
+    it("does not auto-pick Ollama, which needs no key but was never asked for", () => {
+      const resolved = resolveProvider(gateway);
+      expect("error" in resolved ? resolved.error : resolved.spec.id).not.toBe("ollama");
+    });
   });
 
   describe("the provider a previous session remembered", () => {

@@ -108,7 +108,12 @@ export type PaletteOptions = {
   direction?: "up" | "down";
   /** Characters this terminal can draw; the query caret and the cursor come from here. */
   glyphs?: GlyphSet;
+  /** A key legend under everything — what the keys do, for someone who has never opened it. */
+  footer?: string;
 };
+
+/** The legend Ctrl+G's menu shows: every way in and out, in one line. */
+export const PALETTE_FOOTER = "↑↓ choose · Enter run · type to search · Esc back";
 
 export function renderPalette(frame: PaletteFrame, options: PaletteOptions = {}): string {
   const rows = options.rows ?? 8;
@@ -135,9 +140,10 @@ export function renderPalette(frame: PaletteFrame, options: PaletteOptions = {})
     const room = Math.max(0, columns - visibleWidth(`  ${active ? glyphs.prompt : " "} ${padded}  `));
     return `  ${active ? glyphs.prompt : " "} ${padded}  ${clipTo(tail, room)}`;
   });
+  const footer = options.footer ? [clipTo(`  ${options.footer}`, columns)] : [];
   return options.direction === "up"
-    ? [...rendered.reverse(), queryLine].join("\n")
-    : [queryLine, ...rendered].join("\n");
+    ? [...rendered.reverse(), queryLine, ...footer].join("\n")
+    : [queryLine, ...rendered, ...footer].join("\n");
 }
 
 export type PaletteKey = { str?: string; key: KeypressEvent };

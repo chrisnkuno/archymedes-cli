@@ -1,6 +1,7 @@
 import { AcpConnection, type AcpSession, type JsonRpcOutgoing } from "@archymedes/core/cli/acp";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { LocalWorkspace } from "@archymedes/core/cli/backends";
+import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics";
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { loadSession } from "@archymedes/core/cli/session";
 import { resolveSessionProvider } from "./app/session-provider";
@@ -67,17 +68,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
       let agent = build(mode);
 
       function build(currentMode: ArchymedesMode): ArchymedesAgent {
+        const workspace = new LocalWorkspace(root);
         return new ArchymedesAgent({
           root,
           model: (resolved as Exclude<typeof resolved, { error: string }>).provider,
           prices: priceCatalogFor((resolved as Exclude<typeof resolved, { error: string }>).prices),
           mode: currentMode,
-          workspace: new LocalWorkspace(root),
+          workspace,
           search: createExaClient(options.environment),
           onEvent,
           jev: jevOptionsFromEnvironment(options.environment),
+          // Language-server diagnostics appended to each edit result, as in the terminal session.
+          afterEdit: acpEditDiagnostics(root, workspace, options.environment),
           approve: async (request) =>
-            approve({ toolName: request.tool.name, summary: request.summary, toolCallId: request.call.id }),
+            approve({ toolName: request.tool.name, summary: request.summary, toolCallId: request.call.id, ...(request.pattern ? { pattern: request.pattern } : {}) }),
         });
       }
 
@@ -128,6 +132,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
   } finally {
     await connection.dispose();
   }
+}
+
+/**
+ * The `afterEdit` hook for an ACP session: local workspaces only (a server on this machine cannot
+ * see a sandbox's files), and `ARCHYMEDES_EDIT_DIAGNOSTICS=off` disables — the same rule
+ * `archymedes.ts` applies to the terminal session.
+ */
+export function acpEditDiagnostics(
+  root: string,
+  workspace: unknown,
+  environment: Record<string, string | undefined>,
+): ((path: string) => Promise<string | undefined>) | undefined {
+  if (!(workspace instanceof LocalWorkspace)) return undefined;
+  if (environment.ARCHYMEDES_EDIT_DIAGNOSTICS?.trim().toLowerCase() === "off") return undefined;
+  return createLspEditDiagnostics(root);
 }
 
 /**

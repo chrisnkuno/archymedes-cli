@@ -1,0 +1,41 @@
+# Render Blueprint for the free gateway. In the Render dashboard: New > Blueprint, pick this
+# repository and set the Blueprint path to packages/free-gateway/render.yaml.
+# See packages/free-gateway/README.md, "Deploy in 10 minutes".
+services:
+  - type: web
+    name: archymedes-free-gateway
+    runtime: docker
+    # Starter (always on). The free plan sleeps when idle, which resets in-memory counters.
+    plan: starter
+    numInstances: 1          # in-memory counters need exactly one instance (or set UPSTASH_* below)
+    dockerContext: .         # the repository root: the image needs packages/core
+    dockerfilePath: ./packages/free-gateway/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false          # prompted for on first deploy; never committed
+      - key: GATEWAY_TOKEN_SECRET
+        generateValue: true  # random 256-bit value; enables install tokens
+      - key: FREE_GATEWAY_SALT
+        generateValue: true  # keeps per-address counts stable across restarts
+      # Render's proxy appends the address it saw to X-Forwarded-For; the gateway reads the
+      # rightmost entry (never the leftmost, which the client controls). Verify after deploy with
+      # FREE_GATEWAY_DEBUG_IP (see README) and adjust FREE_GATEWAY_PROXY_HOPS if needed.
+      - key: FREE_GATEWAY_TRUST_PROXY
+        value: "true"
+      - key: FREE_GATEWAY_PROXY_HOPS
+        value: "1"
+      # Limits (defaults shown). Tokens are the main daily budget.
+      - key: FREE_GATEWAY_IP_TOKENS_PER_DAY
+        value: "100000"
+      - key: FREE_GATEWAY_INSTALL_TOKENS_PER_DAY
+        value: "100000"
+      - key: FREE_GATEWAY_IP_PER_DAY
+        value: "300"
+      - key: FREE_GATEWAY_INSTALL_PER_DAY
+        value: "300"
+      - key: FREE_GATEWAY_IP_PER_MINUTE
+        value: "20"
+      - key: FREE_GATEWAY_INSTALL_PER_MINUTE
+        value: "20"

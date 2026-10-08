@@ -1,0 +1,9 @@
+# BuildKit reads this (named after the Dockerfile) instead of a root .dockerignore, so building
+# from the repository root sends only what the image needs, not node_modules or other packages.
+*
+!package.json
+!tsconfig.json
+!tsconfig.base.json
+!packages/core/src
+!packages/free-gateway
+packages/free-gateway/**/*.test.ts

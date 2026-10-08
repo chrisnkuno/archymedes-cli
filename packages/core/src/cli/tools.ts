@@ -17,6 +17,8 @@ import { collectExternalTools } from "./tool-providers";
 import { credentialRequest, deployOffer, deployPlan, detectWebApp, DEPLOY_PROVIDERS, type DeployTarget } from "./deploy";
 import { addMemory, type MemoryKind, type MemoryScope } from "./memory";
 import { compute, ComputeError } from "./compute";
+import { applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
+import { createExtraTools } from "./tools-extra";
 
 /**
  * Archymedes CLI's tool set.
@@ -128,7 +130,11 @@ export type ArchymedesToolOptions = {
 };
 
 export type DelegateResult = { report: string; status: string; iterations: number; toolCallsExecuted: number };
-export type DelegateRunner = (task: string) => Promise<DelegateResult>;
+/**
+ * `readOnly` runs the sub-agent in plan mode with only the parallel-safe, effect-free tools, so
+ * several can run at once (see `delegate_readonly_task`).
+ */
+export type DelegateRunner = (task: string, options?: { readOnly?: boolean }) => Promise<DelegateResult>;
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
@@ -193,7 +199,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
   const tools: AgentTool[] = [
     {
       name: "read_file",
-      description: "Read a UTF-8 text file from the project, including project-local environment/configuration files when relevant to the user's task. Reading is allowed; do not repeat secret values in the answer. Prefer reading a whole file; use offset/limit only for very large files.",
+      description: "Read a UTF-8 text file (config/env files included; never repeat secret values). Prefer whole files; offset/limit for very large ones.",
       inputSchema: {
         type: "object",
         properties: {
@@ -209,10 +215,16 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       requiresApproval: false,
       parallelSafe: true,
       async execute(args) {
-        const result = await workspace.readFile(requiredString(args.path, "path"), {
+        const filePath = requiredString(args.path, "path");
+        const result = await workspace.readFile(filePath, {
           offset: optionalInteger(args.offset, "offset"),
           limit: optionalInteger(args.limit, "limit"),
         });
+        // Remember what the file held, for edit_file's stale-write guard. A windowed read still
+        // fingerprints the whole file: the guard is about the file changing, not which lines were shown.
+        const tracker = fileReadTrackerFor(workspace);
+        if (!result.truncated) tracker.record(result.path, result.content);
+        else await workspace.readFile(filePath).then((whole) => tracker.record(whole.path, whole.content), () => undefined);
         const header = result.truncated ? `${result.path} (lines ${result.startLine}-${result.startLine + result.content.split("\n").length - 1} of ${result.totalLines})\n` : "";
         return {
           content: `${header}${result.content}`,
@@ -282,7 +294,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     },
     {
       name: "scan_secrets",
-      description: "Scan tracked files for likely hardcoded credentials (API keys, private keys, tokens, passwords) by pattern. Read-only; matched values are masked in the output, never shown in full.",
+      description: "Scan files for likely hardcoded credentials (keys, tokens, passwords). Values are masked in the output.",
       inputSchema: {
         type: "object",
         properties: { include: { type: "string", description: "Glob limiting which files are scanned, e.g. 'src/**'." } },
@@ -320,12 +332,15 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       parallelSafe: false,
       async execute(args) {
         const result = await workspace.writeFile(requiredString(args.path, "path"), args.content as string);
+        fileReadTrackerFor(workspace).record(result.path, args.content as string);
         return { content: `Wrote ${result.path} (${result.bytesWritten} bytes).`, data: { path: result.path, bytesWritten: result.bytesWritten } };
       },
     },
     {
       name: "edit_file",
-      description: "Replace an exact string in a file. oldText must appear exactly once unless replaceAll is true; include surrounding lines to make it unique.",
+      description:
+        "Replace an exact string. oldText must occur once (add context lines) unless replaceAll. "
+        + "Several changes to one file: pass edits (in order, all or nothing). Fails if the file changed since you read it.",
       inputSchema: {
         type: "object",
         properties: {
@@ -333,8 +348,9 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           oldText: { type: "string" },
           newText: { type: "string" },
           replaceAll: { type: "boolean" },
+          edits: { type: "string", description: "JSON array of {oldText, newText, replaceAll?}." },
         },
-        required: ["path", "oldText", "newText"],
+        required: ["path"],
         additionalProperties: false,
       },
       capabilityId: ARCHYMEDES_CAPABILITIES.write,
@@ -342,18 +358,25 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       requiresApproval: true,
       parallelSafe: false,
       async execute(args) {
-        const result = await workspace.editFile(requiredString(args.path, "path"), args.oldText as string, args.newText as string, {
-          replaceAll: args.replaceAll === true,
-        });
+        const filePath = requiredString(args.path, "path");
+        const edits = parseEditArguments(args);
+        // Read, apply in memory, write once: one code path for every backend, all-or-nothing for a
+        // multi-edit, and the content is in hand for the stale-write check.
+        const existing = await workspace.readFile(filePath);
+        const tracker = fileReadTrackerFor(workspace);
+        tracker.assertFresh(existing.path, existing.content);
+        const updated = applyTextEdits(existing.content, edits, existing.path);
+        await workspace.writeFile(filePath, updated.content);
+        tracker.record(existing.path, updated.content);
         return {
-          content: `Edited ${result.path} (${result.replacements} replacement${result.replacements === 1 ? "" : "s"}).`,
-          data: { path: result.path, replacements: result.replacements },
+          content: `Edited ${existing.path} (${updated.replacements} replacement${updated.replacements === 1 ? "" : "s"}).`,
+          data: { path: existing.path, replacements: updated.replacements },
         };
       },
     },
     {
       name: "run_command",
-      description: `Run a bounded command in the project root. Use for builds, tests, linters and git inspection. Use start_application, not this tool, for a dev server or other application the user needs to open. Requires approval. ${workspace.commandGuidance}`,
+      description: `Run a bounded command in the project root (builds, tests, linters). Dev servers go through start_application. ${workspace.commandGuidance}`,
       inputSchema: {
         type: "object",
         properties: { command: { type: "string" }, timeoutMs: { type: "integer" } },
@@ -410,15 +433,15 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     },
     {
       name: "start_application",
-      description: "Start a local development application and keep it running across turns. Archymedes waits for a real HTTP response before reporting success; startup logs alone are never treated as proof. Use application_status for logs and stop_application when it is no longer needed. Requires approval.",
+      description: "Start a dev application that keeps running across turns; succeeds only once it answers HTTP. Logs: application_status.",
       inputSchema: {
         type: "object",
         properties: {
-          command: { type: "string", description: "Persistent start command, for example 'bun run dev -- --port 4173'." },
-          port: { type: "integer", description: "TCP port the application will listen on." },
-          directory: { type: "string", description: "Project-relative application directory. Defaults to the workspace root." },
-          path: { type: "string", description: "HTTP path used for readiness. Defaults to '/'." },
-          timeoutMs: { type: "integer", description: "Readiness deadline, from 1000 to 60000ms. Defaults to 20000ms." },
+          command: { type: "string", description: "e.g. 'bun run dev -- --port 4173'." },
+          port: { type: "integer" },
+          directory: { type: "string", description: "Default: project root." },
+          path: { type: "string", description: "Readiness HTTP path. Default '/'." },
+          timeoutMs: { type: "integer", description: "1000-60000. Default 20000." },
         },
         required: ["command", "port"],
         additionalProperties: false,
@@ -445,10 +468,10 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     },
     {
       name: "application_status",
-      description: "Show managed applications, whether each process is still running, its verified URL, and recent stdout/stderr. Optionally inspect one application id.",
+      description: "Managed applications: running state, verified URL, recent output.",
       inputSchema: {
         type: "object",
-        properties: { id: { type: "string", description: "Application id such as app-1. Omit to list all applications." } },
+        properties: { id: { type: "string", description: "e.g. app-1. Omit for all." } },
         additionalProperties: false,
       },
       capabilityId: ARCHYMEDES_CAPABILITIES.read,
@@ -469,10 +492,10 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     },
     {
       name: "stop_application",
-      description: "Stop a managed application and its process tree. Requires approval.",
+      description: "Stop a managed application and its process tree.",
       inputSchema: {
         type: "object",
-        properties: { id: { type: "string", description: "Application id returned by start_application." } },
+        properties: { id: { type: "string" } },
         required: ["id"],
         additionalProperties: false,
       },
@@ -549,13 +572,13 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     {
       name: "todo_write",
       description:
-        "Record the plan as a checklist at the start of any multi-step task, then keep it current. Update several todos in ONE call — pass arrays to complete and start — rather than calling this repeatedly. Do not call it again when nothing has changed. Passing `items` replaces the whole list and assigns new ids — always use the ids from the most recent todo_write or todo_read result, never ones from earlier in the conversation.",
+        "Plan a multi-step task as a checklist and keep it current, batching updates into one call; skip it when nothing changed. `items` replaces the list with new ids — use ids from the latest todo_write/todo_read result only.",
       inputSchema: {
         type: "object",
         properties: {
-          items: { type: "array", items: { type: "string" }, description: "Replaces the whole list." },
-          complete: { type: "array", items: { type: "integer" }, description: "Todo ids that are now done." },
-          start: { type: "array", items: { type: "integer" }, description: "Todo ids now in progress." },
+          items: { type: "array", items: { type: "string" } },
+          complete: { type: "array", items: { type: "integer" }, description: "Ids now done." },
+          start: { type: "array", items: { type: "integer" }, description: "Ids now in progress." },
         },
         additionalProperties: false,
       },
@@ -607,13 +630,15 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     {
       name: "compute",
       description:
-        "Evaluate an arithmetic or statistical expression exactly, instead of working it out in your head. Use it for any number that ends up in an answer: a percentage change, a ratio, a total, a standard deviation, a unit conversion. Supports + - * / // % ^ !, parentheses, hex/binary/octal literals (0xFF, 0b1010), constants (pi, e, tau, phi), and functions: sqrt cbrt abs round(x, digits?) floor ceil log(x, base?) ln exp min max gcd lcm hypot clamp(x, lo, hi) mod(a, n); pct_change(from, to), pct(part, whole), ratio(a, b), delta(a, b); sum mean median mode stdev pstdev variance range percentile(list, p) p50 p90 p95 p99 (each takes a [list] or several numbers); convert(n, \"from\", \"to\") for data sizes (B KB MB GB KiB MiB GiB) and durations (ms s min h d). Returns the value, whether it is exact, and any caveat.",
+        "Evaluate math exactly — use it for any number in an answer. Usual operators and functions (log(x,base?), round(x,d?), gcd, clamp, ...), pi e; "
+        + "pct_change(from,to) pct(part,whole) ratio delta; "
+        + "sum mean median mode stdev pstdev variance range percentile(list,p) p50 p90 p95 p99 over [lists]; convert(n,\"from\",\"to\") for B..GiB and ms..d.",
       inputSchema: {
         type: "object",
         properties: {
-          expr: { type: "string", description: "The expression, e.g. pct_change(1240, 870) or stdev([12,15,11,14])/mean([12,15,11,14])*100 or convert(5, \"GiB\", \"MB\")." },
-          precision: { type: "integer", description: "Significant digits to render, 1-15. Default 12." },
-          radix: { type: "integer", enum: [2, 8, 16], description: "Also render an integer result in this base." },
+          expr: { type: "string", description: "e.g. pct_change(1240, 870) or stdev([12,15,11])/mean([12,15,11])*100" },
+          precision: { type: "integer", description: "Significant digits 1-15. Default 12." },
+          radix: { type: "integer", enum: [2, 8, 16], description: "Also show an integer result in this base." },
         },
         required: ["expr"],
         additionalProperties: false,
@@ -879,14 +904,14 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
   tools.push({
     name: "deploy_app",
     description:
-      "Check whether this project can be deployed, and deploy it to Vercel or Render once the user has agreed. Use action='check' freely — it only reads the manifest and reports what is possible, including whether an API token is configured. Use action='deploy' only after the user has explicitly asked for a deploy.",
+      "Deploy to Vercel or Render. action='check' is read-only (what is possible, whether a token is set); use 'deploy' only when the user explicitly asked.",
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["check", "deploy"], description: "'check' inspects and reports; 'deploy' publishes." },
-        target: { type: "string", enum: ["vercel", "render"], description: "Required for deploy; omit on check to see both." },
-        production: { type: "boolean", description: "Deploy to production rather than a preview URL. Defaults to false." },
-        directory: { type: "string", description: "Project directory, relative to the root. Defaults to the root." },
+        action: { type: "string", enum: ["check", "deploy"] },
+        target: { type: "string", enum: ["vercel", "render"], description: "Required for deploy." },
+        production: { type: "boolean", description: "Production instead of preview. Default false." },
+        directory: { type: "string", description: "Default: project root." },
       },
       required: ["action"],
       additionalProperties: false,
@@ -997,13 +1022,13 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
   tools.push({
     name: "remember",
     description:
-      "Save one durable fact so future sessions start knowing it — a convention this project follows, a decision and its reason, a preference the user stated, or a lesson learned the hard way. Use it when you learn something that will still be true next week. Do not use it for anything specific to the current task, for information already obvious from the code, or to store notes to yourself mid-task (use todo_write for that).",
+      "Save a durable fact for future sessions: a project convention, a decision and its reason, a user preference, a hard-won lesson. Not for current-task notes or what the code already shows.",
     inputSchema: {
       type: "object",
       properties: {
-        text: { type: "string", description: "One self-contained sentence. It will be read months from now with no other context." },
-        scope: { type: "string", enum: ["project", "user"], description: "'project' for facts about this repository; 'user' for facts about the person that travel with them." },
-        kind: { type: "string", enum: ["preference", "convention", "decision", "lesson", "fact"], description: "Preferences and conventions are recalled most eagerly. Defaults to fact." },
+        text: { type: "string", description: "One self-contained sentence." },
+        scope: { type: "string", enum: ["project", "user"], description: "'user' facts travel with the person." },
+        kind: { type: "string", enum: ["preference", "convention", "decision", "lesson", "fact"], description: "Default fact." },
       },
       required: ["text", "scope"],
       additionalProperties: false,
@@ -1036,10 +1061,10 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
     tools.push({
       name: "delegate_task",
       description:
-        "Hand off one self-contained sub-task to a bounded sub-agent with its own tool loop, and get back its final report. Good for an independent piece of work you can describe completely up front — a focused investigation, a well-scoped chunk of a larger job — not for the thread of work you were asked to do yourself. The sub-agent has the same tools and mode you do, minus this one: it cannot delegate further.",
+        "Hand an independent, fully describable sub-task to a bounded sub-agent (your tools and mode, no further delegation) and get its final report. Not for your own main thread of work.",
       inputSchema: {
         type: "object",
-        properties: { task: { type: "string", description: "A complete, self-contained brief — the sub-agent starts with no memory of this conversation." } },
+        properties: { task: { type: "string", description: "Self-contained brief; the sub-agent has no memory of this conversation." } },
         required: ["task"],
         additionalProperties: false,
       },
@@ -1056,7 +1081,35 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
         return { content: `${result.report}${note}` };
       },
     });
+    tools.push({
+      name: "delegate_readonly_task",
+      description:
+        "Like delegate_task but read/research only, so several emitted together run in parallel.",
+      inputSchema: {
+        type: "object",
+        properties: { task: { type: "string", description: "Self-contained brief." } },
+        required: ["task"],
+        additionalProperties: false,
+      },
+      capabilityId: ARCHYMEDES_CAPABILITIES.planning,
+      effect: "none",
+      requiresApproval: false,
+      // Parallel-safe because the runner gives this sub-agent plan mode and only the tools that
+      // are themselves effect-free and parallel-safe: no approval prompt can fire, nothing is
+      // written, and each run reserves its own share of the turn's budget before it starts.
+      parallelSafe: true,
+      async execute(args) {
+        const task = requiredString(args.task, "task");
+        const result = await delegate(task, { readOnly: true });
+        const note = result.status === "completed" ? "" : `\n\n[read-only sub-agent ended: ${result.status}, ${result.iterations} iteration(s), ${result.toolCallsExecuted} tool call(s)]`;
+        return { content: `${result.report}${note}` };
+      },
+    });
   }
+
+  // Repo map, symbol lookup, git and notebook tools read the host disk directly, so they are only
+  // offered for a local workspace; `LocalWorkspace.label` is its root.
+  if (workspace.kind === "local") tools.push(...createExtraTools({ root: workspace.label }));
 
   // External tools (skills, MCP, plugins) are merged in before the final wrap below, so schema
   // validation, path-instruction surfacing and hook interception all apply to them exactly as they

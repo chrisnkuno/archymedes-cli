@@ -86,10 +86,22 @@ export interface ArchymedesWorkspace {
  */
 const CONFIG_FILE_SCAN_LIMIT = 500;
 
+/**
+ * What run_command's shell actually is on this machine.
+ *
+ * On Windows a shell command goes through cmd.exe, which expands neither `$VAR` nor `*.ts` and has
+ * no `VAR=x cmd` assignment. A model left to assume POSIX writes commands that run and quietly do
+ * the wrong thing — `printf "$PWD"` prints the literal `$PWD` — so it is told which shell it has.
+ */
+export function localCommandGuidance(platform: NodeJS.Platform): string {
+  if (platform !== "win32") return "Runs in a real shell, so pipes and redirection work.";
+  return "Runs on Windows through cmd.exe: pipes, redirection and && work, but POSIX syntax does not — use %VAR% not $VAR, no globs (*.ts is passed literally), no VAR=x prefixes, and prefer cross-platform tools (node, npm, git) over Unix-only ones.";
+}
+
 /** The developer's own working tree. */
 export class LocalWorkspace implements ArchymedesWorkspace {
   readonly kind = "local" as const;
-  readonly commandGuidance = "Runs in a real shell, so pipes and redirection work.";
+  readonly commandGuidance = localCommandGuidance(process.platform);
   /** The host's own platform: this backend runs commands on this machine. */
   readonly commandPlatform: NodeJS.Platform = process.platform;
 
@@ -294,7 +306,7 @@ abstract class SandboxWorkspace implements ArchymedesWorkspace {
     if (occurrences > 1 && !options.replaceAll) {
       throw new WorkspaceViolation(`oldText appears ${occurrences} times in ${existing.path}; include more surrounding context or set replaceAll`);
     }
-    const updated = options.replaceAll ? existing.content.split(oldText).join(newText) : existing.content.replace(oldText, newText);
+    const updated = options.replaceAll ? existing.content.split(oldText).join(newText) : existing.content.replace(oldText, () => newText);
     await this.writeFile(path, updated);
     return { path: existing.path, replacements: options.replaceAll ? occurrences : 1 };
   }
@@ -363,7 +375,8 @@ abstract class SandboxWorkspace implements ArchymedesWorkspace {
 
   async runCommand(command: string, timeoutMs: number, signal?: AbortSignal): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     if (signal?.aborted) return { exitCode: 130, stdout: "", stderr: "Command cancelled before start." };
-    if (hasShellSyntax(command)) {
+    // The sandbox is Linux whatever the host is, so POSIX rules decide what counts as shell syntax.
+    if (hasShellSyntax(command, "linux")) {
       return {
         exitCode: 2,
         stdout: "",

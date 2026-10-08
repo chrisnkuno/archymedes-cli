@@ -3,6 +3,7 @@ import type { ColorDepth } from "../text/color-depth";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
 import { ANSI_PALETTE, type ColorRole, type Palette } from "../theme/theme";
+import { codeStyle, highlightSyntax, newSyntaxState, type SyntaxState } from "./syntax";
 
 /**
  * Markdown, rendered for a terminal.
@@ -131,11 +132,15 @@ export function wrapTokens(
   return lines;
 }
 
-/** Fence state carried between lines, since a code block spans many of them. */
-export type MarkdownState = { inFence: boolean; fenceLanguage: string };
+/**
+ * Fence state carried between lines, since a code block spans many of them: the language, the
+ * number the next code line gets in the gutter, and the highlighter's own state — an open block
+ * comment or docstring, so the second line of a doc comment is still coloured as one.
+ */
+export type MarkdownState = { inFence: boolean; fenceLanguage: string; fenceLine: number; fenceSyntax: SyntaxState };
 
 export function newMarkdownState(): MarkdownState {
-  return { inFence: false, fenceLanguage: "" };
+  return { inFence: false, fenceLanguage: "", fenceLine: 0, fenceSyntax: newSyntaxState() };
 }
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
@@ -200,19 +205,30 @@ export function renderMarkdownLine(
     if (state.inFence) {
       state.inFence = false;
       state.fenceLanguage = "";
+      state.fenceLine = 0;
+      state.fenceSyntax = newSyntaxState();
       return [paint(`  ${glyphs.boxBottomLeft}${glyphs.boxHorizontal.repeat(ruleWidth)}`, DIM, depth)];
     }
     state.inFence = true;
     state.fenceLanguage = fence[1].trim();
+    state.fenceLine = 0;
+    state.fenceSyntax = newSyntaxState();
     const label = state.fenceLanguage ? ` ${state.fenceLanguage} ` : "";
     const drawn = 1 + visibleWidth(label);
-    return [paint(`  ${glyphs.boxTopLeft}${glyphs.boxHorizontal}${label}${glyphs.boxHorizontal.repeat(Math.max(0, ruleWidth - drawn))}`, DIM, depth)];
+    // The language reads like an editor tab: in the theme's accent, the rule around it dim.
+    return [`${paint(`  ${glyphs.boxTopLeft}${glyphs.boxHorizontal}`, DIM, depth)}${label ? paint(label, `${BOLD}${colour("primary", palette)}`, depth) : ""}${paint(glyphs.boxHorizontal.repeat(Math.max(0, ruleWidth - drawn)), DIM, depth)}`];
   }
 
   if (state.inFence) {
     // Code is never re-wrapped: a broken line of code is a lie about the file it came from, so it
     // is left to the terminal and marked with a gutter that makes the block's extent obvious.
-    return [`${paint(`  ${glyphs.boxVertical} `, DIM, depth)}${paint(line, colour("success", palette), depth)}`];
+    state.fenceLine += 1;
+    const style = codeStyle();
+    const number = style.lineNumbers ? `${paint(String(state.fenceLine).padStart(3), DIM, depth)}  ` : "";
+    const code = style.colors === "vscode"
+      ? highlightSyntax(line, { language: state.fenceLanguage, depth, palette, state: state.fenceSyntax })
+      : paint(line, colour("success", palette), depth);
+    return [`${paint(`  ${glyphs.boxVertical} `, DIM, depth)}${number}${code}`];
   }
 
   const table = tableCells(line);

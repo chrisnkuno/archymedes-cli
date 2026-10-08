@@ -4,6 +4,7 @@ import { roleCode, type Palette } from "../theme/theme";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
 import { GUTTER, clip, panel, type SectionStyle } from "./sections";
+import { codeStyle, highlightSyntax, newSyntaxState, type SyntaxState } from "./syntax";
 
 /**
  * The code the agent actually wrote, shown where it happened.
@@ -139,7 +140,9 @@ const LITERALS = new Set(["true", "false", "null", "nil", "None", "True", "False
  * shape of a line scannable. Four categories does that, in one pass, for every language at once —
  * and being approximate is safe here because it colours a *quotation*, never a decision.
  */
-export function highlightCode(line: string, depth: ColorDepth, palette?: Palette): string {
+export function highlightCode(line: string, depth: ColorDepth, palette?: Palette, language?: string, state?: SyntaxState): string {
+  // VS Code colours unless the session asked for the theme's own roles (`ARCHYMEDES_CODE_COLORS=theme`).
+  if (codeStyle().colors === "vscode") return highlightSyntax(line, { depth, palette, ...(language ? { language } : {}), ...(state ? { state } : {}) });
   if (depth === "none") return line;
   const commentAt = findCommentStart(line);
   const code = commentAt === -1 ? line : line.slice(0, commentAt);
@@ -208,11 +211,15 @@ export function renderCode(content: string, style: SectionStyle, options: CodeVi
   const numberWidth = String(start + lines.length - 1).length;
   const bodyWidth = Math.max(8, style.width - GUTTER.length - numberWidth - 4);
 
-  const render = (from: number, to: number) => lines.slice(from, to).map((line, index) => {
-    const number = paint(String(start + from + index).padStart(numberWidth), DIM, style.depth);
-    const painted = options.highlight === false ? line : highlightCode(line, style.depth, style.palette);
-    return `${number} ${clip(painted, bodyWidth, glyphs)}`;
-  });
+  const render = (from: number, to: number) => {
+    // One highlighter state per pass, so a block comment opened on line 3 is still a comment on 4.
+    const syntax = newSyntaxState();
+    return lines.slice(from, to).map((line, index) => {
+      const number = paint(String(start + from + index).padStart(numberWidth), DIM, style.depth);
+      const painted = options.highlight === false ? line : highlightCode(line, style.depth, style.palette, options.language, syntax);
+      return `${number} ${clip(painted, bodyWidth, glyphs)}`;
+    });
+  };
 
   const hidden = Math.max(0, lines.length - maxLines);
   const shown = render(0, hidden > 0 ? maxLines : lines.length);
@@ -230,11 +237,19 @@ export function renderDiff(diff: readonly DiffLine[], style: SectionStyle, optio
   const condensed = condenseDiff(diff);
   const bodyWidth = Math.max(8, style.width - GUTTER.length - 4);
 
+  // VS Code's diff editor: added and removed rows sit on a green or red band, syntax colour kept
+  // inside them. The band is padded to the widest row so it reads as a row, not a highlight.
+  const vscode = codeStyle().colors === "vscode" && style.depth !== "none";
+  const bandWidth = Math.min(bodyWidth, Math.max(0, ...diff.map((line) => [...line.text].length)));
   const row = (line: DiffLine | { kind: "gap"; text: string }): string => {
     if (line.kind === "gap") return paint(`${glyphs.middot.repeat(3)} ${line.text}`, DIM, style.depth);
     const mark = line.kind === "add" ? glyphs.plus : line.kind === "remove" ? glyphs.minus : " ";
     const code = line.kind === "add" ? roleCode("success", style.palette, style.depth) : line.kind === "remove" ? roleCode("error", style.palette, style.depth) : DIM;
-    const body = line.kind === "context" ? paint(line.text, DIM, style.depth) : highlightCode(line.text, style.depth, style.palette);
+    const body = line.kind === "context"
+      ? (vscode ? highlightCode(line.text, style.depth, style.palette, options.language) : paint(line.text, DIM, style.depth))
+      : vscode
+        ? highlightSyntax(line.text, { depth: style.depth, palette: style.palette, band: line.kind, padTo: bandWidth, ...(options.language ? { language: options.language } : {}) })
+        : highlightCode(line.text, style.depth, style.palette);
     return `${paint(mark, code, style.depth)} ${clip(body, bodyWidth, glyphs)}`;
   };
 
@@ -258,7 +273,7 @@ export function renderFileChange(
 ): RenderedBlock {
   const language = languageOf(change.path);
   const block = change.kind === "edit"
-    ? renderDiff(diffLines(change.before ?? "", change.after ?? ""), style, { maxLines: options.maxLines })
+    ? renderDiff(diffLines(change.before ?? "", change.after ?? ""), style, { maxLines: options.maxLines, language })
     : renderCode(change.content ?? "", style, { maxLines: options.maxLines, language });
 
   const badge = change.kind === "edit"

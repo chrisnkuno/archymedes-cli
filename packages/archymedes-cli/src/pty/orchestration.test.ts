@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
+import { CONPTY, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -40,8 +40,8 @@ describe("read-only inspection commands do not disturb the session", () => {
     proc?.kill();
     proc = undefined;
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {
@@ -62,7 +62,7 @@ describe("read-only inspection commands do not disturb the session", () => {
     return proc;
   }
 
-  it("/task and /todos call no model, change no file, and leave the session able to take the next turn", async () => {
+  it.skipIf(CONPTY)("/task and /todos call no model, change no file, and leave the session able to take the next turn", async () => {
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 

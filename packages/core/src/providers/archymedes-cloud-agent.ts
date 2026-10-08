@@ -1,3 +1,8 @@
+/**
+ * The hosted execution exchange as a turn provider: every model call carries a hard spend cap and
+ * an idempotency key, and the exchange (not this client) owns routing, credentials and settlement.
+ * Completions are buffered, not streamed, until the exchange has a settlement-safe stream.
+ */
 import { createHash, randomUUID } from "node:crypto";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { toWireMessages, turnFromChatResponse, type ChatResponse } from "./openai-compatible";
@@ -5,6 +10,7 @@ import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { buildTaskProfile, TASK_KINDS, type TaskKind } from "./routing-receipt";
 import { parseRoutingPlan, type RoutingPlan } from "./routing-plan";
 import { parseCreditBalance, type CreditBalance } from "./credit-balance";
+import { DEFAULT_TOTAL_TIMEOUT_MS } from "./stream-deadline";
 
 export type ArchymedesCloudDataPolicy = "standard" | "no-training" | "zero-retention" | "local-only";
 
@@ -19,6 +25,11 @@ export type ArchymedesCloudAgentOptions = {
   qualityFloor?: number;
   /** The unit of work the exchange is routing — steers model selection. Defaults to "coding". */
   taskKind?: string;
+  /**
+   * Plan and balance reads use it as their whole deadline. A completion is buffered (see the class
+   * comment), so it is the wall-clock limit for the whole turn and defaults to the same overall cap
+   * the streaming providers use.
+   */
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 };
@@ -188,8 +199,13 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
     const taskId = request.requestId ?? `cli_${randomUUID()}`;
     if (!/^[A-Za-z0-9_-]{1,160}$/.test(taskId)) throw new Error("requestId must contain 1 to 160 letters, numbers, underscores or hyphens");
     request.signal?.throwIfAborted();
+    // The exchange answers with one buffered completion (`stream: false` below): it has no
+    // settlement-safe streaming protocol yet, so there are no chunks to measure idleness by and the
+    // only deadline available is wall-clock. A 180s limit killed long generations the exchange was
+    // still billing for, so the limit is the same generous overall cap the streaming providers use.
+    // Switch this to the stream deadline once the exchange streams.
     const signal = AbortSignal.any([
-      AbortSignal.timeout(this.options.timeoutMs ?? 180_000),
+      AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS),
       ...(request.signal ? [request.signal] : []),
     ]);
     const response = await this.fetchImpl(recoveryOnly ? `${this.completionUrl}/recover` : this.completionUrl, {

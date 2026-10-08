@@ -8,6 +8,7 @@ import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
 import { FreeAgentTurnProvider } from "./free-agent";
 import { OpenRouterAgentTurnProvider } from "./openrouter-agent";
 import { freeAccess, isFreeModelId } from "./free-catalog";
+import { tokenSaverEnabled } from "../cli/token-saver";
 
 /**
  * Which model providers Archymedes can drive, and what their tokens cost.
@@ -84,7 +85,8 @@ function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "
 export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   free: {
     ...PROVIDER_INFO.free,
-    create: (environment, model) => new FreeAgentTurnProvider({ ...freeAccess(environment), model }),
+    // Token saver is on for free mode unless ARCHYMEDES_TOKEN_SAVER=off (see cli/token-saver.ts).
+    create: (environment, model) => new FreeAgentTurnProvider({ ...freeAccess(environment), model, tokenSaver: tokenSaverEnabled(environment) }),
   },
   anthropic: {
     ...PROVIDER_INFO.anthropic,
@@ -169,6 +171,25 @@ function implicitlyAvailableProviders(environment: ProviderEnvironment): Provide
   return availableProviders(environment).filter((spec) => spec.requires.length > 0 && spec.id !== "free");
 }
 
+/**
+ * The keyless default: free mode through a hosted gateway, when nothing else is configured.
+ *
+ * Only a *gateway* qualifies here. Free mode on the user's own `OPENROUTER_API_KEY` is not a
+ * keyless default — that key also configures the paid `openrouter` provider, which the ordinary
+ * rule above already picks. And with no gateway URL in this build or the environment there is
+ * nothing to fall back to, so the caller gets the plain "not configured" error rather than a
+ * session that fails on its first request.
+ */
+function keylessFallback(environment: ProviderEnvironment): ProviderSpec | undefined {
+  const access = freeAccess(environment);
+  return access && "gatewayUrl" in access ? PROVIDERS.free : undefined;
+}
+
+/** Whether a session with nothing configured would start in keyless free mode. */
+export function keylessFreeModeAvailable(environment: ProviderEnvironment): boolean {
+  return keylessFallback(environment) !== undefined;
+}
+
 export type ResolvedProvider = {
   spec: ProviderSpec;
   model: string;
@@ -198,9 +219,9 @@ function rememberedProvider(environment: ProviderEnvironment): ProviderSpec | un
  * Picks the provider and model for a session.
  *
  * An explicit choice is honoured even when its credentials are missing, so the error names the
- * thing the user asked for. Without a choice, the provider a previous session persisted wins, and
- * failing that the first configured provider — in catalog order, which is deliberate rather than
- * alphabetical.
+ * thing the user asked for. Without a choice, the provider a previous session persisted wins, then
+ * the first configured provider — in catalog order, which is deliberate rather than alphabetical —
+ * and with nothing configured at all, keyless free mode through the hosted gateway.
  */
 export function resolveProvider(
   environment: ProviderEnvironment,
@@ -211,9 +232,9 @@ export function resolveProvider(
   }
   const spec = options.provider
     ? PROVIDERS[options.provider as ProviderId]
-    : rememberedProvider(environment) ?? implicitlyAvailableProviders(environment)[0];
+    : rememberedProvider(environment) ?? implicitlyAvailableProviders(environment)[0] ?? keylessFallback(environment);
   if (!spec) {
-    return { error: `No model provider is configured. Set one of: ${PROVIDER_IDS.map((id) => PROVIDERS[id].requires.join("+")).join(", ")}.` };
+    return { error: `No model provider is configured, and keyless free mode is not available in this build (set ARCHYMEDES_FREE_GATEWAY_URL to a free gateway). Or set one of: ${PROVIDER_IDS.filter((id) => id !== "free" && PROVIDERS[id].requires.length > 0).map((id) => PROVIDERS[id].requires.join("+")).join(", ")}.` };
   }
   const missing = missingRequirements(spec.id, environment);
   if (missing.length > 0) return { error: `${spec.label} needs ${missing.join(" and ")}.` };

@@ -91,7 +91,7 @@ describe("the guide screen", () => {
 
   it("offers its keys, since a full-screen reader with no legend is a guessing game", () => {
     const guide = open();
-    expect(guide.frame()).toContain("q leave");
+    expect(guide.frame()).toContain("Esc back");
     guide.view.unmount();
   });
 });

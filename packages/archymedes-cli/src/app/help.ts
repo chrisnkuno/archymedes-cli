@@ -2,6 +2,7 @@ import path from "node:path";
 import { configureRendering, glyphs, style } from "./transcript";
 import { isEssential } from "../ui/navigation";
 import { PROVIDER_IDS } from "@archymedes/core/providers/agent-matrix";
+import { FREE_GATEWAY_URL } from "@archymedes/core/providers/free-catalog";
 import { renderCommandHelp } from "../catalog/commands";
 import { t, type ControlLanguage } from "../platform/i18n";
 
@@ -60,12 +61,13 @@ ${style.bold(t(language, "help.files"))}
   archymedes --sandbox-minutes N  Sandbox lifetime (default 30)
 
 ${style.bold(t(language, "help.model"))}
-  archymedes --free               Free tool models: hosted gateway, or your OPENROUTER_API_KEY
+  archymedes --free               Free tool models: ${FREE_GATEWAY_URL ? "the hosted free gateway (no key)" : "a free gateway set in ARCHYMEDES_FREE_GATEWAY_URL (no key)"}, or your OPENROUTER_API_KEY
   archymedes --provider openrouter --model openrouter/auto   Any OpenRouter model on your own key (paid and free)
   archymedes --provider <name>    ${PROVIDER_IDS.join(" | ")}
   archymedes --model <id>         Model to run (defaults to the provider's)
   /model                    Pick a model from a list, with prices, keeping the transcript
   /model <name>             Switch straight to one, e.g. /model opus
+  /upgrade                  Use your own OpenRouter API key instead of the shared free gateway
   archymedes --providers          Show which providers are configured, and what is missing
   archymedes doctor              Test service health, credentials and every endpoint Archymedes needs
   archymedes doctor --report     Print a redacted JSON support report with request ids
@@ -87,10 +89,12 @@ ${style.bold(t(language, "help.memory"))}
   /memory                   Everything remembered, project and personal, with numbers
   /memory add --user <fact> Remember something about you rather than about this project
   /memory forget N          Drop one entry
-  /history                  Past conversations in this project
+  /history                  Pick an earlier conversation and continue it
+  /resume [<id>|latest]     The same, or straight to one
+  /history list             Print past conversations in this project
   /history search <text>    Find one by what you asked for
   /history <id>             Read a past conversation back
-  /history resume           Pick one up where it stopped
+  /history delete <id>      Delete a past conversation (--all: every one but this)
   /history status           Show whether native indexed history or JSON fallback is active
 
 ${style.bold(t(language, "help.transcript"))}

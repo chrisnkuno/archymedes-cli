@@ -328,7 +328,7 @@ export function renderChooser<T>(state: ChooserState, items: readonly ChooserIte
   // nothing a position would add over just seeing every row.
   const position = visible.length > height && chrome.pagination ? `  ${paginator(state.selected, visible.length)}` : "";
   if (chrome.help) {
-    lines.push(paint.dim(clip(`  ${options.legend ?? `${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} ${options.filter ? `type to filter ${glyphs.middot} ` : ""}${options.filter ? "Esc clear/cancel" : "Esc cancel"}`}${position}`, width)));
+    lines.push(paint.dim(clip(`  ${options.legend ?? `${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} ${options.filter ? `type to filter ${glyphs.middot} ` : ""}${options.filter ? "Esc clear/back" : "Esc back"}`}${position}`, width)));
   } else if (position) {
     // A list with its help hidden still has somewhere to be in, and that is the one thing the rows
     // themselves cannot say once they no longer all fit.
@@ -347,6 +347,11 @@ export type RunChooserOptions = RenderChooserOptions & {
   /** Re-read before every frame so a live terminal resize cannot leave stale geometry behind. */
   getSize?: () => { width?: number; height?: number };
   motion?: boolean;
+  /**
+   * Makes rows deletable: Del or Ctrl+D asks "Delete '<label>'? y/n" in the status row, and a y
+   * calls this. A refusal's reason is shown instead, and the row stays.
+   */
+  onDelete?: (item: ChooserItem<unknown>) => Promise<{ deleted: true } | { deleted: false; reason: string }>;
 };
 
 /** Drives a chooser over a stream of keypresses, returning the chosen value. */
@@ -362,7 +367,10 @@ export async function runChooser<T>(
     const height = Math.max(1, Math.min(options.height ?? 10, size?.height ?? Number.POSITIVE_INFINITY));
     return { ...options, width: size?.width ?? options.width, height };
   };
-  paint(renderChooser(state, items, liveOptions()));
+  // Mutable: a row deleted from inside the list (onDelete) leaves it for good.
+  let list: readonly ChooserItem<T>[] = items;
+  let pendingDelete: ChooserItem<T> | undefined;
+  paint(renderChooser(state, list, liveOptions()));
 
   // The cursor's glide: a terminal grid has no cell "between" two rows to sweep a marker through,
   // so a single-step move gets one transitional frame — the outgoing row's marker left dim rather
@@ -374,11 +382,40 @@ export async function runChooser<T>(
   const settleGlide = () => { glide?.stop(); glide = undefined; };
 
   try { for await (const input of keys) {
+    // A delete awaiting its y/n: this key answers it, and nothing else happens.
+    if (pendingDelete && options.onDelete) {
+      const target = pendingDelete;
+      pendingDelete = undefined;
+      if (input.str === "y" || input.str === "Y") {
+        const outcome = await options.onDelete(target);
+        if (outcome.deleted) {
+          list = list.filter((item) => item !== target);
+          const remaining = filterItems(list, state.query).length;
+          state = { ...state, selected: Math.max(0, Math.min(state.selected, remaining - 1)), status: `deleted "${target.label}"` };
+        } else {
+          state = { ...state, status: outcome.reason };
+        }
+      } else {
+        state = { ...state, status: "kept" };
+      }
+      paint(renderChooser(state, list, liveOptions()));
+      continue;
+    }
+    // Del (or Ctrl+D) asks before it deletes, inline, in the status row.
+    if (options.onDelete && (input.key.name === "delete" || (input.key.ctrl && input.key.name === "d"))) {
+      const target = filterItems(list, state.query)[state.selected];
+      if (target && !target.pinned) {
+        pendingDelete = target;
+        state = { ...state, status: `Delete "${target.label}"? y/n` };
+        paint(renderChooser(state, list, liveOptions()));
+      }
+      continue;
+    }
     // `height` is passed so a digit means the row the renderer numbered; without it the two
     // disagree the moment the list is longer than the screen.
     const current = liveOptions();
     const previousSelected = state.selected;
-    const step = advanceChooser(state, items, input, {
+    const step = advanceChooser(state, list, input, {
       filter: options.filter ?? false,
       page: options.page ?? current.height ?? 8,
       ...(current.height === undefined ? {} : { height: current.height }),
@@ -387,24 +424,24 @@ export async function runChooser<T>(
     if (step.done) {
       settleGlide(); // a chooser that returns must not leave a timer ticking after it
       if (step.done.index === undefined) return undefined;
-      return filterItems(items, state.query)[step.done.index]?.value;
+      return filterItems(list, state.query)[step.done.index]?.value;
     }
     settleGlide();
     const isSingleStep = (input.key.name === "up" || input.key.name === "down") && Math.abs(state.selected - previousSelected) === 1;
     const motion = options.motion ?? (process.env.ARCHYMEDES_NO_MOTION !== "1" && process.env.NO_COLOR === undefined && process.env.TERM !== "dumb");
     if (!motion || !isSingleStep || previousSelected === state.selected) {
-      paint(renderChooser(state, items, liveOptions()));
+      paint(renderChooser(state, list, liveOptions()));
       continue;
     }
-    paint(renderChooser(state, items, { ...liveOptions(), transitionFrom: previousSelected, focusProgress: 0 }));
+    paint(renderChooser(state, list, { ...liveOptions(), transitionFrom: previousSelected, focusProgress: 0 }));
     const animator: SpringAnimator = new SpringAnimator(0, (value) => {
       if (value < 0.95) {
-        paint(renderChooser(state, items, { ...liveOptions(), transitionFrom: value < 0.5 ? previousSelected : undefined, focusProgress: value }));
+        paint(renderChooser(state, list, { ...liveOptions(), transitionFrom: value < 0.5 ? previousSelected : undefined, focusProgress: value }));
         return;
       }
       animator.stop();
       glide = undefined;
-      paint(renderChooser(state, items, liveOptions()));
+      paint(renderChooser(state, list, liveOptions()));
     }, { intervalMs: 30 });
     glide = animator;
     animator.retarget(1);

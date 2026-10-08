@@ -40,8 +40,8 @@ describe("recovery from an unclean failure", () => {
     for (const proc of procs) proc.kill();
     procs = [];
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {

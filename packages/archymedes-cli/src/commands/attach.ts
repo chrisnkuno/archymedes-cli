@@ -5,7 +5,7 @@ type Paint = (text: string) => string;
 export type AttachContext = {
   getJob(id: string): Promise<Job | undefined | null>;
   readLog(id: string, offset: number): Promise<{ text: string; nextByte: number }>;
-  resolveApproval(id: string, decision: "allow" | "deny", actionDigest: string): Promise<boolean>;
+  resolveApproval(id: string, decision: "allow" | "allow_pattern" | "deny", actionDigest: string): Promise<boolean>;
   isTerminal(status: Job["status"]): boolean;
   describe(job: Job): string;
   ask(question: string): Promise<string>;
@@ -39,9 +39,11 @@ export async function runAttach(id: string, context: AttachContext): Promise<voi
       if (current.pendingApproval) {
         // The digest read here is the one shown; re-reading after the question would race a worker
         // that parked a different call meanwhile and silently redirect the answer onto it.
-        const { summary, actionDigest } = current.pendingApproval;
-        const answer = (await context.ask(`  ${paint.yellow("approval needed:")} ${summary} [y/N]: `)).trim().toLowerCase();
-        const applied = await context.resolveApproval(id, answer === "y" || answer === "yes" ? "allow" : "deny", actionDigest);
+        const { summary, actionDigest, pattern } = current.pendingApproval;
+        const choices = pattern ? `[y/N/p = ${pattern.label}]` : "[y/N]";
+        const answer = (await context.ask(`  ${paint.yellow("approval needed:")} ${summary} ${choices}: `)).trim().toLowerCase();
+        const decision = answer === "y" || answer === "yes" ? "allow" : pattern && answer === "p" ? "allow_pattern" : "deny";
+        const applied = await context.resolveApproval(id, decision, actionDigest);
         if (!applied) write(paint.yellow("  That request changed before your answer arrived — nothing was authorized.\n"));
         continue;
       }

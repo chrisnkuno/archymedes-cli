@@ -1,3 +1,6 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { archymedesConfigDirectory } from "@archymedes/core/cli/memory";
 import { isCurrency, type Currency, type FxRate } from "@archymedes/core/money";
 import { FX_ENDPOINTS, hostOf } from "./endpoints";
 import { classifyNetworkError, type NetworkDiagnosis } from "./network";
@@ -140,4 +143,93 @@ export async function fetchDailyFxRate(
     }
   }
   return null;
+}
+
+/** A daily rate is refetched after this long; until then the cached one is used without a request. */
+export const FX_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+type FxCacheFile = { rates: Array<FxRate & { fetchedAt: number }> };
+
+export function fxCachePath(environment: Record<string, string | undefined>): string {
+  return path.join(archymedesConfigDirectory(environment), "fx-cache.json");
+}
+
+async function readFxCache(environment: Record<string, string | undefined>): Promise<FxCacheFile> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(fxCachePath(environment), "utf8")) as Partial<FxCacheFile>;
+    const rates = Array.isArray(parsed.rates) ? parsed.rates : [];
+    return {
+      rates: rates.filter((entry) => entry && isCurrency(entry.from) && isCurrency(entry.to)
+        && typeof entry.rate === "number" && Number.isFinite(entry.rate) && entry.rate > 0
+        && typeof entry.asOf === "string" && typeof entry.source === "string" && typeof entry.fetchedAt === "number"),
+    };
+  } catch {
+    return { rates: [] };
+  }
+}
+
+/** The last fetched `from`→`to` rate and when it was fetched, or null. Never throws. */
+export async function readCachedFxRate(
+  from: Currency,
+  to: Currency,
+  environment: Record<string, string | undefined>,
+): Promise<{ rate: FxRate; fetchedAt: number } | null> {
+  const entry = (await readFxCache(environment)).rates.find((candidate) => candidate.from === from && candidate.to === to);
+  if (!entry) return null;
+  const { fetchedAt, ...rate } = entry;
+  return { rate, fetchedAt };
+}
+
+/** Best effort: a cache that cannot be written only means the next start fetches again. */
+export async function writeCachedFxRate(rate: FxRate, environment: Record<string, string | undefined>, now = Date.now()): Promise<void> {
+  try {
+    const cache = await readFxCache(environment);
+    const rates = cache.rates.filter((entry) => !(entry.from === rate.from && entry.to === rate.to));
+    rates.push({ ...rate, fetchedAt: now });
+    await fs.mkdir(path.dirname(fxCachePath(environment)), { recursive: true });
+    await fs.writeFile(fxCachePath(environment), `${JSON.stringify({ rates }, null, 2)}\n`, "utf8");
+  } catch {
+    // Ignore: caching is an optimisation.
+  }
+}
+
+export type FxStartupLookup = {
+  /** A rate usable right now: a fresh cached one, or a stale one while `refresh` runs. */
+  immediate: FxRate | null;
+  /** The network lookup still running, or null when the cache was fresh. Never rejects. */
+  refresh: Promise<FxRate | null> | null;
+};
+
+/**
+ * The startup rate lookup, without making startup wait on the network.
+ *
+ * A fresh cached rate (under `FX_CACHE_MAX_AGE_MS`) is used as-is and nothing is fetched — the same
+ * result as before, minus the request. Otherwise the daily lookup starts in the background: the
+ * caller gets any stale cached rate to show meanwhile (or none, and shows provider currency) plus
+ * the pending lookup, which caches its result for the next start.
+ */
+export async function startFxRateLookup(
+  from: Currency,
+  to: Currency,
+  options: {
+    environment: Record<string, string | undefined>;
+    fetchImpl?: typeof fetch;
+    onFailure?: (failure: FxLookupFailure) => void;
+    now?: number;
+    maxAgeMs?: number;
+  },
+): Promise<FxStartupLookup> {
+  if (from === to) return { immediate: null, refresh: null };
+  const now = options.now ?? Date.now();
+  const cached = await readCachedFxRate(from, to, options.environment);
+  if (cached && now - cached.fetchedAt >= 0 && now - cached.fetchedAt < (options.maxAgeMs ?? FX_CACHE_MAX_AGE_MS)) {
+    return { immediate: cached.rate, refresh: null };
+  }
+  const refresh = fetchDailyFxRate(from, to, options.fetchImpl, options.onFailure)
+    .then(async (rate) => {
+      if (rate) await writeCachedFxRate(rate, options.environment);
+      return rate;
+    })
+    .catch(() => null);
+  return { immediate: cached?.rate ?? null, refresh };
 }

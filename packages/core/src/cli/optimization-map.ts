@@ -304,7 +304,12 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     layer: "prompt",
     what: "What one build-mode request costs before the user has said anything",
     metric: "tokens",
-    budget: { min: 2_000, max: 6_000 },
+    // Raised from 6,000 on 2026-10-07. Ten tools were added since the baseline (repo_map,
+    // find_symbol, git_status/diff/log/show, notebook_edit, delegate_readonly_task, view_image,
+    // edit_file `edits`), taking the request to ~8,000. Every tool description and parameter text was
+    // then cut to the essentials (8,007 -> 6,464); what remains is ~2,700 of system prompt plus a
+    // minimal schema per tool, so the new budget is the measured cost with ~2% headroom, not slack.
+    budget: { min: 2_000, max: 6_600 },
     baseline: { value: 4_546, on: "2026-08-22" },
     evidence: "archymedes-cli/prompt.ts, archymedes-cli/tools.ts",
     remediation:

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { ArchymedesAgent } from "./agent";
-import { ArchymedesSessionDaemon, type DaemonAgentFactoryContext, type DaemonNotification } from "./daemon";
+import { ArchymedesSessionDaemon, PREVIEW_HUNK_SEPARATOR, type DaemonAgentFactoryContext, type DaemonApprovalRequest, type DaemonNotification } from "./daemon";
 import { loadSession } from "./session";
 
 const prices = { inputRatePerMillion: 2_000, outputRatePerMillion: 8_000 };
@@ -238,5 +238,73 @@ describe("ArchymedesSessionDaemon", () => {
     await client.open(factory(model));
     await client.send("run the tests", "command_run");
     expect(seenPreview).toBeUndefined();
+  });
+
+  it("previews the multi-edit form hunk by hunk, parsed the way the tool parses it", async () => {
+    const seenPreviews: unknown[] = [];
+    const edits = [{ oldText: "const", newText: "let" }, { oldText: "1", newText: "2", replaceAll: true }];
+    const model = modelWith((_request, call) => {
+      if (call === 1) return { finishReason: "tool_calls", content: "", toolCalls: [{ id: "edit_1", name: "edit_file", arguments: { path: "app.ts", edits: JSON.stringify(edits) } }] };
+      if (call === 2) return { finishReason: "tool_calls", content: "", toolCalls: [{ id: "edit_2", name: "edit_file", arguments: { path: "app.ts", edits: "not json" } }] };
+      return { content: "Done." };
+    });
+    const client = daemon.connect({
+      id: "multi-edit-preview",
+      approve: async (request) => { seenPreviews.push(request.preview); return seenPreviews.length === 1 ? "allow" as const : "deny" as const; },
+    });
+    await client.open(factory(model));
+    await client.send("edit twice", "command_multi");
+    expect(seenPreviews[0]).toEqual({
+      toolName: "edit_file",
+      path: "app.ts",
+      oldText: `const${PREVIEW_HUNK_SEPARATOR}1`,
+      newText: `let${PREVIEW_HUNK_SEPARATOR}2`,
+      edits: [{ oldText: "const", newText: "let", replaceAll: false }, { oldText: "1", newText: "2", replaceAll: true }],
+    });
+    // Malformed edits the tool would reject get no preview rather than a guessed one.
+    expect(seenPreviews[1]).toBeUndefined();
+    expect(await fs.readFile(path.join(root, "app.ts"), "utf8")).toBe("export let value = 2;\n");
+  });
+
+  it("forwards the offered pattern and round-trips allow_pattern into a standing rule", async () => {
+    await fs.mkdir(path.join(root, "src"));
+    await fs.writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await fs.writeFile(path.join(root, "src", "b.ts"), "export const b = 1;\n");
+    const seen: DaemonApprovalRequest[] = [];
+    const model = modelWith((_request, call) => {
+      if (call === 1) return { finishReason: "tool_calls", content: "", toolCalls: [{ id: "edit_a", name: "edit_file", arguments: { path: "src/a.ts", oldText: "1", newText: "2" } }] };
+      if (call === 2) return { finishReason: "tool_calls", content: "", toolCalls: [{ id: "edit_b", name: "edit_file", arguments: { path: "src/b.ts", oldText: "1", newText: "2" } }] };
+      return { content: "Done." };
+    });
+    const client = daemon.connect({
+      id: "pattern-check",
+      approve: async (request) => { seen.push(request); return "allow_pattern" as const; },
+    });
+    await client.open(factory(model));
+    await client.send("edit both", "command_pattern");
+    // Only the first edit asked: the granted directory rule covered the second.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.pattern).toEqual({ kind: "directory", directory: "src", label: "always allow edits under src/" });
+    expect(await fs.readFile(path.join(root, "src", "b.ts"), "utf8")).toBe("export const b = 2;\n");
+  });
+
+  it("round-trips allow_pattern through a notification-driven decideApproval too", async () => {
+    await fs.mkdir(path.join(root, "src"));
+    await fs.writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    const model = modelWith((_request, call) => call === 1
+      ? { finishReason: "tool_calls", content: "", toolCalls: [{ id: "edit_a", name: "edit_file", arguments: { path: "src/a.ts", oldText: "1", newText: "2" } }] }
+      : { content: "Done." });
+    let client: ReturnType<ArchymedesSessionDaemon["connect"]> | undefined;
+    client = daemon.connect({
+      id: "remote-ui",
+      onNotification: (notification) => {
+        if (notification.type !== "approval_requested") return;
+        expect(notification.request.pattern?.kind).toBe("directory");
+        queueMicrotask(() => client!.decideApproval(notification.request.id, "allow_pattern"));
+      },
+    });
+    await client.open(factory(model));
+    await client.send("edit", "command_remote");
+    expect(await fs.readFile(path.join(root, "src", "a.ts"), "utf8")).toBe("export const a = 2;\n");
   });
 });

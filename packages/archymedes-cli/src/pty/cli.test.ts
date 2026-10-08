@@ -4,7 +4,7 @@ import os from "node:os";
 import net from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
+import { CONPTY, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -54,8 +54,8 @@ describe("archymedes CLI under a real pty", () => {
     proc?.kill();
     proc = undefined;
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {
@@ -386,7 +386,7 @@ describe("archymedes CLI under a real pty", () => {
     // scrolled-off lines to its scrollback, so the footer became something you ask for rather than
     // something that silently costs you the session's history. `scrollback.test.ts` holds the other
     // half of that bargain — that nothing reserves a region unless this flag is passed.
-    it("sets a scroll region excluding the bottom rows once the prompt is up", async () => {
+    it.skipIf(CONPTY)("sets a scroll region excluding the bottom rows once the prompt is up", async () => {
       const p = boot({ args: ["--pin"] });
       await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
@@ -420,7 +420,7 @@ describe("archymedes CLI under a real pty", () => {
       expect(turn.search(/┌─ .*you/)).toBeLessThan(turn.search(/──.*Archymedes/));
     }, 30_000);
 
-    it("draws the input bar's three rows onto the reserved footer, not into the transcript", async () => {
+    it.skipIf(CONPTY)("draws the input bar's three rows onto the reserved footer, not into the transcript", async () => {
       const p = boot({ args: ["--pin"] });
       await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
@@ -435,7 +435,7 @@ describe("archymedes CLI under a real pty", () => {
       expect(output).toMatch(/┌─[^\n]*archymedes[^\n]*build[^\n]*┐/);
     }, 30_000);
 
-    it("reissues the scroll region at the new size on resize, not the stale one", async () => {
+    it.skipIf(CONPTY)("reissues the scroll region at the new size on resize, not the stale one", async () => {
       const p = boot({ args: ["--pin"] });
       await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
@@ -482,7 +482,7 @@ describe("archymedes CLI under a real pty", () => {
 
       let before = p.output().length;
       p.writeLine("/models");
-      const listed = await p.waitFor(/Esc cancel/, { timeoutMs: 10_000, since: before });
+      const listed = await p.waitFor(/Esc back/, { timeoutMs: 10_000, since: before });
       // The current model is marked, proving the list reflects the live daemon client's state,
       // not a snapshot taken once at startup.
       expect(listed.slice(before)).toMatch(/current/);

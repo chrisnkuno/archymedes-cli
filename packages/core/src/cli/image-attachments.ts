@@ -63,10 +63,15 @@ export function objectiveWithImageProblems(objective: string, problems: readonly
   return problems.length ? `${objective}\n\n(Not attached — ${problems.join("; ")}.)` : objective;
 }
 
+/**
+ * The transcript with every image's bytes replaced by a one-line note — user attachments and images
+ * a tool returned (view_image) alike — so a saved session never carries base64 payloads.
+ */
 export function withoutImageData(messages: readonly AgentMessage[]): AgentMessage[] {
   return messages.map((message) => {
     if (!("images" in message) || !message.images?.length) return message;
     const { images, ...rest } = message;
-    return { ...rest, content: `${message.content}\n\n[${images.map((image) => `image attached: ${image.path}`).join("; ")}]` };
+    const label = message.role === "tool" ? "image viewed, not kept" : "image attached";
+    return { ...rest, content: `${message.content}\n\n[${images.map((image) => `${label}: ${image.path}`).join("; ")}]` } as AgentMessage;
   });
 }

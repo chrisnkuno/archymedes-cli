@@ -3,6 +3,7 @@ import { heading, note, type SectionStyle } from "../render/sections";
 import type { CliStateHistory } from "../session/state-history";
 import type { GlyphSet } from "../text/glyphs";
 import type { ChooserItem } from "../ui/chooser";
+import type { DeleteOutcome } from "../session/delete-session";
 import { relativeTime, renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryCommand, type HistoryEntry } from "./chat-history";
 
 type Paint = (text: string) => string;
@@ -12,8 +13,20 @@ export type HistoryContext = {
   listSessions(limit: number): Promise<Array<{ id: string }>>;
   loadSession(id: string): Promise<SessionRecord | null | undefined>;
   currentSessionId: string | undefined;
-  /** The interactive session picker; omitted when nobody is at the keyboard. */
-  choose?: (items: readonly ChooserItem<string>[]) => Promise<string | undefined>;
+  /**
+   * The interactive session picker; omitted when nobody is at the keyboard. `onDelete`, when given,
+   * makes the highlighted chat deletable from inside the list (Del, with a y/n confirm).
+   */
+  choose?: (items: readonly ChooserItem<string>[], extras?: {
+    onDelete?: (item: ChooserItem<unknown>) => Promise<DeleteOutcome>;
+    legend?: string;
+  }) => Promise<string | undefined>;
+  /** Deletes one past chat of this project; refuses the open one. Omitted, deleting is unavailable. */
+  remove?: (id: string) => Promise<DeleteOutcome>;
+  /** Deletes every chat in this project except the open one. */
+  removeAll?: () => Promise<{ deleted: number }>;
+  /** A y/n question; omitted where nobody can answer, which refuses `delete --all`. */
+  confirm?: (question: string) => Promise<boolean>;
   /** Swaps the session onto a past record. Called once the record is known to exist. */
   resume(record: SessionRecord): Promise<void>;
   write(text: string): void;
@@ -42,6 +55,27 @@ export async function runHistoryCommand(command: HistoryCommand, context: Histor
     case "invalid":
       write(paint.yellow(`  ${command.reason}\n`));
       return;
+    case "browse":
+      // A picker when someone can use one; a pipe gets the printed list instead of nothing.
+      if (context.choose) return runHistoryCommand({ kind: "resume" }, context);
+      return runHistoryCommand({ kind: "list" }, context);
+    case "delete": {
+      if (!context.remove || !context.removeAll) { write(paint.yellow("  Deleting chats is available inside an interactive session.\n")); return; }
+      if (command.all) {
+        const others = (await entries()).filter((entry) => entry.id !== context.currentSessionId);
+        if (others.length === 0) { write(paint.dim("  no other chats in this folder to delete\n")); return; }
+        // Everything at once is the one deletion that is always confirmed, and never silently.
+        if (!context.confirm) { write(paint.yellow("  /history delete --all needs a terminal to confirm in.\n")); return; }
+        const sure = await context.confirm(`Delete all ${others.length} other chat${others.length === 1 ? "" : "s"} in this folder? This can't be undone.`);
+        if (!sure) { write(paint.dim("  nothing deleted\n")); return; }
+        const { deleted } = await context.removeAll();
+        write(paint.green(`  deleted ${deleted} chat${deleted === 1 ? "" : "s"} — the one you are in is kept\n`));
+        return;
+      }
+      const outcome = await context.remove(command.id!);
+      write(outcome.deleted ? paint.green(`  deleted ${command.id}\n`) : paint.yellow(`  ${outcome.reason}\n`));
+      return;
+    }
     case "list": {
       const listed = await entries();
       write(`${renderHistoryList(listed, style, { current: context.currentSessionId })}\n`);
@@ -86,15 +120,21 @@ export async function runHistoryCommand(command: HistoryCommand, context: Histor
       // Picked from a menu when no id was given: the ids are deliberately not memorable.
       const listed = await entries();
       let id = command.id === "latest" ? listed[0]?.id : command.id;
-      if (!id && context.choose && listed.length > 0) {
+      if (!id && listed.length === 0) { write(paint.dim("  no earlier chats in this folder yet\n")); return; }
+      if (!id && context.choose) {
+        const remove = context.remove;
         id = await context.choose(listed.map((entry) => ({
           value: entry.id,
           label: entry.title || entry.id,
-          hint: relativeTime(entry.updatedAt),
+          // The chat you are in is marked, so the list reads as "where I am, and where I was".
+          hint: entry.id === context.currentSessionId ? "this chat" : relativeTime(entry.updatedAt),
           description: `${entry.turns} turn${entry.turns === 1 ? "" : "s"}`,
-        })));
+        })), remove ? {
+          onDelete: (item) => remove(String(item.value)),
+          legend: "↑↓ move · Enter open · Del delete · type to filter · Esc back",
+        } : undefined);
       }
-      if (!id) { write(paint.dim("  no session chosen\n")); return; }
+      if (!id) { write(paint.dim("  no session chosen — back to your chat · /history list prints them all\n")); return; }
       const record = await context.loadSession(id);
       if (!record) { write(paint.yellow(`  No session ${id}.\n`)); return; }
       await context.resume(record);

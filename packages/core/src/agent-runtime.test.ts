@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { agentMessagePromptParts, BoundedAgentRuntime, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryDelayMs, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
 import type { RoutingReceipt } from "./providers/routing-receipt";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
@@ -101,11 +101,14 @@ describe("bounded agent runtime", () => {
   describe("provider recovery", () => {
     function runtimeWithProvider(complete: (request: AgentModelRequest) => Promise<AgentModelTurn>, cancelled = () => false, extra: { random?: () => number; sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean> } = {}) {
       const events: AgentRuntimeEvent[] = [];
+      const sleeps: number[] = [];
       return {
         events,
+        sleeps,
         runtime: new BoundedAgentRuntime({
           model: { complete }, tools: [], prices,
-          ...extra,
+          // Real backoff is seconds long; the delays are recorded rather than waited out.
+          retry: { sleep: async (delayMs, signal) => { sleeps.push(delayMs); return !signal?.aborted; }, random: () => 0.5 },
           control: {
             async heartbeat() {},
             async isCancellationRequested() { return cancelled(); },
@@ -133,8 +136,9 @@ describe("bounded agent runtime", () => {
       expect(ids[1]).toBe(ids[0]);
       expect(value.events.filter((event) => event.type === "model_turn")).toHaveLength(1);
       expect(value.events.find((event) => event.type === "provider_retry")).toMatchObject({
-        nextAttempt: 2, maxAttempts: 4, delayMs: 1000, reason: "server",
+        nextAttempt: 2, maxAttempts: 3, delayMs: 1_000, reason: "server",
       });
+      expect(value.sleeps).toEqual([1_000]);
     });
 
     it("gives a server error four attempts with doubling waits, then surfaces the original failure", async () => {
@@ -159,20 +163,36 @@ describe("bounded agent runtime", () => {
         name: "ProviderRequestError", attempts: 3, kind: "unknown", cause: failure,
       });
       expect(calls).toBe(3);
+      expect(value.events.filter((event) => event.type === "provider_retry")).toHaveLength(2);
+      // Exponential: 1s, then 2s.
+      expect(value.sleeps).toEqual([1_000, 2_000]);
     });
 
-    it("rides out a rate limit across six attempts with growing waits instead of failing fast", async () => {
+    it("retries a timeout at most once", async () => {
       let calls = 0;
-      const failure = Object.assign(new Error("too many requests"), { status: 429 });
-      const value = runtimeWithProvider(async () => { calls += 1; throw failure; }, () => false, { random: () => 0.5, sleep: async () => true });
-      await expect(value.runtime.execute(baseRequest)).rejects.toMatchObject({
-        name: "ProviderRequestError", attempts: 6, kind: "rate_limit", waitedMs: 62000, retrySuppressed: null, cause: failure,
-      });
-      expect(calls).toBe(6);
-      const retries = value.events.filter((event): event is Extract<AgentRuntimeEvent, { type: "provider_retry" }> => event.type === "provider_retry");
-      expect(retries).toHaveLength(5);
-      expect(retries.map((event) => event.delayMs)).toEqual([2000, 4000, 8000, 16000, 32000]);
-      expect(retries.every((event) => event.maxAttempts === 6 && event.reason === "rate_limit")).toBe(true);
+      const failure = Object.assign(new Error("Model stream timed out: no data received for 90s."), { name: "TimeoutError", code: "ETIMEDOUT" });
+      const value = runtimeWithProvider(async () => { calls += 1; throw failure; });
+      await expect(value.runtime.execute(baseRequest)).rejects.toMatchObject({ name: "ProviderRequestError", attempts: 2, cause: failure });
+      expect(calls).toBe(2);
+      expect(value.events.filter((event) => event.type === "provider_retry")).toEqual([
+        expect.objectContaining({ nextAttempt: 2, maxAttempts: 2, reason: "timeout" }),
+      ]);
+    });
+
+    it("does not re-send an attempt that already streamed reasoning or tool-call output", async () => {
+      for (const kind of ["reasoning", "tool_call"] as const) {
+        let calls = 0;
+        const failure = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+        const value = runtimeWithProvider(async (request) => {
+          calls += 1;
+          request.onOutputProgress?.(kind);
+          throw failure;
+        });
+        await expect(value.runtime.execute(baseRequest)).rejects.toMatchObject({
+          name: "ProviderRequestError", attempts: 1, retrySuppressed: "output_started", cause: failure,
+        });
+        expect(calls).toBe(1);
+      }
     });
 
     it("does not retry permanent endpoint, authentication, or request errors", async () => {
@@ -938,20 +958,24 @@ describe("what a nudge costs", () => {
 });
 
 
-it("bounds retry delays per failure class, applies jitter, and honors explicit terminal errors", () => {
-  // Retry-After is a floor, capped by the policy's ceiling.
-  expect(providerRetryDelayMs({ retryAfterMs: 2000 }, 0, RETRY_POLICIES.unknown, () => 0.5)).toBe(2000);
-  expect(providerRetryDelayMs({ retryAfterMs: 90000 }, 0, RETRY_POLICIES.rate_limit, () => 0.5)).toBe(60000);
-  expect(providerRetryDelayMs({ retryAfterMs: NaN }, 1, RETRY_POLICIES.unknown, () => 0.5)).toBe(1000);
-  expect(providerRetryDelayMs({}, 1, RETRY_POLICIES.unknown, () => 0.5)).toBe(1000);
-  // Server outages back off from a full second and respect the policy ceiling.
-  expect(providerRetryDelayMs({}, 0, RETRY_POLICIES.server, () => 0.5)).toBe(1000);
-  expect(providerRetryDelayMs({}, 3, RETRY_POLICIES.server, () => 0.5)).toBe(8000);
-  expect(providerRetryDelayMs({}, 9, RETRY_POLICIES.server, () => 0.5)).toBe(15000);
-  // Jitter keeps retries off a shared schedule without leaving the backoff band.
-  const jittered = Array.from({ length: 200 }, () => providerRetryDelayMs({}, 0, RETRY_POLICIES.server));
-  expect(Math.min(...jittered)).toBeGreaterThanOrEqual(800);
-  expect(Math.max(...jittered)).toBeLessThanOrEqual(1200);
+it("backs off exponentially with jitter, honours retry-after up to 60s, and honors explicit terminal errors", () => {
+  const even = () => 0.5;
+  expect(providerRetryDelayMs({ retryAfterMs: 2000 }, 0, even)).toBe(2000);
+  expect(providerRetryDelayMs({ retryAfterMs: 45_000 }, 0, even)).toBe(45_000);
+  expect(providerRetryDelayMs({ retryAfterMs: 90_000 }, 0, even)).toBe(60_000);
+  // A retry-after shorter than the backoff never undercuts it.
+  expect(providerRetryDelayMs({ retryAfterMs: 10 }, 1, even)).toBe(2_000);
+  expect(providerRetryDelayMs({ retryAfterMs: NaN }, 1, even)).toBe(2_000);
+  expect([0, 1, 2, 3, 4, 5, 9].map((attempt) => providerRetryDelayMs({}, attempt, even))).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
+  // Jitter stays within +/-25% and never exceeds the cap.
+  expect(providerRetryDelayMs({}, 2, () => 0)).toBe(3_000);
+  expect(providerRetryDelayMs({}, 2, () => 1)).toBe(5_000);
+  expect(providerRetryDelayMs({}, 9, () => 1)).toBe(30_000);
+  for (let index = 0; index < 50; index += 1) {
+    const delay = providerRetryDelayMs({}, 0);
+    expect(delay).toBeGreaterThanOrEqual(750);
+    expect(delay).toBeLessThanOrEqual(1_250);
+  }
   expect(isRetryableProviderError({ status: 409, retryable: false })).toBe(false);
   expect(isRetryableProviderError({ status: 409, retryable: true })).toBe(true);
 });
@@ -979,4 +1003,120 @@ it("gives each logical iteration and execution a distinct model request identity
   await value.runtime.execute(baseRequest);
   expect(value.requests).toHaveLength(3);
   expect(new Set(value.requests.map((request) => request.requestId)).size).toBe(3);
+});
+
+describe("in-turn tool-result compaction", () => {
+  function bigTool(size: number): AgentTool {
+    let runs = 0;
+    return {
+      name: "run_command", description: "Run", inputSchema: {}, capabilityId: "workspace.files", effect: "none",
+      requiresApproval: false, parallelSafe: false,
+      // Distinct content per call, so deduplication does not hide the cost being measured.
+      async execute() { runs += 1; return { content: `${runs}:`.padEnd(size, "x") }; },
+    };
+  }
+  const call = (id: string) => ({ id, name: "run_command", arguments: {} });
+
+  it("compacts older results and continues instead of stopping when the total budget runs out", async () => {
+    // Five iterations of ~2,000 chars against an 8,000 total: without compaction the run stopped
+    // with iteration_limit after the fourth.
+    const turns = [1, 2, 3, 4, 5].map((index) => turn({ finishReason: "tool_calls", toolCalls: [call(`c${index}`)] }));
+    const value = harness([...turns, turn({ content: "all done" })], [bigTool(1_900)]);
+    const result = await value.runtime.execute({ ...baseRequest, maxIterations: 10 });
+    expect(result.status).toBe("completed");
+    expect(result.summary).toBe("all done");
+    const tools = result.messages.filter((message) => message.role === "tool");
+    expect(tools).toHaveLength(5);
+    // The oldest are stubs; the most recent result is intact; every call still has its result.
+    expect(tools[0].content).toMatch(/^\[elided: 1900 chars of earlier run_command output/);
+    expect(tools.at(-1)!.content).toHaveLength(1_900);
+    expect(tools.at(-1)!.content.startsWith("5:")).toBe(true);
+    // The model saw the compacted transcript on its next call.
+    const lastRequest = value.requests.at(-1)!;
+    const sentTools = lastRequest.messages.filter((message) => message.role === "tool");
+    expect(sentTools[0].content).toContain("[elided:");
+    expect(sentTools.reduce((sum, message) => sum + message.content.length, 0)).toBeLessThan(baseRequest.maxTotalToolResultChars);
+  });
+
+  it("points the stub at a saved artifact when a store is configured", async () => {
+    const puts: Array<{ toolCallId: string; content: string }> = [];
+    const store: ToolResultArtifactStore = {
+      async put(input) { puts.push(input); return { path: `.archymedes/artifacts/${input.toolCallId}.txt`, bytes: input.content.length, lines: 1, elided: false }; },
+    };
+    const turns = [1, 2, 3, 4, 5].map((index) => turn({ finishReason: "tool_calls", toolCalls: [call(`c${index}`)] }));
+    const value = harness([...turns, turn({ content: "done" })], [bigTool(1_900)], true, store);
+    const result = await value.runtime.execute({ ...baseRequest, maxIterations: 10 });
+    expect(result.status).toBe("completed");
+    const first = result.messages.find((message) => message.role === "tool")!;
+    expect(first.content).toBe(compactedToolResult("run_command", 1_900, ".archymedes/artifacts/c1.txt"));
+    expect(puts[0]).toMatchObject({ toolCallId: "c1" });
+    expect(puts[0].content).toHaveLength(1_900);
+  });
+
+  it("still stops when the newest results alone exhaust the budget", async () => {
+    // One iteration may append up to max(maxToolResultChars, total/4); with nothing older to
+    // compact, the old stop still applies rather than discarding what the model just asked for.
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [call("c1")] }),
+      turn({ content: "unreachable" }),
+    ], [bigTool(1_000)]);
+    const result = await value.runtime.execute({ ...baseRequest, maxToolResultChars: 1_000, maxTotalToolResultChars: 1_000 });
+    expect(result.status).toBe("iteration_limit");
+    expect(result.summary).toContain("total tool-result context budget");
+  });
+});
+
+describe("tool results that carry images", () => {
+  const image = (path: string) => ({ path, mediaType: "image/png" as const, data: "iVBORw0KGgo=" });
+  function viewImage(): AgentTool {
+    return {
+      name: "view_image", description: "View", inputSchema: {}, capabilityId: "workspace.files", effect: "none",
+      requiresApproval: false, parallelSafe: true,
+      async execute(args) { const path = String(args.path); return { content: `Image ${path} is attached below.`, images: [image(path)] }; },
+    };
+  }
+  const call = (id: string, path: string) => ({ id, name: "view_image", arguments: { path } });
+
+  it("carries images onto the tool message and counts them as prompt input", async () => {
+    const value = harness([turn({ finishReason: "tool_calls", toolCalls: [call("v1", "a.png")] }), turn({ content: "seen" })], [viewImage()]);
+    const result = await value.runtime.execute({ ...baseRequest, maxTotalToolResultChars: 64_000 });
+    expect(result.status).toBe("completed");
+    const sent = value.requests[1].messages.find((message) => message.role === "tool")!;
+    expect(sent).toMatchObject({ role: "tool", toolCallId: "v1", content: "Image a.png is attached below.", images: [image("a.png")] });
+    expect(agentMessagePromptParts(sent).join("").length).toBeGreaterThanOrEqual(1_600 * 4);
+    // Image bytes never reach the event stream, which is journalled.
+    const event = value.events.find((item) => item.type === "tool_result")!;
+    expect(JSON.stringify(event)).not.toContain("iVBORw0KGgo=");
+  });
+
+  it("never truncates image data as text, even when the text budget is tiny", async () => {
+    const value = harness([turn({ finishReason: "tool_calls", toolCalls: [call("v1", "a.png")] }), turn({ content: "seen" })], [viewImage()]);
+    const result = await value.runtime.execute({ ...baseRequest, maxToolResultChars: 128, maxTotalToolResultChars: 64_000 });
+    const tool = result.messages.find((message) => message.role === "tool")!;
+    expect("images" in tool && tool.images).toEqual([image("a.png")]);
+  });
+
+  it("drops images from older results during in-turn compaction", async () => {
+    // Each image is charged 6,400 chars against an 8,000 total, so the second forces compaction.
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [call("v1", "a.png")] }),
+      turn({ finishReason: "tool_calls", toolCalls: [call("v2", "b.png")] }),
+      turn({ content: "both seen" }),
+    ], [viewImage()]);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.status).toBe("completed");
+    const [first, second] = result.messages.filter((message) => message.role === "tool");
+    expect("images" in first ? first.images : undefined).toBeUndefined();
+    expect(first.content).toContain("Image a.png is attached below.");
+    expect(first.content).toContain("[elided: 1 image (a.png) from earlier view_image output");
+    expect(second).toMatchObject({ images: [image("b.png")] });
+    // The model's last request no longer carried the first image's bytes.
+    const lastTools = value.requests.at(-1)!.messages.filter((message) => message.role === "tool");
+    expect(lastTools.filter((message) => "images" in message && message.images?.length)).toHaveLength(1);
+  });
+
+  it("describes dropped images in the compaction stub", () => {
+    expect(compactedToolResult("view_image", 0, undefined, [image("x.png"), image("y.png")]))
+      .toBe("[elided: 2 images (x.png, y.png) from earlier view_image output, to keep the conversation within its context budget; view them again if you need to]");
+  });
 });

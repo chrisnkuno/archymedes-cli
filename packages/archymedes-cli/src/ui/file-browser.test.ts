@@ -274,7 +274,7 @@ describe("composeFileFrame", () => {
   });
 
   it("teaches its own keys, and shows the query while searching", () => {
-    expect(composeFileFrame(state(), { kind: "empty" }).at(-1)!.text).toContain("q leave");
+    expect(composeFileFrame(state(), { kind: "empty" }).at(-1)!.text).toContain("Esc back");
     expect(composeFileFrame(state({ searching: true, query: "ts" }), { kind: "empty" }).at(-1)!.text).toContain("search: ts");
   });
 

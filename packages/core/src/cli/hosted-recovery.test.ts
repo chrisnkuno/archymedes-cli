@@ -34,7 +34,13 @@ describe("hosted recovery", () => {
       return turn;
     } };
     await expect(store.wrap(provider, () => session, prices, "main").complete(request)).rejects.toThrow("response lost");
-    expect((await fs.stat(store.file)).mode & 0o777).toBe(0o600);
+    const persisted = JSON.parse(await fs.readFile(store.file, "utf8")).batch.entries[0];
+    expect(persisted.request.requestId).toBe(request.requestId);
+    expect(persisted.request.safetyIdentifier).toBe(request.safetyIdentifier);
+    expect(persisted.state).toBe("ambiguous");
+    expect(Math.abs(persisted.timestamp - Date.now())).toBeLessThan(60_000);
+    // Windows has no owner/group/other bits to assert; the mode is a POSIX guarantee.
+    if (process.platform !== "win32") expect((await fs.stat(store.file)).mode & 0o777).toBe(0o600);
     const restarted = new HostedRecoveryStore(root, session.id);
     const recovered = await restarted.recover(provider, session);
     expect(recovered?.messages.some((message) => message.content === turn.content)).toBe(true);
@@ -89,6 +95,29 @@ describe("hosted recovery", () => {
     expect(failed?.hostedRecoveryBatchId).toBeTruthy();
   });
 
+  it("cleanupOrphaned removes stale recovery files from other sessions", async () => {
+    const otherSession = { ...record(), id: "other-session" };
+    const otherFile = path.join(root, ".archymedes", "recovery", "other-session.json");
+    await fs.mkdir(path.dirname(otherFile), { recursive: true });
+    await fs.writeFile(otherFile, JSON.stringify({ batch: { version: 1, id: "batch-1", sessionId: "other-session", scope: "account", baseTotalRwf: 0, entries: [] }, integrity: "x" }));
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await fs.utimes(otherFile, old, old);
+    const store = new HostedRecoveryStore(root, "current-session");
+    const removed = await store.cleanupOrphaned(root);
+    expect(removed).toBe(1);
+    expect(await fs.stat(otherFile).catch(() => null)).toBeNull();
+  });
+
+  it("cleanupOrphaned preserves the current session file", async () => {
+    const session = record();
+    const store = new HostedRecoveryStore(root, session.id);
+    const provider = { recoveryScope: "account", complete: async () => turn };
+    await store.wrap(provider, () => session, prices, "main").complete(request);
+    const removed = await store.cleanupOrphaned(root);
+    expect(removed).toBe(0);
+    expect(await fs.stat(store.file).catch(() => null)).not.toBeNull();
+  });
+
   it("recovers after SIGKILL following settlement without a second provider call or charge", async () => {
     const cache = new Map<string, { body: string; response: object }>();
     let invocations = 0;
@@ -119,15 +148,31 @@ describe("hosted recovery", () => {
     const providerPath = fileURLToPath(new URL("../providers/archymedes-cloud-agent.ts", import.meta.url));
     const script = path.join(root, "crash-client.ts");
     await fs.writeFile(script, `import { ArchymedesAgent } from ${JSON.stringify(agentPath)};\nimport { ArchymedesCloudTurnProvider } from ${JSON.stringify(providerPath)};\nconst agent = new ArchymedesAgent({ root: ${JSON.stringify(root)}, model: new ArchymedesCloudTurnProvider({ token: "fixture-token", baseURL: ${JSON.stringify(baseURL)} }), prices: ${JSON.stringify(prices)}, mode: "plan", approve: async () => "deny" });\nawait agent.send("recover this paid answer");`);
-    const child = spawn("bun", [script], { stdio: "ignore" });
+    // A shell lets Windows resolve the `bun` npm shim (a .cmd file), which spawn cannot
+    // execute directly; on Unix the real binary resolves either way.
+    const child = spawn("bun", [script], { stdio: "ignore", shell: process.platform === "win32" });
     let recoveredAgent: ArchymedesAgent | undefined;
     try {
       await Promise.race([settled, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error("Fixture did not settle")), 8_000); timer.unref(); })]);
       const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-      child.kill("SIGKILL");
+      // On Windows the direct child is the shell and the writer is bun beneath it, so the whole tree must die or
+      // the orphaned writer keeps ownership of the session journal and recovery cannot proceed.
+      if (process.platform === "win32") spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).unref();
+      else child.kill("SIGKILL");
       await exited;
       const files = await fs.readdir(path.join(root, ".archymedes", "sessions"));
       const sessionId = files.find((file) => file.endsWith(".json"))!.slice(0, -5);
+      // Ownership acquisition fails fast while the writer process is still alive, so wait for the
+      // pid named in the owner record to actually exit before resuming.
+      const ownerFile = `${path.join(root, ".archymedes", "events", `${sessionId}.jsonl`)}.owner`;
+      const deadline = Date.now() + 5_000;
+      for (;;) {
+        let pid: number | undefined;
+        try { pid = (JSON.parse(await fs.readFile(ownerFile, "utf8")) as { pid: number }).pid; } catch { break; }
+        try { process.kill(pid, 0); } catch { break; }
+        if (Date.now() > deadline) throw new Error("Hosted writer process did not exit after the tree was killed");
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
       const saved = await loadSession(root, sessionId);
       expect(saved).not.toBeNull();
       recoveredAgent = new ArchymedesAgent({ root, model: new ArchymedesCloudTurnProvider({ token: "fixture-token", baseURL }), prices, mode: "plan", approve: async () => "deny" });

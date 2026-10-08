@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bunExecutable, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
+/** tmux is a POSIX multiplexer; where it is not installed (Windows, a minimal CI image) there is nothing to test inside. */
+const HAS_TMUX = spawnSync("tmux", ["-V"], { encoding: "utf8" }).status === 0;
+
 /**
  * The installed binary in the terminals people actually run it in.
  *
@@ -41,8 +44,8 @@ describe("the installed binary in a real terminal", () => {
     for (const proc of procs) proc.kill();
     procs = [];
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {
@@ -68,7 +71,7 @@ describe("the installed binary in a real terminal", () => {
     return proc;
   }
 
-  it("runs a whole turn inside tmux and gives the multiplexer back on exit", async () => {
+  it.skipIf(!HAS_TMUX)("runs a whole turn inside tmux and gives the multiplexer back on exit", async () => {
     const socket = path.join(configDir, "tmux.sock");
     const tmux = (...args: string[]) => spawnSync("tmux", ["-S", socket, ...args], { encoding: "utf8", env: process.env });
     const forwarded = [

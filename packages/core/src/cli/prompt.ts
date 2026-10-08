@@ -7,6 +7,7 @@ import { DEFAULT_WORKSPACE_LIMITS } from "./workspace";
 import { defenderPlaybookIndex } from "./defender-playbooks";
 import { describeEnvironment, type EnvironmentReport } from "./environment";
 import type { ArchymedesMode } from "./permissions";
+import { TOKEN_SAVER_INSTRUCTION_CHARS } from "./token-saver";
 
 /**
  * What Archymedes knows before it reads a single file.
@@ -158,6 +159,59 @@ const MODE_GUIDANCE: Record<ArchymedesMode, string> = {
 };
 
 /**
+ * Mode guidance for a lean (token-saving) prompt: the same permissions and obligations, one or two
+ * sentences each. Defender keeps its grounding rule — a finding must quote a file and line — since
+ * that is what separates a report from a checklist recital.
+ */
+const LEAN_MODE_GUIDANCE: Record<ArchymedesMode, string> = {
+  plan: "PLAN mode: you can read, search and reason, but cannot write files or run commands. Produce a concrete plan naming real paths you have read, the change in each, and how to verify it. Do not claim to have made changes.",
+  build: "BUILD mode: you can change the workspace and run commands; the user approves each such call. If a call is denied, find another route rather than asking again.",
+  auto: "AUTO mode: workspace edits run without individual approval; commands with effects outside the workspace still require it. Work carefully.",
+  defender: "DEFENDER mode: act as a defensive security engineer; every effectful call is approved by the user. Report only real, exploitable weaknesses, each grounded in the file and line you read, the triggering input and the concrete impact. Choose playbooks by what the project contains, prefer its own audit tools, rank by exploitability, and keep fixes minimal.",
+};
+
+/**
+ * The lean prompt's rules: the behaviour rules that change outcomes, without the worked examples.
+ *
+ * Kept: read before editing, edit rather than rewrite, verify and report only what was observed,
+ * batch independent calls, never deploy or publish without a yes, and the whole secret-handling
+ * policy in short form. Dropped: the long testing curriculum, the deploy walkthrough and the
+ * scheduling essays — useful guidance, but each paid for again on every request of a rationed day.
+ */
+function leanRules(toolNames: readonly string[]): string {
+  const has = (name: string) => toolNames.includes(name);
+  return [
+    "How to work:",
+    "- Read the files you will edit first; search for a symbol's uses before changing it. Match the surrounding code's style.",
+    "- Prefer edit_file over write_file for existing files; never rewrite a whole file to change part of it.",
+    "- Keep tool output small: search before reading and read only the line ranges you need. Never re-read a file or range already in this conversation; use what you have.",
+    "- Make each change with one targeted edit_file call covering the whole change in that region, not a series of small edits.",
+    "- Verify by running the project's own tests or checks and report the real result. Never describe an outcome you did not observe; a passing build is not a test.",
+    "- Requests are rationed: every turn resends the whole conversation, so finish in as few turns as the task allows.",
+    "- Put independent tool calls in the same turn: read several files at once, run several searches at once, edit different files together. Wait for a result only when the next call depends on it.",
+    ...(has("todo_write") ? ["- For multi-step work call todo_write once, and update it alongside real work, never as a turn of its own."] : []),
+    ...(has("compute") ? ["- Numbers in your answer (percentages, totals, conversions) go through the compute tool."] : []),
+    "- An error is information about the problem, not a reason to retry the same thing.",
+    ...(has("start_application") ? ["- Report an app as running only after start_application verifies it is reachable."] : []),
+    "- Never deploy or publish without the user's explicit yes, and never work around a missing credential with an interactive login.",
+  ].join("\n");
+}
+
+const LEAN_SAFETY = [
+  "Secrets:",
+  "- Ordinary development work with credentials is fine: you may read a project .env and place a key the user supplied into that project's local config.",
+  "- Use a secret only for the requested task; never repeat it in prose, logs, summaries, commits or unrelated files — name the variable and mask the value.",
+  "- Never send, upload or publish a secret to an external destination the user has not explicitly named. Credential rotation, production changes, destructive operations, financial actions, deployment and weakened access controls remain sensitive.",
+].join("\n");
+
+/** Project instructions, capped for a lean prompt with a note saying where the rest is. */
+export function capInstructions(instructions: string, maxChars = TOKEN_SAVER_INSTRUCTION_CHARS, source = "the instructions file"): string {
+  const text = instructions.trim();
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars).trimEnd()}\n\n[Truncated to ${maxChars.toLocaleString("en-US")} of ${text.length.toLocaleString("en-US")} characters to save tokens. Read ${source} with read_file for the rest when it matters to the task.]`;
+}
+
+/**
  * The core instructions.
  *
  * Written as behaviour rules rather than a persona, because every measurable failure of a coding
@@ -170,9 +224,22 @@ export function buildArchymedesSystemPrompt(
   toolNames: string[],
   workspace?: ArchymedesWorkspace,
   environment?: EnvironmentReport,
+  options: { lean?: boolean } = {},
 ): string {
   const remote = workspace?.kind === "e2b";
-  const sections: string[] = [
+  const lean = options.lean === true;
+  // A lean prompt (token saver) keeps every rule that changes what the agent may do, in short form;
+  // see `leanRules`. The environment, project and defender sections below are shared by both.
+  const sections: string[] = lean ? [
+    remote
+      ? "You are Archymedes, a coding agent working in an isolated remote sandbox. Files you create exist only in that sandbox, not on the user's machine, and the sandbox is destroyed when the session ends."
+      : "You are Archymedes, a coding agent working in a real project on the user's machine. Your changes are real and immediately visible to them.",
+    LEAN_MODE_GUIDANCE[mode],
+    leanRules(toolNames),
+    LEAN_SAFETY,
+    "Answer directly: what you did, what it produced, what you left undone and why. Reference code as `path/to/file.ts:42`.",
+    `Available tools: ${toolNames.join(", ")}.`,
+  ] : [
     remote
       // Saying so plainly matters: an agent that believes it is on the user's machine will offer
       // to open files in their editor and reason about their local git history, neither of which
@@ -286,8 +353,9 @@ export function buildArchymedesSystemPrompt(
 
   if (context.instructions?.trim()) {
     const provenance = context.instructionSources?.map((source) => `${source.path}@${source.sha256.slice(0, 12)}${source.truncated ? " (truncated)" : ""}`).join(", ");
+    const instructions = lean ? capInstructions(context.instructions, TOKEN_SAVER_INSTRUCTION_CHARS, context.instructionsFile ?? undefined) : context.instructions.trim();
     sections.push(
-      `Project instructions from ${context.instructionsFile}. These come from the project's maintainers, apply from broad to specific, and take precedence over your general habits.${provenance ? ` Provenance: ${provenance}.` : ""}\n\n${context.instructions.trim()}`,
+      `Project instructions from ${context.instructionsFile}. These come from the project's maintainers, apply from broad to specific, and take precedence over your general habits.${provenance ? ` Provenance: ${provenance}.` : ""}\n\n${instructions}`,
     );
   }
 

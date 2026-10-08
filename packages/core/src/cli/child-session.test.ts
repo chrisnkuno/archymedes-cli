@@ -162,7 +162,8 @@ describe("isolated worktrees, against a real repository", () => {
   it("creates a real, separate working directory sharing the same history", async () => {
     const worktree = await createChildWorktree(root, "c1", runGitReal);
     try {
-      expect(await fs.readFile(path.join(worktree.path, "shared.txt"), "utf8")).toBe("original\n");
+      // Git may check the file out with CRLF endings on Windows; the content is what matters.
+      expect((await fs.readFile(path.join(worktree.path, "shared.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("original\n");
       const inside = await runGitReal(["rev-parse", "--is-inside-work-tree"], { cwd: worktree.path });
       expect(inside.stdout.trim()).toBe("true");
       const branch = await runGitReal(["branch", "--show-current"], { cwd: worktree.path });

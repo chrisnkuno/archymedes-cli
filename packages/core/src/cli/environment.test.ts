@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { LocalWorkspace } from "./backends";
+import { localCommandGuidance, LocalWorkspace } from "./backends";
 import type { CommandRunner } from "./command";
 import { describeEnvironment, probeEnvironment } from "./environment";
 import { DEFAULT_WORKSPACE_LIMITS } from "./workspace";
@@ -89,7 +89,7 @@ describe("probeEnvironment", () => {
   it("records the backend's own execution rules so the prompt cannot invent them", async () => {
     const report = await probeEnvironment(workspaceWith({}));
     expect(report.backend).toBe("local");
-    expect(report.execution).toContain("real shell");
+    expect(report.execution).toBe(localCommandGuidance(process.platform));
     expect(report.host).toContain(os.arch());
   });
 });

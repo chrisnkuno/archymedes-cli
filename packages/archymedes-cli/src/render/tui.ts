@@ -292,6 +292,12 @@ export type StatusFields = {
    * than the counts and the cost that merely report progress.
    */
   badge?: string;
+  /**
+   * Free mode's daily token meter (`today 12.3k tok · 87.7k left · resets 00:00 UTC`), painted in
+   * the warning colour once the gateway says the day is nearly spent. Ranked with the mode: in
+   * free mode it is the number that decides whether the next request will be answered at all.
+   */
+  allowance?: { text: string; warning: boolean };
 };
 
 export type HeaderSegment = { full: string; compact?: string };
@@ -580,6 +586,7 @@ export function formatStatusLine(fields: StatusFields, width: number, depth: Col
     fields.toolCalls > 0 ? `${fields.toolCalls} tool${fields.toolCalls === 1 ? "" : "s"}` : "",
     fields.badge ?? "",
     fields.steps && fields.steps.total > 0 ? stepProgress(fields.steps.done, fields.steps.total, { label: fields.steps.label ?? "steps", depth: "none" }) : "",
+    fields.allowance?.text ?? "",
     fields.mode,
     fields.balance ?? "",
   ].filter((segment) => segment !== "");
@@ -599,7 +606,12 @@ export function formatStatusLine(fields: StatusFields, width: number, depth: Col
         return width > 0 ? paint(glyphs.star, accent, depth) : "";
       }
       const gap = Math.max(1, width - visibleWidth(left) - right.length);
-      return `${paintedLeft}${" ".repeat(gap)}${paint(right, DIM, depth)}`;
+      // Painted per segment only when one needs its own colour, so the common case is unchanged.
+      const warned = fields.allowance?.warning ? fields.allowance.text : undefined;
+      const paintedRight = warned && kept.includes(warned)
+        ? [...kept, formatElapsed(fields.elapsedMs)].map((segment) => paint(segment, segment === warned ? roleCode("warning", undefined, depth) : DIM, depth)).join(paint(separator, DIM, depth))
+        : paint(right, DIM, depth);
+      return `${paintedLeft}${" ".repeat(gap)}${paintedRight}`;
     }
     kept = kept.slice(0, -1); // drop the least important segment still present
   }

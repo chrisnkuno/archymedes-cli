@@ -128,6 +128,9 @@ describe("argument parsing", () => {
 
   it("reads --resume with and without an explicit session id", () => {
     expect(parseArgs(["--resume"]).resume).toBe("latest");
+    // No id: an interactive terminal opens the picker instead of guessing the newest chat.
+    expect(parseArgs(["--resume"]).resumePick).toBe(true);
+    expect(parseArgs(["--resume", "latest"]).resumePick).toBeUndefined();
     expect(parseArgs(["--resume", "20260808T000000Z-abc123"]).resume).toBe("20260808T000000Z-abc123");
     // The request must never be mistaken for a session id — that silently resumes nothing and
     // then drops into the REPL with the user's actual request thrown away.

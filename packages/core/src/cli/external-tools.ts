@@ -1,8 +1,8 @@
 import type { ArchymedesWorkspace } from "./backends";
-import { HOOKS_DIRECTORY, HookRegistry, type HookSource } from "./hooks";
-import { discoverMcpServers, McpConnection, McpToolProvider } from "./mcp-provider";
+import { HOOKS_DIRECTORY, HookRegistry, type HookSource } from "../hooks";
+import { discoverMcpServers, McpConnection, McpToolProvider } from "../mcp";
 import { discoverPlugins } from "./plugins";
-import { SkillToolProvider, SKILLS_DIRECTORY } from "./skills";
+import { SkillToolProvider, SKILLS_DIRECTORY } from "../skills";
 import type { ToolProvider } from "./tool-providers";
 
 /**
@@ -21,6 +21,8 @@ import type { ToolProvider } from "./tool-providers";
 export type LocalExternalTooling = {
   providers: ToolProvider[];
   hooks: HookRegistry;
+  /** One entry per configured MCP server: its transport and the tools it offered, or its failure. */
+  mcpServers(): Promise<McpServerStatus[]>;
   dispose(): Promise<void>;
 };
 
@@ -34,6 +36,14 @@ export type LocalExternalTooling = {
  * with no skills, and saying it to every such user is noise dressed as a warning.
  */
 export const IMPLICIT_SKILL_PROVIDER_ID = "local-skills";
+
+export type McpServerStatus = {
+  id: string;
+  transport: "stdio" | "http";
+  tools: string[];
+  /** Present when the server could not be reached or listed — the reason, for display. */
+  error?: string;
+};
 
 export async function loadLocalExternalTooling(workspace: ArchymedesWorkspace): Promise<LocalExternalTooling> {
   const providers: ToolProvider[] = [new SkillToolProvider(IMPLICIT_SKILL_PROVIDER_ID, SKILLS_DIRECTORY, workspace)];
@@ -59,6 +69,19 @@ export async function loadLocalExternalTooling(workspace: ArchymedesWorkspace): 
   return {
     providers,
     hooks: new HookRegistry(hookSources, workspace),
+    // Listed per server with its own error rather than one failure hiding the rest: a project with
+    // five servers where one has a wrong path should still see the other four working.
+    mcpServers: async () => {
+      const statuses = await Promise.all(connections.map(async (connection) => {
+        const base = { id: connection.config.id, transport: ("command" in connection.config ? "stdio" : "http") as "stdio" | "http", tools: [] as string[] };
+        try {
+          return { ...base, tools: (await connection.listTools()).map((tool) => tool.name) };
+        } catch (error) {
+          return { ...base, error: error instanceof Error ? error.message : String(error) };
+        }
+      }));
+      return statuses;
+    },
     dispose: async () => {
       for (const connection of connections) connection.close();
     },

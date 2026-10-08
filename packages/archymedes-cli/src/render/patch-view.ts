@@ -3,7 +3,8 @@ import { UNICODE_GLYPHS } from "../text/glyphs";
 import { BOLD, DIM, REVERSE, paint, paintAll } from "../text/ansi";
 import { roleCode } from "../theme/theme";
 import { pairHunkLines, type Segment } from "./intraline";
-import { describeChange, highlightCode, type DiffLine } from "./code-view";
+import { describeChange, highlightCode, languageOf, type DiffLine } from "./code-view";
+import { codeStyle, highlightSyntax } from "./syntax";
 import { visibleWidth } from "../text/text-width";
 
 /**
@@ -135,6 +136,13 @@ export function renderPatchFile(file: PatchFile, style: SectionStyle, options: {
   }
 
   const rows: string[] = [];
+  const vscode = codeStyle().colors === "vscode" && depth !== "none";
+  const language = languageOf(file.path);
+  // Bands padded to the widest changed row (within the panel), so each reads as a whole row.
+  const bandWidth = Math.min(
+    Math.max(8, style.width - 18),
+    Math.max(0, ...file.hunks.flatMap((hunk) => hunk.lines.map((line) => [...line.text].length))),
+  );
   for (const [index, hunk] of file.hunks.entries()) {
     // A hunk boundary is a jump in the file; without a marker the rows either side read as
     // consecutive, which silently misrepresents the distance between two changes.
@@ -151,13 +159,16 @@ export function renderPatchFile(file: PatchFile, style: SectionStyle, options: {
       const added = roleCode("success", style.palette, depth);
       const removed = roleCode("error", style.palette, depth);
       const marker = line.kind === "add" ? paint("+", added, depth) : line.kind === "remove" ? paint("-", removed, depth) : " ";
-      // Syntax highlighting only on the surviving text: colouring a removed line the same as a
-      // kept one makes the two hard to tell apart at a glance, which is the whole job here.
-      const body = line.kind === "remove"
-        ? paintSegments(line.text, line.segments, removed, depth)
-        : line.kind === "add"
-          ? paintSegments(line.text, line.segments, added, depth)
-          : highlightCode(line.text, depth, style.palette);
+      // VS Code colours: syntax colour everywhere, with added/removed rows on a green/red band and
+      // the run that actually changed on a stronger one. The theme path keeps the old look —
+      // syntax colour only on context, solid role colour on the changed rows.
+      const body = vscode && line.kind !== "context"
+        ? highlightSyntax(line.text, { depth, palette: style.palette, language, band: line.kind, padTo: bandWidth, ...(line.segments ? { segments: line.segments } : {}) })
+        : line.kind === "remove"
+          ? paintSegments(line.text, line.segments, removed, depth)
+          : line.kind === "add"
+            ? paintSegments(line.text, line.segments, added, depth)
+            : highlightCode(line.text, depth, style.palette, language);
       rows.push(`${gutterNumber} ${marker} ${body}`);
     }
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cancel, claim, consumeApproval, detach, emptyStore, enqueue, finish, heartbeat, MAX_ATTEMPTS, recoverStale, requestApproval, resolveApproval, summarize, type ApprovalRequest, type JobStore } from "./jobs";
+import { cancel, claim, consumeApproval, detach, emptyStore, enqueue, finish, heartbeat, MAX_ATTEMPTS, parseJobRecord, recoverStale, requestApproval, resolveApproval, summarize, type ApprovalRequest, type JobStore } from "./jobs";
 
 const LEASE = 30_000;
 const T0 = 1_760_000_000_000;
@@ -315,6 +315,30 @@ describe("approval while nobody is watching", () => {
     expect(collected.decision).toBe("deny");
     expect(collected.store.jobs[0].executedApprovals ?? []).toEqual([]);
     expect(requestApproval(collected.store, "job-1", "worker-1", approvalFor("d1"), T0 + 4_000).ok).toBe(true);
+  });
+
+  it("carries an offered pattern across the boundary and round-trips allow_pattern as an execution", () => {
+    const pattern = { kind: "command-prefix" as const, prefix: "npm test", label: "always allow commands starting with \"npm test\"" };
+    const running = claim(seed(["ship it"]), "worker-1", T0, LEASE);
+    const paused = requestApproval(running.store, "job-1", "worker-1", approvalFor("d1", { pattern }), T0 + 1_000);
+    expect(paused.store.jobs[0].pendingApproval?.pattern).toEqual(pattern);
+    // Survives the store's own record validation, which is what a reload after a crash runs.
+    expect(parseJobRecord(JSON.parse(JSON.stringify(paused.store.jobs[0])), 0).pendingApproval?.pattern).toEqual(pattern);
+    const resolved = resolveApproval(paused.store, "job-1", "allow_pattern", "d1", T0 + 2_000);
+    expect(resolved.ok).toBe(true);
+    expect(parseJobRecord(JSON.parse(JSON.stringify(resolved.store.jobs[0])), 0).approvalDecision?.decision).toBe("allow_pattern");
+    const collected = consumeApproval(resolved.store, "job-1", "worker-1", T0 + 3_000);
+    expect(collected.decision).toBe("allow_pattern");
+    // An allow of any flavour is an execution, so it is spent exactly once.
+    expect(collected.store.jobs[0].executedApprovals).toEqual(["d1"]);
+  });
+
+  it("rejects a stored pending approval whose pattern is malformed", () => {
+    const running = claim(seed(["ship it"]), "worker-1", T0, LEASE);
+    const paused = requestApproval(running.store, "job-1", "worker-1", approvalFor("d1"), T0 + 1_000);
+    const record = JSON.parse(JSON.stringify(paused.store.jobs[0]));
+    record.pendingApproval.pattern = { kind: "regex", label: "anything" };
+    expect(() => parseJobRecord(record, 0)).toThrow(/pendingApproval\.pattern/);
   });
 
   it("has nothing to collect before a decision is delivered", () => {

@@ -1,3 +1,5 @@
+import type { ApprovalPattern } from "./permissions";
+
 /**
  * Work that outlives the terminal that started it.
  *
@@ -77,7 +79,8 @@ export type Job = {
   executedApprovals?: string[];
 };
 
-export type ApprovalDecision = "allow" | "allow_always" | "deny" | "deny_always";
+/** Mirrors `PermissionDecision`; `allow_pattern` grants the request's offered `pattern` as a standing rule. */
+export type ApprovalDecision = "allow" | "allow_always" | "allow_pattern" | "deny" | "deny_always";
 
 /**
  * The exact action a human is being asked to authorize, carried whole across the process boundary.
@@ -100,13 +103,18 @@ export type PendingApproval = {
   policyVersion: string;
   effect: "none" | "workspace" | "external";
   capabilityId: string;
+  /**
+   * The broader standing rule the human may grant instead of this exact action, when the ledger
+   * offered one. Carried so `/jobs` and `/attach` can show it; answering `allow_pattern` grants it.
+   */
+  pattern?: ApprovalPattern;
   requestedAt: number;
 };
 
 export type JobStore = { jobs: Job[] };
 
 const JOB_STATUSES: readonly JobStatus[] = ["queued", "running", "paused", "completed", "failed", "cancelled"];
-const DECISIONS: readonly ApprovalDecision[] = ["allow", "allow_always", "deny", "deny_always"];
+const DECISIONS: readonly ApprovalDecision[] = ["allow", "allow_always", "allow_pattern", "deny", "deny_always"];
 
 /**
  * One stored job, checked field by field.
@@ -148,6 +156,9 @@ export function parseJobRecord(value: unknown, index: number): Job {
     && ["none", "workspace", "external"].includes(pending.effect as string) && Number.isFinite(pending.requestedAt))) {
     fail("pendingApproval", "a complete approval request");
   }
+  if (pending !== undefined && (pending as Record<string, unknown>).pattern !== undefined && !isApprovalPattern((pending as Record<string, unknown>).pattern)) {
+    fail("pendingApproval.pattern", "{ kind: command-prefix | directory, label, prefix | directory }");
+  }
   const decision = job.approvalDecision;
   if (decision !== undefined && !(isObject(decision) && DECISIONS.includes(decision.decision as ApprovalDecision)
     && typeof decision.actionDigest === "string" && Number.isFinite(decision.decidedAt))) {
@@ -157,6 +168,15 @@ export function parseJobRecord(value: unknown, index: number): Job {
     fail("executedApprovals", "an array of strings");
   }
   return job as Job;
+}
+
+function isApprovalPattern(value: unknown): value is ApprovalPattern {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const pattern = value as Record<string, unknown>;
+  if (typeof pattern.label !== "string") return false;
+  if (pattern.kind === "command-prefix") return typeof pattern.prefix === "string" && pattern.prefix.length > 0;
+  if (pattern.kind === "directory") return typeof pattern.directory === "string" && pattern.directory.length > 0;
+  return false;
 }
 
 export const MAX_ATTEMPTS = 3;
@@ -334,7 +354,7 @@ export function consumeApproval(store: JobStore, id: string, workerId: string, n
   if (job.executedApprovals?.includes(actionDigest)) {
     return { store: replace(store, { ...job, updatedAt: now, approvalDecision: undefined }) };
   }
-  const allowed = decision === "allow" || decision === "allow_always";
+  const allowed = decision === "allow" || decision === "allow_always" || decision === "allow_pattern";
   return {
     store: replace(store, {
       ...job,

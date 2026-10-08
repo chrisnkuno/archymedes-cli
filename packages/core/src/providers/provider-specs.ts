@@ -72,10 +72,12 @@ export type ProviderInfo = {
 
 /**
  * The settings still missing before `id` can run. Free mode is the one provider with two ways in:
- * the user's own OpenRouter key, or a free gateway that needs nothing from them.
+ * a free gateway that needs nothing from the user, or the user's own OpenRouter key. With neither
+ * configured, free gateway mode is simply unavailable — the message says what would make it work
+ * rather than demanding a key the gateway path never needs.
  */
 export function missingRequirements(id: ProviderId, environment: ProviderEnvironment): string[] {
-  if (id === "free") return freeAccess(environment) ? [] : ["OPENROUTER_API_KEY"];
+  if (id === "free") return freeAccess(environment) ? [] : ["ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"];
   return PROVIDER_INFO[id].requires.filter((name) => !environment[name]?.trim());
 }
 

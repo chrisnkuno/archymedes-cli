@@ -125,7 +125,7 @@ describe("switching models under a real pty", () => {
     const p = await boot();
     const mark = p.output().length;
     p.write("/model\r");
-    await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: mark });
 
     const moved = p.output().length;
     p.write(`${DOWN}\r`);
@@ -139,7 +139,7 @@ describe("switching models under a real pty", () => {
     const p = await boot();
     const mark = p.output().length;
     p.write("/model\r");
-    await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: mark });
 
     // `t` swaps the menu for the same models in columns — the view a printed list cannot offer.
     const toTable = p.output().length;
@@ -167,7 +167,7 @@ describe("switching models under a real pty", () => {
     const p = await boot();
     const mark = p.output().length;
     p.write("/model\r");
-    await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: mark });
 
     const toTable = p.output().length;
     p.write("t");
@@ -176,7 +176,7 @@ describe("switching models under a real pty", () => {
     // Escape is a view toggle here, not a way out: the menu it came from is what it returns to.
     const back = p.output().length;
     p.write(ESCAPE);
-    const seen = await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: back });
+    const seen = await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: back });
     expect(seen.slice(back)).not.toContain("no change");
     p.kill();
   }, 60_000);
@@ -185,7 +185,7 @@ describe("switching models under a real pty", () => {
     const p = await boot();
     const mark = p.output().length;
     p.write("/model\r");
-    await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: mark });
 
     const dismissed = p.output().length;
     p.write(ESCAPE);
@@ -194,14 +194,23 @@ describe("switching models under a real pty", () => {
     p.kill();
   }, 60_000);
 
-  it("opens settings straight away when no provider is configured", async () => {
-    // The dead end this replaces: printing the name of the door the user is already standing at.
+  it("starts the free mode setup straight away when no provider is configured", async () => {
+    // The dead end this replaces: printing what to configure and exiting. With no provider and no
+    // free gateway, a real terminal is walked through getting a free OpenRouter key instead.
     const configOnly = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-nokey-"));
     const p = spawnArchymedes({ cwd, args: ["--currency", "USD"], env: {
       ARCHYMEDES_CONFIG_DIR: configOnly, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC",
+      OPENROUTER_API_KEY: undefined, ARCHYMEDES_FREE_GATEWAY_URL: undefined, ARCHYMEDES_PROVIDER: undefined, ANTHROPIC_API_KEY: undefined, OPENAI_API_KEY: undefined,
     }});
-    const started = await p.waitFor(/Anthropic API key|Archymedes settings/, { timeoutMs: 30_000 });
-    expect(started).toMatch(/Anthropic API key|Archymedes settings/);
+    const started = await p.waitFor(/OpenRouter API key/, { timeoutMs: 30_000 });
+    expect(started).toContain("Free mode setup");
+    expect(started).toContain("https://openrouter.ai/keys");
+    // Esc backs out without saving anything, and says how to come back.
+    const mark = p.output().length;
+    p.write(ESCAPE);
+    const cancelled = await p.waitFor(/setup cancelled/, { timeoutMs: 15_000, since: mark });
+    expect(cancelled.slice(mark)).toContain("archymedes settings");
+    await expect(fs.readFile(path.join(configOnly, "settings.json"), "utf8")).rejects.toThrow();
     p.kill();
   }, 60_000);
 
@@ -209,7 +218,7 @@ describe("switching models under a real pty", () => {
     const p = await boot();
     const mark = p.output().length;
     p.write("/model\r");
-    await p.waitFor(/Esc cancel/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/Esc back/, { timeoutMs: 15_000, since: mark });
 
     // The last row is the settings row; End jumps to it.
     const jumped = p.output().length;

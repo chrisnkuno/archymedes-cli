@@ -1,7 +1,7 @@
-import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
+import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
-import { DEFAULT_STREAM_TIMEOUTS, fetchWithStreamTimeouts, type StreamTimeouts } from "./stream-fetch";
+import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
 
 /**
  * Anthropic Messages API adapter.
@@ -19,6 +19,7 @@ export type AnthropicAgentOptions = {
   apiKey: string;
   model: string;
   baseURL?: string;
+  /** The stream's idle timeout, not a wall-clock limit; see `streamTimeoutsFor`. */
   timeoutMs?: number;
   /** Underlying fetch, wrapped with byte-level stream timeouts. Defaults to the global fetch. */
   fetchImpl?: typeof fetch;
@@ -49,6 +50,8 @@ export type AnthropicStreamEvent =
 export async function collectAnthropicStream(
   stream: AsyncIterable<AnthropicStreamEvent>,
   onTextDelta?: (text: string) => void,
+  /** Reports every piece of model output, including thinking and tool-input fragments. */
+  onOutputProgress?: (kind: AgentOutputKind) => void,
 ): Promise<AnthropicResponse> {
   let id = "";
   let model = "";
@@ -68,15 +71,21 @@ export async function collectAnthropicStream(
     } else if (event.type === "content_block_start") {
       const start = event as Extract<AnthropicStreamEvent, { type: "content_block_start" }>;
       blocks.set(start.index, { type: start.content_block.type, id: start.content_block.id, name: start.content_block.name, text: "", json: "" });
+      if (start.content_block.type === "tool_use") onOutputProgress?.("tool_call");
     } else if (event.type === "content_block_delta") {
       const delta = event as Extract<AnthropicStreamEvent, { type: "content_block_delta" }>;
       const block = blocks.get(delta.index);
       if (!block) continue;
       if (delta.delta.type === "text_delta" && delta.delta.text) {
         block.text += delta.delta.text;
+        onOutputProgress?.("text");
         onTextDelta?.(delta.delta.text);
       }
-      if (delta.delta.type === "input_json_delta" && delta.delta.partial_json) block.json += delta.delta.partial_json;
+      if (delta.delta.type === "input_json_delta" && delta.delta.partial_json) {
+        block.json += delta.delta.partial_json;
+        onOutputProgress?.("tool_call");
+      }
+      if (delta.delta.type === "thinking_delta") onOutputProgress?.("reasoning");
     } else if (event.type === "message_delta") {
       const message = event as Extract<AnthropicStreamEvent, { type: "message_delta" }>;
       if (message.delta.stop_reason) stopReason = message.delta.stop_reason;
@@ -151,7 +160,16 @@ export function toAnthropicMessages(messages: readonly AgentMessage[]): { system
     if (message.role === "system") continue;
 
     if (message.role === "tool") {
-      const block = { type: "tool_result", tool_use_id: message.toolCallId, content: message.content || "(empty tool result)" };
+      const text = message.content || "(empty tool result)";
+      // A tool that returns an image (view_image) sends it inside the tool_result itself, as a
+      // content-block array; a text-only result stays a plain string, byte-identical to before.
+      const block = {
+        type: "tool_result",
+        tool_use_id: message.toolCallId,
+        content: message.images?.length
+          ? [{ type: "text", text }, ...message.images.map((image) => ({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } }))]
+          : text,
+      };
       const last = converted[converted.length - 1];
       if (last?.role === "user" && Array.isArray(last.content) && (last.content as Array<{ type: string }>)[0]?.type === "tool_result") {
         (last.content as unknown[]).push(block);
@@ -308,7 +326,7 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
       request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.inputSchema })),
     );
 
-    const raw = await this.call({
+    const body = {
       model: this.options.model,
       max_tokens: request.maxOutputTokens,
       ...(system ? { system } : {}),
@@ -327,11 +345,23 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
       // is lost. A caller that passes no `onTextDelta` simply gets the collected turn, exactly as
       // before; nothing above this line can tell the difference.
       stream: true,
-    }, signal);
+    };
 
-    const response = Symbol.asyncIterator in Object(raw)
-      ? await collectAnthropicStream(raw as AsyncIterable<AnthropicStreamEvent>, request.onTextDelta)
-      : (raw as AnthropicResponse);
+    // Deadlines that follow the stream (first event, silence between events, generous overall cap)
+    // rather than one wall-clock limit that cut long, healthy generations off mid-answer.
+    const deadline = createStreamDeadline({ ...streamTimeoutsFor(this.options.timeoutMs), signal: request.signal });
+    let response: AnthropicResponse;
+    try {
+      const raw = await deadline.race(this.call(body, deadline.signal));
+      response = Symbol.asyncIterator in Object(raw)
+        ? await collectAnthropicStream(deadline.wrap(raw as AsyncIterable<AnthropicStreamEvent>), request.onTextDelta, request.onOutputProgress)
+        : (raw as AnthropicResponse);
+    } catch (error) {
+      if (deadline.timedOut) throw deadline.timedOut;
+      throw error;
+    } finally {
+      deadline.dispose();
+    }
 
     const toolCalls = response.content
       .filter((block): block is { type: "tool_use"; id: string; name: string; input: unknown } => block.type === "tool_use")
