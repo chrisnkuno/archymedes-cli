@@ -907,3 +907,43 @@ describe("a command that names a program this environment does not have", () => 
     expect(result.verification).toBeUndefined();
   });
 });
+
+describe("edit_file", () => {
+  it("applies a multi-edit atomically and keeps the single form working", async () => {
+    const workspace = new LocalWorkspace(root);
+    const edit = toolNamed(await createArchymedesTools({ workspace, todos: new TodoList() }), "edit_file");
+    const single = await edit.execute({ path: "src/app.ts", oldText: "3000", newText: "$&8080" }, context);
+    expect(single.content).toBe("Edited src/app.ts (1 replacement).");
+    expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toBe("export const port = $&8080;\n");
+
+    const multi = await edit.execute({ path: "src/app.ts", edits: JSON.stringify([{ oldText: "const port", newText: "const listenPort" }, { oldText: "$&8080", newText: "9090" }]) }, context);
+    expect(multi.content).toBe("Edited src/app.ts (2 replacements).");
+    expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toBe("export const listenPort = 9090;\n");
+
+    await expect(edit.execute({ path: "src/app.ts", edits: JSON.stringify([{ oldText: "9090", newText: "1" }, { oldText: "absent", newText: "2" }]) }, context)).rejects.toThrow(/edits\[1\]: oldText was not found/);
+    expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toBe("export const listenPort = 9090;\n");
+  });
+
+  it("refuses to edit a file that changed on disk since it was read, across turns", async () => {
+    const workspace = new LocalWorkspace(root);
+    const firstTurn = await createArchymedesTools({ workspace, todos: new TodoList() });
+    await toolNamed(firstTurn, "read_file").execute({ path: "src/app.ts" }, context);
+    await fs.writeFile(path.join(root, "src", "app.ts"), "export const port = 3000; // edited by a human\n");
+
+    // The tool list is rebuilt every turn; the guard must survive that.
+    const secondTurn = await createArchymedesTools({ workspace, todos: new TodoList() });
+    const edit = toolNamed(secondTurn, "edit_file");
+    await expect(edit.execute({ path: "src/app.ts", oldText: "3000", newText: "8080" }, context)).rejects.toThrow(/changed on disk since it was last read; re-read it/);
+
+    await toolNamed(secondTurn, "read_file").execute({ path: "src/app.ts", offset: 1, limit: 1 }, context);
+    await edit.execute({ path: "src/app.ts", oldText: "3000", newText: "8080" }, context);
+    // Its own edit does not make the file stale.
+    await edit.execute({ path: "src/app.ts", oldText: "8080", newText: "9090" }, context);
+    expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toBe("export const port = 9090; // edited by a human\n");
+  });
+
+  it("edits a file it never read without a guard", async () => {
+    const edit = toolNamed(await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() }), "edit_file");
+    await expect(edit.execute({ path: "src/app.ts", oldText: "3000", newText: "8080" }, context)).resolves.toMatchObject({ data: { replacements: 1 } });
+  });
+});

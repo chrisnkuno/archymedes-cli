@@ -178,7 +178,7 @@ export function renderModelPicker(frame: { rows: readonly PickerRow[]; selected:
     const room = Math.max(0, columns - visibleWidth(`  ${active ? glyphs.prompt : " "} ${number} ${isCurrent ? glyphs.circleFull : " "} ${padded}  `));
     lines.push(`  ${cursor} ${paint.dim(number)} ${isCurrent ? paint.green(glyphs.circleFull) : " "} ${label}  ${paint.dim(clipTo(tail, room))}`);
   }
-  lines.push(paint.dim(clipTo(`  ${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} t table ${glyphs.middot} type to filter ${glyphs.middot} Esc cancel`, columns)));
+  lines.push(paint.dim(clipTo(`  ${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} t table ${glyphs.middot} type to filter ${glyphs.middot} Esc back`, columns)));
   return lines.join("\n");
 }
 

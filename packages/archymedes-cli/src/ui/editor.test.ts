@@ -354,3 +354,45 @@ describe("what the user is shown", () => {
     expect(status).toContain("3 lines");
   });
 });
+
+describe("Esc goes back to the chat", () => {
+  const press = (state: EditorState, key: { name?: string }, character?: string) => applyEditorAction(state, keyToEditorAction(key, character, state));
+
+  it("leaves straight away from normal mode when nothing changed", () => {
+    expect(press(open("abc"), { name: "escape" }).effect).toEqual({ kind: "quit" });
+  });
+
+  it("takes two presses from insert mode: out of insert, then out of the editor", () => {
+    const inserting = type(open("abc"), ["i"]);
+    const first = press(inserting, { name: "escape" });
+    expect(first.effect).toBeUndefined();
+    expect(first.state.mode).toBe("normal");
+    expect(press(first.state, { name: "escape" }).effect).toEqual({ kind: "quit" });
+  });
+
+  it("asks before leaving unsaved changes, and every answer does what it says", () => {
+    const edited = type(open("abc"), ["x"]);
+    const asked = press(edited, { name: "escape" });
+    expect(asked.effect).toBeUndefined();
+    expect(asked.state.confirmLeave).toBe(true);
+    expect(asked.state.message).toContain("Save changes?");
+    expect(press(asked.state, { name: "y" }, "y").effect).toEqual({ kind: "save" });
+    expect(press(asked.state, { name: "n" }, "n").effect).toEqual({ kind: "quit" });
+    const kept = press(asked.state, { name: "escape" });
+    expect(kept.effect).toBeUndefined();
+    expect(kept.state.confirmLeave).toBe(false);
+    expect(editorContent(kept.state)).toBe("bc");
+    // Other keys do nothing while the question is up — no stray edit can land behind it.
+    expect(editorContent(press(asked.state, { name: "x" }, "x").state)).toBe("bc");
+  });
+
+  it("marks the document clean after an auto-save, unless typing moved on", () => {
+    const edited = type(open("abc"), ["x"]);
+    expect(applyEditorAction(edited, { kind: "autosaved", content: "bc" }).state.dirty).toBe(false);
+    expect(applyEditorAction(edited, { kind: "autosaved", content: "older" }).state.dirty).toBe(true);
+  });
+
+  it("says Esc goes back on the key bar", () => {
+    expect(editorKeyBar(open("abc"), 120)).toContain("esc back");
+  });
+});

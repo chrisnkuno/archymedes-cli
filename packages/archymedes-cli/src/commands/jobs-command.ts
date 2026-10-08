@@ -10,7 +10,7 @@ export type JobsCommand =
   | { kind: "list" }
   | { kind: "run"; objective: string }
   | { kind: "cancel"; id: string }
-  | { kind: "approve"; id: string; decision: "allow" | "allow_always" | "deny" | "deny_always" }
+  | { kind: "approve"; id: string; decision: "allow" | "allow_always" | "allow_pattern" | "deny" | "deny_always" }
   | { kind: "invalid"; reason: string };
 
 type ApprovalDecision = Extract<JobsCommand, { kind: "approve" }>["decision"];
@@ -21,6 +21,9 @@ const APPROVAL_WORDS: Record<string, ApprovalDecision> = {
   y: "allow",
   "allow-always": "allow_always",
   always: "allow_always",
+  // Grants the pattern the pending request offered; the runner refuses it when none was offered.
+  pattern: "allow_pattern",
+  "allow-pattern": "allow_pattern",
   deny: "deny",
   no: "deny",
   n: "deny",
@@ -46,7 +49,7 @@ export function parseJobsCommand(input: string): JobsCommand | null {
       if (!id) return { kind: "invalid", reason: "Which job? /jobs approve <id> [allow|deny]" };
       const word = (words[1] ?? "allow").toLowerCase();
       const decision = APPROVAL_WORDS[word];
-      return decision ? { kind: "approve", id, decision } : { kind: "invalid", reason: `"${words[1]}" is not a decision — try allow, deny, allow-always, or deny-always.` };
+      return decision ? { kind: "approve", id, decision } : { kind: "invalid", reason: `"${words[1]}" is not a decision — try allow, deny, allow-always, allow-pattern, or deny-always.` };
     }
     default:
       return { kind: "invalid", reason: `Unknown /jobs command "${verb}". Try run, cancel, or approve.` };

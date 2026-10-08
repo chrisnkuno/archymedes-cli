@@ -245,7 +245,7 @@ const STATUS_MARK: Record<WorkspacePane["status"], string> = {
   idle: " ",
 };
 
-export const WORKSPACE_LEGEND = "1-9 pane \u00b7 \u2190\u2192 move \u00b7 \u2191\u2193 scroll \u00b7 g/G ends \u00b7 q leave";
+export const WORKSPACE_LEGEND = "1-9 pane \u00b7 \u2190\u2192 move \u00b7 \u2191\u2193 scroll \u00b7 g/G ends \u00b7 Esc back";
 
 /** Keeps the active pane named even when the full tab strip cannot fit. */
 function paneBar(snapshot: WorkspaceSnapshot, columns: number): string {

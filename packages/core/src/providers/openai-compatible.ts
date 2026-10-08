@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentModelTurn } from "../agent-runtime";
+import type { AgentImage, AgentMessage, AgentModelTurn, AgentOutputKind } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { parseRoutingReceipt } from "./routing-receipt";
 
@@ -67,8 +67,94 @@ export function toWireMessage(message: AgentMessage): Record<string, unknown> {
   return { role: message.role, content: message.content };
 }
 
-export function toWireMessages(messages: readonly AgentMessage[]): Array<Record<string, unknown>> {
-  return messages.map(toWireMessage);
+export type WireMessageOptions = {
+  /**
+   * Whether the model can see images. Default true, matching how user-attached images have always
+   * been sent. False turns tool-returned images into a text note instead of an image part.
+   */
+  vision?: boolean;
+};
+
+/**
+ * The runtime's messages as Chat Completions messages.
+ *
+ * A `tool` message there can only carry text, so images a tool returned (view_image) travel in one
+ * follow-up `user` message placed right after that step's run of tool messages — after the run, not
+ * between its members, because every tool_call_id must be answered before anything else is said.
+ */
+export function toWireMessages(messages: readonly AgentMessage[], options: WireMessageOptions = {}): Array<Record<string, unknown>> {
+  const vision = options.vision ?? true;
+  const wire: Array<Record<string, unknown>> = [];
+  let pending: Array<{ name: string; images: AgentImage[] }> = [];
+  const flush = () => {
+    if (pending.length === 0) return;
+    wire.push({
+      role: "user",
+      content: [
+        { type: "text", text: `Image${pending.reduce((sum, entry) => sum + entry.images.length, 0) === 1 ? "" : "s"} returned by the ${[...new Set(pending.map((entry) => entry.name))].join(", ")} tool call${pending.length === 1 ? "" : "s"} above: ${pending.flatMap((entry) => entry.images.map((image) => image.path)).join(", ")}` },
+        ...pending.flatMap((entry) => entry.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.data}` } }))),
+      ],
+    });
+    pending = [];
+  };
+  for (const message of messages) {
+    if (message.role !== "tool") flush();
+    if (message.role === "tool" && message.images?.length) {
+      if (vision) {
+        wire.push(toWireMessage(message));
+        pending.push({ name: message.name, images: message.images });
+      } else {
+        const note = `[${message.images.length === 1 ? "image" : "images"} not shown: this model cannot view images (${message.images.map((image) => image.path).join(", ")})]`;
+        wire.push(toWireMessage({ ...message, content: `${message.content}
+${note}` }));
+      }
+      continue;
+    }
+    wire.push(toWireMessage(message));
+  }
+  flush();
+  return wire;
+}
+
+const EPHEMERAL = { type: "ephemeral" } as const;
+
+/**
+ * Whether an OpenRouter model honours explicit `cache_control` breakpoints.
+ *
+ * OpenAI, DeepSeek, Grok and most others cache a stable prefix automatically and need nothing; the
+ * Anthropic and Gemini families on OpenRouter only cache where the request marks a breakpoint.
+ */
+export function usesOpenRouterCacheControl(model: string): boolean {
+  return model.startsWith("anthropic/") || model.startsWith("google/");
+}
+
+/** Whether a base URL is OpenRouter's, where `cache_control` on message parts is accepted. */
+export function isOpenRouterBaseUrl(baseURL: string | undefined): boolean {
+  if (!baseURL) return false;
+  try { return new URL(baseURL).hostname.endsWith("openrouter.ai"); } catch { return false; }
+}
+
+function withPartBreakpoint(message: Record<string, unknown>): Record<string, unknown> {
+  if (typeof message.content === "string") {
+    return message.content ? { ...message, content: [{ type: "text", text: message.content, cache_control: EPHEMERAL }] } : message;
+  }
+  if (!Array.isArray(message.content)) return message;
+  const parts = message.content as Array<Record<string, unknown>>;
+  const last = parts.map((part) => part.type).lastIndexOf("text");
+  if (last < 0) return message;
+  return { ...message, content: parts.map((part, index) => (index === last ? { ...part, cache_control: EPHEMERAL } : part)) };
+}
+
+/**
+ * Adds OpenRouter `cache_control` breakpoints for models that need them (see
+ * `usesOpenRouterCacheControl`): one on the system message, covering tools plus the fixed system
+ * prompt, and one on the last user message, covering the conversation up to it. Two of the four
+ * breakpoints Anthropic allows; Gemini uses only the last. Other models get the messages unchanged.
+ */
+export function withOpenRouterCacheControl(messages: Array<Record<string, unknown>>, model: string): Array<Record<string, unknown>> {
+  if (!usesOpenRouterCacheControl(model)) return messages;
+  const lastUser = messages.map((message) => message.role).lastIndexOf("user");
+  return messages.map((message, index) => (message.role === "system" || index === lastUser ? withPartBreakpoint(message) : message));
 }
 
 function parseArguments(value: string): unknown {
@@ -156,6 +242,9 @@ export type ChatStreamChunk = {
     delta?: {
       content?: string | null;
       refusal?: string | null;
+      /** Reasoning text, under the names OpenRouter (`reasoning`) and DeepSeek-style gateways use. */
+      reasoning?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>;
     };
   }>;
@@ -173,6 +262,8 @@ export type ChatStreamChunk = {
 export async function collectChatStream(
   stream: AsyncIterable<ChatStreamChunk>,
   onTextDelta?: (text: string) => void,
+  /** Reports every piece of model output, including reasoning and tool-call fragments. */
+  onOutputProgress?: (kind: AgentOutputKind) => void,
 ): Promise<ChatResponse> {
   let id = "";
   let model = "";
@@ -190,10 +281,13 @@ export async function collectChatStream(
     if (!choice) continue;
     if (choice.finish_reason) finishReason = choice.finish_reason;
     if (choice.delta?.refusal) refusal += choice.delta.refusal;
+    if (choice.delta?.reasoning || choice.delta?.reasoning_content) onOutputProgress?.("reasoning");
     if (choice.delta?.content) {
       content += choice.delta.content;
+      onOutputProgress?.("text");
       onTextDelta?.(choice.delta.content);
     }
+    if (choice.delta?.tool_calls?.length) onOutputProgress?.("tool_call");
     for (const fragment of choice.delta?.tool_calls ?? []) {
       const existing = calls.get(fragment.index) ?? { id: "", name: "", args: "" };
       // Truthiness, not nullish coalescing: providers send `"name": ""` and `"id": null` on the

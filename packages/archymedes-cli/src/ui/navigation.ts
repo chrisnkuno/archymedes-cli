@@ -71,7 +71,45 @@ export const NAV_GROUPS: ReadonlyArray<{ id: NavGroupId; title: string }> = [
  * Deliberately not a ranking of everything: a list where the seventh item is "essential" is a list
  * whose first item is not. Additions should have to displace something.
  */
-export const ESSENTIAL_COMMANDS: readonly string[] = ["/help", "/mode", "/diff", "/undo", "/model", "/cost", "/exit"];
+export const ESSENTIAL_COMMANDS: readonly string[] = ["/help", "/history", "/model", "/mode", "/diff", "/undo", "/settings", "/exit"];
+
+/**
+ * Simple mode: the CLI out of the way until it is needed. On by default; `ARCHYMEDES_SIMPLE=off`
+ * restores the full banner, the starters and the grouped help as the first answer to /help.
+ */
+export function isSimpleMode(environment: Record<string, string | undefined>): boolean {
+  const value = environment.ARCHYMEDES_SIMPLE?.trim().toLowerCase();
+  return !(value === "off" || value === "false" || value === "0" || value === "no");
+}
+
+/** Everything a first screen needs to say, in one line. */
+export const SIMPLE_BANNER_LINE = "Type what you want done. / for commands · Esc back · Ctrl+G menu";
+
+/** What each essential is for, in words a first session uses — not the catalog's fuller description. */
+const ESSENTIAL_PURPOSE: Readonly<Record<string, string>> = {
+  "/help": "this list — /help all for everything",
+  "/history": "go back to an earlier chat",
+  "/model": "switch to another model",
+  "/mode": "choose whether it may change your files",
+  "/diff": "see what it changed",
+  "/undo": "take the last change back",
+  "/settings": "theme, code colours, keys and more",
+  "/exit": "leave — the chat stays saved",
+};
+
+/**
+ * The short help: the essentials, one per line, and how to reach the rest. What `/help` and a lone
+ * `?` show in simple mode — eight rows someone can read in one glance, where the grouped help is a
+ * reference to come back to.
+ */
+export function renderSimpleHelp(style: SectionStyle): string {
+  const glyphs = style.glyphs ?? UNICODE_GLYPHS;
+  const width = Math.max(24, style.width - 4);
+  const nameWidth = Math.max(...ESSENTIAL_COMMANDS.map((name) => name.length));
+  const rows = ESSENTIAL_COMMANDS.map((name) => note(clipTo(`${name.padEnd(nameWidth)}  ${ESSENTIAL_PURPOSE[name] ?? ""}`, width, glyphs), style, "accent"));
+  const keys = note(clipTo(`Esc back ${glyphs.middot} Ctrl+G menu of every command ${glyphs.middot} Tab completes ${glyphs.middot} /help all`, width, glyphs), style);
+  return [heading("Just type what you want done. These help:", 2, style), ...rows, "", keys].join("\n");
+}
 
 /** Whether a command is one of the few a first session actually needs. */
 export function isEssential(command: string): boolean {
@@ -88,13 +126,13 @@ export const COMMAND_GROUP: Readonly<Record<string, NavGroupId>> = {
   "/mode": "steer", "/plan": "steer", "/build": "steer", "/auto": "steer", "/defender": "steer",
   "/model": "steer", "/models": "steer", "/fallback": "steer", "/slow": "steer", "/clear": "steer", "/memory": "steer",
   "/todos": "review", "/task": "review", "/route": "review", "/diff": "review", "/undo": "work", "/retry": "work", "/continue": "work", "/cost": "review", "/expand": "review",
-  "/history": "review", "/sessions": "review", "/export": "review", "/balance": "review", "/pay": "review", "/scan": "work", "/wander": "work", "/voice": "work",
+  "/history": "review", "/sessions": "review", "/resume": "review", "/export": "review", "/balance": "review", "/pay": "review", "/scan": "work", "/diagnostics": "review", "/wander": "work", "/voice": "work",
   "/cat": "review", "/find": "review", "/pager": "review", "/files": "work", "/pull": "work", "/where": "review",
   "/jobs": "parallel", "/detach": "parallel", "/attach": "parallel", "/watch": "parallel",
   "/tab": "parallel", "/workspace": "parallel",
   "/guide": "learn", "/help": "learn", "/keys": "learn", "/palette": "learn", "/tools": "learn",
   "/edit": "work", "/exit": "steer",
-  "/settings": "setup", "/providers": "setup", "/theme": "setup", "/layout": "setup", "/update": "setup",
+  "/settings": "setup", "/providers": "setup", "/theme": "setup", "/layout": "setup", "/update": "setup", "/upgrade": "setup",
 };
 
 /**

@@ -33,11 +33,11 @@ describe("resuming, from the terminal", () => {
     proc?.kill();
     proc = undefined;
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
-  function boot(args: string[] = []): ArchymedesProcess {
+  function boot(args: string[] = [], extra: Record<string, string> = {}): ArchymedesProcess {
     proc = spawnArchymedes({
       cwd,
       args: ["--currency", "USD", ...args],
@@ -48,10 +48,35 @@ describe("resuming, from the terminal", () => {
         ARCHYMEDES_CONFIG_DIR: configDir,
         ARCHYMEDES_FX_OFFLINE: "true",
         TZ: "UTC",
+        ...extra,
       },
     });
     return proc;
   }
+
+  it("starts simply, offers the last chat, and takes it on an empty Enter", async () => {
+    stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
+    const first = boot();
+    await first.waitFor(PROMPT, { timeoutMs: 60_000 });
+    const asked = first.output().length;
+    first.writeLine("where does the migration live?");
+    await first.waitFor(/0007-add-index/, { timeoutMs: 40_000, since: asked });
+    await first.waitFor(PROMPT, { timeoutMs: 20_000, since: asked });
+    first.write("\x03");
+    await first.waitForExit(20_000);
+
+    // Simple mode and the resume offer are the defaults; the harness turns both off for older tests.
+    const second = boot([], { ARCHYMEDES_SIMPLE: "on", ARCHYMEDES_RESUME: "ask" });
+    await second.waitFor(/Continue your last chat/, { timeoutMs: 60_000 });
+    await second.waitFor(PROMPT, { timeoutMs: 20_000 });
+    const banner = second.output();
+    expect(banner).toContain("Type what you want done.");
+    expect(banner).toContain("where does the migration live?");
+    expect(banner).not.toContain("No session spend cap set");
+    const answered = second.output().length;
+    second.write("\r");
+    await second.waitFor(/resumed \d{8}T\d{6}Z-/i, { timeoutMs: 30_000, since: answered });
+  }, 120_000);
 
   it("opens on the end of the conversation it resumed, not on an empty screen", async () => {
     stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
@@ -67,13 +92,18 @@ describe("resuming, from the terminal", () => {
     first.write("\x03"); // Ctrl+C at an idle prompt is the clean way out
     await first.waitForExit(20_000);
 
+    // `--resume` with no id in a terminal opens the picker; Enter takes the newest chat.
     const second = boot(["--resume"]);
-    await second.waitFor(PROMPT, { timeoutMs: 60_000 });
+    await second.waitFor(/Pick up a past conversation/, { timeoutMs: 60_000 });
+    const picking = second.output().length;
+    second.write("\r");
+    await second.waitFor(/resumed \d{8}T\d{6}Z-/i, { timeoutMs: 30_000, since: picking });
+    await second.waitFor(PROMPT, { timeoutMs: 20_000, since: picking });
     const screen = second.output();
 
     // Both halves matter: which session (so you can tell it picked the right one) and what was
     // said in it (so you can tell it actually loaded).
-    expect(screen).toMatch(/Resumed \d{8}T\d{6}Z-/);
+    expect(screen).toMatch(/resumed \d{8}T\d{6}Z-/i);
     expect(screen).toContain("where does the migration live?");
     expect(screen).toContain("0007-add-index");
   }, 120_000);

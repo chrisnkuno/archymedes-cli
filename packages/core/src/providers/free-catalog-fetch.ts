@@ -16,7 +16,9 @@ const MAX_BYTES = 8 * 1024 * 1024;
 
 async function boundedJson(fetchImpl: FreeCatalogFetch, url: string, signal: AbortSignal): Promise<unknown> {
   const response = await fetchImpl(url, { signal, redirect: "error", headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`Catalog returned HTTP ${response.status}`);
+  // The status travels with the error, so a listing that answered with an error is told apart from
+  // one that could not be reached at all.
+  if (!response.ok) throw Object.assign(new Error(`Catalog returned HTTP ${response.status}`), { status: response.status });
   if (!response.body) {
     const result = await response.json();
     if (JSON.stringify(result).length > MAX_BYTES) throw new Error("Catalog exceeds size limit");

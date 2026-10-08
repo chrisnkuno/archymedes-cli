@@ -1,0 +1,48 @@
+# Fly.io config for the free gateway. Deploy from the REPOSITORY ROOT (the image needs packages/core):
+#   fly launch --no-deploy --copy-config -c packages/free-gateway/fly.toml --dockerfile packages/free-gateway/Dockerfile
+#   fly deploy -c packages/free-gateway/fly.toml --dockerfile packages/free-gateway/Dockerfile --ha=false
+# See packages/free-gateway/README.md, "Deploy in 10 minutes".
+app = "archymedes-free-gateway"   # must be globally unique; `fly launch` offers to rename it
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"       # relative to this file; the build context is the directory you run `fly deploy` from
+
+[env]
+  PORT = "8787"
+  # Fly's proxy overwrites Fly-Client-IP on every request, so clients cannot forge it.
+  FREE_GATEWAY_CLIENT_IP_HEADER = "fly-client-ip"
+  # Limits (defaults shown; uncomment to change). Tokens are the main daily budget.
+  # FREE_GATEWAY_IP_TOKENS_PER_DAY = "100000"
+  # FREE_GATEWAY_INSTALL_TOKENS_PER_DAY = "100000"
+  # FREE_GATEWAY_IP_PER_DAY = "300"
+  # FREE_GATEWAY_INSTALL_PER_DAY = "300"
+  # FREE_GATEWAY_IP_PER_MINUTE = "20"
+  # FREE_GATEWAY_INSTALL_PER_MINUTE = "20"
+  # FREE_GATEWAY_GLOBAL_PER_MINUTE = "20"
+  # FREE_GATEWAY_GLOBAL_PER_DAY = "1000"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # In-memory counters live in the one machine: keep it running so limits are not reset by a stop.
+  # (With Upstash configured you may use "stop" and scale out.)
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

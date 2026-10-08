@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PROVIDER_IDS } from "@archymedes/core/providers/agent-matrix";
-import { MODEL_FIELD_PROVIDER, SETTING_FIELDS, loadSettings, maskSetting, mergedEnvironment, runSettingsMenu, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
+import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, sectionOf, maskSetting, mergedEnvironment, runSettingsMenu, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
@@ -179,8 +179,66 @@ describe("the settings menu with a chooser", () => {
     const written: string[] = [];
     const answers = ["q"];
     await runSettingsMenu({}, { ask: async () => answers.shift()!, askSecret: async () => "", write: (text) => written.push(text) });
-    expect(written.join("")).toContain("1. Control language");
+    expect(written.join("")).toContain(`${SETTING_FIELDS.findIndex((field) => field.key === "ARCHYMEDES_LANGUAGE") + 1}. Control language`);
     expect(written.join("")).toContain("q.");
+  });
+
+  it("groups the list into sections, appearance first", async () => {
+    const written: string[] = [];
+    await runSettingsMenu({}, { ask: async () => "q", askSecret: async () => "", write: (text) => written.push(text) });
+    const text = written.join("");
+    expect(text).toContain("Appearance");
+    expect(text.indexOf("Appearance")).toBeLessThan(text.indexOf("Behaviour"));
+    expect(text.indexOf("Free mode")).toBeLessThan(text.indexOf("Providers"));
+    expect(sectionOf("ARCHYMEDES_TOKEN_SAVER")).toBe("Free mode");
+    expect(sectionOf("ANTHROPIC_API_KEY")).toBe("Providers");
+  });
+
+  it("keeps a typed field unchanged when Esc cancels it, without leaving the menu", async () => {
+    const written: string[] = [];
+    const position = String(SETTING_FIELDS.findIndex((field) => field.key === "ARCHYMEDES_KEYS") + 1);
+    const answers = [position, SETTING_CANCELLED, "q"];
+    const result = await runSettingsMenu({ ARCHYMEDES_KEYS: "/diff=alt+d" }, { ask: async () => answers.shift()!, askSecret: async () => "", write: (text) => written.push(text) });
+    expect(result.ARCHYMEDES_KEYS).toBe("/diff=alt+d");
+    expect(written.join("")).toContain("unchanged");
+  });
+
+  it("tells the chooser that Esc on the field list saves", async () => {
+    let legend: string | undefined;
+    await runSettingsMenu({}, { ...silent, choose: async (request) => { legend = request.legend; return undefined; } });
+    expect(legend).toContain("Esc done (saves)");
+    expect(legend).toContain("Enter edit");
+  });
+});
+
+describe("appearance, behaviour and free-mode settings", () => {
+  it("accepts their few words, case-insensitively, and refuses anything else", () => {
+    expect(validateSetting("ARCHYMEDES_CODE_COLORS", "VSCode")).toBe("vscode");
+    expect(validateSetting("ARCHYMEDES_CODE_LINE_NUMBERS", "off")).toBe("off");
+    expect(validateSetting("ARCHYMEDES_TOKEN_SAVER", "ON")).toBe("on");
+    expect(validateSetting("ARCHYMEDES_TOKEN_METER", "off")).toBe("off");
+    expect(validateSetting("ARCHYMEDES_SIMPLE", "off")).toBe("off");
+    expect(validateSetting("ARCHYMEDES_RESUME", "Always")).toBe("always");
+    expect(validateSetting("ARCHYMEDES_EDITOR_AUTOSAVE", "on")).toBe("on");
+    expect(() => validateSetting("ARCHYMEDES_RESUME", "sometimes")).toThrow(/ask, always, never/);
+    expect(() => validateSetting("ARCHYMEDES_CODE_COLORS", "monokai")).toThrow();
+  });
+
+  it("offers the built-in themes and accepts a theme file's name", () => {
+    const theme = SETTING_FIELDS.find((field) => field.key === "ARCHYMEDES_THEME")!;
+    expect("choices" in theme && theme.choices.map((choice) => choice.value)).toContain("parchment");
+    expect(validateSetting("ARCHYMEDES_THEME", "Parchment")).toBe("parchment");
+    expect(validateSetting("ARCHYMEDES_THEME", "my-theme")).toBe("my-theme");
+    expect(() => validateSetting("ARCHYMEDES_THEME", "two words")).toThrow();
+  });
+});
+
+describe("the persisted set", () => {
+  it("keeps every new setting in the persisted set", async () => {
+    const keys = SETTING_FIELDS.map((field) => field.key);
+    for (const key of ["ARCHYMEDES_THEME", "ARCHYMEDES_CODE_COLORS", "ARCHYMEDES_CODE_LINE_NUMBERS", "ARCHYMEDES_TOKEN_SAVER", "ARCHYMEDES_TOKEN_METER", "ARCHYMEDES_SIMPLE", "ARCHYMEDES_RESUME", "ARCHYMEDES_EDITOR_AUTOSAVE"]) {
+      expect(keys).toContain(key);
+    }
   });
 });
 

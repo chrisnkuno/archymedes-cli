@@ -31,8 +31,8 @@ describe("tracking a balance from the prompt", () => {
     proc?.kill();
     proc = undefined;
     await model.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(env: Record<string, string> = {}): ArchymedesProcess {

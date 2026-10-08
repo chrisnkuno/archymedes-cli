@@ -922,3 +922,142 @@ describe("tool-result allowances", () => {
     await agent.dispose();
   });
 });
+
+describe("read-only delegation", () => {
+  it("runs several delegate_readonly_task calls at once, each with only read-only tools in plan mode", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const subTools: string[][] = [];
+    const subSystems: string[] = [];
+    let parentCalls = 0;
+    const model: AgentTurnProvider = {
+      async complete(request) {
+        const names = request.tools.map((tool) => tool.name);
+        const base = { responseId: "r", model: "archymedes-test", usage } as const;
+        if (names.includes("delegate_readonly_task")) {
+          parentCalls += 1;
+          return parentCalls === 1
+            ? { ...base, finishReason: "tool_calls", content: "", toolCalls: [
+              { id: "d1", name: "delegate_readonly_task", arguments: { task: "inspect module a" } },
+              { id: "d2", name: "delegate_readonly_task", arguments: { task: "inspect module b" } },
+            ] } as AgentModelTurn
+            : { ...base, finishReason: "stop", content: "Both reports are in.", toolCalls: [] } as AgentModelTurn;
+        }
+        subTools.push(names);
+        subSystems.push(String(request.messages.find((message) => message.role === "system")?.content ?? ""));
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        active -= 1;
+        return { ...base, finishReason: "stop", content: "module report", toolCalls: [] } as AgentModelTurn;
+      },
+    };
+    const approvals: string[] = [];
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async (request) => { approvals.push(request.tool.name); return "allow"; } });
+    const result = await agent.send("investigate modules a and b and fix whatever is wrong");
+    expect(result.status).toBe("completed");
+    expect(subTools).toHaveLength(2);
+    expect(maxActive).toBe(2);
+    for (const names of subTools) {
+      expect(names).toContain("read_file");
+      for (const forbidden of ["write_file", "edit_file", "run_command", "todo_write", "delegate_task", "delegate_readonly_task"]) {
+        expect(names).not.toContain(forbidden);
+      }
+    }
+    expect(approvals).toEqual([]);
+    await agent.dispose();
+  });
+});
+
+describe("diagnostics after edit", () => {
+  it("appends what the afterEdit hook reports to a successful edit's result", async () => {
+    const edited: string[] = [];
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "edit_file", arguments: { path: "app.ts", oldText: "3000", newText: "\"x\"" } }] },
+      { finishReason: "stop", content: "done" },
+    ]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async () => ({ exitCode: 1, stdout: "", stderr: "" }),
+      afterEdit: async (file) => { edited.push(file); return "app.ts:1:21 error Type 'string' is not assignable to type 'number'."; },
+    });
+    await agent.send("change the port");
+    expect(edited).toHaveLength(1);
+    const followUp = JSON.stringify(model.requests[1].messages);
+    expect(followUp).toContain("Diagnostics after edit:");
+    expect(followUp).toContain("is not assignable");
+    await agent.dispose();
+  });
+
+  it("leaves the result untouched when the hook fails or has nothing to say", async () => {
+    for (const afterEdit of [async () => { throw new Error("no server"); }, async () => undefined]) {
+      const model = scriptedModel([
+        { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "write_file", arguments: { path: "src/new.ts", content: "export {};\n" } }] },
+        { finishReason: "stop", content: "done" },
+      ]);
+      const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", git: async () => ({ exitCode: 1, stdout: "", stderr: "" }), afterEdit });
+      await agent.send("write a file");
+      expect(JSON.stringify(model.requests[1].messages)).toContain("Wrote ");
+      expect(JSON.stringify(model.requests[1].messages)).not.toContain("Diagnostics after edit:");
+      await agent.dispose();
+    }
+  });
+});
+
+describe("token saver (free mode)", () => {
+  const longFile = `export const port = 3000;\n${"// configuration notes that pad the file out\n".repeat(40)}`;
+  function rationed(turns: Array<Partial<AgentModelTurn>>, capabilities = { contextWindow: 32_768, maxOutputTokens: 4_096, supportsEffort: false }) {
+    return Object.assign(scriptedModel(turns), { tokenSaver: true, capabilities });
+  }
+
+  it("runs lean: smaller budgets, a short prompt, fewer tools, and earlier turns' tool output sent as stubs", async () => {
+    await fs.writeFile(path.join(root, "app.ts"), longFile);
+    const model = rationed([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "app.ts" } }] },
+      { content: "It listens on 3000." },
+      { content: "Port 3000, as read earlier." },
+    ]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    expect(agent.budgetSnapshot).toMatchObject({ contextLimit: 16_384, maxOutputTokens: 4_096, maxToolResultChars: 3_000, maxTotalToolResultChars: 24_000, maxToolCallsPerTurn: 8 });
+
+    await agent.send("explain which port app.ts uses");
+    // Within the turn the result is whole: the agent is working with it right now.
+    const inTurn = model.requests[1].messages.find((message) => message.role === "tool");
+    expect(inTurn?.content).toContain("configuration notes");
+    const system = model.requests[0].messages[0].content;
+    expect(system).toContain("How to work:");
+    expect(system).not.toContain("INVARIANT");
+    expect(model.requests[0].tools.map((tool) => tool.name)).not.toContain("web_search");
+
+    const second = await agent.send("and which file was that in?");
+    const sent = model.requests[2].messages.find((message) => message.role === "tool");
+    expect(sent?.content).toMatch(/^\[earlier read_file result, \d+ chars, omitted to save tokens/);
+    // What is kept (and saved) is the full transcript, not the stubs that were sent.
+    expect(second.messages.find((message) => message.role === "tool")?.content).toContain("configuration notes");
+    const saved = await loadSession(root, agent.sessionId);
+    expect(saved?.messages.find((message) => message.role === "tool")?.content).toContain("configuration notes");
+    await agent.dispose();
+  });
+
+  it("re-reads the model's limits each turn without undoing a spend limit or an explicit budget", async () => {
+    const capabilities = { contextWindow: 32_768, maxOutputTokens: 4_096, supportsEffort: false };
+    const model = rationed([{ content: "ok" }], capabilities);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", budgets: { maxToolCallsPerTurn: 4 } });
+    agent.setModelSpendLimit(1_234);
+    // The free provider learns a concrete model's smaller window from the live catalog.
+    capabilities.contextWindow = 8_192;
+    capabilities.maxOutputTokens = 1_024;
+    await agent.send("hello");
+    expect(agent.budgetSnapshot).toMatchObject({ contextLimit: 8_192, maxOutputTokens: 1_024, maxToolCallsPerTurn: 4, maxRwf: 1_234 });
+    await agent.dispose();
+  });
+
+  it("changes nothing for a provider that does not ask for it", async () => {
+    const model = Object.assign(scriptedModel([{ content: "ok" }]), { capabilities: { contextWindow: 32_768, maxOutputTokens: 4_096, supportsEffort: false } });
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    expect(agent.budgetSnapshot).toMatchObject({ contextLimit: 32_768, maxToolResultChars: 6_554, maxToolCallsPerTurn: 16 });
+    await agent.send("fix the port in app.ts");
+    expect(model.requests[0].messages[0].content).toContain("INVARIANT");
+    await agent.dispose();
+  });
+});

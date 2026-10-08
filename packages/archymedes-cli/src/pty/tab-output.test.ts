@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { paintContaining, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
+import { CONPTY, paintContaining, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -41,8 +41,8 @@ describe("what a tab keeps, under a real pty", () => {
     }
     proc = undefined;
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {
@@ -107,7 +107,7 @@ describe("what a tab keeps, under a real pty", () => {
     p.kill();
   }, 90_000);
 
-  it("keeps each tab's work in its own tab rather than in whichever is on screen", async () => {
+  it.skipIf(CONPTY)("keeps each tab's work in its own tab rather than in whichever is on screen", async () => {
     const p = boot();
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
@@ -213,7 +213,7 @@ describe("what a tab keeps, under a real pty", () => {
     const opening = p.output().length;
     p.writeLine("/workspace");
     // The legend is the panel's own text and appears nowhere else in the CLI.
-    await p.waitFor(/q leave/, { timeoutMs: 30_000, since: opening });
+    await p.waitFor(/Esc back/, { timeoutMs: 30_000, since: opening });
 
     // Leaving must restore the prompt: a panel that keeps the keyboard is a hung session.
     const leaving = p.output().length;
@@ -289,7 +289,7 @@ describe("what a tab keeps, under a real pty", () => {
     // them is testing its own timing rather than the screen.
     const closing = p.output().length;
     p.write("\r");
-    await p.waitFor(/topic .* q leave/, { timeoutMs: 20_000, since: closing });
+    await p.waitFor(/topic .* Esc back/, { timeoutMs: 20_000, since: closing });
 
     const leaving = p.output().length;
     p.write("q");

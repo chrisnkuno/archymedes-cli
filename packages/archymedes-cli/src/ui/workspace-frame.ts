@@ -61,7 +61,7 @@ export function workspaceHeader(context: WorkspaceFrameContext, width: number, p
   const modes = ["plan", "build", "auto", "defender"].map((mode) => mode === context.mode
     ? ink(` ${mode.toUpperCase()} `, color + BOLD + REVERSE) : ink(` ${mode} `, p.muted)).join(ink(g.boxVertical, p.muted));
   const second = width >= 48 ? ` ${modes}` : ` ${ink(`[${context.mode.toUpperCase()}]`, color + BOLD)}`;
-  const hint = width >= 90 ? `  /mode choose  Ctrl+G menu` : "";
+  const hint = width >= 90 ? `  ? help  Ctrl+G menu` : "";
   const model = clean(context.model);
   const navigation = width >= 72 ? (position.startsWith("HISTORY") ? "Esc live " : "PgUp/wheel history ") : "";
   const modelWidth = Math.max(0, width - navigation.length - 3);
@@ -304,7 +304,7 @@ export class WorkspaceFrame extends PinnedScreen {
       body = renderIdentity({ ...context, width: this.current.columns - 1, rows: height >= 15 ? 24 : 12,
         angle: this.phase * 0.065 }).split("\n");
       body.push("", ...warnings);
-      body.push(paint("  /mode choose your tools   /palette find any action", context.palette.muted, context.palette.depth));
+      body.push(paint("  ? help   Ctrl+G find any action   /history earlier chats", context.palette.muted, context.palette.depth));
       body = body.slice(0, height);
     }
     if (this.overlay !== undefined) {

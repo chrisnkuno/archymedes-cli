@@ -2,11 +2,11 @@ import { type Interface } from "node:readline/promises";
 import path from "node:path";
 import { FOLD_AFTER_LINES, activity, endStreamedLine, glyphs, markdown, out, renderEvent, screen, sectionStyle, spinner, statusBar, style } from "./transcript";
 import { type DaemonApprovalRequest } from "@archymedes/core/cli/daemon";
-import type { PermissionDecision } from "@archymedes/core/cli/permissions";
+import type { ApprovalPattern, PermissionDecision } from "@archymedes/core/cli/permissions";
 import { type SafetyAssessment } from "@archymedes/core/cli/safety";
 import { type JevToolCheck } from "@archymedes/core/cli/jev";
 import { openChooser } from "../ui/shortcuts";
-import { type SettingsPrompts } from "../platform/settings";
+import { SETTING_CANCELLED, type SettingsPrompts } from "../platform/settings";
 import { renderFileChange } from "../render/code-view";
 
 /**
@@ -63,10 +63,13 @@ export function settingsChooser(readline: Interface): NonNullable<SettingsPrompt
       title: request.title,
       ...(request.filter ? { filter: true } : {}),
       ...(request.initialIndex === undefined ? {} : { initialIndex: request.initialIndex }),
+      ...(request.legend ? { legend: request.legend } : {}),
       // Fits the longest exactly-fitting list: the twelve providers plus the pinned
       // "Clear this setting" row, with one spare. A shorter window would leave that
       // escape hatch below the fold, where it renders never and reads as absent.
-      height: 14,
+      // Section headings take rows of their own; the window gives them back so the legend (and
+      // its "Esc done (saves)") stays on screen in a frame no taller than before.
+      height: request.items.some((item) => item.header) ? 10 : 14,
       // The real terminal, so rows are clipped rather than wrapped onto lines the repaint does
       // not know it drew.
       width: process.stdout.columns ?? 80,
@@ -89,14 +92,46 @@ export function settingsChooser(readline: Interface): NonNullable<SettingsPrompt
 /** What a pending `write_file`/`edit_file` approval would actually change — no file read needed: `write_file` carries its whole new content, `edit_file` carries the exact before/after snippet. */
 export function renderApprovalPreview(preview: DaemonApprovalRequest["preview"]): string | undefined {
   if (!preview) return undefined;
-  const rendered = preview.toolName === "write_file"
-    ? renderFileChange({ path: preview.path, kind: "write", content: preview.content }, sectionStyle(), { maxLines: FOLD_AFTER_LINES })
-    : renderFileChange({ path: preview.path, kind: "edit", before: preview.oldText, after: preview.newText }, sectionStyle(), { maxLines: FOLD_AFTER_LINES });
-  return rendered.text;
+  if (preview.toolName === "write_file") {
+    return renderFileChange({ path: preview.path, kind: "write", content: preview.content }, sectionStyle(), { maxLines: FOLD_AFTER_LINES }).text;
+  }
+  // The multi-edit form: one diff per hunk, in the order they apply. The approval request carries no
+  // workspace handle (and the file may live in a sandbox), so each edit is shown as its own
+  // old -> new hunk rather than as a whole-file diff computed from contents read here.
+  const edits = preview.edits;
+  if (edits && edits.length > 1) {
+    return edits.map((edit, index) => renderFileChange(
+      { path: `${preview.path} (edit ${index + 1}/${edits.length}${edit.replaceAll ? ", all occurrences" : ""})`, kind: "edit", before: edit.oldText, after: edit.newText },
+      sectionStyle(),
+      { maxLines: FOLD_AFTER_LINES },
+    ).text).join("\n");
+  }
+  const single = edits?.[0];
+  return renderFileChange(
+    { path: preview.path, kind: "edit", before: single ? single.oldText : preview.oldText, after: single ? single.newText : preview.newText },
+    sectionStyle(),
+    { maxLines: FOLD_AFTER_LINES },
+  ).text;
+}
+
+/** The answer line's choices; `[p]` appears only when the request offers a pattern to grant. */
+export function approvalChoices(pattern?: ApprovalPattern): string {
+  // The label already reads "always allow …", so it is shown as-is after the key.
+  return `[y]es / [n]o / [a]lways / ${pattern ? `[p] ${pattern.label} / ` : ""}[d]eny always: `;
+}
+
+/** Maps a typed answer to a decision. `p` without an offered pattern is not a recognised answer, so it denies. */
+export function approvalDecisionFor(answer: string, pattern?: ApprovalPattern): PermissionDecision {
+  const normalized = answer.trim().toLowerCase();
+  if (normalized === "a" || normalized === "always") return "allow_always";
+  if (normalized === "p" || normalized === "pattern") return pattern ? "allow_pattern" : "deny";
+  if (normalized === "d") return "deny_always";
+  if (normalized === "n" || normalized === "no") return "deny";
+  return normalized === "" || normalized === "y" || normalized === "yes" ? "allow" : "deny";
 }
 
 export function createApprovalPrompt(readline: Interface, interactive: boolean, signal: () => AbortSignal | undefined) {
-  return async ({ summary, safety, preview, jev }: { summary: string; safety?: SafetyAssessment; preview?: DaemonApprovalRequest["preview"]; jev?: JevToolCheck }): Promise<PermissionDecision> => {
+  return async ({ summary, safety, preview, jev, pattern }: { summary: string; safety?: SafetyAssessment; preview?: DaemonApprovalRequest["preview"]; jev?: JevToolCheck; pattern?: ApprovalPattern }): Promise<PermissionDecision> => {
     // Without a terminal there is nobody to ask, and a prompt written to a pipe would either hang
     // or read the next line of piped input as an answer. Denying is the only honest result — and
     // it is reported, so the run does not look like the model simply chose not to act.
@@ -127,7 +162,7 @@ export function createApprovalPrompt(readline: Interface, interactive: boolean, 
     }
     let answer: string;
     try {
-      answer = (await readline.question(`    ${style.dim("[y]es / [n]o / [a]lways / [d]eny always: ")}`, { signal: signal() })).trim().toLowerCase();
+      answer = await readline.question(`    ${style.dim(approvalChoices(pattern))}`, { signal: signal() });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         out.write(style.yellow("\n  interrupted — treating as denied\n"));
@@ -135,10 +170,7 @@ export function createApprovalPrompt(readline: Interface, interactive: boolean, 
       }
       throw error;
     }
-    if (answer === "a" || answer === "always") return "allow_always";
-    if (answer === "d") return "deny_always";
-    if (answer === "n" || answer === "no") return "deny";
-    return answer === "" || answer === "y" || answer === "yes" ? "allow" : "deny";
+    return approvalDecisionFor(answer, pattern);
   };
 }
 
@@ -175,19 +207,45 @@ export async function confirmSpendingCap(readline: Interface, interactive: boole
   return answer === "" || answer === "y" || answer === "yes";
 }
 
+/**
+ * A typed question that Esc backs out of, answering `SETTING_CANCELLED` instead of a value.
+ *
+ * readline has no notion of Esc on a line it is reading, so the key is watched on the input stream
+ * (readline already emits `keypress` there) and turned into an abort of this one question. The
+ * cancellation is told apart from Ctrl+C or Ctrl+D by whose signal fired: only ours means "back".
+ */
+export async function questionWithEscape(ask: (signal: AbortSignal) => Promise<string>, input: NodeJS.ReadableStream = process.stdin): Promise<string> {
+  const controller = new AbortController();
+  const onKeypress = (_text: string | undefined, key: { name?: string } | undefined) => {
+    if (key?.name === "escape") controller.abort();
+  };
+  input.on("keypress", onKeypress);
+  try {
+    return await ask(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      process.stdout.write("\n");
+      return SETTING_CANCELLED;
+    }
+    throw error;
+  } finally {
+    input.off("keypress", onKeypress);
+  }
+}
+
 /** Ctrl+D/EOF is a normal way to leave a terminal program, never an application failure. */
 export function isReadlineExit(error: unknown): boolean {
   return error instanceof Error && (error.name === "AbortError" || /aborted with ctrl\+d|readline was closed/i.test(error.message));
 }
 
 /** Reads a secret through readline without echoing pasted credentials to the terminal or history. */
-export async function hiddenQuestion(readline: Interface, question: string): Promise<string> {
+export async function hiddenQuestion(readline: Interface, question: string, signal?: AbortSignal): Promise<string> {
   process.stdout.write(`${question}${style.dim("[input hidden] ")}`);
   const stdout = process.stdout as typeof process.stdout & { write: typeof process.stdout.write };
   const original = stdout.write;
   try {
     stdout.write = (() => true) as typeof process.stdout.write;
-    const answer = await readline.question("");
+    const answer = await readline.question("", signal ? { signal } : {});
     // readline records answers automatically. A hidden value must not become visible again when
     // the user presses Up, nor reach the persistent prompt history file.
     const history = (readline as Interface & { history?: string[] }).history;

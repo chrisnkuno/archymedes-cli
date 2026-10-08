@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
-import type { ChatResponse } from "./openai-compatible";
+import type { ChatResponse, ChatStreamChunk } from "./openai-compatible";
 
 const usage = {
   prompt_tokens: 800,
@@ -38,6 +38,38 @@ describe("OpenAI agent adapter", () => {
     controller.abort();
     await expect(pending).rejects.toThrow("cancelled");
     expect(received?.aborted).toBe(true);
+  });
+
+  it("reports a stream deadline as a timeout rather than the SDK's abort error", async () => {
+    vi.useFakeTimers();
+    try {
+      const provider = new OpenAIAgentTurnProvider({ apiKey: "sk-test", model: "gpt-5.6-terra" }, async (_body, signal) =>
+        await new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(Object.assign(new Error("Request was aborted."), { name: "APIUserAbortError" })), { once: true })));
+      const pending = provider.complete(request).catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(300_000);
+      await expect(pending).resolves.toMatchObject({ name: "TimeoutError", code: "ETIMEDOUT", phase: "first_byte" });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not cut off a long stream that keeps producing output", async () => {
+    vi.useFakeTimers();
+    try {
+      async function* slow(): AsyncIterable<ChatStreamChunk> {
+        // Ten minutes in total, far past the old 180s wall clock, never silent for more than 60s.
+        for (let index = 0; index < 10; index += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 60_000));
+          yield { id: "s", model: "gpt-5.6-terra", choices: [{ delta: index % 2 ? { content: "x" } : { tool_calls: [{ index: 0, id: "c", function: { name: "read_file", arguments: "" } }] } }] };
+        }
+        yield { choices: [{ finish_reason: "stop", delta: {} }], usage };
+      }
+      const progress: string[] = [];
+      const provider = new OpenAIAgentTurnProvider({ apiKey: "sk-test", model: "gpt-5.6-terra" }, async () => slow());
+      const pending = provider.complete({ ...request, onOutputProgress: (kind) => progress.push(kind) });
+      await vi.advanceTimersByTimeAsync(600_000);
+      await expect(pending).resolves.toMatchObject({ content: "xxxxx" });
+      expect(progress).toContain("tool_call");
+      expect(progress).toContain("text");
+    } finally { vi.useRealTimers(); }
   });
 
   it("sends tools in the function-calling schema and identifies the caller", async () => {
@@ -160,5 +192,38 @@ describe("OpenAI agent adapter", () => {
     const turn = await provider.complete({ ...request, onTextDelta: (text) => seen.push(text) });
     expect(seen).toEqual(["Hel", "lo."]);
     expect(turn).toMatchObject({ finishReason: "stop", content: "Hello." });
+  });
+});
+
+describe("OpenAI agent adapter prompt caching", () => {
+  const capture = () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const call = async (body: Record<string, unknown>) => { bodies.push(body); return respond(); };
+    return { bodies, call };
+  };
+
+  it("adds cache_control breakpoints for anthropic/ models through OpenRouter", async () => {
+    const { bodies, call } = capture();
+    await new OpenAIAgentTurnProvider({ apiKey: "sk", model: "anthropic/claude-sonnet-4.6", baseURL: "https://openrouter.ai/api/v1" }, call).complete(request);
+    const messages = bodies[0].messages as Array<{ content: unknown }>;
+    expect(messages[0].content).toEqual([{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }]);
+    expect(messages[1].content).toEqual([{ type: "text", text: "hi", cache_control: { type: "ephemeral" } }]);
+  });
+
+  it("sends no breakpoints to OpenAI itself, and keeps the request prefix byte-stable across turns", async () => {
+    const { bodies, call } = capture();
+    const provider = new OpenAIAgentTurnProvider({ apiKey: "sk", model: "gpt-5.6-terra" }, call);
+    await provider.complete(request);
+    await provider.complete({ ...request, messages: [...request.messages, { role: "assistant" as const, content: "x" }, { role: "user" as const, content: "more" }] });
+    expect(JSON.stringify(bodies[0])).not.toContain("cache_control");
+    expect(bodies[0].prompt_cache_key).toBe(bodies[1].prompt_cache_key);
+    expect(JSON.stringify(bodies[0].tools)).toBe(JSON.stringify(bodies[1].tools));
+    expect((bodies[1].messages as unknown[]).slice(0, 2)).toEqual(bodies[0].messages);
+  });
+
+  it("reads cached prompt tokens into usage", async () => {
+    const { call } = capture();
+    const turn = await new OpenAIAgentTurnProvider({ apiKey: "sk", model: "gpt-5.6-terra" }, call).complete(request);
+    expect(turn.usage.cachedInputTokens).toBe(600);
   });
 });

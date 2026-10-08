@@ -17,6 +17,8 @@ type Entry = {
   fingerprint: string;
   kind: string;
   prices: ModelPriceCatalog;
+  /** When this identity was first persisted, before any dispatch of it. Absent on older snapshots. */
+  timestamp?: number;
   state: "pending" | "completed" | "failed" | "ambiguous" | "cancelled";
   response?: AgentModelTurn;
 };
@@ -52,13 +54,21 @@ function validateBatch(value: unknown, sessionId: string): Batch {
     if (!entry || !entry.request || typeof entry.request.requestId !== "string" || ids.has(entry.request.requestId)
       || !Array.isArray(entry.request.messages) || !Array.isArray(entry.request.tools)
       || digest(entry.request) !== entry.fingerprint || !["pending", "completed", "failed", "ambiguous", "cancelled"].includes(entry.state)
-      || typeof entry.kind !== "string" || !entry.prices || (entry.state === "completed" && !entry.response)) {
+      || typeof entry.kind !== "string" || (entry.timestamp !== undefined && (!Number.isSafeInteger(entry.timestamp) || entry.timestamp <= 0)) || !entry.prices
+      || (entry.state === "completed" && !entry.response)) {
       throw new Error("Invalid hosted recovery request; refusing to replay changed content.");
     }
     ids.add(entry.request.requestId);
   }
   return batch;
 }
+
+/**
+ * How long another session's recovery snapshot is kept before it counts as abandoned. Long, on
+ * purpose: the snapshot is the only record of a request that may already have been paid for, and
+ * deleting it early turns a recoverable response into a second charge.
+ */
+const ORPHAN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class HostedRecoveryStore {
   private batch: Batch | undefined;
@@ -81,15 +91,18 @@ export class HostedRecoveryStore {
 
   private async write(batch: Batch): Promise<void> {
     await fs.mkdir(path.dirname(this.file), { recursive: true, mode: 0o700 });
+    const data = JSON.stringify({ batch, integrity: digest(batch) });
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       const handle = await fs.open(temporary, "wx", 0o600);
-      try { await handle.writeFile(JSON.stringify({ batch, integrity: digest(batch) })); await handle.sync(); }
+      try { await handle.writeFile(data); await handle.sync(); }
       finally { await handle.close(); }
       await fs.rename(temporary, this.file);
       // Persist the name before dispatch as well as the file's content.
+      // Windows refuses to sync a directory handle (EPERM). The file itself is already synced and
+      // renamed into place, so that one refusal is not a failed write.
       const directory = await fs.open(path.dirname(this.file), "r").catch(() => null);
-      if (directory) { try { await directory.sync(); } finally { await directory.close(); } }
+      if (directory) { try { await directory.sync(); } catch (e) { if ((e as NodeJS.ErrnoException).code !== "EPERM") throw e; } finally { await directory.close(); } }
     } finally { await fs.unlink(temporary).catch(() => undefined); }
   }
 
@@ -116,7 +129,7 @@ export class HostedRecoveryStore {
     let entry = this.batch.entries.find((item) => item.request.requestId === saved.requestId);
     if (entry && entry.fingerprint !== digest(saved)) throw new Error("Hosted request identity reused with changed content");
     if (!entry) {
-      entry = { request: saved, fingerprint: digest(saved), kind, prices: { ...prices }, state: "pending" };
+      entry = { request: saved, fingerprint: digest(saved), kind, prices: { ...prices }, timestamp: Date.now(), state: "pending" };
       this.batch.entries.push(entry);
       await this.write(this.batch);
     }
@@ -165,9 +178,41 @@ export class HostedRecoveryStore {
   async cleanup(committedId?: string): Promise<void> {
     const batch = this.batch ?? await this.read();
     if (batch && batch.id === committedId) {
-      await fs.unlink(this.file).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; });
+      await fs.unlink(this.file).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT" && error.code !== "EPERM") throw error; });
       this.batch = undefined;
     }
+  }
+
+  /**
+   * Removes recovery files older than the TTL that were never resumed.
+   *
+   * A process that crashes and is never started again leaves its recovery file on disk
+   * indefinitely. This method scans the recovery directory and removes files whose last
+   * modification time exceeds the TTL, preventing unbounded growth.
+   *
+   * Only files for other sessions are removed — the current session's file is never touched.
+   */
+  async cleanupOrphaned(root: string, ttlMs: number = ORPHAN_TTL_MS): Promise<number> {
+    const dir = path.join(root, ".archymedes", "recovery");
+    let entries: string[];
+    try { entries = await fs.readdir(dir); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0; throw error; }
+    const now = Date.now();
+    let removed = 0;
+    for (const entry of entries) {
+      if (entry === `${this.sessionId}.json` || !entry.endsWith(".json")) continue;
+      const filePath = path.join(dir, entry);
+      try {
+        const stat = await fs.stat(filePath);
+        if (now - stat.mtimeMs > ttlMs) {
+          await fs.unlink(filePath);
+          removed += 1;
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+    return removed;
   }
 
   async recover(provider: AgentTurnProvider, session: SessionRecord, signal?: AbortSignal): Promise<SessionRecord | null> {

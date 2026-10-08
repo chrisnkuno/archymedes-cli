@@ -1,6 +1,6 @@
 import type { Interface } from "node:readline/promises";
 import { KeyBindingRegistry, type KeypressEvent } from "../terminal/keybindings";
-import { paletteEntries, runCommandPalette, type PaletteKey, type RunPaletteOptions } from "./palette";
+import { PALETTE_FOOTER, paletteEntries, runCommandPalette, type PaletteKey, type RunPaletteOptions } from "./palette";
 import { runModelPicker, type PickerResult, type RunModelPickerOptions } from "./model-picker";
 import { runDefenderTriage, type DefenderOutcome, type RunDefenderOptions } from "./defender-screen";
 import type { PlacedSecretFinding } from "@archymedes/core/cli/tools";
@@ -189,8 +189,10 @@ export async function openPalette(host: ShortcutHost, self?: unknown, options: R
   // the renderer: the renderer is pure and has no business asking the process how wide it is.
   const sized = {
     width: host.output.columns ?? 80,
+    footer: PALETTE_FOOTER,
     ...options,
-    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 3) })),
+    // One row fewer than before, for the key legend under the query.
+    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 4) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runCommandPalette(keys, paletteEntries(chords), paint, sized));
 }

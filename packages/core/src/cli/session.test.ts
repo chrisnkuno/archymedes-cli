@@ -5,6 +5,8 @@ import path from "node:path";
 import type { AgentMessage } from "../agent-runtime";
 import { CheckpointStore, runGit, type GitRunner } from "./checkpoints";
 import {
+  appendSessionStep,
+  sessionJournalPath,
   atSafeBoundary,
   buildCompactedMessages,
   COMPACTION_INSTRUCTION,
@@ -99,6 +101,70 @@ describe("session storage", () => {
     await expect(saveSession(stale)).rejects.toThrow(/revision conflict/);
     expect((await loadSession(root, "shared"))?.title).toBe("newer state");
     expect((await fs.readdir(path.join(root, ".archymedes", "sessions"))).some((file) => file.endsWith(".tmp"))).toBe(false);
+  });
+
+  it("appends tool steps to a journal and resumes from snapshot plus journal tail", async () => {
+    const saved = record({ id: "journaled" });
+    const snapshotFile = await saveSession(saved);
+    const steps: AgentMessage[] = [
+      { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.ts" } }] },
+      { role: "tool", toolCallId: "c1", content: "file contents" },
+      { role: "assistant", content: "done" },
+    ] as AgentMessage[];
+    // The first step after a snapshot is an append, not a rewrite.
+    await appendSessionStep({ ...saved, messages: [...saved.messages, ...steps.slice(0, 2)], title: "Renamed" });
+    await appendSessionStep({ ...saved, messages: [...saved.messages, ...steps] });
+    expect(await fs.readFile(snapshotFile, "utf8")).not.toContain("file contents");
+    expect((await fs.readFile(sessionJournalPath(root, saved.id), "utf8")).trim().split("\n")).toHaveLength(2);
+
+    const resumed = await loadSession(root, saved.id);
+    expect(resumed?.messages).toEqual([...saved.messages, ...steps]);
+    expect(resumed?.revision).toBe(1);
+    expect(resumed?.title).toBe("Add a health check");
+    // A full save compacts: the snapshot carries everything and the journal is gone.
+    await saveSession(resumed!);
+    expect(await fs.stat(sessionJournalPath(root, saved.id)).catch(() => null)).toBeNull();
+    expect((await loadSession(root, saved.id))?.messages).toEqual([...saved.messages, ...steps]);
+  });
+
+  it("resumes past a torn final journal line, and later appends still land", async () => {
+    const saved = record({ id: "torn" });
+    await saveSession(saved);
+    const first: AgentMessage = { role: "assistant", content: "step one" };
+    await appendSessionStep({ ...saved, messages: [...saved.messages, first] });
+    // A crash mid-append leaves a partial line with no newline.
+    await fs.appendFile(sessionJournalPath(root, saved.id), '{"base":1,"seq":2,"from":2,"append":[{"role":"assis');
+    const resumed = await loadSession(root, saved.id);
+    expect(resumed?.messages).toEqual([...saved.messages, first]);
+
+    const second: AgentMessage = { role: "assistant", content: "step two" };
+    await appendSessionStep({ ...resumed!, messages: [...resumed!.messages, second] });
+    expect((await loadSession(root, saved.id))?.messages).toEqual([...saved.messages, first, second]);
+  });
+
+  it("ignores journal lines that are corrupt or belong to an older snapshot", async () => {
+    const saved = record({ id: "stale-journal" });
+    await saveSession(saved);
+    await appendSessionStep({ ...saved, messages: [...saved.messages, { role: "assistant", content: "kept" }] });
+    const journal = sessionJournalPath(root, saved.id);
+    const [line] = (await fs.readFile(journal, "utf8")).trim().split("\n");
+    // A tampered line fails its hash and ends the replay there.
+    await fs.appendFile(journal, `${line!.replace("kept", "evil")}\n`);
+    expect((await loadSession(root, saved.id))?.messages.at(-1)).toEqual({ role: "assistant", content: "kept" });
+    // Entries for revision 1 are ignored once the snapshot is at revision 2.
+    const stale = await fs.readFile(journal, "utf8");
+    const current = (await loadSession(root, saved.id))!;
+    await saveSession(current);
+    await fs.writeFile(journal, stale);
+    expect((await loadSession(root, saved.id))?.messages).toEqual(current.messages);
+  });
+
+  it("falls back to a full save when the transcript was rewritten rather than extended", async () => {
+    const saved = record({ id: "rewritten" });
+    const file = await saveSession(saved);
+    await appendSessionStep({ ...saved, messages: [{ role: "user", content: "compacted summary" }] });
+    expect(await fs.readFile(file, "utf8")).toContain("compacted summary");
+    expect((await loadSession(root, saved.id))?.messages).toEqual([{ role: "user", content: "compacted summary" }]);
   });
 
   it("fails closed when a saved session is tampered with", async () => {
@@ -400,6 +466,35 @@ describe("checkpoints against a real repository", () => {
       expect(await fs.readFile(path.join(repo, "app.ts"), "utf8")).toBe("export const port = 3000;\n");
       expect(await fs.stat(path.join(repo, "stray.ts")).catch(() => null)).toBeNull();
       expect(await fs.readFile(path.join(repo, ".archymedes", "session.json"), "utf8")).toBe("{}");
+    } finally {
+      await fs.rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("seeds the first capture from the repository's index and still snapshots the working tree exactly", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-git-"));
+    try {
+      await runGit(["init", "-q"], { cwd: repo });
+      await runGit(["config", "core.autocrlf", "false"], { cwd: repo });
+      await fs.writeFile(path.join(repo, "kept.ts"), "kept\n");
+      await fs.writeFile(path.join(repo, "staged.ts"), "staged\n");
+      await fs.mkdir(path.join(repo, ".archymedes"), { recursive: true });
+      await fs.writeFile(path.join(repo, ".archymedes", "tracked.json"), "{}");
+      await runGit(["add", "-A"], { cwd: repo });
+      // Working tree diverges from the user's index: a modification, a deletion, a new file.
+      await fs.writeFile(path.join(repo, "kept.ts"), "changed\n");
+      await fs.unlink(path.join(repo, "staged.ts"));
+      await fs.writeFile(path.join(repo, "new.ts"), "new\n");
+
+      const seeded = await new CheckpointStore(repo, path.join(repo, ".archymedes", "seeded-index")).capture("a", "t1", 0);
+      // The reference: the same capture from an empty index (what every first capture used to do).
+      const coldIndex = path.join(repo, ".archymedes", "cold-index");
+      const env = { GIT_INDEX_FILE: coldIndex };
+      await runGit(["add", "--all", "--", ".", ":(exclude).archymedes"], { cwd: repo, env });
+      const cold = (await runGit(["write-tree"], { cwd: repo, env })).stdout.trim();
+      expect(seeded?.tree).toBe(cold);
+      const listed = (await runGit(["ls-tree", "-r", "--name-only", seeded!.tree], { cwd: repo })).stdout.trim().split("\n");
+      expect(listed.sort()).toEqual(["kept.ts", "new.ts"]);
     } finally {
       await fs.rm(repo, { recursive: true, force: true });
     }

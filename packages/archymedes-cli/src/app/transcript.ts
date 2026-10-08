@@ -1,5 +1,6 @@
 import path from "node:path";
 import { type ArchymedesEvent } from "@archymedes/core/cli/agent";
+import type { ModelAllowance } from "@archymedes/core/agent-runtime";
 import { detectColorDepth } from "../text/color-depth";
 import { WorkspaceFrame } from "../ui/workspace-frame";
 import { box, MarkdownStream, ReplaceableBlock, Spinner, StatusBar, table, wrapPlain } from "../render/tui";
@@ -115,7 +116,11 @@ export const expandables = new ExpandableStore();
 export function contentWidth(): number {
   return screen?.current.contentWidth ?? (process.stdout.columns ?? 80);
 }
-export const activity: { awaitingFirstDelta: boolean; toolCalls: number; tokens: number; phase: "thinking" | "operation"; operation?: string; steps?: { done: number; total: number; label?: string } } = {
+/**
+ * `allowance` is the newest daily-allowance snapshot a model call reported (free mode). Unlike the
+ * per-turn counts it is never reset at a turn boundary: the day's meter outlives the turn.
+ */
+export const activity: { awaitingFirstDelta: boolean; toolCalls: number; tokens: number; phase: "thinking" | "operation"; operation?: string; steps?: { done: number; total: number; label?: string }; allowance?: ModelAllowance } = {
   awaitingFirstDelta: false,
   toolCalls: 0,
   tokens: 0,
@@ -414,6 +419,7 @@ export function renderEvent(event: ArchymedesEvent): void {
     // Silent by design: every call this turn announces itself below, so a "thinking (3 tool
     // calls)" line would only restate what the next three lines are about to say.
     activity.tokens += runtime.usage.inputTokens + runtime.usage.outputTokens;
+    if (runtime.allowance) activity.allowance = runtime.allowance;
     return;
   }
   if (runtime.type === "tool_call") {

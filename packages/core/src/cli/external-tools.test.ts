@@ -22,8 +22,17 @@ async function writeSkill(directory: string, name: string, command: string): Pro
   await fs.writeFile(path.join(directory, name, "skill.json"), JSON.stringify({ name, description: `The ${name} skill.`, command, inputSchema: schema }));
 }
 
+/** A real hook script for the platform under test: `.sh` on POSIX, the equivalent `.cmd` on Windows. */
 async function writeHook(directory: string, fileName: string, body: string): Promise<void> {
   await fs.mkdir(directory, { recursive: true });
+  if (process.platform === "win32") {
+    const windowsBody = body
+      .replace(/echo '([^']*)' >&2/g, "echo $1 1>&2")
+      .replace(/echo (\w+) >> (.+)/g, 'echo $1>>"$2"')
+      .replace(/^exit (\d+)$/gm, "exit /b $1");
+    await fs.writeFile(path.join(directory, fileName.replace(/\.sh$/, ".cmd")), `@echo off\r\n${windowsBody.replaceAll("\n", "\r\n")}\r\n`);
+    return;
+  }
   await fs.writeFile(path.join(directory, fileName), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 }
 
@@ -68,7 +77,7 @@ describe("loadLocalExternalTooling", () => {
     const tooling = await loadLocalExternalTooling(new LocalWorkspace(root));
     try {
       await expect(tooling.hooks.runPreToolUse("write_file", { path: "a.txt" })).resolves.toEqual({ blocked: false });
-      const lines = (await fs.readFile(log, "utf8")).trim().split("\n").sort();
+      const lines = (await fs.readFile(log, "utf8")).trim().split(/\r?\n/).sort();
       expect(lines).toEqual(["bundled", "top"]); // a plugin's hook is not skipped in favour of the top-level one
     } finally {
       await tooling.dispose();

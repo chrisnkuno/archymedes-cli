@@ -6,6 +6,7 @@ import { CONTROL_LANGUAGES, controlLabel, resolveControlLanguage } from "./i18n"
 import { SUPPORTED_COUNTRIES, currencyForCountry, normalizeCountryCode } from "./local-currency";
 import { isCurrency } from "@archymedes/core/money";
 import { PROVIDER_IDS, PROVIDER_INFO, isProviderId, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { builtinThemes } from "../theme/theme";
 
 /**
  * A value that can be picked from a list, with the human name shown beside the stored code.
@@ -62,6 +63,44 @@ const JEV_CHOICES: readonly SettingChoice[] = [
   { value: "off", label: "Off — never call Jev, even with a key configured" },
 ];
 
+const THEME_CHOICES: readonly SettingChoice[] = builtinThemes().map((theme) => ({ value: theme.name, label: theme.name, ...(theme.description ? { description: theme.description } : {}) }));
+
+const CODE_COLOR_CHOICES: readonly SettingChoice[] = [
+  { value: "vscode", label: "VS Code colours — Dark+ or Light+ to match the theme (default)" },
+  { value: "theme", label: "Theme colours — code painted in the theme's own palette" },
+];
+
+const SHOW_HIDE_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On (default)" },
+  { value: "off", label: "Off" },
+];
+
+const TOKEN_SAVER_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — trim prompts and history to stretch free limits (default)" },
+  { value: "off", label: "Off — send everything, as with a paid model" },
+];
+
+const TOKEN_METER_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — show tokens used in the status line" },
+  { value: "off", label: "Off" },
+];
+
+const SIMPLE_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — a quiet start and a short /help (default)" },
+  { value: "off", label: "Off — the full banner, tips and grouped help" },
+];
+
+const RESUME_CHOICES: readonly SettingChoice[] = [
+  { value: "ask", label: "Ask — offer to continue the last chat in this folder (default)" },
+  { value: "always", label: "Always — continue the last chat automatically" },
+  { value: "never", label: "Never — always start fresh" },
+];
+
+const AUTOSAVE_CHOICES: readonly SettingChoice[] = [
+  { value: "off", label: "Off — save with Ctrl+S (default)" },
+  { value: "on", label: "On — save a second after you stop typing" },
+];
+
 const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label }));
 
 /**
@@ -73,10 +112,33 @@ const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ v
  * Archymedes can price in is a fact it already holds.
  */
 export const SETTING_FIELDS = [
+  { key: "ARCHYMEDES_THEME", label: "Theme — colours for the whole CLI (/theme <name> also saves it)", choices: THEME_CHOICES, section: "Appearance" },
+  { key: "ARCHYMEDES_CODE_COLORS", label: "Code colours", choices: CODE_COLOR_CHOICES },
+  { key: "ARCHYMEDES_CODE_LINE_NUMBERS", label: "Line numbers in code blocks", choices: SHOW_HIDE_CHOICES },
+  { key: "ARCHYMEDES_SIMPLE", label: "Simple mode — quiet start, short help", choices: SIMPLE_CHOICES },
   { key: "ARCHYMEDES_LANGUAGE", label: "Control language", choices: LANGUAGE_CHOICES },
-  { key: "ARCHYMEDES_COUNTRY", label: "Location — sets the currency costs are shown in", choices: COUNTRY_CHOICES },
+  { key: "ARCHYMEDES_RESUME", label: "Continue your last chat at startup", choices: RESUME_CHOICES, section: "Behaviour" },
+  { key: "ARCHYMEDES_EDITOR_AUTOSAVE", label: "Auto-save in /edit", choices: AUTOSAVE_CHOICES },
+  // Off by default, and the label says what it costs: the deterministic suggestions are free and
+  // instant, and this buys two extra project-specific ones for a small model call per turn. A
+  // feature that quietly bills a person for a hint is a feature they turn off once and distrust
+  // afterwards.
+  { key: "ARCHYMEDES_SUGGEST_MODEL", label: "Ask the model for extra suggestions (a small extra call per turn)", choices: ON_OFF_CHOICES },
+  // Three states rather than a switch: looking and installing are different decisions, and the one
+  // people want to make separately is whether Archymedes may replace itself without being asked.
+  { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
+  { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
+  { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
+  { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)", section: "Free mode" },
+  { key: "ARCHYMEDES_TOKEN_SAVER", label: "Free mode token saver", choices: TOKEN_SAVER_CHOICES },
+  { key: "ARCHYMEDES_TOKEN_METER", label: "Token meter in the status line", choices: TOKEN_METER_CHOICES },
+  { key: "ARCHYMEDES_COUNTRY", label: "Location — sets the currency costs are shown in", choices: COUNTRY_CHOICES, section: "Money" },
   { key: "ARCHYMEDES_CURRENCY", label: "Display currency (overrides the one your location implies)", choices: CURRENCY_CHOICES },
-  { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES },
+  { key: "ARCHYMEDES_ACCOUNT_BALANCE", label: "Tracked spend balance — drawn down by each turn's measured cost" },
+  { key: "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY", label: "Currency of the tracked balance (defaults to the display currency)" },
+  { key: "ARCHYMEDES_LOW_BALANCE", label: "Low-balance alert threshold, in the balance currency" },
+  { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
+  { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES, section: "Providers" },
   { key: "ARCHYMEDES_FALLBACK_MODEL", label: "Fallback after transient provider failure — ask, or provider:model" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", secret: true },
   { key: "ANTHROPIC_BASE_URL", label: "Anthropic base URL", url: true },
@@ -120,37 +182,31 @@ export const SETTING_FIELDS = [
   { key: "OPENROUTER_APP_TITLE", label: "OpenRouter app title for rankings (optional)" },
   { key: "TYPESAFE_API_KEY", label: "TypeSafe API key for Jev verdicts (optional)", secret: true },
   { key: "TYPESAFE_MODEL", label: "Jev model (default jev-latest)" },
-  { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
-  { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)" },
-  { key: "E2B_API_KEY", label: "E2B API key", secret: true },
+  { key: "E2B_API_KEY", label: "E2B API key", secret: true, section: "Tools & voice" },
   { key: "E2B_CODING_TEMPLATE", label: "E2B template" },
   { key: "EXA_API_KEY", label: "Exa search API key", secret: true },
   { key: "EXA_BASE_URL", label: "Exa base URL", url: true },
   { key: "VOICE_TRANSCRIPTION_URL", label: "Speech-to-text URL", url: true },
   { key: "VOICE_MODEL", label: "Speech-to-text model" },
   { key: "VOICE_INPUT_DEVICE", label: "Microphone device override" },
-  { key: "MODEL_INPUT_PER_MILLION", label: "Input price per million tokens" },
+  { key: "MODEL_INPUT_PER_MILLION", label: "Input price per million tokens", section: "Price overrides" },
   { key: "MODEL_OUTPUT_PER_MILLION", label: "Output price per million tokens" },
   { key: "MODEL_CACHED_INPUT_PER_MILLION", label: "Cached input price per million tokens" },
   { key: "MODEL_PRICE_CURRENCY", label: "Model price currency" },
   { key: "MODEL_PRICE_MODEL", label: "Model the price override applies to" },
-  // Three states rather than a switch: looking and installing are different decisions, and the one
-  // people want to make separately is whether Archymedes may replace itself without being asked.
-  { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
-  { key: "ARCHYMEDES_ACCOUNT_BALANCE", label: "Tracked spend balance — drawn down by each turn's measured cost" },
-  { key: "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY", label: "Currency of the tracked balance (defaults to the display currency)" },
-  { key: "ARCHYMEDES_LOW_BALANCE", label: "Low-balance alert threshold, in the balance currency" },
-  { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
-  { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
-  // Off by default, and the label says what it costs: the deterministic suggestions are free and
-  // instant, and this buys two extra project-specific ones for a small model call per turn. A
-  // feature that quietly bills a person for a hint is a feature they turn off once and distrust
-  // afterwards.
-  { key: "ARCHYMEDES_SUGGEST_MODEL", label: "Ask the model for extra suggestions (a small extra call per turn)", choices: ON_OFF_CHOICES },
 ] as const;
 
+/**
+ * Settings Archymedes records for itself and never offers in the menu: acknowledgements and the
+ * like, which a person has no reason to edit but which must survive a restart.
+ *
+ * `ARCHYMEDES_FREE_PRIVACY_ACK` is `yes` once the free-mode privacy notice has been shown.
+ */
+export const INTERNAL_SETTING_KEYS = ["ARCHYMEDES_FREE_PRIVACY_ACK"] as const;
+export type InternalSettingKey = typeof INTERNAL_SETTING_KEYS[number];
+
 export type SettingKey = typeof SETTING_FIELDS[number]["key"];
-export type ArchymedesSettings = Partial<Record<SettingKey, string>>;
+export type ArchymedesSettings = Partial<Record<SettingKey | InternalSettingKey, string>>;
 
 /** Native per-user config location on Windows, macOS and freedesktop systems. */
 export function settingsDirectory(environment: Record<string, string | undefined> = process.env, platform = process.platform): string {
@@ -171,6 +227,10 @@ function cleanSettings(value: unknown): ArchymedesSettings {
   for (const field of SETTING_FIELDS) {
     const item = source[field.key];
     if (typeof item === "string" && item.trim()) settings[field.key] = item.trim();
+  }
+  for (const key of INTERNAL_SETTING_KEYS) {
+    const item = source[key];
+    if (typeof item === "string" && item.trim()) settings[key] = item.trim();
   }
   return settings;
 }
@@ -207,10 +267,41 @@ export function maskSetting(value: string | undefined): string {
   return `${value.slice(0, 3)}…${value.slice(-3)}`;
 }
 
+/**
+ * Settings whose answer is one of a few words. Checked case-insensitively and stored lowercased,
+ * so `ON` in a hand-edited settings.json means the same as `on`.
+ */
+const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
+  ARCHYMEDES_CODE_COLORS: ["vscode", "theme"],
+  ARCHYMEDES_CODE_LINE_NUMBERS: ["on", "off"],
+  ARCHYMEDES_TOKEN_SAVER: ["on", "off"],
+  ARCHYMEDES_TOKEN_METER: ["on", "off"],
+  ARCHYMEDES_SIMPLE: ["on", "off"],
+  ARCHYMEDES_RESUME: ["ask", "always", "never"],
+  ARCHYMEDES_EDITOR_AUTOSAVE: ["on", "off"],
+  ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
+  ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
+};
+
+/** Returned by `SettingsPrompts.ask` when the person pressed Esc: leave this field as it was. */
+export const SETTING_CANCELLED = "\u0000cancelled";
+
 export function validateSetting(key: SettingKey, raw: string): string {
   const value = raw.trim();
   const field = SETTING_FIELDS.find((candidate) => candidate.key === key)!;
   if (!value) throw new Error("Value cannot be empty. Enter - in the menu to clear it.");
+  const allowed = ENUM_SETTINGS[key];
+  if (allowed) {
+    const lowered = value.toLowerCase();
+    if (!allowed.includes(lowered)) throw new Error(`Choose one of: ${allowed.join(", ")}.`);
+    return lowered;
+  }
+  if (key === "ARCHYMEDES_THEME") {
+    // Built-in names are offered in the menu, but a theme file the user wrote is just as valid;
+    // the name is checked for shape here and for existence when the session starts.
+    if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Theme names are letters, digits, - and _ — see /theme list.");
+    return value.toLowerCase();
+  }
   if (key === "FREE_MODEL" && !isFreeModelId(value)) throw new Error("Choose openrouter/free or an exact publisher/model:free ID.");
   if ("url" in field && field.url) {
     let url: URL;
@@ -274,9 +365,11 @@ export type SettingsPrompts = {
    */
   choose?<T>(request: {
     title: string;
-    items: readonly { value: T; label: string; description?: string; hint?: string; pinned?: boolean }[];
+    items: readonly { value: T; label: string; description?: string; hint?: string; pinned?: boolean; header?: string }[];
     filter?: boolean;
     initialIndex?: number;
+    /** Replaces the chooser's key legend. */
+    legend?: string;
   }): Promise<T | undefined>;
 };
 
@@ -338,6 +431,16 @@ export const MODEL_FIELD_PROVIDER: Partial<Record<SettingKey, ProviderId>> = {
   OLLAMA_MODEL: "ollama",
 };
 
+/** The section heading a field sits under: the nearest field at or above it that names one. */
+export function sectionOf(key: SettingKey): string | undefined {
+  let section: string | undefined;
+  for (const field of SETTING_FIELDS) {
+    if ("section" in field && field.section) section = field.section;
+    if (field.key === key) return section;
+  }
+  return undefined;
+}
+
 /** What the menu is asking for, when a caller can render a real chooser. */
 export type SettingsSelection =
   | { kind: "field"; key: SettingKey }
@@ -362,7 +465,7 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
       // Arrow-driven when the caller can borrow the keyboard. The rows carry their current values
       // so the menu answers "what is set?" without anyone having to open each field to find out.
       const items = [
-        ...fields.map((field) => ({ value: { kind: "field", key: field.key } as SettingsSelection, label: field.label, hint: describe(field) })),
+        ...fields.map((field) => ({ value: { kind: "field", key: field.key } as SettingsSelection, label: field.label, hint: describe(field), ...(focused ? {} : { header: sectionOf(field.key) }) })),
         ...(focused ? [{ value: { kind: "expand" } as SettingsSelection, label: "Everything else", description: "base URLs, models, pricing, voice, keys", pinned: true }] : []),
         { value: { kind: "done" } as SettingsSelection, label: `${controlLabel(language, "saved")} / ${controlLabel(language, "exit")}`, pinned: true },
       ];
@@ -373,6 +476,9 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
         // scrolling back down twice, and the list is long enough for that to be the whole cost of
         // using it.
         initialIndex: cursor,
+        // Esc here is "I'm done", and what is done is kept — said on screen, because Esc in most
+        // menus means "throw it away" and nobody should have to find out which by trying it.
+        legend: "↑↓ move · Enter edit · Esc done (saves)",
       });
       // Escape means "leave the menu", the same as choosing the exit row.
       selection = chosen ?? { kind: "done" };
@@ -382,7 +488,13 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
       // The typed path stays, and stays first-class. It is what a pipe, a test and a terminal too
       // small to paint into all use, and it is the accessible reading of the same menu.
       prompts.write(`\nArchymedes ${controlLabel(language, "settings")}\n`);
-      fields.forEach((field, index) => prompts.write(`  ${String(index + 1).padStart(2)}. ${field.label}: ${describe(field)}\n`));
+      let lastSection: string | undefined;
+      fields.forEach((field, index) => {
+        const section = focused ? undefined : sectionOf(field.key);
+        if (section && section !== lastSection) prompts.write(`  ${section}\n`);
+        lastSection = section;
+        prompts.write(`  ${String(index + 1).padStart(2)}. ${field.label}: ${describe(field)}\n`);
+      });
       if (focused) prompts.write("   a. everything else (base URLs, models, pricing, voice, keys)\n");
       prompts.write(`   q. ${controlLabel(language, "saved")} / ${controlLabel(language, "exit")}\n`);
       const choice = (await prompts.ask(`${controlLabel(language, "choose")}: `)).trim().toLowerCase();
@@ -442,7 +554,11 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
       continue;
     }
 
-    const raw = await ("secret" in field && field.secret ? prompts.askSecret(`${field.label} (paste hidden; - clears): `) : prompts.ask(`${field.label} (- clears): `));
+    const raw = await ("secret" in field && field.secret ? prompts.askSecret(`${field.label} (paste hidden; - clears; Esc keeps): `) : prompts.ask(`${field.label} (- clears; Esc keeps): `));
+    if (raw === SETTING_CANCELLED) {
+      prompts.write(`${field.label} unchanged.\n`);
+      continue;
+    }
     if (raw.trim() === "-") {
       delete settings[field.key];
       prompts.write(`${field.label} cleared.\n`);

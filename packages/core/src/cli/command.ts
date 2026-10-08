@@ -179,7 +179,9 @@ export function isFindDelete(command: string): boolean {
 
 const SHELL_METACHARACTERS = /[|&;><`$()]|\|\||&&/;
 
-export function hasShellSyntax(command: string): boolean {
+export function hasShellSyntax(command: string, platform: NodeJS.Platform = process.platform): boolean {
+  // cmd.exe expands `%NAME%`; spawned directly, the program would receive the literal text.
+  if (platform === "win32" && /%[A-Za-z_][A-Za-z0-9_]*%/.test(command)) return true;
   // Assignments and shell builtins cannot be spawned as executables.
   if (/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=|(?:cd|export|unset|set|source|\.|umask|alias|unalias|read|eval|exec|exit|return)\s)/.test(command)) return true;
   let quote: '"' | "'" | null = null;
@@ -202,14 +204,42 @@ export function hasShellSyntax(command: string): boolean {
   return false;
 }
 
+/**
+ * A multi-line command, made runnable by cmd.exe.
+ *
+ * `cmd /c` runs only the first line of what it is given and silently drops the rest. Joining the
+ * lines with `&` runs every one of them, in order, whether or not the one before succeeded — which
+ * is what a newline means to sh. A newline inside double quotes is part of an argument and is left
+ * alone; blank lines are dropped, since `& &` is a syntax error.
+ */
+export function joinCmdLines(command: string): string {
+  const lines: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (const character of command.replace(/\r\n/g, "\n")) {
+    if (character === '"') quoted = !quoted;
+    if (character === "\n" && !quoted) {
+      lines.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  lines.push(current);
+  return lines.map((line) => line.trim()).filter(Boolean).join(" & ");
+}
+
 function terminateProcessTree(pid: number | undefined, signal: NodeJS.Signals): void {
   if (!pid) return;
   try {
     if (process.platform !== "win32") process.kill(-pid, signal);
     else {
       // Windows has no Unix process groups. taskkill /T is the native equivalent and prevents a
-      // timed-out test runner from leaving compilers or dev servers behind.
-      spawn("taskkill", ["/PID", String(pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])], {
+      // timed-out test runner from leaving compilers or dev servers behind. Always /F: without it
+      // taskkill asks the process to close its window, and a console command has none, so the
+      // polite attempt only reports "can only be terminated forcefully" and the tree runs on until
+      // the SIGKILL fallback fires.
+      spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
         detached: false,
         stdio: "ignore",
         windowsHide: true,
@@ -317,7 +347,7 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
   let program: string;
   let argv: string[];
   try {
-    [program, ...argv] = throughShell ? [command] : tokenizeCommand(command);
+    [program, ...argv] = throughShell ? [process.platform === "win32" ? joinCmdLines(command) : command] : tokenizeCommand(command);
   } catch (error) {
     return { exitCode: 2, stdout: "", stderr: error instanceof Error ? error.message : "Invalid command" };
   }

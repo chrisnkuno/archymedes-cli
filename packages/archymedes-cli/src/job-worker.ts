@@ -3,6 +3,7 @@ import { ArchymedesAgent, type ArchymedesEvent } from "@archymedes/core/cli/agen
 import type { ApprovalPrompt } from "@archymedes/core/cli/permissions";
 import { loadSession } from "@archymedes/core/cli/session";
 import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
+import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics";
 import type { AgentTurnProvider } from "@archymedes/core/agent-runtime";
 import type { ModelPriceCatalog } from "@archymedes/core/model-cost";
 import type { ExaSearchClient } from "@archymedes/core/providers/exa";
@@ -76,6 +77,7 @@ export function detachedApprovalPrompt(options: {
       policyVersion: request.policyVersion,
       effect: request.tool.effect,
       capabilityId: request.tool.capabilityId,
+      ...(request.pattern ? { pattern: request.pattern } : {}),
     });
     // Refused parking means this digest was already executed under an earlier decision. Re-running
     // it would be a second execution of a single authorization.
@@ -144,6 +146,10 @@ export type JobWorkerDeps = {
   approvalTimeoutMs?: number;
   approvalPollMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Read for `ARCHYMEDES_EDIT_DIAGNOSTICS`; defaults to `process.env`. */
+  environment?: Record<string, string | undefined>;
+  /** Overrides the LSP diagnostics hook (tests); `null` disables it. */
+  afterEdit?: ((path: string) => Promise<string | undefined>) | null;
   /** Handed the constructed agent so a process-level SIGTERM handler can call `.cancel()`. */
   onAgentReady?: (agent: ArchymedesAgent) => void;
 };
@@ -193,6 +199,7 @@ export async function runJobWorkerOnce(deps: JobWorkerDeps): Promise<JobWorkerOu
       approve,
       workspace,
       search: deps.search,
+      afterEdit: editDiagnosticsFor(deps, workspace),
       onEvent: (event) => {
         const step = stepJobLog(logState, event);
         logState = step.state;
@@ -238,6 +245,21 @@ export async function runJobWorkerOnce(deps: JobWorkerDeps): Promise<JobWorkerOu
     clearInterval(heartbeat);
     await workspaceDispose(deps.workspace);
   }
+}
+
+/**
+ * Language-server diagnostics appended to each edit result, exactly as the interactive session wires
+ * them: local workspaces only (a server on this machine cannot see a sandbox's files), and
+ * `ARCHYMEDES_EDIT_DIAGNOSTICS=off` disables.
+ */
+export function editDiagnosticsFor(
+  deps: Pick<JobWorkerDeps, "root" | "environment" | "afterEdit">,
+  workspace: ArchymedesWorkspace,
+): ((path: string) => Promise<string | undefined>) | undefined {
+  if (deps.afterEdit === null) return undefined;
+  const environment = deps.environment ?? process.env;
+  if (!(workspace instanceof LocalWorkspace) || environment.ARCHYMEDES_EDIT_DIAGNOSTICS?.trim().toLowerCase() === "off") return undefined;
+  return deps.afterEdit ?? createLspEditDiagnostics(deps.root);
 }
 
 async function writeLogSafely(root: string, id: string, line: string): Promise<void> {

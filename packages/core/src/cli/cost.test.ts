@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatMoney, fromUnits, tokenPrices, toUnits, type FxRate } from "../money";
 import { definePrices } from "../pricing";
-import { CostLedger, predictAgentUsage, type Expense } from "./cost";
+import { CostLedger, formatTokenFlow, predictAgentUsage, type Expense } from "./cost";
 
 /** Anthropic's published Opus rates: $5 / $25 per million, cached input at a tenth. */
 const opus = tokenPrices("USD", 5, 25, 0.5);
@@ -466,5 +466,50 @@ describe("whether the prompt cache is actually working", () => {
       { input: 300, cached: 0, written: 300 },
     ]);
     expect(ledger.cacheHealth.churning).toBe(false);
+  });
+});
+
+describe("free-mode token meter in the ledger", () => {
+  const free = tokenPrices("USD", 0, 0);
+  const allowance = { date: new Date().toISOString().slice(0, 10), usedTokens: 12_300, remainingTokens: 87_700, resetsAt: "2026-10-09T00:00:00.000Z" };
+
+  it("formats a turn's token flow", () => {
+    expect(formatTokenFlow(usage(12_345, 1_200))).toBe("↑12.3k ↓1.2k tok");
+    expect(formatTokenFlow(usage(800, 40))).toBe("↑800 ↓40 tok");
+  });
+
+  it("shows a $0 turn as tokens and the day's meter once an allowance is known", () => {
+    const ledger = new CostLedger({ prices: free, display: "USD" });
+    expect(ledger.formatTurn(ledger.record({ usage: usage(9_000, 500), iterations: 2, toolCalls: 1, elapsedMs: 3_000 }))).toContain("$0");
+    ledger.recordAllowance(allowance);
+    expect(ledger.latestAllowance).toEqual(allowance);
+    const line = ledger.formatTurn(ledger.record({ usage: usage(9_000, 500), iterations: 2, toolCalls: 1, elapsedMs: 3_000 }));
+    expect(line).toBe("2 turns · 1 tools · ↑9k ↓500 tok · 3.0s · today 12.3k tok · 87.7k left · resets 00:00 UTC");
+  });
+
+  it("keeps money for a priced turn even when an allowance was recorded", () => {
+    const ledger = new CostLedger({ prices: opus, display: "USD" });
+    ledger.recordAllowance(allowance);
+    expect(ledger.formatTurn(ledger.record({ usage: usage(1_000_000, 0), iterations: 1, toolCalls: 0, elapsedMs: 1_000 }))).toContain("$5");
+  });
+
+  it("puts today's free total, what is left and the gateway's warning in /cost", () => {
+    const ledger = new CostLedger({ prices: free, display: "USD" });
+    ledger.record({ usage: usage(9_000, 500), iterations: 1, toolCalls: 0, elapsedMs: 1_000 });
+    expect(ledger.formatReport()).not.toContain("Free tokens");
+    ledger.recordAllowance({ ...allowance, warning: "You've used 80% of today's free allowance." });
+    const report = ledger.formatReport();
+    expect(report).toContain("Free tokens: today 12.3k tok · 87.7k left · resets 00:00 UTC");
+    expect(report).toContain("You've used 80% of today's free allowance.");
+  });
+
+  it("shows OpenRouter's request figures and key credit for the user's own key", () => {
+    const ledger = new CostLedger({ prices: free, display: "USD" });
+    ledger.record({ usage: usage(9_000, 500), iterations: 1, toolCalls: 0, elapsedMs: 1_000 });
+    ledger.recordAllowance({ date: allowance.date, usedTokens: 4_000, remainingRequests: 47, requestLimit: 50, creditsRemaining: 7.456, resetsAt: "2026-10-09T00:00:00.000Z" });
+    const report = ledger.formatReport();
+    expect(report).toContain("Free tokens: today 4k tok · 47/50 req left · resets 00:00 UTC");
+    expect(report).toContain("limit: 50 req/day");
+    expect(report).toContain("key credit left: 7.46");
   });
 });

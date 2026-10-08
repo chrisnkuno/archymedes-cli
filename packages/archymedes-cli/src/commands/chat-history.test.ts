@@ -183,9 +183,27 @@ describe("replaying a conversation", () => {
 });
 
 describe("the /history grammar", () => {
-  it("lists on a bare command, under either name", () => {
-    expect(parseHistoryCommand("/history")).toEqual({ kind: "list" });
-    expect(parseHistoryCommand("/sessions")).toEqual({ kind: "list" });
+  it("opens the picker on a bare command, under any of its names, and lists on request", () => {
+    // Going back to an earlier chat is what people type this for; the printed list is one word away.
+    expect(parseHistoryCommand("/history")).toEqual({ kind: "browse" });
+    expect(parseHistoryCommand("/sessions")).toEqual({ kind: "browse" });
+    expect(parseHistoryCommand("/resume")).toEqual({ kind: "browse" });
+    expect(parseHistoryCommand("/history list")).toEqual({ kind: "list" });
+  });
+
+  it("deletes one chat by id, or all of them with --all", () => {
+    expect(parseHistoryCommand("/history delete 20260808T001720Z-2ubjpz")).toEqual({ kind: "delete", id: "20260808T001720Z-2ubjpz" });
+    expect(parseHistoryCommand("/history delete --all")).toEqual({ kind: "delete", all: true });
+    expect(parseHistoryCommand("/sessions rm 20260808T001720Z-2ubjpz")).toEqual({ kind: "delete", id: "20260808T001720Z-2ubjpz" });
+    expect(parseHistoryCommand("/history delete")).toMatchObject({ kind: "invalid" });
+    expect(parseHistoryCommand("/history delete yesterday")).toMatchObject({ kind: "invalid" });
+  });
+
+  it("resumes by id or latest through /resume", () => {
+    expect(parseHistoryCommand("/resume latest")).toEqual({ kind: "resume", id: "latest" });
+    expect(parseHistoryCommand("/resume 20260808T001720Z-2ubjpz")).toEqual({ kind: "resume", id: "20260808T001720Z-2ubjpz" });
+    expect(parseHistoryCommand("/resume yesterday")).toMatchObject({ kind: "invalid" });
+    expect(parseHistoryCommand("/resumes")).toBeNull();
   });
 
   it("searches for free text", () => {

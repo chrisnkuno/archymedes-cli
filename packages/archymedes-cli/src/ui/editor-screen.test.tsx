@@ -168,3 +168,20 @@ describe("opening the editor from the file browser", () => {
     expect(keyToFileAction({}, "e", true)).toEqual({ kind: "type", character: "e" });
   });
 });
+
+describe("leaving the editor with Esc", () => {
+  it("returns to the chat from normal mode, and asks first about unsaved changes", () => {
+    const clean = open("hi");
+    clean.view.pressKey("escape");
+    expect(clean.exited).toBe(true);
+    expect(clean.saved).toBeUndefined();
+
+    const edited = open("hi");
+    edited.view.pressKey("x");
+    edited.view.pressKey("escape");
+    expect(edited.exited).toBe(false);
+    expect(edited.frame()).toContain("Save changes?");
+    edited.view.pressKey("y");
+    expect(edited.saved).toBe("i");
+  });
+});

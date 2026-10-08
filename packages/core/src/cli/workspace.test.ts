@@ -3,7 +3,15 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  applyTextEdits,
   editTextFile,
+  editTextFileWithEdits,
+  FileReadTracker,
+  parseEditArguments,
+  parseGitignore,
+  parseRipgrepJsonLine,
+  ripgrepArguments,
+  DEFAULT_WORKSPACE_LIMITS,
   globToRegExp,
   globWorkspace,
   grepWorkspace,
@@ -205,5 +213,134 @@ describe("walking and searching concurrently", () => {
     await tree(root);
     const found = await grepWorkspace(root, "needle-\\d+-[0-5]", { regex: true, maxResults: 1_000 });
     expect(found.length).toBe(12 * 6 * 4);
+  });
+});
+
+describe("edit robustness", () => {
+  it("inserts newText literally, never expanding $& $$ $' or $` replacement patterns", async () => {
+    await fs.writeFile(path.join(root, "price.sh"), "echo PRICE\n");
+    await editTextFile(root, "price.sh", "PRICE", "$$5 $& $' $` $1");
+    expect(await fs.readFile(path.join(root, "price.sh"), "utf8")).toBe("echo $$5 $& $' $` $1\n");
+  });
+
+  it("matches LF oldText in a CRLF file and keeps the file CRLF", async () => {
+    await fs.writeFile(path.join(root, "win.ts"), "const a = 1;\r\nconst b = 2;\r\nconst c = 3;\r\n");
+    await editTextFile(root, "win.ts", "const a = 1;\nconst b = 2;", "const a = 10;\nconst b = 20;\nconst bb = 21;");
+    expect(await fs.readFile(path.join(root, "win.ts"), "utf8")).toBe("const a = 10;\r\nconst b = 20;\r\nconst bb = 21;\r\nconst c = 3;\r\n");
+  });
+
+  it("matches CRLF oldText in an LF file and keeps the file LF", async () => {
+    await editTextFile(root, "src/main.ts", "export const value = 1;\r\nconst other = 2;", "export const value = 5;\r\nconst other = 6;");
+    expect(await fs.readFile(path.join(root, "src", "main.ts"), "utf8")).toBe("export const value = 5;\nconst other = 6;\n");
+  });
+
+  it("falls back to a unique trailing-whitespace-insensitive line match", () => {
+    const result = applyTextEdits("a  \nb\t\nc\n", [{ oldText: "a\nb", newText: "x\ny" }], "f");
+    expect(result).toEqual({ content: "x\ny\nc\n", replacements: 1 });
+  });
+
+  it("refuses an ambiguous whitespace-insensitive match", () => {
+    expect(() => applyTextEdits("a \nb\na\t\nb\n", [{ oldText: "a\nb", newText: "x" }], "f")).toThrow(/matches 2 places when trailing whitespace is ignored/);
+  });
+
+  it("names the nearest similar line when oldText is not found", () => {
+    expect(() => applyTextEdits("one\n    const total = price * qty;\nthree\n", [{ oldText: "const total = price * quantity;", newText: "x" }], "f.ts"))
+      .toThrow(/oldText was not found in f\.ts\. Closest line is 2: "    const total = price \* qty;"/);
+  });
+
+  it("applies several edits in order, all or nothing", async () => {
+    const result = await editTextFileWithEdits(root, "src/main.ts", [
+      { oldText: "value = 1", newText: "value = 2" },
+      { oldText: "value = 2", newText: "value = 3" },
+      { oldText: "other", newText: "another" },
+    ]);
+    expect(result.replacements).toBe(3);
+    expect(await fs.readFile(path.join(root, "src", "main.ts"), "utf8")).toBe("export const value = 3;\nconst another = 2;\n");
+
+    await expect(editTextFileWithEdits(root, "src/main.ts", [
+      { oldText: "value = 3", newText: "value = 4" },
+      { oldText: "missing", newText: "x" },
+    ])).rejects.toThrow(/edits\[1\]: oldText was not found/);
+    expect(await fs.readFile(path.join(root, "src", "main.ts"), "utf8")).toBe("export const value = 3;\nconst another = 2;\n");
+  });
+
+  it("parses the single and the multi-edit argument forms", () => {
+    expect(parseEditArguments({ oldText: "a", newText: "b" })).toEqual([{ oldText: "a", newText: "b", replaceAll: false }]);
+    expect(parseEditArguments({ edits: JSON.stringify([{ oldText: "a", newText: "b", replaceAll: true }]) })).toEqual([{ oldText: "a", newText: "b", replaceAll: true }]);
+    expect(parseEditArguments({ edits: [{ oldText: "a", newText: "b" }] })).toEqual([{ oldText: "a", newText: "b", replaceAll: false }]);
+    expect(() => parseEditArguments({ edits: "[]" })).toThrow(/non-empty array/);
+    expect(() => parseEditArguments({ edits: "not json" })).toThrow(/JSON array/);
+    expect(() => parseEditArguments({ edits: "[]", oldText: "a" })).toThrow(/not both/);
+    expect(() => parseEditArguments({ newText: "b" })).toThrow(/oldText must be/);
+  });
+
+  it("tracks staleness only for files it has seen", () => {
+    const tracker = new FileReadTracker();
+    expect(() => tracker.assertFresh("a.ts", "anything")).not.toThrow();
+    tracker.record("a.ts", "one");
+    expect(() => tracker.assertFresh("a.ts", "one")).not.toThrow();
+    expect(() => tracker.assertFresh("a.ts", "two")).toThrow(/changed on disk since it was last read; re-read it/);
+  });
+});
+
+describe(".gitignore", () => {
+  it("parses directories, globs, anchoring and negation", () => {
+    const ignored = parseGitignore("# comment\n\n*.log\n!keep.log\nout/\n/top.txt\nsrc/gen/*.ts\n");
+    expect(ignored("a.log", false)).toBe(true);
+    expect(ignored("deep/b.log", false)).toBe(true);
+    expect(ignored("deep/keep.log", false)).toBe(false);
+    expect(ignored("out", true)).toBe(true);
+    expect(ignored("pkg/out", true)).toBe(true);
+    expect(ignored("out", false)).toBe(false);
+    expect(ignored("top.txt", false)).toBe(true);
+    expect(ignored("sub/top.txt", false)).toBe(false);
+    expect(ignored("src/gen/x.ts", false)).toBe(true);
+    expect(ignored("src/x.ts", false)).toBe(false);
+  });
+
+  it("filters the walk, glob and the JS grep by the root .gitignore", async () => {
+    await fs.writeFile(path.join(root, ".gitignore"), "generated/\n*.secret\n");
+    await fs.mkdir(path.join(root, "generated"), { recursive: true });
+    await fs.writeFile(path.join(root, "generated", "out.ts"), "value\n");
+    await fs.writeFile(path.join(root, "src", "key.secret"), "value\n");
+    const walked: string[] = [];
+    for await (const entry of walkWorkspace(root)) walked.push(entry.relative);
+    expect(walked).not.toContain("generated");
+    expect(walked).not.toContain("generated/out.ts");
+    expect(walked).not.toContain("src/key.secret");
+    expect(walked).toContain(".gitignore");
+    expect(await globWorkspace(root, "**/*")).not.toContain("src/key.secret");
+    const matches = await grepWorkspace(root, "value", { ripgrep: null });
+    expect(matches.map((match) => match.path)).not.toContain("generated/out.ts");
+    expect(matches.map((match) => match.path)).not.toContain("src/key.secret");
+    // An empty ignore list (config discovery) sees everything.
+    const all: string[] = [];
+    for await (const entry of walkWorkspace(root, { ...DEFAULT_WORKSPACE_LIMITS, ignoredDirectories: [] })) all.push(entry.relative);
+    expect(all).toContain("generated/out.ts");
+  });
+});
+
+describe("ripgrep", () => {
+  it("parses rg --json match lines into the JS search's result shape", () => {
+    const line = JSON.stringify({ type: "match", data: { path: { text: ".\\src\\main.ts" }, lines: { text: "export const value = 1;\r\n" }, line_number: 1, submatches: [] } });
+    expect(parseRipgrepJsonLine(line)).toEqual({ path: "src/main.ts", line: 1, text: "export const value = 1;\r" });
+    const bytes = JSON.stringify({ type: "match", data: { path: { bytes: Buffer.from("./a.txt").toString("base64") }, lines: { bytes: Buffer.from(`${"x".repeat(500)}\n`).toString("base64") }, line_number: 7 } });
+    expect(parseRipgrepJsonLine(bytes)).toEqual({ path: "a.txt", line: 7, text: "x".repeat(400) });
+    expect(parseRipgrepJsonLine(JSON.stringify({ type: "begin", data: { path: { text: "a" } } }))).toBeNull();
+    expect(parseRipgrepJsonLine("not json")).toBeNull();
+  });
+
+  it("builds equivalent arguments", () => {
+    const args = ripgrepArguments("a.b", { include: "src/**/*.ts", regex: false, limits: DEFAULT_WORKSPACE_LIMITS });
+    expect(args).toEqual(expect.arrayContaining(["--json", "--hidden", "--no-require-git", "--fixed-strings", "--glob", "src/**/*.ts", "!node_modules"]));
+    expect(args.slice(-4)).toEqual(["--regexp", "a.b", "--", "."]);
+    expect(ripgrepArguments("a.b", { regex: true, limits: DEFAULT_WORKSPACE_LIMITS })).not.toContain("--fixed-strings");
+  });
+
+  it("falls back to the JS search when rg cannot run", async () => {
+    const viaMissingBinary = await grepWorkspace(root, "value", { ripgrep: path.join(root, "no-such-rg") });
+    const viaJs = await grepWorkspace(root, "value", { ripgrep: null });
+    expect(viaMissingBinary).toEqual(viaJs);
+    expect(viaJs.length).toBeGreaterThan(0);
   });
 });

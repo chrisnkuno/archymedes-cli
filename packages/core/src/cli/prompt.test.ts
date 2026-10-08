@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { EnvironmentReport } from "./environment";
 import { DEFENDER_PLAYBOOK_CATALOG, playbookFor } from "./defender-playbooks";
-import { buildArchymedesSystemPrompt, collectProjectContext } from "./prompt";
+import { buildArchymedesSystemPrompt, capInstructions, collectProjectContext } from "./prompt";
 
 let root: string;
 
@@ -282,5 +282,49 @@ describe("the environment section", () => {
     const prompt = buildArchymedesSystemPrompt(await collectProjectContext(root), "build", ["run_command"]);
     expect(prompt).not.toContain("NOT available");
     expect(prompt).not.toContain("Environment (measured");
+  });
+});
+
+describe("lean (token saver) system prompt", () => {
+  const context = { root: "/project", instructions: null, instructionsFile: null, layout: ["src/"], packageScripts: ["test"], gitBranch: "main" };
+  const toolNames = ["read_file", "edit_file", "write_file", "run_command", "todo_write", "compute", "start_application"];
+
+  it("is a fraction of the full prompt for every mode and keeps the rules that change outcomes", () => {
+    for (const mode of ["plan", "build", "auto", "defender"] as const) {
+      const full = buildArchymedesSystemPrompt(context, mode, toolNames);
+      const lean = buildArchymedesSystemPrompt(context, mode, toolNames, undefined, undefined, { lean: true });
+      expect(lean.length, mode).toBeLessThan(full.length * (mode === "defender" ? 0.75 : 0.4));
+      expect(lean, mode).toContain(`${mode.toUpperCase()} mode`);
+      expect(lean, mode).toContain("Available tools: read_file, edit_file");
+    }
+    const lean = buildArchymedesSystemPrompt(context, "build", toolNames, undefined, undefined, { lean: true });
+    for (const rule of ["Prefer edit_file over write_file", "Never describe an outcome you did not observe", "Never deploy or publish without the user's explicit yes",
+      "never repeat it in prose", "Never send, upload or publish a secret", "same turn", "Project root: /project"]) {
+      expect(lean, rule).toContain(rule);
+    }
+    expect(lean).not.toContain("INVARIANT");
+  });
+
+  it("asks for fewer, batched requests: parallel reads and searches, one targeted edit, no re-reads", () => {
+    const lean = buildArchymedesSystemPrompt(context, "build", toolNames, undefined, undefined, { lean: true });
+    for (const rule of ["read several files at once", "run several searches at once", "one targeted edit_file call", "Never re-read a file or range already in this conversation", "as few turns as the task allows"]) {
+      expect(lean, rule).toContain(rule);
+    }
+  });
+
+  it("mentions only the tools it was given", () => {
+    const lean = buildArchymedesSystemPrompt(context, "build", ["read_file"], undefined, undefined, { lean: true });
+    expect(lean).not.toContain("todo_write");
+    expect(lean).not.toContain("compute tool");
+    expect(lean).not.toContain("start_application");
+  });
+
+  it("caps project instructions with a note naming the file, and leaves short ones whole", () => {
+    const long = { ...context, instructions: `Rule one.\n${"x".repeat(6_000)}`, instructionsFile: "AGENTS.md" };
+    const lean = buildArchymedesSystemPrompt(long, "build", toolNames, undefined, undefined, { lean: true });
+    expect(lean).toContain("[Truncated to 4,000 of 6,010 characters to save tokens. Read AGENTS.md with read_file");
+    expect(buildArchymedesSystemPrompt(long, "build", toolNames)).toContain("x".repeat(6_000));
+    expect(capInstructions("  short  ")).toBe("short");
+    expect(capInstructions("abcdef", 3, "X.md")).toBe("abc\n\n[Truncated to 3 of 6 characters to save tokens. Read X.md with read_file for the rest when it matters to the task.]");
   });
 });

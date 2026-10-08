@@ -291,7 +291,7 @@ export function composeGuideFrame(state: GuideBrowserState): GuideRow[] {
   const position = lines.length > height ? `  ${scrollIndicator(scrollPercent(start, lines.length, height))}` : "";
   const footer = state.searching
     ? `search: ${state.query}▏  Enter done · Esc done`
-    : `↑↓ topic · ←→ scroll · space page · / search · q leave${state.query ? `   filter: ${state.query}` : ""}${position}`;
+    : `↑↓ topic · ←→ scroll · space page · / search · Esc back${state.query ? `   filter: ${state.query}` : ""}${position}`;
   rows.push({ text: pad(` ${footer}`, columns), dim: true, color: theme.textMuted });
   return rows;
 }

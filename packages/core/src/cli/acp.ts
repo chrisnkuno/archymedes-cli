@@ -1,6 +1,6 @@
 import type { AgentRuntimeResult } from "../agent-runtime";
 import type { ArchymedesEvent } from "./agent";
-import type { ArchymedesMode, PermissionDecision } from "./permissions";
+import type { ApprovalPattern, ArchymedesMode, PermissionDecision } from "./permissions";
 
 /**
  * Archymedes as an ACP agent: the same session, driven by an editor instead of a terminal.
@@ -41,12 +41,21 @@ export interface AcpSession {
   dispose(): Promise<void>;
 }
 
+/** What the agent hands the connection when a tool call needs the client's human. */
+export type AcpApprovalRequest = {
+  toolName: string;
+  summary: string;
+  toolCallId: string;
+  /** A broader standing rule the human may grant instead; offered as an extra `allow_always`-kind option. */
+  pattern?: ApprovalPattern;
+};
+
 export type AcpSessionFactory = (input: {
   cwd: string;
   /** Streamed straight out as `session/update` notifications. */
   onEvent: (event: ArchymedesEvent) => void;
   /** Asks the *client* to decide, since in ACP the editor owns the human. */
-  approve: (request: { toolName: string; summary: string; toolCallId: string }) => Promise<PermissionDecision>;
+  approve: (request: AcpApprovalRequest) => Promise<PermissionDecision>;
   /** Present only for `session/load`: resume this stored session rather than starting one. */
   resumeSessionId?: string;
 }) => Promise<AcpSession>;
@@ -79,7 +88,7 @@ export function acpStopReason(status: AgentRuntimeResult["status"]): "end_turn" 
   return "end_turn";
 }
 
-/** The four decisions Archymedes's ledger understands, as the option list a client renders. */
+/** The four decisions Archymedes's ledger understands for every request, as the option list a client renders. */
 export const ACP_PERMISSION_OPTIONS = [
   { optionId: "allow", name: "Allow", kind: "allow_once" },
   { optionId: "allow_always", name: "Allow this action from now on", kind: "allow_always" },
@@ -87,9 +96,31 @@ export const ACP_PERMISSION_OPTIONS = [
   { optionId: "deny_always", name: "Deny this action from now on", kind: "reject_always" },
 ] as const;
 
-export function decisionFromOptionId(optionId: unknown): PermissionDecision {
+export type AcpPermissionOption = { optionId: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" };
+
+/**
+ * The options for one request. A request that offers a pattern gets a fifth, `allow_pattern`,
+ * rendered with ACP's `allow_always` kind (ACP has no narrower "standing rule" kind) and named by
+ * the pattern's label ("Always allow commands starting with …") so the human sees exactly how broad the grant is.
+ */
+export function acpPermissionOptions(pattern?: ApprovalPattern): AcpPermissionOption[] {
+  const options: AcpPermissionOption[] = ACP_PERMISSION_OPTIONS.map((option) => ({ ...option }));
+  if (pattern) options.splice(2, 0, { optionId: "allow_pattern", name: capitalize(pattern.label), kind: "allow_always" });
+  return options;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * `patternOffered` gates `allow_pattern`: an answer naming an option this request never offered is
+ * not consent to anything, so it reads as a refusal like any other unrecognised id.
+ */
+export function decisionFromOptionId(optionId: unknown, patternOffered = false): PermissionDecision {
   // Anything unrecognised is a refusal. An editor that answers with a string this agent does not
   // know must never be read as consent — the safe reading of an unparseable answer is "no".
+  if (optionId === "allow_pattern") return patternOffered ? "allow_pattern" : "deny";
   return optionId === "allow" || optionId === "allow_always" || optionId === "deny_always" ? optionId : "deny";
 }
 
@@ -265,17 +296,17 @@ export class AcpConnection {
     }
   }
 
-  private async askClient(sessionId: string, request: { toolName: string; summary: string; toolCallId: string }): Promise<PermissionDecision> {
+  private async askClient(sessionId: string, request: AcpApprovalRequest): Promise<PermissionDecision> {
     const answer = await this.request("session/request_permission", {
       sessionId,
       toolCall: { toolCallId: request.toolCallId, title: request.summary, kind: acpToolKind(request.toolName), status: "pending" },
-      options: ACP_PERMISSION_OPTIONS.map((option) => ({ ...option })),
+      options: acpPermissionOptions(request.pattern),
     }).catch(() => null);
     if (typeof answer !== "object" || answer === null) return "deny";
     const outcome = answer as Record<string, unknown>;
     // `cancelled` is the client saying the human went away. That is not consent either.
     if (outcome.outcome !== "selected") return "deny";
-    return decisionFromOptionId(outcome.selectedOptionId);
+    return decisionFromOptionId(outcome.selectedOptionId, request.pattern !== undefined);
   }
 
   /** One Archymedes event, as whichever `session/update` an editor can render. */

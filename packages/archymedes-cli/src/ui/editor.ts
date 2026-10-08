@@ -40,6 +40,8 @@ export type EditorState = {
   search: { query: string; typing: boolean };
   /** One-line feedback under the key bar: "saved", "no matches", and the like. */
   message?: string;
+  /** Esc was pressed with unsaved changes: the next key answers "Save changes? y/n/Esc". */
+  confirmLeave?: boolean;
 };
 
 export type EditorAction =
@@ -56,6 +58,11 @@ export type EditorAction =
   | { kind: "redo" }
   | { kind: "save" }
   | { kind: "quit" }
+  /** Esc from normal mode: leave, asking first when there are unsaved changes. */
+  | { kind: "leave" }
+  | { kind: "cancelLeave" }
+  /** The host wrote the file in the background (auto-save); the document is clean again. */
+  | { kind: "autosaved"; content: string }
   | { kind: "search" }
   | { kind: "searchType"; character: string }
   | { kind: "searchBackspace" }
@@ -162,6 +169,14 @@ export function keyToEditorAction(
   if (key.ctrl && name === "s") return { kind: "save" };
   if (key.ctrl && (name === "q" || name === "c")) return { kind: "quit" };
 
+  // "Save changes? y/n/Esc" is up: only those three keys mean anything until it is answered.
+  if (state.confirmLeave) {
+    if (character === "y" || character === "Y" || isEnter) return { kind: "save" };
+    if (character === "n" || character === "N") return { kind: "quit" };
+    if (isEscape) return { kind: "cancelLeave" };
+    return { kind: "none" };
+  }
+
   if (state.search.typing) {
     if (isEscape) return { kind: "searchCommit" };
     if (isEnter) return { kind: "searchNext" };
@@ -188,7 +203,9 @@ export function keyToEditorAction(
   if (state.pending === "d") return name === "d" || character === "d" ? { kind: "deleteLine" } : { kind: "normal" };
   if (state.pending === "g") return name === "g" || character === "g" ? { kind: "jump", to: "fileStart" } : { kind: "normal" };
 
-  if (isEscape) return { kind: "normal" };
+  // Esc always goes somewhere safer: out of insert mode first, and from normal mode back to the
+  // chat. Two presses from anywhere is the way home, which is the rule every other screen keeps.
+  if (isEscape) return { kind: "leave" };
   if (name === "up" || character === "k") return { kind: "move", rows: -1 };
   if (name === "down" || character === "j") return { kind: "move", rows: 1 };
   if (name === "left" || character === "h") return { kind: "move", cols: -1 };
@@ -342,7 +359,20 @@ export function applyEditorAction(state: EditorState, action: EditorAction): { s
       return { state: clamp({ ...state, dirty: false, message: `saved ${state.path}`, pending: undefined }), effect: { kind: "save" } };
 
     case "quit":
-      return { state, effect: { kind: "quit" } };
+      return { state: { ...state, confirmLeave: false }, effect: { kind: "quit" } };
+
+    case "leave":
+      if (!state.dirty) return { state, effect: { kind: "quit" } };
+      return { state: { ...state, pending: undefined, confirmLeave: true, message: "Save changes? y yes · n discard · Esc keep editing" }, effect: undefined };
+
+    case "cancelLeave":
+      return plain({ ...state, confirmLeave: false, message: undefined });
+
+    case "autosaved":
+      // Only clean if nothing was typed since the content that was written.
+      return editorContent(state) === action.content
+        ? plain({ ...state, dirty: false, message: "auto-saved" })
+        : plain(state);
 
     case "search":
       return plain({ ...state, search: { query: "", typing: true }, message: undefined });
@@ -404,6 +434,7 @@ export function editorKeyBar(state: EditorState, columns = Number.POSITIVE_INFIN
     { text: "/ find" },
     { text: "^S save", essential: true },
     { text: "^Q quit", essential: true },
+    { text: "esc back", essential: true },
   ];
   const optional = hints.filter((hint) => !hint.essential);
   for (let dropped = 0; dropped <= optional.length; dropped += 1) {

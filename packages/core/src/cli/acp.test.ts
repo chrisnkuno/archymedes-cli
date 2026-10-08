@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   ACP_PROTOCOL_VERSION,
   AcpConnection,
+  acpPermissionOptions,
   acpStopReason,
   acpToolKind,
   acpUpdateFor,
   decisionFromOptionId,
   JSON_RPC,
   toolCallTitle,
+  type AcpApprovalRequest,
   type AcpSession,
   type JsonRpcOutgoing,
 } from "./acp";
@@ -202,6 +204,43 @@ describe("acp permission requests", () => {
     expect(decisionFromOptionId(undefined)).toBe("deny");
     expect(decisionFromOptionId("yes please")).toBe("deny");
     expect(decisionFromOptionId(42)).toBe("deny");
+  });
+
+  it("only honours allow_pattern when the request offered a pattern", () => {
+    expect(decisionFromOptionId("allow_pattern")).toBe("deny");
+    expect(decisionFromOptionId("allow_pattern", true)).toBe("allow_pattern");
+    expect(acpPermissionOptions().map((option) => option.optionId)).toEqual(["allow", "allow_always", "deny", "deny_always"]);
+    expect(acpPermissionOptions({ kind: "command-prefix", prefix: "npm test", label: "always allow commands starting with \"npm test\"" })[2])
+      .toEqual({ optionId: "allow_pattern", name: "Always allow commands starting with \"npm test\"", kind: "allow_always" });
+  });
+
+  it("offers the pattern option to the client and round-trips allow_pattern", async () => {
+    const sent: JsonRpcOutgoing[] = [];
+    let ask: ((request: AcpApprovalRequest) => Promise<string>) | undefined;
+    const connection = new AcpConnection({
+      send: (message) => {
+        sent.push(message);
+        if ("method" in message && message.method === "session/request_permission" && message.id !== undefined) {
+          void connection.receive({ jsonrpc: "2.0", id: message.id, result: { outcome: "selected", selectedOptionId: "allow_pattern" } });
+        }
+      },
+      createSession: async ({ approve }) => {
+        ask = approve;
+        return { id: "sess_1", async send() { return { status: "completed" as const, summary: "" }; }, cancel() {}, async setMode() {}, async dispose() {} };
+      },
+    });
+    await connection.receive({ jsonrpc: "2.0", id: 1, method: "initialize", params: initialize });
+    await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/tmp/p" } });
+
+    const pattern = { kind: "directory" as const, directory: "src/app", label: "always allow edits under src/app/" };
+    expect(await ask!({ toolName: "edit_file", summary: "edit src/app/a.ts", toolCallId: "c1", pattern })).toBe("allow_pattern");
+    // The same answer to a request that offered no pattern is not consent to anything.
+    expect(await ask!({ toolName: "edit_file", summary: "edit src/app/a.ts", toolCallId: "c2" })).toBe("deny");
+
+    const requests = sent.filter((message) => "method" in message && message.method === "session/request_permission") as unknown as Array<{ params: { options: Array<{ optionId: string; name: string }> } }>;
+    expect(requests[0]!.params.options.map((option) => option.optionId)).toEqual(["allow", "allow_always", "allow_pattern", "deny", "deny_always"]);
+    expect(requests[0]!.params.options[2]!.name).toBe("Always allow edits under src/app/");
+    expect(requests[1]!.params.options.map((option) => option.optionId)).not.toContain("allow_pattern");
   });
 });
 

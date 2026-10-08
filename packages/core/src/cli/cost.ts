@@ -1,5 +1,7 @@
 import { addMoney, convertTo, formatMoney, money, priceUsage, zero, type Currency, type FxRate, type Money, type TokenPrices } from "../money";
 import { priceUnits, selectPrice, type PriceRecord } from "../pricing";
+import type { ModelAllowance } from "../agent-runtime";
+import { compactTokenCount, formatModelAllowance } from "../providers/free-usage";
 import type { ModelUsage } from "../providers/model";
 import type { ArchymedesMode } from "./permissions";
 
@@ -12,6 +14,15 @@ import type { ArchymedesMode } from "./permissions";
  * looks identical to one doing careful work. Showing the number after every turn is what makes the
  * difference visible while the user can still stop it.
  */
+
+/**
+ * `↑12.3k ↓1.2k tok`: what one turn sent and received, for a provider whose cost is tokens rather
+ * than money. Input first because in an agent session it is nearly all of it — the whole
+ * conversation resent on every request — and that is the number a user can do something about.
+ */
+export function formatTokenFlow(usage: Pick<ModelUsage, "inputTokens" | "outputTokens">): string {
+  return `↑${compactTokenCount(usage.inputTokens)} ↓${compactTokenCount(usage.outputTokens)} tok`;
+}
 
 export type TurnCost = {
   turnNumber: number;
@@ -153,7 +164,25 @@ export class CostLedger {
    */
   private readonly carried = new Map<string, Money>();
 
+  /**
+   * The latest daily-allowance snapshot a model call reported (free mode), for `/cost`.
+   *
+   * Kept beside the money because in free mode it is the money: every turn costs $0, and what the
+   * user is actually spending is a day's token allowance.
+   */
+  private allowance?: ModelAllowance;
+
   constructor(private readonly options: CostLedgerOptions) {}
+
+  /** Records where the daily allowance stands; the newest snapshot replaces the last. */
+  recordAllowance(allowance: ModelAllowance): void {
+    this.allowance = allowance;
+  }
+
+  /** The latest daily-allowance snapshot, when a provider with one has reported it. */
+  get latestAllowance(): ModelAllowance | undefined {
+    return this.allowance;
+  }
 
   /**
    * Records what a resumed session had already spent, in the display currency.
@@ -362,8 +391,14 @@ export class CostLedger {
   formatTurn(turn: TurnCost): string {
     const parts = [`${turn.iterations} turns`, `${turn.toolCalls} tools`];
     const shown = turn.cost ? convertTo(turn.cost, this.options.display, this.options.rates ?? []) : undefined;
-    parts.push(shown ? formatMoney(shown) : "cost unknown");
+    // Free mode (a daily token allowance, every turn $0): the tokens are the cost, so they replace it.
+    const allowance = this.allowance && (!turn.cost || turn.cost.micros === 0) ? this.allowance : undefined;
+    parts.push(allowance ? formatTokenFlow(turn.usage) : shown ? formatMoney(shown) : "cost unknown");
     parts.push(`${(turn.elapsedMs / 1_000).toFixed(1)}s`);
+    if (allowance) {
+      parts.push(formatModelAllowance(allowance));
+      return parts.join(" · ");
+    }
     const sessionTotal = this.displayTotal;
     // From the first turn when spend was carried in: on a resumed session the running total is
     // already the interesting number, and withholding it until turn two reads as if the earlier
@@ -443,6 +478,14 @@ export class CostLedger {
       const remaining = this.turnsRemaining;
       const forecast = remaining !== undefined && this.turns.length > 1 ? `, ~${remaining} more turn${remaining === 1 ? "" : "s"} at this rate` : "";
       lines.push(`  budget  ${formatMoney(total)} of ${formatMoney(this.options.budget)} (${Math.round(fraction * 100)}%${forecast})`);
+    }
+    // Free mode's real meter: the day's token allowance, which outlives this session.
+    if (this.allowance) {
+      lines.push("", `Free tokens: ${formatModelAllowance(this.allowance)}`);
+      if (this.allowance.warning) lines.push(`  ${this.allowance.warning}`);
+      // From OpenRouter's key endpoint, with the user's own key: the account's real daily cap.
+      if (this.allowance.requestLimit !== undefined) lines.push(`  limit: ${this.allowance.requestLimit} req/day (OpenRouter free models, this account)`);
+      if (this.allowance.creditsRemaining !== undefined) lines.push(`  key credit left: ${Math.round(this.allowance.creditsRemaining * 100) / 100}`);
     }
     if (this.turns.length > 1) {
       lines.push("", "Per request:");

@@ -134,18 +134,21 @@ export class SessionProjection {
       return database;
     };
 
-    let database: SqliteDatabase;
+    let database: SqliteDatabase | undefined;
     try {
       database = new DatabaseSync(file);
       const row = database.prepare("SELECT value FROM meta WHERE key = 'schemaVersion'").get() as { value?: string } | undefined;
       if (row?.value !== String(PROJECTION_SCHEMA_VERSION)) {
         database.close();
+        database = undefined;
         await fs.rm(file, { force: true });
         database = build();
       }
     } catch {
       // Corrupt, truncated, or written by a version that structured it differently. It holds
       // nothing the journal does not, so the cheapest correct response is to throw it away.
+      // The handle is closed first: Windows refuses to delete a file that is still open.
+      try { database?.close(); } catch { /* already closed or never opened */ }
       await fs.rm(file, { force: true });
       database = build();
     }

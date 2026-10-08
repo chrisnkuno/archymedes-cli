@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
+import { CONPTY, spawnArchymedes, type ArchymedesProcess, type SpawnArchymedesOptions } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
@@ -40,8 +40,8 @@ describe("scrollback, under a real pty", () => {
     proc?.kill();
     proc = undefined;
     await stub.close();
-    await rm(cwd, { recursive: true, force: true });
-    await rm(configDir, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   function boot(options: Partial<SpawnArchymedesOptions> = {}): ArchymedesProcess {
@@ -84,7 +84,7 @@ describe("scrollback, under a real pty", () => {
     expect(p.output()).toMatch(/\$0\.00/);
   }, 60_000);
 
-  it("reserves the region only when the footer is explicitly asked for", async () => {
+  it.skipIf(CONPTY)("reserves the region only when the footer is explicitly asked for", async () => {
     const p = boot({ args: ["--pin"] });
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
     expect(p.output()).toMatch(RESERVED_REGION);

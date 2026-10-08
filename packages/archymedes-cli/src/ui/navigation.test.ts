@@ -9,7 +9,10 @@ import {
   GROUP_PREVIEW,
   groupedCommands,
   isEssential,
+  isSimpleMode,
   renderEssentials,
+  renderSimpleHelp,
+  SIMPLE_BANNER_LINE,
   NAV_GROUPS,
   rankWithContext,
   renderGroupedHelp,
@@ -262,7 +265,9 @@ describe("the commands worth learning first", () => {
   it("stays short enough to be a shortlist", () => {
     // A list where the eighth item is "essential" is a list whose first item is not. Additions
     // should have to displace something rather than accumulate.
-    expect(ESSENTIAL_COMMANDS.length).toBeLessThanOrEqual(7);
+    // Eight since /history and /settings joined: the way back to an earlier chat and the way to
+    // change how this looks are both questions a first session asks.
+    expect(ESSENTIAL_COMMANDS.length).toBeLessThanOrEqual(8);
     expect(new Set(ESSENTIAL_COMMANDS).size).toBe(ESSENTIAL_COMMANDS.length);
   });
 
@@ -319,5 +324,25 @@ describe("the commands worth learning first", () => {
     // one that leads to every other, so it is the last to go.
     const narrow = renderEssentials(fresh(), { ...style, width: 28 });
     expect(narrow).toContain("/help");
+  });
+});
+
+describe("simple mode", () => {
+  it("is on unless turned off", () => {
+    expect(isSimpleMode({})).toBe(true);
+    expect(isSimpleMode({ ARCHYMEDES_SIMPLE: "off" })).toBe(false);
+    expect(isSimpleMode({ ARCHYMEDES_SIMPLE: "on" })).toBe(true);
+  });
+
+  it("leads the short help with the essentials, including the way back to an earlier chat", () => {
+    const help = renderSimpleHelp(style);
+    for (const name of ["/history", "/model", "/undo", "/settings", "/exit"]) expect(help).toContain(name);
+    expect(help).toContain("/help all");
+    expect(help).toContain("Esc back");
+    expect(help.split("\n").length).toBeLessThanOrEqual(12);
+  });
+
+  it("says everything a first screen needs in one line", () => {
+    expect(SIMPLE_BANNER_LINE).toBe("Type what you want done. / for commands · Esc back · Ctrl+G menu");
   });
 });

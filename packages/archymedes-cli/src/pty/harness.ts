@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import * as pty from "node-pty";
@@ -14,17 +13,21 @@ import * as pty from "node-pty";
 
 const ARCHYMEDES_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../archymedes.ts");
 
-/** node-pty's macOS posix_spawnp binding does not reliably search PATH. */
-export function bunExecutable(environment = process.env): string {
-  const names = process.platform === "win32" ? ["bun.exe", "bun.cmd", "bun"] : ["bun"];
-  for (const directory of (environment.PATH ?? "").split(path.delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = path.join(directory, name);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return "bun";
-}
+import { bunExecutable } from "./bun-executable";
+
+export { bunExecutable };
+
+/**
+ * True where the pty is Windows' ConPTY.
+ *
+ * ConPTY does not forward a program's bytes. It renders them into a screen buffer of its own and
+ * emits a fresh encoding of that buffer: scroll regions (`ESC[t;br`) and erase-below (`ESC[0J`) are
+ * applied rather than passed on, synchronized-output markers no longer bracket one paint, and rows
+ * still on screen are re-sent whenever ConPTY repaints. A test that asserts those exact sequences,
+ * isolates a single paint, or asserts text is *absent* from the stream cannot hold there. What
+ * those tests check is platform-independent rendering logic, covered on every POSIX run.
+ */
+export const CONPTY = process.platform === "win32";
 
 export type SpawnArchymedesOptions = {
   args?: string[];
@@ -106,6 +109,11 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
         // The child runs in a real pty. Inheriting the runner's CI=true would put full-screen views
         // into their static fallback; a test about CI behaviour can set it again through options.env.
         CI: "",
+        // The pty tests were written against the full banner and a session that never offers to
+        // continue an earlier chat; simple mode and the resume offer have their own tests, which
+        // turn these back on through options.env.
+        ARCHYMEDES_SIMPLE: "off",
+        ARCHYMEDES_RESUME: "never",
         ...options.env,
       }).filter(([, value]) => value !== undefined),
     ) as Record<string, string>,
@@ -128,7 +136,8 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
 
   let settleExit!: (value: { exitCode: number; signal?: number }) => void;
   const exited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { settleExit = resolve; });
-  proc.onExit(({ exitCode, signal }) => settleExit({ exitCode, signal }));
+  let hasExited = false;
+  proc.onExit(({ exitCode, signal }) => { hasExited = true; settleExit({ exitCode, signal }); });
 
   return {
     write: (data) => proc.write(data),
@@ -164,6 +173,12 @@ export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProc
         resolve(result);
       });
     }),
-    kill: (signal) => proc.kill(signal),
+    kill: (signal) => {
+      // On Windows node-pty's kill() asks a helper process to attach to the console, which throws
+      // "AttachConsole failed" from that helper once the process is already gone — and Windows
+      // supports no signal argument at all. Killing an exited process is a no-op everywhere else.
+      if (hasExited) return;
+      try { proc.kill(process.platform === "win32" ? undefined : signal); } catch { /* exited in the meantime */ }
+    },
   };
 }

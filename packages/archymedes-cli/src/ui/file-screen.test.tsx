@@ -108,7 +108,7 @@ describe("the file screen", () => {
 
   it("teaches its own keys", () => {
     const screen = open();
-    expect(screen.frame()).toContain("q leave");
+    expect(screen.frame()).toContain("Esc back");
     screen.view.unmount();
   });
 });

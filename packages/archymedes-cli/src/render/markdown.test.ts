@@ -166,7 +166,7 @@ describe("renderMarkdownLine", () => {
 
     // Inside a fence nothing is interpreted: this line is code, not a bullet and not emphasis.
     const code = renderMarkdownLine("  - x = **2**", state, options);
-    expect(plain(code[0])).toBe("  │   - x = **2**");
+    expect(plain(code[0])).toBe("  │   1    - x = **2**");
 
     renderMarkdownLine("```", state, options);
     expect(state.inFence).toBe(false);
@@ -194,7 +194,7 @@ describe("renderMarkdown", () => {
     expect(rendered).toContain("Result");
     expect(rendered).not.toContain("# Result"); // the hash is consumed, not printed
     expect(rendered).toContain("Changed port to 8080.");
-    expect(rendered).toContain("│ const port = 8080;"); // gutter, and the code kept verbatim
+    expect(rendered).toContain("│   1  const port = 8080;"); // gutter, line number, and the code kept verbatim
     expect(rendered).toContain("• verified with npm test");
   });
 

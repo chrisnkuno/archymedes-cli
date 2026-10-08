@@ -10,6 +10,12 @@ export const FREE_BASE_URL = "https://openrouter.ai/api/v1";
  * The official hosted free gateway (`packages/free-gateway`). Empty until it is deployed: shipping a
  * URL nobody operates would make `--free` fail for everyone with a network error instead of a clear
  * setup message. `ARCHYMEDES_FREE_GATEWAY_URL` points at a staging or self-hosted gateway.
+ *
+ * This one constant is what makes a fresh install keyless: once it holds a URL, a session with no
+ * provider configured starts in free mode through it (see `resolveProvider`) instead of asking for
+ * a key. While it is empty, a fresh install prints how to set `ARCHYMEDES_FREE_GATEWAY_URL`.
+ *
+ * Empty until packages/free-gateway is deployed; it then holds that gateway's https URL.
  */
 export const FREE_GATEWAY_URL = "";
 export const FREE_DISCOVERY_URL = "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json";

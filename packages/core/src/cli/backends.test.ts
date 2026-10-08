@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { InteractiveCodingSandboxProvider, SandboxCommand } from "../providers/contracts";
 import { validateSandboxCommand } from "../sandbox-policy";
-import { downloadProject, E2BWorkspace, hasShellSyntax, LocalWorkspace, tokenizeCommand, uploadProject } from "./backends";
+import { downloadProject, E2BWorkspace, hasShellSyntax, localCommandGuidance, LocalWorkspace, tokenizeCommand, uploadProject } from "./backends";
 
 let root: string;
 
@@ -78,6 +78,15 @@ describe("command tokenization", () => {
     expect(hasShellSyntax("npm test")).toBe(false);
     // A literal argument that happens to contain an operator is not shell syntax.
     expect(hasShellSyntax('git commit -m "fix a && b"')).toBe(false);
+  });
+});
+
+describe("local command guidance", () => {
+  it("tells the model a Windows shell is cmd.exe, so it does not write POSIX it cannot run", () => {
+    expect(localCommandGuidance("win32")).toContain("cmd.exe");
+    expect(localCommandGuidance("win32")).toContain("%VAR%");
+    expect(localCommandGuidance("linux")).toBe("Runs in a real shell, so pipes and redirection work.");
+    expect(localCommandGuidance("darwin")).not.toContain("cmd.exe");
   });
 });
 

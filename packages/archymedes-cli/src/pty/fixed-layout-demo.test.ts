@@ -18,8 +18,8 @@ function spawnDemo(options: { cols?: number; rows?: number; quiet?: boolean } = 
   let output = "";
   proc.onData((chunk) => { output += chunk; });
 
-  const waitFor = (pattern: string | RegExp, timeoutMs = 5_000): Promise<string> => {
-    const matches = () => typeof pattern === "string" ? output.includes(pattern) : pattern.test(output);
+  const waitFor = (pattern: string | RegExp, timeoutMs = 5_000, since = 0): Promise<string> => {
+    const matches = () => typeof pattern === "string" ? output.slice(since).includes(pattern) : pattern.test(output.slice(since));
     if (matches()) return Promise.resolve(output);
     return new Promise((resolve, reject) => {
       const timer = setInterval(() => {
@@ -72,7 +72,9 @@ describe("the runnable fixed-layout demo", () => {
 
       const beforeResize = demo.output().length;
       demo.proc.resize(52, 14);
-      await demo.waitForOutputAfter(beforeResize, 2_000);
+      // Waits for the repaint itself, not merely the first bytes after the resize: Windows' ConPTY
+      // reports the new size (`ESC[8;14;52t`) on its own before the demo has drawn anything.
+      await demo.waitFor("Archymedes — fixed layout demo", 2_000, beforeResize);
       expect(demo.output().slice(beforeResize)).toContain("Archymedes — fixed layout demo");
 
       // One write deliberately exercises PTY coalescing: terminals are byte streams and may hand

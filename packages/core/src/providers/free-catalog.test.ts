@@ -62,6 +62,9 @@ describe("bounded free catalog fetching", () => {
       await expect(fetchFreeCatalog({ discovery: false, fetchImpl: async () => response })).rejects.toThrow();
     }
   });
+  it("keeps the HTTP status of a listing that answered with an error", async () => {
+    await expect(fetchFreeCatalog({ discovery: false, fetchImpl: async () => new Response("down", { status: 503 }) })).rejects.toMatchObject({ status: 503 });
+  });
   it("propagates cancellation", async () => {
     const abort = new AbortController(); abort.abort();
     await expect(fetchFreeCatalog({ signal: abort.signal, discovery: false, fetchImpl: async () => Response.json({ data: [row] }) })).rejects.toThrow();

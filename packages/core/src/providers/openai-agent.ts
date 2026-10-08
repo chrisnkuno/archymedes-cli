@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
-import { collectChatStream, toWireMessages, turnFromChatResponse, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
+import { collectChatStream, isOpenRouterBaseUrl, toWireMessages, turnFromChatResponse, withOpenRouterCacheControl, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
+import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
 
 /**
  * OpenAI adapter for the agent loop.
@@ -11,6 +12,11 @@ import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
  * the message shape. Two copies of that translation is two places for a tool-call bug to hide.
  */
 
+/**
+ * `timeoutMs` is the stream's *idle* timeout (longest silence between chunks), not a wall-clock
+ * limit on the whole reply; see `streamTimeoutsFor` for how it maps onto the first-byte and overall
+ * deadlines.
+ */
 export type OpenAIAgentOptions = { apiKey: string; model: string; baseURL?: string; timeoutMs?: number; defaultHeaders?: Record<string, string> };
 
 export type OpenAIChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<ChatResponse | AsyncIterable<ChatStreamChunk>>;
@@ -42,9 +48,13 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
     if (!request.safetyIdentifier.trim()) throw new Error("safetyIdentifier is required");
     const inkling = usesInklingToolContract(this.options.model);
-    const response = await this.call({
+    const body = {
       model: this.options.model,
-      messages: toWireMessages(request.messages),
+      // OpenAI caches a stable prefix on its own; through OpenRouter, the Anthropic and Gemini
+      // families only cache where a `cache_control` breakpoint says so.
+      messages: isOpenRouterBaseUrl(this.options.baseURL)
+        ? withOpenRouterCacheControl(toWireMessages(request.messages), this.options.model)
+        : toWireMessages(request.messages),
       ...(request.tools.length > 0 ? {
         tools: request.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })),
       } : {}),
@@ -71,14 +81,24 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       // streamed response reports no usage without it, and the accounting is not optional.
       stream: true,
       stream_options: { include_usage: true },
-    }, AbortSignal.any([
-      AbortSignal.timeout(this.options.timeoutMs ?? 180_000),
-      ...(request.signal ? [request.signal] : []),
-    ]));
-    return turnFromChatResponse(
-      Symbol.asyncIterator in Object(response)
-        ? await collectChatStream(response as AsyncIterable<ChatStreamChunk>, request.onTextDelta)
-        : (response as ChatResponse),
-    );
+    };
+    // Deadlines that follow the stream rather than the clock: a long, healthy generation is never
+    // cut off mid-answer, while a stalled connection still fails promptly.
+    const deadline = createStreamDeadline({ ...streamTimeoutsFor(this.options.timeoutMs), signal: request.signal });
+    try {
+      const response = await deadline.race(this.call(body, deadline.signal));
+      return turnFromChatResponse(
+        Symbol.asyncIterator in Object(response)
+          ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), request.onTextDelta, request.onOutputProgress)
+          : (response as ChatResponse),
+      );
+    } catch (error) {
+      // The SDK reports its own abort as APIUserAbortError, which reads as "you cancelled". When the
+      // abort was a deadline, the deadline is what the user needs to see.
+      if (deadline.timedOut) throw deadline.timedOut;
+      throw error;
+    } finally {
+      deadline.dispose();
+    }
   }
 }

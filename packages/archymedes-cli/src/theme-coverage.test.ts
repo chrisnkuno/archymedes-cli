@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { setCodeStyle } from "./render/syntax";
 import { highlightCode } from "./render/code-view";
 import { composeExplainPanel, initialExplainPanelState } from "./ui/explain-view";
 import { renderMarkdown } from "./render/markdown";
@@ -11,6 +12,10 @@ const archymedes = buildPalette(findBuiltinTheme("archymedes")!, "truecolor");
 const blueprint = buildPalette(findBuiltinTheme("blueprint")!, "truecolor");
 
 describe("theme coverage", () => {
+  // These check the theme-role highlighter; VS Code colours (the default) have their own tests in render/syntax.test.ts.
+  beforeAll(() => setCodeStyle({ colors: "theme" }));
+  afterAll(() => setCodeStyle({ colors: "vscode" }));
+
   it("resolves roles through the palette, falling back to ANSI and to nothing without colour", () => {
     expect(roleCode("primary", archymedes, "truecolor")).toBe(archymedes.primary);
     expect(roleCode("primary", undefined, "truecolor")).toBe(ANSI_PALETTE.primary);

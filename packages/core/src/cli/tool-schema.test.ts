@@ -155,7 +155,7 @@ const GOLDEN_CONTRACT = [
   { name: "grep_files", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["query"], properties: ["query", "include", "regex"] },
   { name: "scan_secrets", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["include"] },
   { name: "write_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path", "content"], properties: ["path", "content"] },
-  { name: "edit_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path", "oldText", "newText"], properties: ["path", "oldText", "newText", "replaceAll"] },
+  { name: "edit_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path"], properties: ["path", "oldText", "newText", "replaceAll", "edits"] },
   { name: "run_command", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command"], properties: ["command", "timeoutMs"] },
   { name: "start_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command", "port"], properties: ["command", "port", "directory", "path", "timeoutMs"] },
   { name: "application_status", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["id"] },
@@ -176,6 +176,16 @@ const GOLDEN_CONTRACT = [
   // Writing to a file the user carries between sessions is a change to their environment, so it
   // goes through the same approval gate as any other edit rather than being silently free.
   { name: "remember", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["text", "scope"], properties: ["text", "scope", "kind"] },
+  // Read-only navigation and git inspection: no approval, safe to run in parallel.
+  { name: "repo_map", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["path", "query", "maxChars"] },
+  { name: "find_symbol", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["name"], properties: ["name", "mode", "path", "kind", "maxResults"] },
+  { name: "git_status", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: [] },
+  { name: "git_diff", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["staged", "ref", "path", "stat", "maxChars"] },
+  { name: "git_log", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["n", "path", "ref"] },
+  { name: "git_show", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["ref"], properties: ["ref", "path", "maxChars"] },
+  // A notebook edit is a file edit: approval-gated like edit_file.
+  { name: "notebook_edit", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path"], properties: ["path", "operation", "cell_index", "cell_id", "cell_type", "source"] },
+  { name: "view_image", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["path"], properties: ["path"] },
 ] as const;
 
 describe("the tool contract is pinned", () => {

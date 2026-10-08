@@ -55,6 +55,11 @@ export async function runJobsCommand(command: JobsCommand, context: JobsContext)
         // so this never authorizes whatever the job happens to be asking for by the time it lands.
         const pending = (await context.getJob(command.id))?.pendingApproval;
         if (!pending) { write(paint.yellow(`  ${command.id} has no pending approval.\n`)); return; }
+        if (command.decision === "allow_pattern" && !pending.pattern) {
+          write(paint.yellow("  this request offers no pattern to allow — answer allow or deny.\n"));
+          return;
+        }
+        if (pending.pattern && command.decision !== "allow_pattern") write(paint.dim(`  pattern available: ${pending.pattern.label} (/jobs approve ${command.id} pattern)\n`));
         write(paint.dim(`  ${command.decision === "deny" ? "denying" : "approving"}: ${pending.summary}\n`));
         const delivered = await context.resolveApproval(command.id, command.decision, pending.actionDigest);
         write(delivered ? "  delivered — the worker will pick it up shortly.\n" : paint.yellow("  that request changed before your answer arrived — nothing was authorized.\n"));

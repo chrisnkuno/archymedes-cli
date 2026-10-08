@@ -80,7 +80,7 @@ describe("the real CLI in a fixed workspace", () => {
       expect((await proc.waitForExit()).exitCode).toBe(0);
       expect(stub.requestCount()).toBe(1);
     } finally {
-      proc.kill(); await stub.close(); await rm(root, { recursive: true, force: true });
+      proc.kill(); await stub.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   }, 45_000);
 });

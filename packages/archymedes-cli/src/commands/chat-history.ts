@@ -221,27 +221,52 @@ export function renderReplay(record: SessionRecord, style: SectionStyle, options
 }
 
 export type HistoryCommand =
+  /** Bare `/history`, `/sessions` or `/resume`: the picker when someone is at the keyboard, the list otherwise. */
+  | { kind: "browse" }
   | { kind: "list" }
   | { kind: "search"; query: string }
   | { kind: "status" }
   | { kind: "show"; id: string; turns?: number }
   | { kind: "resume"; id?: string }
+  /** `/history delete <id>` or `/history delete --all` (everything but the open chat, after a confirm). */
+  | { kind: "delete"; id?: string; all?: boolean }
   | { kind: "invalid"; reason: string };
 
 const SESSION_ID = /^\d{8}T\d{6}Z-[a-z0-9]{6}$/;
 
-/** `/history`, `/history search <text>`, `/history <id>`, `/history resume [id]`. */
+/**
+ * `/history` (pick a past chat), `/history list`, `/history search <text>`, `/history <id>`,
+ * `/history resume [id]` — and `/resume [id|latest]`, the name people actually reach for.
+ */
 export function parseHistoryCommand(input: string): HistoryCommand | null {
+  const resume = /^\/resume(?:\s+([\s\S]*))?$/.exec(input.trim());
+  if (resume) {
+    const argument = (resume[1] ?? "").trim();
+    if (argument === "") return { kind: "browse" };
+    return SESSION_ID.test(argument) || argument === "latest"
+      ? { kind: "resume", id: argument }
+      : { kind: "invalid", reason: `"${argument}" is not a session id. Run /resume to pick one from a list.` };
+  }
   const match = /^\/(?:history|sessions)(?:\s+([\s\S]*))?$/.exec(input.trim());
   if (!match) return null;
   const rest = (match[1] ?? "").trim();
-  if (rest === "" || rest === "list") return { kind: "list" };
+  // Bare: open the picker. Going back to an earlier conversation is what people type this for;
+  // the printed list is one word away for anyone who wants to read rather than pick.
+  if (rest === "") return { kind: "browse" };
+  if (rest === "list") return { kind: "list" };
   if (rest === "status" || rest === "doctor") return { kind: "status" };
 
   const [verb, ...others] = rest.split(/\s+/);
   const argument = others.join(" ").trim();
   if (verb === "search" || verb === "find") {
     return argument ? { kind: "search", query: argument } : { kind: "invalid", reason: "/history search needs something to search for." };
+  }
+  if (verb === "delete" || verb === "remove" || verb === "rm") {
+    if (argument === "--all" || argument === "all") return { kind: "delete", all: true };
+    if (argument === "") return { kind: "invalid", reason: "/history delete needs a session id, or --all. In the /history picker, Del deletes the highlighted chat." };
+    return SESSION_ID.test(argument)
+      ? { kind: "delete", id: argument }
+      : { kind: "invalid", reason: `"${argument}" is not a session id. Run /history list to see them.` };
   }
   if (verb === "resume" || verb === "open") {
     if (argument === "") return { kind: "resume" };
@@ -253,5 +278,5 @@ export function parseHistoryCommand(input: string): HistoryCommand | null {
     const turns = /^\d+$/.test(argument) ? Number(argument) : undefined;
     return { kind: "show", id: verb, ...(turns === undefined ? {} : { turns }) };
   }
-  return { kind: "invalid", reason: `/history takes a session id, "search <text>", "status", or "resume" — not "${verb}".` };
+  return { kind: "invalid", reason: `/history takes "list", a session id, "search <text>", "delete <id>", "status", or "resume" — not "${verb}".` };
 }

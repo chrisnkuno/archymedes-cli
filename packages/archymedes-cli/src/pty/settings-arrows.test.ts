@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 import { spawnArchymedes } from "./harness";
+import { SETTING_FIELDS } from "../platform/settings";
 
 /**
  * Navigating settings with the arrow keys, against a real terminal.
@@ -17,6 +18,8 @@ const ESCAPE = String.fromCharCode(27);
 const DOWN = `${ESCAPE}[B`;
 const UP = `${ESCAPE}[A`;
 const ENTER = "\r";
+/** Arrow presses from the top of the field list to a setting — derived, so reordering the menu cannot silently retarget a test. */
+const downTo = (key: string) => DOWN.repeat(SETTING_FIELDS.findIndex((field) => field.key === key));
 
 let stub: AnthropicStub; let cwd: string;
 beforeAll(async () => {
@@ -40,8 +43,10 @@ describe("settings under a real pty", () => {
     const { p } = await boot();
     const mark = p.output().length;
     p.write(`/settings${ENTER}`);
-    const seen = await p.waitFor(/Enter choose/, { timeoutMs: 20_000, since: mark });
-    expect(seen.slice(mark)).toContain("Location");
+    const seen = await p.waitFor(/Enter edit/, { timeoutMs: 20_000, since: mark });
+    // The first rows are the Appearance section, which is what most people open settings to change.
+    expect(seen.slice(mark)).toContain("Appearance");
+    expect(seen.slice(mark)).toContain("Theme");
     // Values are on the rows, so the menu answers "what is set?" without opening each field.
     expect(seen.slice(mark)).toContain("not set");
     p.kill();
@@ -50,7 +55,7 @@ describe("settings under a real pty", () => {
   it("moves the highlight with the arrow keys", async () => {
     const { p } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 20_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const moved = p.output().length;
     p.write(DOWN);
@@ -64,11 +69,11 @@ describe("settings under a real pty", () => {
   it("picks a location from a named list, without anyone needing to know the code", async () => {
     const { p, configDir } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 20_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
-    // Location is the second row; one Down from the top, then open it.
+    // Location sits in the Money section; arrow down to it, then open it.
     const opened = p.output().length;
-    p.write(`${DOWN}${ENTER}`);
+    p.write(`${downTo("ARCHYMEDES_COUNTRY")}${ENTER}`);
     const list = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: opened });
     // Sorted by name, so the window opens on the A's — Rwanda is below the fold, which is exactly
     // why the list filters rather than expecting anyone to page to it.
@@ -82,7 +87,7 @@ describe("settings under a real pty", () => {
     await p.waitFor(/rwanda/, { timeoutMs: 15_000, since: filtered });
     p.write(ENTER);
     // Back on the field list, with the location it just took shown on its row.
-    const back = await p.waitFor(/Enter choose/, { timeoutMs: 15_000, since: filtered });
+    const back = await p.waitFor(/Enter edit/, { timeoutMs: 15_000, since: filtered });
     expect(back.slice(filtered)).toContain("RW");
 
     // Leaving the menu is what saves and applies it.
@@ -100,22 +105,22 @@ describe("settings under a real pty", () => {
     // perfectly well and a moving highlight badly.
     const { p } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 20_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const jumped = p.output().length;
     p.write("2");
     await p.waitFor(/❯/, { timeoutMs: 15_000, since: jumped });
     p.write(ENTER);
-    // Row 2 is Location, so typing its number opened the same list arrowing to it would have.
+    // Row 2 is Code colours, so typing its number opened the same list arrowing to it would have.
     const seen = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: jumped });
-    expect(seen.slice(jumped)).toContain("Location");
+    expect(seen.slice(jumped)).toContain("VS Code colours");
     p.kill();
   }, 90_000);
 
   it("leaves the menu on Escape without saving a change nobody made", async () => {
     const { p } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 20_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const dismissed = p.output().length;
     p.write(ESCAPE);
@@ -127,18 +132,18 @@ describe("settings under a real pty", () => {
   it("returns to the field list after setting a value, rather than dropping out", async () => {
     const { p } = await boot();
     p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter choose/, { timeoutMs: 20_000 });
+    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const opened = p.output().length;
-    p.write(`${DOWN}${DOWN}${DOWN}${ENTER}`);  // Default provider
+    p.write(`${downTo("ARCHYMEDES_PROVIDER")}${ENTER}`);  // Default provider
     // "Anthropic API key" is already visible in the parent list. Wait for a row unique to the
     // provider chooser so Enter cannot race the submenu opening and select the parent row again.
     await p.waitFor(/Clear this setting/, { timeoutMs: 15_000, since: opened });
     const chosen = p.output().length;
     p.write(ENTER);
     // Back on the field list, with the value it just took shown on the row.
-    const seen = await p.waitFor(/Enter choose/, { timeoutMs: 15_000, since: chosen });
-    expect(seen.slice(chosen)).toContain("Location");
+    const seen = await p.waitFor(/Enter edit/, { timeoutMs: 15_000, since: chosen });
+    expect(seen.slice(chosen)).toContain("Default provider");
     p.write(UP);
     p.kill();
   }, 90_000);

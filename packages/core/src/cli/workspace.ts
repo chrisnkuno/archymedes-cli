@@ -1,4 +1,6 @@
-import { promises as fs } from "node:fs";
+import { constants as fsConstants, promises as fs } from "node:fs";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import type { Dirent } from "node:fs";
 
@@ -191,6 +193,175 @@ export async function writeTextFile(root: string, candidate: string, content: st
   return { path: displayPath(root, absolute), bytesWritten: bytes };
 }
 
+/** One exact-text replacement. `replaceAll` permits more than one occurrence. */
+export type TextEdit = { oldText: string; newText: string; replaceAll?: boolean };
+
+type LineEnding = "lf" | "crlf" | "mixed";
+
+function lineEndingOf(content: string): LineEnding {
+  const crlf = content.split("\r\n").length - 1;
+  if (crlf === 0) return "lf";
+  const lf = content.split("\n").length - 1;
+  return lf === crlf ? "crlf" : "mixed";
+}
+
+const toLf = (text: string): string => text.replace(/\r\n/g, "\n");
+const toCrlf = (text: string): string => toLf(text).replace(/\n/g, "\r\n");
+
+/** Non-overlapping occurrences, the same count `split` gives. */
+function countOccurrences(haystack: string, needle: string): number {
+  let count = 0;
+  for (let index = haystack.indexOf(needle); index !== -1; index = haystack.indexOf(needle, index + needle.length)) count += 1;
+  return count;
+}
+
+/**
+ * Index-slice replacement. Never `String.prototype.replace` with a string replacement: that expands
+ * `$&`, `$'`, `` $` `` and `$$` inside `newText`, which silently corrupts any edit that happens to
+ * contain a dollar sign followed by one of those characters (shell, PHP, regex, template code...).
+ */
+function replaceText(content: string, oldText: string, newText: string, all: boolean): string {
+  if (all) return content.split(oldText).join(newText);
+  const index = content.indexOf(oldText);
+  return index === -1 ? content : content.slice(0, index) + newText + content.slice(index + oldText.length);
+}
+
+/** Dice coefficient over character bigrams: cheap enough to run against every line of a file. */
+function similarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (left.length < 2 || right.length < 2) return 0;
+  const bigrams = new Map<string, number>();
+  for (let index = 0; index < left.length - 1; index += 1) {
+    const pair = left.slice(index, index + 2);
+    bigrams.set(pair, (bigrams.get(pair) ?? 0) + 1);
+  }
+  let shared = 0;
+  for (let index = 0; index < right.length - 1; index += 1) {
+    const pair = right.slice(index, index + 2);
+    const remaining = bigrams.get(pair) ?? 0;
+    if (remaining > 0) { shared += 1; bigrams.set(pair, remaining - 1); }
+  }
+  return (2 * shared) / (left.length + right.length - 2);
+}
+
+/** A hint naming the line most like oldText's first line, so a near miss is fixable in one turn. */
+function nearestLineHint(content: string, oldText: string): string {
+  const needle = toLf(oldText).split("\n").map((line) => line.trim()).find(Boolean);
+  if (!needle) return "";
+  const lines = toLf(content).split("\n");
+  let best = { score: 0, line: 0 };
+  for (let index = 0; index < lines.length; index += 1) {
+    const candidate = lines[index].trim();
+    if (!candidate || Math.abs(candidate.length - needle.length) > Math.max(needle.length, 40)) continue;
+    const score = similarity(needle.slice(0, 300), candidate.slice(0, 300));
+    if (score > best.score) best = { score, line: index + 1 };
+  }
+  if (best.score < 0.5) return " Re-read the file and copy oldText exactly.";
+  const text = lines[best.line - 1];
+  const shown = text.length > 160 ? `${text.slice(0, 160)}…` : text;
+  const exactIgnoringIndent = text.trim() === needle;
+  return ` Closest line is ${best.line}${exactIgnoringIndent ? " (same text, different indentation)" : ""}: ${JSON.stringify(shown)}. Re-read the file and copy oldText exactly.`;
+}
+
+/**
+ * Locates `oldText` line-wise, ignoring trailing whitespace on every line and line-ending style.
+ *
+ * Returns the character span of every match in `content`. Only whole lines are compared; that is
+ * the shape a model's near-miss nearly always has (an editor stripped trailing spaces, or the model
+ * dropped them), and it keeps the fallback from matching something the model did not mean.
+ */
+function trailingWhitespaceInsensitiveMatches(content: string, oldText: string): Array<{ start: number; end: number }> {
+  const wanted = toLf(oldText).split("\n");
+  const includesFinalNewline = wanted.length > 1 && wanted[wanted.length - 1] === "";
+  if (includesFinalNewline) wanted.pop();
+  const wantedTrimmed = wanted.map((line) => line.trimEnd());
+  if (wantedTrimmed.every((line) => line === "")) return [];
+
+  const rawLines = content.split("\n");
+  const starts: number[] = [];
+  let offset = 0;
+  for (const line of rawLines) { starts.push(offset); offset += line.length + 1; }
+  const trimmed = rawLines.map((line) => line.trimEnd());
+
+  const matches: Array<{ start: number; end: number }> = [];
+  for (let first = 0; first + wantedTrimmed.length <= rawLines.length; first += 1) {
+    let matched = true;
+    for (let line = 0; line < wantedTrimmed.length; line += 1) {
+      if (trimmed[first + line] !== wantedTrimmed[line]) { matched = false; break; }
+    }
+    if (!matched) continue;
+    const last = first + wantedTrimmed.length - 1;
+    if (includesFinalNewline && last + 1 >= rawLines.length) continue; // oldText promised a newline the file does not have.
+    const lastLine = rawLines[last];
+    const end = includesFinalNewline
+      ? starts[last] + lastLine.length + 1
+      : starts[last] + lastLine.length - (lastLine.endsWith("\r") ? 1 : 0);
+    matches.push({ start: starts[first], end });
+  }
+  return matches;
+}
+
+/**
+ * Applies `edits` in order to `content`, all-or-nothing: the first edit that cannot be applied
+ * throws, and nothing is returned for writing.
+ *
+ * Exact matching first. Then two tolerances, each only when the exact text is absent:
+ *
+ * - Line endings. A model almost always sends LF; a Windows checkout is often CRLF. The edit is
+ *   matched after normalizing oldText to the file's own line ending, and newText is written in the
+ *   file's line ending so a CRLF file never ends up with a stray block of LF lines (or vice versa).
+ * - Trailing whitespace, line-wise, and only when that match is unique — an ambiguous fuzzy match is
+ *   still an error, never a guess.
+ */
+export function applyTextEdits(content: string, edits: readonly TextEdit[], label: string): { content: string; replacements: number } {
+  if (!Array.isArray(edits) || edits.length === 0) throw new WorkspaceViolation("at least one edit is required");
+  let current = content;
+  let replacements = 0;
+  edits.forEach((edit, index) => {
+    const prefix = edits.length > 1 ? `edits[${index}]: ` : "";
+    const { oldText, newText } = edit ?? ({} as TextEdit);
+    if (typeof oldText !== "string" || oldText === "") throw new WorkspaceViolation(`${prefix}oldText must be a non-empty string`);
+    if (typeof newText !== "string") throw new WorkspaceViolation(`${prefix}newText must be a string`);
+    if (oldText === newText) throw new WorkspaceViolation(`${prefix}oldText and newText are identical`);
+
+    const ending = lineEndingOf(current);
+    // newText in the file's own line ending, so an inserted block never mixes styles.
+    const adapt = (text: string): string => (ending === "crlf" ? toCrlf(text) : ending === "lf" ? toLf(text) : text);
+
+    let needle = oldText;
+    let occurrences = countOccurrences(current, needle);
+    if (occurrences === 0 && ending !== "mixed") {
+      const normalized = adapt(oldText);
+      if (normalized !== oldText) {
+        needle = normalized;
+        occurrences = countOccurrences(current, needle);
+      }
+    }
+
+    if (occurrences > 0) {
+      if (occurrences > 1 && !edit.replaceAll) {
+        throw new WorkspaceViolation(`${prefix}oldText appears ${occurrences} times in ${label}; include more surrounding context or set replaceAll`);
+      }
+      current = replaceText(current, needle, adapt(newText), edit.replaceAll === true);
+      replacements += edit.replaceAll ? occurrences : 1;
+      return;
+    }
+
+    const fuzzy = trailingWhitespaceInsensitiveMatches(current, oldText);
+    if (fuzzy.length === 1) {
+      const [{ start, end }] = fuzzy;
+      current = current.slice(0, start) + adapt(newText) + current.slice(end);
+      replacements += 1;
+      return;
+    }
+    if (fuzzy.length > 1) {
+      throw new WorkspaceViolation(`${prefix}oldText was not found exactly in ${label}, and matches ${fuzzy.length} places when trailing whitespace is ignored; include more surrounding context`);
+    }
+    throw new WorkspaceViolation(`${prefix}oldText was not found in ${label}.${nearestLineHint(current, oldText)}`);
+  });
+  return { content: current, replacements };
+}
+
 /**
  * Replaces one exact occurrence of `oldText`.
  *
@@ -205,19 +376,105 @@ export async function editTextFile(
   newText: string,
   options: { replaceAll?: boolean; limits?: WorkspaceLimits } = {},
 ): Promise<{ path: string; replacements: number }> {
-  if (typeof oldText !== "string" || oldText === "") throw new WorkspaceViolation("oldText must be a non-empty string");
-  if (typeof newText !== "string") throw new WorkspaceViolation("newText must be a string");
-  if (oldText === newText) throw new WorkspaceViolation("oldText and newText are identical");
+  return editTextFileWithEdits(root, candidate, [{ oldText, newText, replaceAll: options.replaceAll }], { limits: options.limits });
+}
 
-  const existing = await readTextFile(root, candidate, { limits: options.limits });
-  const occurrences = existing.content.split(oldText).length - 1;
-  if (occurrences === 0) throw new WorkspaceViolation(`oldText was not found in ${existing.path}`);
-  if (occurrences > 1 && !options.replaceAll) {
-    throw new WorkspaceViolation(`oldText appears ${occurrences} times in ${existing.path}; include more surrounding context or set replaceAll`);
+/**
+ * The edits an `edit_file` call asks for: either the single `oldText`/`newText`/`replaceAll` form,
+ * or `edits` — an array of `{oldText, newText, replaceAll?}`, accepted as a real array or as its JSON
+ * encoding (the tool schema only declares scalar types, so the model sends it as a string).
+ */
+export function parseEditArguments(args: Record<string, unknown>): TextEdit[] {
+  if (args.edits !== undefined && args.edits !== null) {
+    if (args.oldText !== undefined || args.newText !== undefined) {
+      throw new WorkspaceViolation("use either edits or oldText/newText, not both");
+    }
+    let raw: unknown = args.edits;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        throw new WorkspaceViolation("edits must be a JSON array of {\"oldText\", \"newText\", \"replaceAll\"?} objects");
+      }
+    }
+    if (!Array.isArray(raw) || raw.length === 0) throw new WorkspaceViolation("edits must be a non-empty array of {oldText, newText, replaceAll?} objects");
+    return raw.map((entry, index) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) throw new WorkspaceViolation(`edits[${index}] must be an object with oldText and newText`);
+      const { oldText, newText, replaceAll } = entry as Record<string, unknown>;
+      if (typeof oldText !== "string" || oldText === "") throw new WorkspaceViolation(`edits[${index}].oldText must be a non-empty string`);
+      if (typeof newText !== "string") throw new WorkspaceViolation(`edits[${index}].newText must be a string`);
+      if (replaceAll !== undefined && replaceAll !== null && typeof replaceAll !== "boolean") throw new WorkspaceViolation(`edits[${index}].replaceAll must be true or false`);
+      return { oldText, newText, replaceAll: replaceAll === true };
+    });
   }
-  const updated = options.replaceAll ? existing.content.split(oldText).join(newText) : existing.content.replace(oldText, newText);
-  await writeTextFile(root, candidate, updated, options.limits ?? DEFAULT_WORKSPACE_LIMITS);
-  return { path: existing.path, replacements: options.replaceAll ? occurrences : 1 };
+  if (typeof args.oldText !== "string" || args.oldText === "") throw new WorkspaceViolation("oldText must be a non-empty string (or pass edits)");
+  if (typeof args.newText !== "string") throw new WorkspaceViolation("newText must be a string");
+  return [{ oldText: args.oldText, newText: args.newText, replaceAll: args.replaceAll === true }];
+}
+
+export function fingerprintText(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+/**
+ * What the agent last saw of each file, so an edit cannot be applied to a file that changed on disk
+ * underneath it (the user saved in their editor, a formatter ran, another agent wrote it).
+ *
+ * Only files the agent has read or written are guarded: an edit to a file it never read still goes
+ * through, as it always has — the guard is against acting on a stale view, not against editing
+ * without looking.
+ */
+export class FileReadTracker {
+  private readonly seen = new Map<string, string>();
+
+  /** Records the full content the agent now knows `path` to have. */
+  record(path: string, content: string): void {
+    this.seen.set(path, fingerprintText(content));
+  }
+
+  forget(path: string): void {
+    this.seen.delete(path);
+  }
+
+  has(path: string): boolean {
+    return this.seen.has(path);
+  }
+
+  /** Throws when `path` was read before and its content on disk is no longer what was read. */
+  assertFresh(path: string, currentContent: string): void {
+    const known = this.seen.get(path);
+    if (known !== undefined && known !== fingerprintText(currentContent)) {
+      throw new WorkspaceViolation(`${path} changed on disk since it was last read; re-read it with read_file before editing`);
+    }
+  }
+}
+
+const fileReadTrackers = new WeakMap<object, FileReadTracker>();
+
+/**
+ * The tracker for one workspace. Keyed by the workspace object because that object lives as long
+ * as the session does, while the tool list is rebuilt on every turn.
+ */
+export function fileReadTrackerFor(owner: object): FileReadTracker {
+  let tracker = fileReadTrackers.get(owner);
+  if (!tracker) {
+    tracker = new FileReadTracker();
+    fileReadTrackers.set(owner, tracker);
+  }
+  return tracker;
+}
+
+/** Several edits to one file, applied in order and written once — or not at all. */
+export async function editTextFileWithEdits(
+  root: string,
+  candidate: string,
+  edits: readonly TextEdit[],
+  options: { limits?: WorkspaceLimits } = {},
+): Promise<{ path: string; replacements: number }> {
+  const existing = await readTextFile(root, candidate, { limits: options.limits });
+  const result = applyTextEdits(existing.content, edits, existing.path);
+  await writeTextFile(root, candidate, result.content, options.limits ?? DEFAULT_WORKSPACE_LIMITS);
+  return { path: existing.path, replacements: result.replacements };
 }
 
 export type WalkEntry = { absolute: string; relative: string; isDirectory: boolean };
@@ -245,6 +502,9 @@ const GREP_CONCURRENCY = 32;
 export async function* walkWorkspace(root: string, limits = DEFAULT_WORKSPACE_LIMITS, maxEntries = 20_000): AsyncGenerator<WalkEntry> {
   const absoluteRoot = path.resolve(root);
   const ignored = new Set(limits.ignoredDirectories);
+  // An empty ignore list means "show me everything" (config discovery under `.archymedes`), so the
+  // project's .gitignore is only consulted when the caller wants the agent-facing, filtered view.
+  const gitignored = ignored.size > 0 ? await loadRootGitignore(absoluteRoot) : null;
   let level: string[] = [absoluteRoot];
   let seen = 0;
 
@@ -268,8 +528,10 @@ export async function* walkWorkspace(root: string, limits = DEFAULT_WORKSPACE_LI
           // Symlinks are reported but never followed: following them can leave the tree and can loop.
           const isDirectory = entry.isDirectory();
           if (isDirectory && ignored.has(entry.name)) continue;
+          const relative = displayPath(absoluteRoot, absolute);
+          if (gitignored?.(relative, isDirectory)) continue;
           seen += 1;
-          yield { absolute, relative: displayPath(absoluteRoot, absolute), isDirectory };
+          yield { absolute, relative, isDirectory };
           if (isDirectory) next.push(absolute);
         }
       }
@@ -321,6 +583,51 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** True when a root-relative, forward-slashed path is ignored. */
+export type GitignoreMatcher = (relative: string, isDirectory: boolean) => boolean;
+
+/**
+ * The common subset of .gitignore syntax: comments, blank lines, `!` negation, a trailing `/` for
+ * directories only, a leading or embedded `/` anchoring to the root, and the same `*`/`**`/`?`/`{}`
+ * globs `globToRegExp` supports. Later rules win, as in git. Character classes are matched
+ * literally; nested .gitignore files are not read — this is a root-file filter, not git.
+ */
+export function parseGitignore(text: string): GitignoreMatcher {
+  const rules: Array<{ regex: RegExp; negate: boolean; directoryOnly: boolean }> = [];
+  for (const raw of text.split("\n")) {
+    let line = raw.replace(/\r$/, "").replace(/(?<!\\)\s+$/, "");
+    if (!line || line.startsWith("#")) continue;
+    const negate = line.startsWith("!");
+    if (negate) line = line.slice(1);
+    if (line.startsWith("\\#") || line.startsWith("\\!")) line = line.slice(1);
+    const directoryOnly = line.endsWith("/");
+    if (directoryOnly) line = line.replace(/\/+$/, "");
+    if (!line) continue;
+    const anchored = line.includes("/");
+    line = line.replace(/^\/+/, "");
+    if (!line) continue;
+    rules.push({ regex: globToRegExp(anchored ? line : `**/${line}`), negate, directoryOnly });
+  }
+  return (relative, isDirectory) => {
+    let ignoredPath = false;
+    for (const rule of rules) {
+      if (rule.directoryOnly && !isDirectory) continue;
+      if (rule.regex.test(relative)) ignoredPath = !rule.negate;
+    }
+    return ignoredPath;
+  };
+}
+
+/** The root .gitignore as a matcher, or null when there is none (or it cannot be read). */
+export async function loadRootGitignore(root: string): Promise<GitignoreMatcher | null> {
+  try {
+    const text = await fs.readFile(path.join(path.resolve(root), ".gitignore"), "utf8");
+    return parseGitignore(text);
+  } catch {
+    return null;
+  }
+}
+
 export async function globWorkspace(root: string, pattern: string, limits = DEFAULT_WORKSPACE_LIMITS, maxResults = 500): Promise<string[]> {
   const matcher = globToRegExp(pattern);
   const matches: string[] = [];
@@ -334,23 +641,167 @@ export async function globWorkspace(root: string, pattern: string, limits = DEFA
 
 export type GrepMatch = { path: string; line: number; text: string };
 
+let ripgrepLookup: Promise<string | null> | undefined;
+
+/**
+ * The `rg` binary on PATH, looked up once per process. `ARCHYMEDES_RIPGREP=0` (or `off`) disables
+ * it; any other value is taken as an explicit path to the binary.
+ */
+export function findRipgrep(environment: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  ripgrepLookup ??= (async () => {
+    const override = environment.ARCHYMEDES_RIPGREP?.trim();
+    if (override && /^(0|off|false|no)$/i.test(override)) return null;
+    if (override) return override;
+    const names = process.platform === "win32" ? ["rg.exe"] : ["rg"];
+    for (const directory of (environment.PATH ?? environment.Path ?? "").split(path.delimiter)) {
+      if (!directory) continue;
+      for (const name of names) {
+        const candidate = path.join(directory.replace(/^"|"$/g, ""), name);
+        try {
+          await fs.access(candidate, process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK);
+          return candidate;
+        } catch {
+          // Not here; keep looking.
+        }
+      }
+    }
+    return null;
+  })();
+  return ripgrepLookup;
+}
+
+/** Test hook: forget the cached `rg` lookup. */
+export function resetRipgrepLookup(): void {
+  ripgrepLookup = undefined;
+}
+
+/**
+ * rg arguments equivalent to the JS search: hidden files included (the walk includes dotfiles), the
+ * hard-coded ignore list excluded, the root .gitignore honoured even outside a git checkout, the
+ * same per-file size limit, and path-sorted output so repeated searches are stable.
+ */
+export function ripgrepArguments(query: string, options: { include?: string; regex?: boolean; limits: WorkspaceLimits }): string[] {
+  const args = ["--json", "--no-messages", "--hidden", "--no-require-git", "--no-ignore-parent", "--sort=path", "--max-filesize", String(options.limits.maxReadBytes)];
+  for (const directory of options.limits.ignoredDirectories) args.push("--glob", `!${directory}`);
+  // A superset of `globToRegExp`'s meaning (rg matches an unanchored glob at any depth); the exact
+  // include matcher is re-applied to every result so the two paths agree.
+  if (options.include) args.push("--glob", options.include);
+  if (!options.regex) args.push("--fixed-strings");
+  args.push("--regexp", query, "--", ".");
+  return args;
+}
+
+/**
+ * One line of `rg --json` output as a match, or null for every other message type.
+ *
+ * Text is kept exactly as the JS search reports it — the line without its `\n`, capped at 400
+ * characters — and the path is normalised to root-relative forward slashes.
+ */
+export function parseRipgrepJsonLine(line: string): GrepMatch | null {
+  if (!line.trim()) return null;
+  let message: { type?: string; data?: { path?: { text?: string; bytes?: string }; line_number?: number; lines?: { text?: string; bytes?: string } } };
+  try {
+    message = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (message.type !== "match" || !message.data) return null;
+  const decode = (value?: { text?: string; bytes?: string }): string | undefined =>
+    value?.text ?? (value?.bytes !== undefined ? Buffer.from(value.bytes, "base64").toString("utf8") : undefined);
+  const rawPath = decode(message.data.path);
+  const rawText = decode(message.data.lines);
+  const lineNumber = message.data.line_number;
+  if (rawPath === undefined || rawText === undefined || typeof lineNumber !== "number") return null;
+  const relative = rawPath.replace(/\\/g, "/").replace(/^\.\//, "");
+  return { path: relative, line: lineNumber, text: rawText.replace(/\n$/, "").slice(0, 400) };
+}
+
+/**
+ * Runs `rg` and collects up to `maxResults` matches, or returns null when rg could not answer
+ * (missing binary, a regex rg's engine rejects, any other error) so the caller falls back to the
+ * JS search rather than reporting a false "no matches".
+ */
+async function ripgrepSearch(
+  binary: string,
+  root: string,
+  query: string,
+  options: { include?: string; regex?: boolean; maxResults: number; limits: WorkspaceLimits },
+): Promise<GrepMatch[] | null> {
+  const include = options.include ? globToRegExp(options.include) : null;
+  const args = ripgrepArguments(query, options);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: GrepMatch[] | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(binary, args, { cwd: path.resolve(root), stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    } catch {
+      finish(null);
+      return;
+    }
+    const matches: GrepMatch[] = [];
+    let pending = "";
+    const consume = (line: string): void => {
+      const match = parseRipgrepJsonLine(line);
+      if (!match || (include && !include.test(match.path))) return;
+      matches.push(match);
+      if (matches.length >= options.maxResults) {
+        child.kill();
+        finish(matches);
+      }
+    };
+    child.stdout!.setEncoding("utf8");
+    child.stdout!.on("data", (chunk: string) => {
+      if (settled) return;
+      pending += chunk;
+      let newline = pending.indexOf("\n");
+      while (newline !== -1 && !settled) {
+        consume(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf("\n");
+      }
+    });
+    child.on("error", () => finish(null));
+    child.on("close", (code) => {
+      if (settled) return;
+      if (pending) consume(pending);
+      if (settled) return;
+      // 0: matches, 1: none. 2 is an error — trust it only if it still produced results.
+      if (code === 0 || code === 1 || (code === 2 && matches.length > 0)) finish(matches);
+      else finish(null);
+    });
+  });
+}
+
 /**
  * Content search across the workspace.
  *
- * Reads files directly rather than shelling out to ripgrep: the CLI must behave identically on a
- * machine that does not have `rg` installed, and a search that silently finds nothing because a
- * binary is missing is the worst possible failure mode for an agent deciding what to edit.
+ * Uses ripgrep when it is installed, and reads files directly when it is not: the CLI must behave
+ * identically on a machine that does not have `rg`, and a search that silently finds nothing
+ * because a binary is missing is the worst possible failure mode for an agent deciding what to
+ * edit — so any rg failure falls back to the JS search rather than returning an empty result.
+ * Pass `ripgrep: null` to force the JS search.
  */
 export async function grepWorkspace(
   root: string,
   query: string,
-  options: { include?: string; regex?: boolean; maxResults?: number; limits?: WorkspaceLimits } = {},
+  options: { include?: string; regex?: boolean; maxResults?: number; limits?: WorkspaceLimits; ripgrep?: string | null } = {},
 ): Promise<GrepMatch[]> {
   if (typeof query !== "string" || query === "") throw new WorkspaceViolation("query must be a non-empty string");
   const limits = options.limits ?? DEFAULT_WORKSPACE_LIMITS;
   const maxResults = options.maxResults ?? 200;
-  const include = options.include ? globToRegExp(options.include) : null;
+  // Validate a regex with the JS engine first, so a malformed pattern fails the same way either way.
   const matcher = options.regex ? new RegExp(query) : null;
+  const binary = options.ripgrep === undefined ? await findRipgrep() : options.ripgrep;
+  if (binary) {
+    const found = await ripgrepSearch(binary, root, query, { include: options.include, regex: options.regex, maxResults, limits });
+    if (found) return found;
+  }
+  const include = options.include ? globToRegExp(options.include) : null;
   const matches: GrepMatch[] = [];
   /**
    * The literal being searched for, as bytes.

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { bunExecutable } from "./pty/bun-executable";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -36,7 +37,7 @@ describe("free mode through the real CLI", () => {
       };
     `);
     const run = (args: string[]) => new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
-      const child = spawn("bun", ["--preload", preload, entry, "--currency", "USD", "--json", ...args], {
+      const child = spawn(bunExecutable(), ["--preload", preload, entry, "--currency", "USD", "--json", ...args], {
         cwd: root, env: { ...process.env, OPENROUTER_API_KEY: "test-free-key", OPENAI_API_KEY: "paid-key-that-must-not-be-used",
           ARCHYMEDES_PROVIDER: "openai", ARCHYMEDES_CONFIG_DIR: path.join(root, "config"), ARCHYMEDES_AUTO_UPDATE: "off", ARCHYMEDES_FX_OFFLINE: "true",
           ARCHYMEDES_FALLBACK_MODEL: "openai:gpt-5.6-terra", EXA_API_KEY: "", ARCHYMEDES_SUGGEST_MODEL: "off" },

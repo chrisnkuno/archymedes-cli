@@ -155,7 +155,8 @@ describe("path confinement holds under real adversarial input", () => {
 
   it("refuses a symlink planted inside the root that points outside it", async () => {
     await withWorkspace(async (workspace, rootPath, outsidePath) => {
-      await fs.symlink(outsidePath, path.join(rootPath, "escape-link"), "dir");
+      // A junction on Windows: it needs no privilege, so it is the escape an attacker there would plant.
+      await fs.symlink(outsidePath, path.join(rootPath, "escape-link"), process.platform === "win32" ? "junction" : "dir");
       await expect(workspace.readFile("escape-link/secret.txt")).rejects.toThrow(/outside the workspace root/);
     });
   });

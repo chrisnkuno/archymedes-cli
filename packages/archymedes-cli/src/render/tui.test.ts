@@ -1292,3 +1292,25 @@ describe("spinner timing", () => {
     expect(ticks).toBe(1);
   });
 });
+
+describe("status line free-mode meter", () => {
+  const fields = { mode: "build", spinnerGlyph: "✦", elapsedMs: 4_200, toolCalls: 3, tokens: 1_200, cost: "" };
+  const allowance = { text: "today 12.3k tok · 87.7k left · resets 00:00 UTC", warning: false };
+
+  it("shows the day's meter in place of a cost, and keeps it longer than the per-turn counts", () => {
+    const wide = plain(formatStatusLine({ ...fields, allowance }, 140, "none"));
+    expect(wide).toContain("today 12.3k tok · 87.7k left · resets 00:00 UTC");
+    expect(wide).toContain("1.2k tokens");
+    expect(wide).not.toContain("$");
+    const narrow = plain(formatStatusLine({ ...fields, allowance }, 90, "none"));
+    expect(narrow).toContain("87.7k left");
+    expect(narrow).not.toContain("1.2k tokens");
+  });
+
+  it("paints the meter in the warning colour only when the gateway flags it", () => {
+    const quiet = formatStatusLine({ ...fields, allowance }, 140, "ansi256");
+    const warned = formatStatusLine({ ...fields, allowance: { ...allowance, warning: true } }, 140, "ansi256");
+    expect(plain(warned)).toBe(plain(quiet));
+    expect(warned).not.toBe(quiet);
+  });
+});

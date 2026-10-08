@@ -4,12 +4,12 @@ import type { ArchymedesAgent, ArchymedesEvent, ArchymedesTurnResult, RestoreSco
 import type { ArchymedesWorkspace } from "./backends";
 import type { AgentCostPrediction } from "./cost";
 import type { Checkpoint } from "./checkpoints";
-import type { ApprovalPrompt, ApprovalRequest, PermissionDecision } from "./permissions";
+import type { ApprovalPattern, ApprovalPrompt, ApprovalRequest, PermissionDecision } from "./permissions";
 import type { JevToolCheck } from "./jev";
 import type { SafetyAssessment } from "./safety";
 import type { SessionRecord } from "./session";
 import type { PlacedSecretFinding, TodoItem } from "./tools";
-import type { ReadResult } from "./workspace";
+import { parseEditArguments, type ReadResult, type TextEdit } from "./workspace";
 
 /** Protocol version for the app-server commands and notifications, independent of journal schema. */
 export const ARCHYMEDES_DAEMON_PROTOCOL_VERSION = 1 as const;
@@ -48,8 +48,26 @@ export type DaemonApprovalRequest = {
    * rather than the whole `ApprovalRequest` forwarded wholesale: this boundary is a stable, minimal
    * contract, not a leak of whatever shape an internal type happens to have this month.
    */
-  preview?: { toolName: "write_file"; path: string; content: string } | { toolName: "edit_file"; path: string; oldText: string; newText: string };
+  preview?: DaemonApprovalPreview;
+  /**
+   * A broader standing rule the human may grant instead of the exact action ("always allow commands
+   * starting with `npm test`"). Answering `allow_pattern` grants it; absent when the call is not safe
+   * to generalize. Optional and additive, like `jev`.
+   */
+  pattern?: ApprovalPattern;
 };
+
+/**
+ * `edit_file` previews always carry `oldText`/`newText` so a client that only knows the single-edit
+ * form still shows something faithful. For the multi-edit form those are the hunks joined in order,
+ * and `edits` carries each one separately for a client that can render them individually.
+ */
+export type DaemonApprovalPreview =
+  | { toolName: "write_file"; path: string; content: string }
+  | { toolName: "edit_file"; path: string; oldText: string; newText: string; edits?: TextEdit[] };
+
+/** Between joined hunks in the flattened multi-edit preview. */
+export const PREVIEW_HUNK_SEPARATOR = "\n…\n";
 
 /** Reads `preview` straight off the call's own arguments — no workspace access needed either way. */
 function previewFor(request: ApprovalRequest): DaemonApprovalRequest["preview"] {
@@ -58,6 +76,19 @@ function previewFor(request: ApprovalRequest): DaemonApprovalRequest["preview"] 
   if (!path) return undefined;
   if (request.tool.name === "write_file" && typeof args.content === "string") {
     return { toolName: "write_file", path, content: args.content };
+  }
+  if (request.tool.name === "edit_file" && args.edits !== undefined && args.edits !== null) {
+    // Same parser the tool itself uses, so the preview shows exactly the edits that will run — and
+    // a malformed `edits` the tool would reject gets no preview rather than a guessed one.
+    let edits: TextEdit[];
+    try { edits = parseEditArguments(args); } catch { return undefined; }
+    return {
+      toolName: "edit_file",
+      path,
+      oldText: edits.map((edit) => edit.oldText).join(PREVIEW_HUNK_SEPARATOR),
+      newText: edits.map((edit) => edit.newText).join(PREVIEW_HUNK_SEPARATOR),
+      edits,
+    };
   }
   if (request.tool.name === "edit_file" && typeof args.oldText === "string" && typeof args.newText === "string") {
     return { toolName: "edit_file", path, oldText: args.oldText, newText: args.newText };
@@ -155,6 +186,7 @@ export class ArchymedesSessionDaemon {
       safety: request.safety,
       preview: previewFor(request),
       ...(request.jev ? { jev: request.jev } : {}),
+      ...(request.pattern ? { pattern: request.pattern } : {}),
     };
     const live = this.requireSession(sessionId);
     for (const clientId of live.subscribers) {
