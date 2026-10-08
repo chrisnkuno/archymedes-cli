@@ -9,6 +9,7 @@
         "@termuijs/testing": "^0.1.7",
         "@types/node": "^22.0.0",
         "@vitest/coverage-v8": "3.2.7",
+        "@xterm/headless": "5.5.0",
         "e2b": "^2.39.0",
         "node-pty": "^1.1.0",
         "typescript": "^5.7.0",
@@ -17,7 +18,7 @@
     },
     "packages/archymedes-cli": {
       "name": "archymedes-cli",
-      "version": "2.2.0",
+      "version": "2.4.0",
       "bin": {
         "archymedes": "dist/archymedes.mjs",
       },
@@ -39,7 +40,7 @@
     },
     "packages/core": {
       "name": "@archymedes/core",
-      "version": "0.12.1",
+      "version": "0.13.0",
       "dependencies": {
         "openai": "^6.49.0",
         "zod": "^4.4.3",
@@ -55,7 +56,7 @@
     },
     "packages/free-gateway": {
       "name": "@archymedes/free-gateway",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
   },
   "packages": {
@@ -240,6 +241,8 @@
     "@vitest/spy": ["@vitest/spy@3.2.7", "", { "dependencies": { "tinyspy": "^4.0.3" } }, "sha512-Q2eQGI6d2L/hBtZ0qNuKcAGid68XK6cv1xsoaIma6PaJhHPoqcEJhYpXZ/5myCMqkNgtP6UKuBhbc0nHKnrkuQ=="],
 
     "@vitest/utils": ["@vitest/utils@3.2.7", "", { "dependencies": { "@vitest/pretty-format": "3.2.7", "loupe": "^3.1.4", "tinyrainbow": "^2.0.0" } }, "sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw=="],
+
+    "@xterm/headless": ["@xterm/headless@5.5.0", "", {}, "sha512-5xXB7kdQlFBP82ViMJTwwEc3gKCLGKR/eoxQm4zge7GPBl86tCdI0IdPJjoKd8mUSFXz5V7i/25sfsEkP4j46g=="],
 
     "ansi-regex": ["ansi-regex@6.3.0", "", {}, "sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ=="],
 

@@ -485,3 +485,16 @@ describe("the chooser's chrome", () => {
     expect(lines.split("\n")[0]).toContain("✦ Models");
   });
 });
+
+describe("a caller's legend while filtering", () => {
+  const items = [{ value: "a", label: "Anthropic API key" }, { value: "b", label: "Theme" }];
+  const paint = { dim: (text: string) => text, cyan: (text: string) => text, green: (text: string) => text, yellow: (text: string) => text };
+  const legend = "↑↓ move · Enter edit · Esc done (saves)";
+  it("says Escape clears the filter while one is typed, and restores the caller's words after", () => {
+    const filtered = renderChooser({ selected: 0, query: "the" }, items, { paint, filter: true, legend });
+    expect(filtered).toContain("↑↓ move · Enter edit · Esc clear filter");
+    expect(filtered).not.toContain("Esc done (saves)");
+    expect(renderChooser({ selected: 0, query: "" }, items, { paint, filter: true, legend })).toContain("Esc done (saves)");
+  });
+});
+

@@ -328,7 +328,13 @@ export function renderChooser<T>(state: ChooserState, items: readonly ChooserIte
   // nothing a position would add over just seeing every row.
   const position = visible.length > height && chrome.pagination ? `  ${paginator(state.selected, visible.length)}` : "";
   if (chrome.help) {
-    lines.push(paint.dim(clip(`  ${options.legend ?? `${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} ${options.filter ? `type to filter ${glyphs.middot} ` : ""}${options.filter ? "Esc clear/back" : "Esc back"}`}${position}`, width)));
+    // A caller's legend describes the list at rest ("Esc done (saves)"). While a filter is typed,
+    // Escape clears the filter instead, and a legend still promising the other thing is the one
+    // line on screen that is wrong — so its Escape clause says what Escape will do now.
+    const legend = options.legend !== undefined && options.filter && state.query !== ""
+      ? options.legend.replace(/Esc\b[^·]*$/, "Esc clear filter")
+      : options.legend;
+    lines.push(paint.dim(clip(`  ${legend ?? `${glyphs.arrowUp}${glyphs.arrowDown} move ${glyphs.middot} Enter choose ${glyphs.middot} ${options.filter ? `type to filter ${glyphs.middot} ` : ""}${options.filter ? "Esc clear/back" : "Esc back"}`}${position}`, width)));
   } else if (position) {
     // A list with its help hidden still has somewhere to be in, and that is the one thing the rows
     // themselves cannot say once they no longer all fit.

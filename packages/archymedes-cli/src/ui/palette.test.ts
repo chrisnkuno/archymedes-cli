@@ -180,8 +180,20 @@ describe("the interaction end to end", () => {
     // Escape means "not from this menu", not "forget that I typed" — a dropdown that opens on "/"
     // would otherwise eat every keystroke of anyone typing an absolute path.
     const dismissed: string[] = [];
-    await runCommandPalette(keys([...type("/hom"), press("escape")]), entries, () => {}, { onDismiss: (query) => dismissed.push(query) });
+    await runCommandPalette(keys([...type("/hom"), press("g", { ctrl: true })]), entries, () => {}, { onDismiss: (query) => dismissed.push(query) });
     expect(dismissed).toEqual(["/hom"]);
+  });
+
+  it("clears a typed search on the first Escape and closes on the second, like every other list", async () => {
+    const painted: string[] = [];
+    const chosen = await runCommandPalette(keys([...type("dif"), press("escape"), press("escape")]), entries, (frame) => painted.push(frame));
+    expect(chosen).toBeUndefined();
+    // After the first Escape the palette is still painted, with an empty search.
+    const searchLine = painted.at(-1)!.split("\n").find((line) => line.includes("›"));
+    expect(searchLine?.trim()).toBe("›");
+    expect(advancePalette({ selected: 0, query: "dif" }, entries, press("escape"))).toEqual({ state: { selected: 0, query: "" } });
+    expect(advancePalette({ selected: 0, query: "" }, entries, press("escape")).done).toEqual({});
+    expect(advancePalette({ selected: 0, query: "dif" }, entries, press("c", { ctrl: true })).done).toEqual({});
   });
 
   it("does not report a dismissal when a command was chosen", async () => {

@@ -113,7 +113,7 @@ export type PaletteOptions = {
 };
 
 /** The legend Ctrl+G's menu shows: every way in and out, in one line. */
-export const PALETTE_FOOTER = "↑↓ choose · Enter run · type to search · Esc back";
+export const PALETTE_FOOTER = "↑↓ choose · Enter run · type to search · Esc clear/back";
 
 export function renderPalette(frame: PaletteFrame, options: PaletteOptions = {}): string {
   const rows = options.rows ?? 8;
@@ -173,6 +173,9 @@ export function advancePalette(
   // back, rendered, or resolved against rows that no longer have it.
   state = { ...state, selected: clamp(state.selected) };
 
+  // Escape undoes a typed search before it closes the palette — the same two-step every other list
+  // here (and fzf, and every editor's picker) uses. Ctrl+C and Ctrl+G always leave outright.
+  if (name === "escape" && state.query !== "") return { state: { ...state, query: "", selected: 0 } };
   if (name === "escape" || (input.key.ctrl && (name === "c" || name === "g"))) return { state, done: {} };
   if (name === "return" || name === "enter") {
     // Clamped when used: a selection left over from a longer match list must not cancel Enter.

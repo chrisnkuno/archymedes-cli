@@ -26,7 +26,7 @@ import { WorkspaceFrame } from "./ui/workspace-frame";
 import { layoutNotice, parseLayoutCommand, resolveLayout, wantsPinnedFooter } from "./ui/layout-choice";
 import { setWorkspaceMenu, installShortcuts } from "./ui/shortcuts";
 import { completeInput } from "./catalog/commands";
-import { KeyBindingRegistry, parseBindingOverrides } from "./terminal/keybindings";
+import { KeyBindingRegistry, escapeCodeTimeoutMs, parseBindingOverrides } from "./terminal/keybindings";
 import { resolveCurrencyPreference } from "./platform/local-currency";
 import { loadSettings, mergedEnvironment, saveSettings } from "./platform/settings";
 import { runFreeModeSetup } from "./app/free-setup";
@@ -180,7 +180,7 @@ async function main(): Promise<number> {
   // it, and carries on into the session (see `runFreeModeSetup`) — never the full settings menu.
   // A pipe or --json run has nobody to answer, so it keeps the message and the non-zero exit.
   if ("error" in resolved && !args.provider && !args.model && !args.json && process.stdin.isTTY && process.stdout.isTTY) {
-    const setupReadline = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const setupReadline = createInterface({ input: process.stdin, output: process.stdout, terminal: true, escapeCodeTimeout: escapeCodeTimeoutMs() });
     // Ctrl+C during setup ends the question rather than leaving it paused.
     setupReadline.on("SIGINT", () => setupReadline.close());
     let saved: Awaited<ReturnType<typeof runFreeModeSetup>>;
@@ -292,6 +292,7 @@ async function main(): Promise<number> {
   const readline = createInterface({
     input: process.stdin,
     output: process.stdout,
+    escapeCodeTimeout: escapeCodeTimeoutMs(),
     // Reads the cached project listing below, so completion never blocks on a filesystem walk.
     // Built per keystroke rather than cached: the catalog depends on `environment`, which a
     // `/settings` edit mutates mid-session, and a stale list would keep offering a provider whose

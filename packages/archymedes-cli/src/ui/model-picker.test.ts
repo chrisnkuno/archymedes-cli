@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceModelPicker, buildPickerRows, filterPickerRows, initialSelection, renderModelPicker, runModelPicker, type PickerRow } from "./model-picker";
+import { advanceModelPicker, buildPickerRows, filterPickerRows, initialSelection, pickerWindow, renderModelPicker, runModelPicker, type PickerRow } from "./model-picker";
 import { buildModelCatalog } from "../session/models";
 import type { KeypressEvent } from "../terminal/keybindings";
 import { visibleWidth } from "../text/text-width";
@@ -72,7 +72,8 @@ describe("moving around the picker", () => {
     const first = rendered.split("\n").find((line) => line.includes("1."));
     const jumped = advanceModelPicker({ selected, query: "" }, rows, press("1", {}, "1"), { height }).state.selected;
     const label = rows[jumped]?.kind === "model" ? rows[jumped].choice.model : rows[jumped]?.label;
-    expect(first).toContain(label);
+    // The row may be clipped to the width; its opening words identify it.
+    expect(first).toContain(label?.slice(0, 24));
   });
 
   it("ignores a number past the end of the list", () => {
@@ -258,9 +259,27 @@ describe("filtering the picker", () => {
     expect(advanceModelPicker(state, rows, press("return")).done).toEqual({});
   });
 
-  it("pages with PageUp and PageDown like every other list", () => {
-    expect(advanceModelPicker({ selected: 0, query: "" }, rows, press("pagedown"), { height: 4 }).state.selected).toBe(4);
-    expect(advanceModelPicker({ selected: 3, query: "" }, rows, press("pageup"), { height: 4 }).state.selected).toBe(0);
+  it("pages by the rows on screen less one, so the row being read stays visible", () => {
+    const shown = (selected: number) => { const window = pickerWindow(rows, selected, 4); return window.end - window.start; };
+    expect(advanceModelPicker({ selected: 0, query: "" }, rows, press("pagedown"), { height: 4 }).state.selected).toBe(shown(0) - 1);
+    const from = 5;
+    expect(advanceModelPicker({ selected: from, query: "" }, rows, press("pageup"), { height: 4 }).state.selected).toBe(from - (shown(from) - 1));
+  });
+
+  it("never paints more lines than its height, however many group headings the window spans", () => {
+    for (let selected = 0; selected < rows.length; selected += 1) {
+      for (const height of [3, 4, 6, 10]) {
+        const painted = renderModelPicker({ rows, selected }, { ...options, height }).split("\n");
+        // The legend is the last line; everything above it is the window.
+        expect(painted.length - 1, `selected ${selected}, height ${height}`).toBeLessThanOrEqual(height);
+        expect(painted.some((line) => line.includes("❯") || line.includes(">")), `selection visible at ${selected}`).toBe(true);
+      }
+    }
+  });
+
+  it("leaves outright on Ctrl+C even with a filter typed; only Escape clears the filter first", () => {
+    expect(advanceModelPicker({ selected: 0, query: "son" }, rows, press("c", { ctrl: true })).done).toEqual({});
+    expect(advanceModelPicker({ selected: 0, query: "son" }, rows, press("escape"))).toEqual({ state: { selected: 0, query: "" } });
   });
 });
 

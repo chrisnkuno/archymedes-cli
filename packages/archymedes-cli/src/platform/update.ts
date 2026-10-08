@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { hostOf } from "./endpoints";
 import { classifyNetworkError } from "./network";
+import { escapeCodeTimeoutMs } from "../terminal/keybindings";
 import cliPackage from "../../package.json";
 
 export const ARCHYMEDES_CLI_PACKAGE = "archymedes-cli";
@@ -158,7 +159,7 @@ export async function fetchLatestVersion(options: {
 }
 
 async function askForConfirmation(question: string): Promise<boolean> {
-  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  const readline = createInterface({ input: process.stdin, output: process.stdout, escapeCodeTimeout: escapeCodeTimeoutMs() });
   try {
     const answer = (await readline.question(`${question} [Y/n] `)).trim().toLowerCase();
     return answer === "" || answer === "y" || answer === "yes";

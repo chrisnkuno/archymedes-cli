@@ -205,3 +205,45 @@ describe("a feature key pressed while something is already typed", () => {
     session.readline.close();
   });
 });
+
+describe("typing ahead across chained menus", () => {
+  /** Reads keys until Enter, returning the printable ones typed before it. */
+  const readUntilEnter = async (keys: AsyncIterable<{ str?: string; key: { name?: string } }>) => {
+    let typed = "";
+    for await (const input of keys) {
+      if (input.key.name === "return") return typed;
+      typed += input.str ?? "";
+    }
+    return typed;
+  };
+
+  it("hands keys typed after one menu's Enter to the menu opened right after it", async () => {
+    const terminal = host();
+    const first = withBorrowedKeyboard(terminal, undefined, (keys) => readUntilEnter(keys));
+    // One decoded chunk: Enter for the field list, then the value and its Enter, before the value
+    // list has started listening — exactly what a fast typist or a paste delivers.
+    for (const [str, name] of [["\r", "return"], ["r", "r"], ["w", "w"], ["\r", "return"]] as const) {
+      terminal.input.emit("keypress", str, { name });
+    }
+    expect(await first).toBe("");
+    expect(await withBorrowedKeyboard(terminal, undefined, (keys) => readUntilEnter(keys))).toBe("rw");
+  });
+
+  it("does not replay stale keys into a menu opened long after", async () => {
+    const terminal = host();
+    const first = withBorrowedKeyboard(terminal, undefined, (keys) => readUntilEnter(keys));
+    terminal.input.emit("keypress", "\r", { name: "return" });
+    terminal.input.emit("keypress", "x", { name: "x" });
+    await first;
+    const realNow = Date.now;
+    Date.now = () => realNow() + 5_000;
+    try {
+      const later = withBorrowedKeyboard(terminal, undefined, (keys) => readUntilEnter(keys));
+      terminal.input.emit("keypress", "\r", { name: "return" });
+      expect(await later).toBe("");
+    } finally {
+      Date.now = realNow;
+    }
+  });
+});
+

@@ -1,0 +1,1154 @@
+[
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "CTRL_G",
+    "expect": "A command palette opens over the session: a filter line, a list of actions with one highlighted, and a key legend.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "no_visible_effect": 0,
+        "as_expected": 0.88,
+        "partly": 0.11,
+        "wrong": 0.01
+      },
+      "stuck": 0.07,
+      "discoverable": 2,
+      "defect": 0.11
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves down exactly one row; nothing else changes.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │   ❯ /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │     /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.97,
+        "partly": 0.02,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.07,
+      "discoverable": 1.99,
+      "defect": 0.04
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "CTRL_P",
+    "expect": "Ctrl+P is the Emacs/fzf alias for Up: the highlight moves back up one row.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │   ❯ /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │     /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "partly": 0.03,
+        "no_visible_effect": 0.01,
+        "as_expected": 0.92,
+        "wrong": 0.04
+      },
+      "stuck": 0.11,
+      "discoverable": 1.99,
+      "defect": 0.05
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "type 'mod'",
+    "expect": "The list narrows as each character is typed to actions matching 'mod' (such as /model), and the filter line shows 'mod'.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /route [all|summary|plan]           The hosted exchange's routing decision:… │\n   │     /fallback [off|ask|provider:model]  Opt into a safe alternate model after t… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │   ❯ /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   › mod                                                                          │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "partly",
+      "outcomeP": {
+        "as_expected": 0.26,
+        "wrong": 0.04,
+        "no_visible_effect": 0,
+        "partly": 0.7
+      },
+      "stuck": 0.11,
+      "discoverable": 1.98,
+      "defect": 0.19
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 5,
+    "key": "BACKSPACE",
+    "expect": "One character is removed from the filter ('mo') and the list widens accordingly.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /route [all|summary|plan]           The hosted exchange's routing decision:… │\n   │     /fallback [off|ask|provider:model]  Opt into a safe alternate model after t… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │   ❯ /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   › mod                                                                          │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /fallback [off|ask|provider:model]   Opt into a safe alternate model after … │\n   │     /defender                            Switch to defender mode — find and fix… │\n   │     /build                               Switch to build mode — edits need appr… │\n   │     /plan                                Switch to plan mode — read and reason,… │\n   │     /memory [add|replace|recall|forget]  Bounded, relevant memory across sessio… │\n   │     /model [name | N | provider model]   Open the model picker, or switch strai… │\n   │     /models [refresh]                    Every model each provider actually off… │\n   │   ❯ /mode [plan|build|auto|defender]     Show or switch the permission mode  [F… │\n   │   › mo                                                                           │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "partly": 0.19,
+        "wrong": 0.05,
+        "as_expected": 0.75,
+        "no_visible_effect": 0.01
+      },
+      "stuck": 0.1,
+      "discoverable": 1.92,
+      "defect": 0.35
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 6,
+    "key": "ESC",
+    "expect": "The first Escape clears the typed filter but keeps the palette open with the full list.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /fallback [off|ask|provider:model]   Opt into a safe alternate model after … │\n   │     /defender                            Switch to defender mode — find and fix… │\n   │     /build                               Switch to build mode — edits need appr… │\n   │     /plan                                Switch to plan mode — read and reason,… │\n   │     /memory [add|replace|recall|forget]  Bounded, relevant memory across sessio… │\n   │     /model [name | N | provider model]   Open the model picker, or switch strai… │\n   │     /models [refresh]                    Every model each provider actually off… │\n   │   ❯ /mode [plan|build|auto|defender]     Show or switch the permission mode  [F… │\n   │   › mo                                                                           │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.74,
+        "partly": 0.23,
+        "no_visible_effect": 0,
+        "wrong": 0.03
+      },
+      "stuck": 0.12,
+      "discoverable": 1.98,
+      "defect": 0.13
+    }
+  },
+  {
+    "scenario": "palette",
+    "surface": "command palette (Ctrl+G)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 7,
+    "key": "ESC",
+    "expect": "The second Escape closes the palette and returns to the prompt without running anything.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │     /model [name | N | provider model]  Open the model picker, or switch straig… │\n   │     /models [refresh]                   Every model each provider actually offe… │\n   │     /defender                           Switch to defender mode — find and fix … │\n   │     /auto                               Auto-apply ordinary edits; sensitive ac… │\n   │     /build                              Switch to build mode — edits need appro… │\n   │     /plan                               Switch to plan mode — read and reason, … │\n   │     /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2] │\n   │   ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal … │\n   │   ›                                                                              │\n   │   ↑↓ choose · Enter run · type to search · Esc clear/back                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n│ › ",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.43,
+        "partly": 0.27,
+        "no_visible_effect": 0,
+        "wrong": 0.3
+      },
+      "stuck": 0.42,
+      "discoverable": 1.44,
+      "defect": 0.15
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /model",
+    "expect": "A model picker opens listing providers' models, with the current model marked and a legend of keys.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.83,
+        "partly": 0.16,
+        "wrong": 0.01,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.05,
+      "discoverable": 2,
+      "defect": 0.1
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves down one row.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │     1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │   ❯ 2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 1,
+        "partly": 0,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.05,
+      "discoverable": 2,
+      "defect": 0.03
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "PGDN",
+    "expect": "The highlight jumps down by about one visible page, scrolling the list if needed.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │     1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │   ❯ 2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │     1.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     2.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     3.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     4.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     5.   claude-vega-6-20270114  unpriced                                        │\n   │   Ollama (local)                                                                 │\n   │   ❯ 6.   llama3.1                $0.00/$0.00 per Mtok  (default)                 │\n   │   OpenAI                                                                         │\n   │     7. Add a key — needs OPENAI_API_KEY                                          │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.86,
+        "partly": 0.13,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.06,
+      "discoverable": 1.99,
+      "defect": 0.06
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "END",
+    "expect": "The highlight jumps to the last row of the list.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │     1.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     2.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     3.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     4.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     5.   claude-vega-6-20270114  unpriced                                        │\n   │   Ollama (local)                                                                 │\n   │   ❯ 6.   llama3.1                $0.00/$0.00 per Mtok  (default)                 │\n   │   OpenAI                                                                         │\n   │     7. Add a key — needs OPENAI_API_KEY                                          │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Mistral                                                                        │\n   │     1. Add a key — needs MISTRAL_API_KEY                                         │\n   │   Groq                                                                           │\n   │     2. Add a key — needs GROQ_API_KEY                                            │\n   │   OpenAI-compatible                                                              │\n   │     3. Add a key — needs OPENAI_COMPATIBLE_API_KEY and OPENAI_COMPATIBLE_BASE_U… │\n   │   Free models (OpenRouter)                                                       │\n   │     4. Add a key — needs ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gatewa… │\n   │   Settings                                                                       │\n   │   ❯ 5. Keys, models, pricing and voice…                                          │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.55,
+        "partly": 0.22,
+        "no_visible_effect": 0,
+        "wrong": 0.23
+      },
+      "stuck": 0.12,
+      "discoverable": 1.99,
+      "defect": 0.15
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 5,
+    "key": "HOME",
+    "expect": "The highlight jumps back to the first row.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Mistral                                                                        │\n   │     1. Add a key — needs MISTRAL_API_KEY                                         │\n   │   Groq                                                                           │\n   │     2. Add a key — needs GROQ_API_KEY                                            │\n   │   OpenAI-compatible                                                              │\n   │     3. Add a key — needs OPENAI_COMPATIBLE_API_KEY and OPENAI_COMPATIBLE_BASE_U… │\n   │   Free models (OpenRouter)                                                       │\n   │     4. Add a key — needs ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gatewa… │\n   │   Settings                                                                       │\n   │   ❯ 5. Keys, models, pricing and voice…                                          │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "wrong",
+      "outcomeP": {
+        "as_expected": 0.38,
+        "partly": 0.1,
+        "no_visible_effect": 0.01,
+        "wrong": 0.51
+      },
+      "stuck": 0.07,
+      "discoverable": 1.99,
+      "defect": 0.07
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 6,
+    "key": "type 'haiku'",
+    "expect": "The list narrows to models matching 'haiku' and the filter text is visible.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   filter: haiku                                                                  │\n   │   Anthropic                                                                      │\n   │   ❯ 1.   claude-haiku-4-5  $1.00/$5.00 per Mtok                                  │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.97,
+        "partly": 0.03,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.1,
+      "discoverable": 1.99,
+      "defect": 0.05
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 7,
+    "key": "ESC",
+    "expect": "Escape clears the filter first; the picker stays open showing the full list.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   filter: haiku                                                                  │\n   │   Anthropic                                                                      │\n   │   ❯ 1.   claude-haiku-4-5  $1.00/$5.00 per Mtok                                  │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.94,
+        "partly": 0.05,
+        "wrong": 0.01,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.08,
+      "discoverable": 1.99,
+      "defect": 0.08
+    }
+  },
+  {
+    "scenario": "model-picker",
+    "surface": "model picker (/model)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 8,
+    "key": "ESC",
+    "expect": "Escape closes the picker without switching models and says nothing changed (or simply returns to the prompt).",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Anthropic                                                                      │\n   │   ❯ 1. ● claude-sonnet-5         $3.00/$15.00 per Mtok  (default, current)       │\n   │     2.   claude-fable-5          $10.00/$50.00 per Mtok                          │\n   │     3.   claude-haiku-4-5        $1.00/$5.00 per Mtok                            │\n   │     4.   claude-opus-4-6         $5.00/$25.00 per Mtok                           │\n   │     5.   claude-opus-4-7         $5.00/$25.00 per Mtok                           │\n   │     6.   claude-opus-4-8         $5.00/$25.00 per Mtok                           │\n   │     7.   claude-opus-5           $5.00/$25.00 per Mtok                           │\n   │     8.   claude-sonnet-4-6       $3.00/$15.00 per Mtok                           │\n   │     9.   claude-vega-6-20270114  unpriced                                        │\n   │   ↑↓ move · Enter choose · t table · type to filter · Esc back                   │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n  no change\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.84,
+        "partly": 0.15,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.21,
+      "discoverable": 1.65,
+      "defect": 0.11
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /settings",
+    "expect": "The settings menu opens: fields grouped in sections with their current values, one highlighted, and a legend that says Esc saves and leaves.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "partly": 0.24,
+        "as_expected": 0.76,
+        "wrong": 0,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.07,
+      "discoverable": 1.99,
+      "defect": 0.48
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves to the next field.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │     1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │   ❯ 2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  2/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 1,
+        "partly": 0,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.05,
+      "discoverable": 2,
+      "defect": 0.06
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "type 'theme'",
+    "expect": "Typing filters the field list to fields matching 'theme'.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │     1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │   ❯ 2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  2/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   filter: theme                                                                  │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. saved / leave                                                             │\n   │   ↑↓ move · Enter edit · Esc clear filter                                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "partly",
+      "outcomeP": {
+        "partly": 0.67,
+        "as_expected": 0.31,
+        "wrong": 0.02,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.27,
+      "discoverable": 1.96,
+      "defect": 0.32
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "ENTER",
+    "expect": "Enter opens the highlighted field's value list (the themes), showing which value is current.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   filter: theme                                                                  │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. saved / leave                                                             │\n   │   ↑↓ move · Enter edit · Esc clear filter                                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI (/theme <name> also saves it)                │\n   │   ❯ 1. archymedes            Bronze instruments, limestone ink and olive acce…   │\n   │     2. blueprint             Blueprint navy, chalk-white ink and an amber pen…   │\n   │     3. parchment             The same drawing inked on paper, for a light ter…   │\n   │     4. chalkboard            A slate: near-black green, chalk white, chalk ye…   │\n   │     5. high-contrast         Maximum separation, named colours only — for low…   │\n   │     6. rainbow               Every hue at once — the opening art and the thin…   │\n   │     7. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.97,
+        "partly": 0.03,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.07,
+      "discoverable": 2,
+      "defect": 0.05
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 5,
+    "key": "DOWN",
+    "expect": "The highlight moves to the next theme in the value list.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI (/theme <name> also saves it)                │\n   │   ❯ 1. archymedes            Bronze instruments, limestone ink and olive acce…   │\n   │     2. blueprint             Blueprint navy, chalk-white ink and an amber pen…   │\n   │     3. parchment             The same drawing inked on paper, for a light ter…   │\n   │     4. chalkboard            A slate: near-black green, chalk white, chalk ye…   │\n   │     5. high-contrast         Maximum separation, named colours only — for low…   │\n   │     6. rainbow               Every hue at once — the opening art and the thin…   │\n   │     7. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI (/theme <name> also saves it)                │\n   │     1. archymedes            Bronze instruments, limestone ink and olive acce…   │\n   │   ❯ 2. blueprint             Blueprint navy, chalk-white ink and an amber pen…   │\n   │     3. parchment             The same drawing inked on paper, for a light ter…   │\n   │     4. chalkboard            A slate: near-black green, chalk white, chalk ye…   │\n   │     5. high-contrast         Maximum separation, named colours only — for low…   │\n   │     6. rainbow               Every hue at once — the opening art and the thin…   │\n   │     7. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0,
+        "no_visible_effect": 0,
+        "as_expected": 1,
+        "partly": 0
+      },
+      "stuck": 0.04,
+      "discoverable": 2,
+      "defect": 0.03
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 6,
+    "key": "ESC",
+    "expect": "Escape leaves the value list without changing the setting and returns to the field list.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI (/theme <name> also saves it)                │\n   │     1. archymedes            Bronze instruments, limestone ink and olive acce…   │\n   │   ❯ 2. blueprint             Blueprint navy, chalk-white ink and an amber pen…   │\n   │     3. parchment             The same drawing inked on paper, for a light ter…   │\n   │     4. chalkboard            A slate: near-black green, chalk white, chalk ye…   │\n   │     5. high-contrast         Maximum separation, named colours only — for low…   │\n   │     6. rainbow               Every hue at once — the opening art and the thin…   │\n   │     7. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.77,
+        "partly": 0.2,
+        "no_visible_effect": 0,
+        "wrong": 0.03
+      },
+      "stuck": 0.1,
+      "discoverable": 1.99,
+      "defect": 0.49
+    }
+  },
+  {
+    "scenario": "settings",
+    "surface": "settings menu (/settings)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 7,
+    "key": "ESC",
+    "expect": "Escape leaves the settings menu; it says settings were saved and returns to the prompt.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n  settings saved to /tmp/archymedes-navaudit-cfg-9qAKIZ/settings.json\n  Settings are active now. Use /model only to change the selected model.\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.9400000000000001,
+        "no_visible_effect": 0,
+        "wrong": 0,
+        "partly": 0.06
+      },
+      "stuck": 0.14,
+      "discoverable": 1.73,
+      "defect": 0.08
+    }
+  },
+  {
+    "scenario": "files",
+    "surface": "file browser (/files)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /files",
+    "expect": "A file browser opens showing the project tree with one entry highlighted and a key legend.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " archymedes files · src                                                                   \n❯ ├─▸ src/                           │                                                   \n  ╰─ README.md                       │   0 folders, 1 file                                \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "problems": [],
+    "jev": {
+      "outcome": "partly",
+      "outcomeP": {
+        "as_expected": 0.42,
+        "no_visible_effect": 0,
+        "partly": 0.54,
+        "wrong": 0.04
+      },
+      "stuck": 0.09,
+      "discoverable": 2,
+      "defect": 0.19
+    }
+  },
+  {
+    "scenario": "files",
+    "surface": "file browser (/files)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves to the next file or folder.",
+    "before": " archymedes files · src                                                                   \n❯ ├─▸ src/                           │                                                   \n  ╰─ README.md                       │   0 folders, 1 file                                \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "after": " archymedes files · README.md                                                             \n  ├─▸ src/                           │   # audit project                                  \n❯ ╰─ README.md                       │                                                    \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.82,
+        "partly": 0.13,
+        "no_visible_effect": 0,
+        "wrong": 0.05
+      },
+      "stuck": 0.09,
+      "discoverable": 1.99,
+      "defect": 0.24
+    }
+  },
+  {
+    "scenario": "files",
+    "surface": "file browser (/files)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "UP",
+    "expect": "The highlight moves back up one entry.",
+    "before": " archymedes files · README.md                                                             \n  ├─▸ src/                           │   # audit project                                  \n❯ ╰─ README.md                       │                                                    \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "after": " archymedes files · src                                                                   \n❯ ├─▸ src/                           │                                                    \n  ╰─ README.md                       │   0 folders, 1 file                                \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "partly": 0.18,
+        "wrong": 0.05,
+        "as_expected": 0.77,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.13,
+      "discoverable": 1.98,
+      "defect": 0.13
+    }
+  },
+  {
+    "scenario": "files",
+    "surface": "file browser (/files)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "type 'q'",
+    "expect": "q closes the file browser and returns to the session prompt with nothing typed into it.",
+    "before": " archymedes files · src                                                                   \n❯ ├─▸ src/                           │                                                    \n  ╰─ README.md                       │   0 folders, 1 file                                \n                                     │                                                    \n(… 23 more identical rows)\n ↑↓ move · →/l open · ←/h close · Enter pick a file · / search · Esc back                 ",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0.11,
+        "no_visible_effect": 0,
+        "partly": 0.08,
+        "as_expected": 0.81
+      },
+      "stuck": 0.31,
+      "discoverable": 1.66,
+      "defect": 0.1
+    }
+  },
+  {
+    "scenario": "help",
+    "surface": "help (/help)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /help",
+    "expect": "Help is shown: what the main commands and keys are, in a readable list, ending at a usable prompt or in a view with a visible way out.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n  Find your way around\n      /palette                    Search every command by name or by what it does\n      /guide [topic|search <tex…  The user guide, as a screen you can browse — or print o\n…\n    ✦ /help [all|work|review|st…  Commands grouped by purpose\n      /tools                      What the agent can call, and which skills, plugins, MCP\n…\n                                  … 1 more\n\n  Set it up\n    ✦ /settings                   Theme, code colours, simple mode, startup, free-mode sa\n…\n      /layout [fixed|scrollback]  Toggle the fixed workspace or terminal scrollback layou\nt\n      /theme [name|list|where]    Pick the colours from a list, or name one — blueprint, \n…\n      /providers                  Which model providers are configured\n                                  … 2 more\n\n    · ✦ start with these · /help all or /help <group> narrows this\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0.01,
+        "no_visible_effect": 0,
+        "partly": 0.05,
+        "as_expected": 0.94
+      },
+      "stuck": 0.14,
+      "discoverable": 1.62,
+      "defect": 0.11
+    }
+  },
+  {
+    "scenario": "history-scroll",
+    "surface": "transcript history in the fixed layout",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /help",
+    "expect": "Help prints into the transcript, giving it something to scroll back through.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n  Find your way around\n      /palette                    Search every command by name or by what it does\n      /guide [topic|search <tex…  The user guide, as a screen you can browse — or print o\n…\n    ✦ /help [all|work|review|st…  Commands grouped by purpose\n      /tools                      What the agent can call, and which skills, plugins, MCP\n…\n                                  … 1 more\n\n  Set it up\n    ✦ /settings                   Theme, code colours, simple mode, startup, free-mode sa\n…\n      /layout [fixed|scrollback]  Toggle the fixed workspace or terminal scrollback layou\nt\n      /theme [name|list|where]    Pick the colours from a list, or name one — blueprint, \n…\n      /providers                  Which model providers are configured\n                                  … 2 more\n\n    · ✦ start with these · /help all or /help <group> narrows this\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.96,
+        "partly": 0.03,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.24,
+      "discoverable": 1.44,
+      "defect": 0.12
+    }
+  },
+  {
+    "scenario": "history-scroll",
+    "surface": "transcript history in the fixed layout",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "PGUP",
+    "expect": "Page Up scrolls the transcript back by a page; the header indicates the view is in history rather than live.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n  Find your way around\n      /palette                    Search every command by name or by what it does\n      /guide [topic|search <tex…  The user guide, as a screen you can browse — or print o\n…\n    ✦ /help [all|work|review|st…  Commands grouped by purpose\n      /tools                      What the agent can call, and which skills, plugins, MCP\n…\n                                  … 1 more\n\n  Set it up\n    ✦ /settings                   Theme, code colours, simple mode, startup, free-mode sa\n…\n      /layout [fixed|scrollback]  Toggle the fixed workspace or terminal scrollback layou\nt\n      /theme [name|list|where]    Pick the colours from a list, or name one — blueprint, \n…\n      /providers                  Which model providers are configured\n                                  … 2 more\n\n    · ✦ start with these · /help all or /help <group> narrows this\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                             v2.5.0  HISTORY 66% \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                                     Esc live \n ──────────────────────────────────────────────────────────────────────────────────────── \n      /route [all|summary|plan]   The hosted exchange's routing decision: chosen model, a│\n…                                                                                        │\n                                  … 10 more                                              │\n                                                                                         │\n  Steer the agent                                                                        │\n    ✦ /mode [plan|build|auto|de…  Show or switch the permission mode                     │\n    ✦ /model [name | N | provid…  Open the model picker, or switch straight to a name, ke│\n…                                                                                        │\n    ✦ /exit                       Leave                                                  │\n      /plan                       Switch to plan mode — read and reason, no writes       │\n                                  … 7 more                                               ┃\n                                                                                         ┃\n  Run more than one thing                                                                ┃\n      /workspace                  Open the control panel: every tab and watched job, live┃\n…                                                                                        ┃\n      /tab [new|next|prev|close…  Several pieces of work, one at a time — only the tab in┃\n…                                                                                        │\n      /jobs [run|cancel|approve]  Durable background work: list, start, cancel, or answer│\n      /detach <task>              Start work in the background; press Alt+B to send a run│\n…                                                                                        │\n                                                                                         │\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.8,
+        "partly": 0.19,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.29,
+      "discoverable": 1.94,
+      "defect": 0.26
+    }
+  },
+  {
+    "scenario": "history-scroll",
+    "surface": "transcript history in the fixed layout",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "ESC",
+    "expect": "Escape returns the transcript to the live bottom; the header shows live again.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                             v2.5.0  HISTORY 66% \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                                     Esc live \n ──────────────────────────────────────────────────────────────────────────────────────── \n      /route [all|summary|plan]   The hosted exchange's routing decision: chosen model, a│\n…                                                                                        │\n                                  … 10 more                                              │\n                                                                                         │\n  Steer the agent                                                                        │\n    ✦ /mode [plan|build|auto|de…  Show or switch the permission mode                     │\n    ✦ /model [name | N | provid…  Open the model picker, or switch straight to a name, ke│\n…                                                                                        │\n    ✦ /exit                       Leave                                                  │\n      /plan                       Switch to plan mode — read and reason, no writes       │\n                                  … 7 more                                               ┃\n                                                                                         ┃\n  Run more than one thing                                                                ┃\n      /workspace                  Open the control panel: every tab and watched job, live┃\n…                                                                                        ┃\n      /tab [new|next|prev|close…  Several pieces of work, one at a time — only the tab in┃\n…                                                                                        │\n      /jobs [run|cancel|approve]  Durable background work: list, start, cancel, or answer│\n      /detach <task>              Start work in the background; press Alt+B to send a run│\n…                                                                                        │\n                                                                                         │\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n  Find your way around\n      /palette                    Search every command by name or by what it does\n      /guide [topic|search <tex…  The user guide, as a screen you can browse — or print o\n…\n    ✦ /help [all|work|review|st…  Commands grouped by purpose\n      /tools                      What the agent can call, and which skills, plugins, MCP\n…\n                                  … 1 more\n\n  Set it up\n    ✦ /settings                   Theme, code colours, simple mode, startup, free-mode sa\n…\n      /layout [fixed|scrollback]  Toggle the fixed workspace or terminal scrollback layou\nt\n      /theme [name|list|where]    Pick the colours from a list, or name one — blueprint, \n…\n      /providers                  Which model providers are configured\n                                  … 2 more\n\n    · ✦ start with these · /help all or /help <group> narrows this\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.86,
+        "partly": 0.11,
+        "no_visible_effect": 0,
+        "wrong": 0.03
+      },
+      "stuck": 0.3,
+      "discoverable": 1.27,
+      "defect": 0.09
+    }
+  },
+  {
+    "scenario": "theme",
+    "surface": "theme chooser (/theme)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /theme",
+    "expect": "A theme chooser opens listing themes with the current one marked.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI                                              │\n   │   ❯ 1. archymedes      current  Bronze instruments, limestone ink and olive a…   │\n   │     2. blueprint        Blueprint navy, chalk-white ink and an amber pencil —…   │\n   │     3. parchment        The same drawing inked on paper, for a light terminal.   │\n   │     4. chalkboard       A slate: near-black green, chalk white, chalk yellow …   │\n   │     5. high-contrast    Maximum separation, named colours only — for low visi…   │\n   │     6. rainbow          Every hue at once — the opening art and the thinking …   │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /theme\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0,
+        "no_visible_effect": 0,
+        "as_expected": 0.92,
+        "partly": 0.08
+      },
+      "stuck": 0.06,
+      "discoverable": 2,
+      "defect": 0.07
+    }
+  },
+  {
+    "scenario": "theme",
+    "surface": "theme chooser (/theme)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves to the next theme.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI                                              │\n   │   ❯ 1. archymedes      current  Bronze instruments, limestone ink and olive a…   │\n   │     2. blueprint        Blueprint navy, chalk-white ink and an amber pencil —…   │\n   │     3. parchment        The same drawing inked on paper, for a light terminal.   │\n   │     4. chalkboard       A slate: near-black green, chalk white, chalk yellow …   │\n   │     5. high-contrast    Maximum separation, named colours only — for low visi…   │\n   │     6. rainbow          Every hue at once — the opening art and the thinking …   │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /theme\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI                                              │\n   │     1. archymedes      current  Bronze instruments, limestone ink and olive a…   │\n   │   ❯ 2. blueprint        Blueprint navy, chalk-white ink and an amber pencil —…   │\n   │     3. parchment        The same drawing inked on paper, for a light terminal.   │\n   │     4. chalkboard       A slate: near-black green, chalk white, chalk yellow …   │\n   │     5. high-contrast    Maximum separation, named colours only — for low visi…   │\n   │     6. rainbow          Every hue at once — the opening art and the thinking …   │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /theme\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 1,
+        "partly": 0,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.04,
+      "discoverable": 2,
+      "defect": 0.03
+    }
+  },
+  {
+    "scenario": "theme",
+    "surface": "theme chooser (/theme)",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "ESC",
+    "expect": "Escape closes the chooser, keeps the original theme and says it is unchanged.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Theme — colours for the whole CLI                                              │\n   │     1. archymedes      current  Bronze instruments, limestone ink and olive a…   │\n   │   ❯ 2. blueprint        Blueprint navy, chalk-white ink and an amber pencil —…   │\n   │     3. parchment        The same drawing inked on paper, for a light terminal.   │\n   │     4. chalkboard       A slate: near-black green, chalk white, chalk yellow …   │\n   │     5. high-contrast    Maximum separation, named colours only — for low visi…   │\n   │     6. rainbow          Every hue at once — the opening art and the thinking …   │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /theme\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n  theme unchanged: archymedes\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.82,
+        "wrong": 0.01,
+        "partly": 0.17,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.24,
+      "discoverable": 1.61,
+      "defect": 0.09
+    }
+  },
+  {
+    "scenario": "settings-filter-legend",
+    "surface": "settings menu while a filter is typed",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /settings",
+    "expect": "The settings menu opens with a legend naming its keys.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.83,
+        "no_visible_effect": 0,
+        "wrong": 0.02,
+        "partly": 0.15
+      },
+      "stuck": 0.08,
+      "discoverable": 1.99,
+      "defect": 0.36
+    }
+  },
+  {
+    "scenario": "settings-filter-legend",
+    "surface": "settings menu while a filter is typed",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "type 'anthropic'",
+    "expect": "The field list narrows to Anthropic fields and the legend says Escape now clears the filter.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   filter: anthropic                                                              │\n   │   Providers                                                                      │\n   │   ❯ 1. Anthropic API key    not set                                              │\n   │     2. Anthropic base URL   not set                                              │\n   │     3. Anthropic model      not set                                              │\n   │     4. saved / leave                                                             │\n   │   ↑↓ move · Enter edit · Esc clear filter                                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.78,
+        "partly": 0.21,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.1,
+      "discoverable": 1.99,
+      "defect": 0.18
+    }
+  },
+  {
+    "scenario": "settings-filter-legend",
+    "surface": "settings menu while a filter is typed",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "ESC",
+    "expect": "Escape clears the filter and the full field list returns, with the legend saying Escape saves and leaves.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   filter: anthropic                                                              │\n   │   Providers                                                                      │\n   │   ❯ 1. Anthropic API key    not set                                              │\n   │     2. Anthropic base URL   not set                                              │\n   │     3. Anthropic model      not set                                              │\n   │     4. saved / leave                                                             │\n   │   ↑↓ move · Enter edit · Esc clear filter                                        │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "partly",
+      "outcomeP": {
+        "as_expected": 0.34,
+        "no_visible_effect": 0,
+        "partly": 0.62,
+        "wrong": 0.04
+      },
+      "stuck": 0.19,
+      "discoverable": 1.93,
+      "defect": 0.52
+    }
+  },
+  {
+    "scenario": "settings-filter-legend",
+    "surface": "settings menu while a filter is typed",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "ESC",
+    "expect": "Escape leaves the settings menu, says settings were saved, and returns to the prompt.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n  settings saved to /tmp/archymedes-navaudit-cfg-OscaLD/settings.json\n  Settings are active now. Use /model only to change the selected model.\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.86,
+        "partly": 0.12,
+        "no_visible_effect": 0,
+        "wrong": 0.02
+      },
+      "stuck": 0.17,
+      "discoverable": 1.77,
+      "defect": 0.09
+    }
+  },
+  {
+    "scenario": "settings-type-ahead",
+    "surface": "settings menu, choosing a field and typing its value without pausing",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 1,
+    "key": "run /settings",
+    "expect": "The settings menu opens.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic / claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  No session spend cap set · use --budget N to approve and enforce one.\n  ? help   Ctrl+G find any action   /history earlier chats\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.93,
+        "partly": 0.06,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.08,
+      "discoverable": 1.99,
+      "defect": 0.36
+    }
+  },
+  {
+    "scenario": "settings-type-ahead",
+    "surface": "settings menu, choosing a field and typing its value without pausing",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 2,
+    "key": "type 'control language', Enter, 'deut' in one burst",
+    "expect": "The language field opens and its value list is already narrowed to 'deut' (Deutsch): nothing typed in the burst is lost.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes settings                                                            │\n   │   Appearance                                                                     │\n   │   ❯ 1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │     5. Control language                             not set                      │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  1/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Control language                                                               │\n   │   filter: deut                                                                   │\n   │   ❯ 1. Deutsch                                                                   │\n   │     2. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0.01,
+        "partly": 0.12,
+        "no_visible_effect": 0,
+        "as_expected": 0.87
+      },
+      "stuck": 0.08,
+      "discoverable": 2,
+      "defect": 0.19
+    }
+  },
+  {
+    "scenario": "settings-type-ahead",
+    "surface": "settings menu, choosing a field and typing its value without pausing",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 3,
+    "key": "ENTER",
+    "expect": "Enter picks Deutsch, confirms it was saved in the menu, and returns to the field list (now possibly in German).",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Control language                                                               │\n   │   filter: deut                                                                   │\n   │   ❯ 1. Deutsch                                                                   │\n   │     2. Clear this setting                                                        │\n   │   ↑↓ move · Enter choose · type to filter · Esc clear/back                       │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes Einstellungen                                                       │\n   │   Appearance                                                                     │\n   │     1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │   ❯ 5. Control language                             de                           │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  5/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.68,
+        "partly": 0.31,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.14,
+      "discoverable": 1.98,
+      "defect": 0.43
+    }
+  },
+  {
+    "scenario": "settings-type-ahead",
+    "surface": "settings menu, choosing a field and typing its value without pausing",
+    "layout": "fixed",
+    "size": "90x28",
+    "step": 4,
+    "key": "ESC",
+    "expect": "Escape leaves the settings menu and says settings were saved.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  MENU \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────────────────────────────────────────────╮\n   │   Archymedes Einstellungen                                                       │\n   │   Appearance                                                                     │\n   │     1. Theme — colours for the whole CLI (/theme…   not set                      │\n   │     2. Code colours                                 not set                      │\n   │     3. Line numbers in code blocks                  not set                      │\n   │     4. Simple mode — quiet start, short help        not set                      │\n   │   ❯ 5. Control language                             de                           │\n   │   Behaviour                                                                      │\n   │     6. Continue your last chat at startup           not set                      │\n   │     7. Auto-save in /edit                           not set                      │\n   │     8. Ask the model for extra suggestions (a sm…   not set                      │\n   │     9. Automatic updates — install daily by defa…   not set                      │\n   │        Jev second opinion — post-turn verdicts a…   not set                      │\n   │   ↑↓ move · Enter edit · Esc done (saves)  5/77                                  │\n   ╰──────────────────────────────────────────────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › /settings\n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX                                    v2.5.0  LIVE \n  plan │ BUILD │ auto │ defender   ? help  Ctrl+G menu\n Anthropic / claude-sonnet-5                                           PgUp/wheel history \n ──────────────────────────────────────────────────────────────────────────────────────── \n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n  settings saved to /tmp/archymedes-navaudit-cfg-gITGHu/settings.json\n  Settings are active now. Use /model only to change the selected model.\n\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "no_visible_effect": 0,
+        "as_expected": 0.88,
+        "partly": 0.11,
+        "wrong": 0.01
+      },
+      "stuck": 0.2,
+      "discoverable": 1.54,
+      "defect": 0.14
+    }
+  },
+  {
+    "scenario": "model-picker-narrow",
+    "surface": "model picker on a narrow terminal",
+    "layout": "fixed",
+    "size": "50x18",
+    "step": 1,
+    "key": "run /model",
+    "expect": "The picker opens and fits the 50-column width: rows are clipped, not wrapped, and the legend is still readable.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    LIVE \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n△ ARCHYMEDES  2.5.0\nbuild · archymedes-navaudit-v0XkMX\nAnthropic / claude-sonnet-5\n\n  No session spend cap set · use --budget N to ap\n  ? help   Ctrl+G find any action   /history earl\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    MENU \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────╮\n   │   Anthropic                              │\n   │   ❯ 1. ● claude-sonnet-5     $3.00/$15.… │\n   │     2.   claude-fable-5      $10.00/$50… │\n   │     3.   claude-haiku-4-5    $1.00/$5.0… │\n   │     4.   claude-opus-4-6     $5.00/$25.… │\n   │   ↑↓ move · Enter choose · t table · ty… │\n   ╰──────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0.03,
+        "partly": 0.35,
+        "as_expected": 0.62,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.16,
+      "discoverable": 1.45,
+      "defect": 0.15
+    }
+  },
+  {
+    "scenario": "model-picker-narrow",
+    "surface": "model picker on a narrow terminal",
+    "layout": "fixed",
+    "size": "50x18",
+    "step": 2,
+    "key": "DOWN",
+    "expect": "The highlight moves down one row without breaking the layout.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    MENU \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────╮\n   │   Anthropic                              │\n   │   ❯ 1. ● claude-sonnet-5     $3.00/$15.… │\n   │     2.   claude-fable-5      $10.00/$50… │\n   │     3.   claude-haiku-4-5    $1.00/$5.0… │\n   │     4.   claude-opus-4-6     $5.00/$25.… │\n   │   ↑↓ move · Enter choose · t table · ty… │\n   ╰──────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    MENU \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────╮\n   │   Anthropic                              │\n   │     1. ● claude-sonnet-5     $3.00/$15.… │\n   │   ❯ 2.   claude-fable-5      $10.00/$50… │\n   │     3.   claude-haiku-4-5    $1.00/$5.0… │\n   │     4.   claude-opus-4-6     $5.00/$25.… │\n   │   ↑↓ move · Enter choose · t table · ty… │\n   ╰──────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0,
+        "partly": 0.03,
+        "as_expected": 0.97,
+        "no_visible_effect": 0
+      },
+      "stuck": 0.09,
+      "discoverable": 1.81,
+      "defect": 0.05
+    }
+  },
+  {
+    "scenario": "model-picker-narrow",
+    "surface": "model picker on a narrow terminal",
+    "layout": "fixed",
+    "size": "50x18",
+    "step": 3,
+    "key": "ESC",
+    "expect": "Escape closes the picker cleanly.",
+    "before": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    MENU \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n   ╭──────────────────────────────────────────╮\n   │   Anthropic                              │\n   │     1. ● claude-sonnet-5     $3.00/$15.… │\n   │   ❯ 2.   claude-fable-5      $10.00/$50… │\n   │     3.   claude-haiku-4-5    $1.00/$5.0… │\n   │     4.   claude-opus-4-6     $5.00/$25.… │\n   │   ↑↓ move · Enter choose · t table · ty… │\n   ╰──────────────────────────────────────────╯\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › /model\n└────────────────────────────────────────────────┘",
+    "after": " ◇ ARCHYMEDES  archymedes-navaudit-v0XkMX    LIVE \n  plan │ BUILD │ auto │ defender \n Anthropic / claude-sonnet-5                      \n ──────────────────────────────────────────────── \n\n△ ARCHYMEDES  2.5.0\nbuild · archymedes-navaudit-v0XkMX\nAnthropic / claude-sonnet-5\n\n  No session spend cap set · use --budget N to ap\n  ? help   Ctrl+G find any action   /history earl\n\n  no change\n\n┌─ ✦ archymedes · build ──────  · build · $0.00 ─┐\n│ › \n└────────────────────────────────────────────────┘",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "partly": 0.18,
+        "no_visible_effect": 0,
+        "wrong": 0.05,
+        "as_expected": 0.77
+      },
+      "stuck": 0.26,
+      "discoverable": 1.64,
+      "defect": 0.18
+    }
+  },
+  {
+    "scenario": "palette-scrollback",
+    "surface": "command palette in the scrollback layout",
+    "layout": "scrollback",
+    "size": "90x28",
+    "step": 1,
+    "key": "CTRL_G",
+    "expect": "A command palette opens below the prompt with a filter line, a highlighted action and a legend.",
+    "before": "                            ARCHYMEDES  2.5.0\n             ◇              A place to think. The tools to build.\n            /.\\             \n           /.◇ \\\\           build · archymedes-navaudit-v0XkMX\n          / /.\\  \\          Anthropic claude-sonnet-5\n          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › ",
+    "after": "          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ ›     /model [name | N | provider model]  Open the model picker, or switch straight to a\n na…\n    /models [refresh]                   Every model each provider actually offers, with p…\n    /defender                           Switch to defender mode — find and fix real secur…\n    /auto                               Auto-apply ordinary edits; sensitive actions stil…\n    /build                              Switch to build mode — edits need approval\n    /plan                               Switch to plan mode — read and reason, no writes …\n    /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2]\n  ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal scrollback…\n  › \n  ↑↓ choose · Enter run · type to search · Esc clear/back",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "wrong": 0.06,
+        "no_visible_effect": 0,
+        "partly": 0.27,
+        "as_expected": 0.67
+      },
+      "stuck": 0.11,
+      "discoverable": 1.95,
+      "defect": 0.38
+    }
+  },
+  {
+    "scenario": "palette-scrollback",
+    "surface": "command palette in the scrollback layout",
+    "layout": "scrollback",
+    "size": "90x28",
+    "step": 2,
+    "key": "type 'set'",
+    "expect": "The list narrows to actions matching 'set' (such as /settings).",
+    "before": "          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ ›     /model [name | N | provider model]  Open the model picker, or switch straight to a\n na…\n    /models [refresh]                   Every model each provider actually offers, with p…\n    /defender                           Switch to defender mode — find and fix real secur…\n    /auto                               Auto-apply ordinary edits; sensitive actions stil…\n    /build                              Switch to build mode — edits need approval\n    /plan                               Switch to plan mode — read and reason, no writes …\n    /mode [plan|build|auto|defender]    Show or switch the permission mode  [F2]\n  ❯ /layout [fixed|scrollback]          Toggle the fixed workspace or terminal scrollback…\n  › \n  ↑↓ choose · Enter run · type to search · Esc clear/back",
+    "after": "          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ ›     /model [name | N | provider model]  Open the model picker, or switch straight to a\n  ❯ /settings  Theme, code colours, simple mode, startup, free-mode savings, keys and mod…\n  › set\n  ↑↓ choose · Enter run · type to search · Esc clear/back",
+    "problems": [],
+    "jev": {
+      "outcome": "partly",
+      "outcomeP": {
+        "as_expected": 0.33,
+        "no_visible_effect": 0,
+        "partly": 0.65,
+        "wrong": 0.02
+      },
+      "stuck": 0.18,
+      "discoverable": 1.96,
+      "defect": 0.37
+    }
+  },
+  {
+    "scenario": "palette-scrollback",
+    "surface": "command palette in the scrollback layout",
+    "layout": "scrollback",
+    "size": "90x28",
+    "step": 3,
+    "key": "ENTER",
+    "expect": "Enter runs the highlighted action; for /settings, the settings menu opens.",
+    "before": "          //.  \\\\ \\         /help · /guide · /workspace\n         /◇-◇----◇.\\\\       \n        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ ›     /model [name | N | provider model]  Open the model picker, or switch straight to a\n  ❯ /settings  Theme, code colours, simple mode, startup, free-mode savings, keys and mod…\n  › set\n  ↑↓ choose · Enter run · type to search · Esc clear/back",
+    "after": "        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n    Archymedes settings\n  Appearance\n  ❯ 1. Theme — colours for the whole CLI (/theme <name…   not set\n    2. Code colours                                       not set\n    3. Line numbers in code blocks                        not set\n    4. Simple mode — quiet start, short help              not set\n    5. Control language                                   not set\n  Behaviour\n    6. Continue your last chat at startup                 not set\n    7. Auto-save in /edit                                 not set\n    8. Ask the model for extra suggestions (a small ex…   not set\n    9. Automatic updates — install daily by default       not set\n       Jev second opinion — post-turn verdicts and pre…   not set\n  ↑↓ move · Enter edit · Esc done (saves)  1/77",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.82,
+        "partly": 0.17,
+        "no_visible_effect": 0,
+        "wrong": 0.01
+      },
+      "stuck": 0.11,
+      "discoverable": 2,
+      "defect": 0.75
+    }
+  },
+  {
+    "scenario": "palette-scrollback",
+    "surface": "command palette in the scrollback layout",
+    "layout": "scrollback",
+    "size": "90x28",
+    "step": 4,
+    "key": "ESC",
+    "expect": "Escape leaves the settings menu, saving, and returns to the prompt.",
+    "before": "        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n    Archymedes settings\n  Appearance\n  ❯ 1. Theme — colours for the whole CLI (/theme <name…   not set\n    2. Code colours                                       not set\n    3. Line numbers in code blocks                        not set\n    4. Simple mode — quiet start, short help              not set\n    5. Control language                                   not set\n  Behaviour\n    6. Continue your last chat at startup                 not set\n    7. Auto-save in /edit                                 not set\n    8. Ask the model for extra suggestions (a small ex…   not set\n    9. Automatic updates — install daily by default       not set\n       Jev second opinion — post-turn verdicts and pre…   not set\n  ↑↓ move · Enter edit · Esc done (saves)  1/77",
+    "after": "        /.◇.....   ..\\      \n       ◇--------------◇     \n\n  costs USD (flag)\n  No session spend cap set · use --budget N to approve and enforce one.\n  · /slow paces spending without capping it\n\n  Try asking\n    · What does archymedes-navaudit-v0XkMX do, and how is it laid out?\n    · Run the tests and tell me what fails\n    · Find the riskiest thing in this codebase\n    ✦ /help all of this · /diff what changed · /undo take it back\n  settings saved to /tmp/archymedes-navaudit-cfg-R5DgTF/settings.json\n  Settings are active now. Use /model only to change the selected model.\n┌─ ✦ archymedes · build · archymedes-navaudit-v0XkMX ─────────────────  · build · $0.00 ─┐\n│ › ",
+    "problems": [],
+    "jev": {
+      "outcome": "as_expected",
+      "outcomeP": {
+        "as_expected": 0.84,
+        "partly": 0.16,
+        "no_visible_effect": 0,
+        "wrong": 0
+      },
+      "stuck": 0.21,
+      "discoverable": 0.89,
+      "defect": 0.17
+    }
+  }
+]

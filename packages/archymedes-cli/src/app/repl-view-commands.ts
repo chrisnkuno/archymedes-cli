@@ -184,6 +184,13 @@ export async function dispatchViewCommand(input: string, context: ReplContext): 
       paint: () => style,
       style: sectionStyle,
       glyphs,
+      width: contentWidth(),
+      ...(interactive ? {
+        choose: (items, initialIndex) => openChooser<string>({ readline, input: process.stdin, output: process.stdout }, items, {
+          title: "Theme — colours for the whole CLI", filter: true, height: 12, initialIndex, glyphs,
+          paint: { dim: style.dim, cyan: style.cyan, green: style.green, yellow: style.yellow },
+        }),
+      } : {}),
     });
     return "continue";
   }

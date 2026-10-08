@@ -1,5 +1,7 @@
 import { GUTTER, heading, note, rule, type SectionStyle } from "../render/sections";
 import type { GlyphSet } from "../text/glyphs";
+import { clipTo } from "../text/text-width";
+import type { ChooserItem } from "../ui/chooser";
 import type { DiscoveredTheme } from "../theme/theme-files";
 import type { Theme, ThemeCommand } from "../theme/theme";
 
@@ -17,6 +19,13 @@ export type ThemeCommandContext = {
   paint(): { dim: Paint; yellow: Paint; cyan: Paint; green: Paint; red: Paint; accent: Paint };
   style(): SectionStyle;
   glyphs: GlyphSet;
+  /** Columns available to a printed line; a theme's description is clipped to it rather than wrapped mid-word. */
+  width?: number;
+  /**
+   * A list to pick from, when there is a keyboard to pick with. Bare `/theme` then opens the themes
+   * the way bare `/model` opens the models; without one it prints the current theme as it always did.
+   */
+  choose?(items: ChooserItem<string>[], initialIndex: number): Promise<string | undefined>;
 };
 
 /** The roles side by side: names mean nothing until they are seen in the terminal drawing them. */
@@ -47,10 +56,29 @@ export async function runThemeCommand(command: ThemeCommand, context: ThemeComma
       }
       write(`${note("/theme <name> to change it", style)}\n`);
       return;
-    case "show":
-      write(`${GUTTER}${paint.cyan(context.active.name)}${context.active.description ? paint.dim(` — ${context.active.description}`) : ""}\n`);
+    case "show": {
+      if (context.choose) {
+        const themes = await context.discover();
+        const items = themes.map((theme) => ({
+          value: theme.name,
+          label: theme.name,
+          ...(theme.description ? { description: theme.description } : {}),
+          ...(theme.name === context.active.name ? { hint: "current" } : theme.source === "builtin" ? {} : { hint: theme.source }),
+        }));
+        const picked = await context.choose(items, Math.max(0, themes.findIndex((theme) => theme.name === context.active.name)));
+        if (picked === undefined || picked === context.active.name) {
+          write(paint.dim(`  theme unchanged: ${context.active.name}\n`));
+          return;
+        }
+        await runThemeCommand({ kind: "set", name: picked }, context);
+        return;
+      }
+      const line = `${context.active.name}${context.active.description ? ` — ${context.active.description}` : ""}`;
+      const clipped = context.width ? clipTo(line, Math.max(10, context.width - GUTTER.length), glyphs) : line;
+      write(`${GUTTER}${paint.cyan(clipped.slice(0, context.active.name.length))}${paint.dim(clipped.slice(context.active.name.length))}\n`);
       write(swatch(paint));
       return;
+    }
     case "set": {
       const chosen = await context.find(command.name);
       if (!chosen) { write(paint.yellow(`  No theme named "${command.name}". /theme list shows what there is.\n`)); return; }

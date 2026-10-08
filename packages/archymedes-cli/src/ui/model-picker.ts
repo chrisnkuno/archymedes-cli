@@ -127,15 +127,51 @@ function groupOf(row: PickerRow): string {
   return row.kind === "model" ? row.choice.providerLabel : (row.header ?? row.label);
 }
 
+/**
+ * The rows that fit in `height` lines, keeping the selection on screen.
+ *
+ * Group headings take lines of their own, so a window of `height` *rows* overflows whenever it
+ * spans several providers — a page of one-row "Add a key" groups is twice as tall as a page of
+ * Anthropic models — and the overflow pushed the key legend off the bottom of the frame. The window
+ * is measured in painted lines instead: rows plus a heading wherever the group changes (and one for
+ * the first row). The renderer and the digit keys both use this, so the number on screen is the
+ * number pressed.
+ */
+export function pickerWindow(rows: readonly PickerRow[], selected: number, height: number): { start: number; end: number } {
+  const lines = (from: number, to: number) => {
+    let count = 0;
+    let group: string | undefined;
+    for (let index = from; index < to; index += 1) {
+      const next = groupOf(rows[index]!);
+      if (next !== group) count += 1;
+      group = next;
+      count += 1;
+    }
+    return count;
+  };
+  const budget = Math.max(2, height);
+  let start = windowStart(selected, rows.length, budget);
+  let end = Math.min(rows.length, start + budget);
+  // Trim from whichever end the selection is not on until the painted lines fit.
+  while (end - start > 1 && lines(start, end) > budget) {
+    if (selected < end - 1) end -= 1;
+    else start += 1;
+  }
+  return { start, end };
+}
+
 export function renderModelPicker(frame: { rows: readonly PickerRow[]; selected: number }, options: RenderPickerOptions): string {
   const { paint } = options;
   const glyphs = options.glyphs ?? UNICODE_GLYPHS;
   const height = options.height ?? 10;
   // Same windowing rule as the palette: keep the selection on screen, or the arrow keys look broken.
+  // The filter line is part of the same frame, so it comes out of the same budget.
   const columns = terminalColumns(options.width);
-  const start = windowStart(frame.selected, frame.rows.length, height);
-  const visible = frame.rows.slice(start, start + height);
-  const naturalWidth = Math.max(0, ...visible.map((row) => visibleWidth(row.kind === "model" ? row.choice.model : row.label)));
+  const { start, end } = pickerWindow(frame.rows, frame.selected, height - (options.query ? 1 : 0));
+  const visible = frame.rows.slice(start, end);
+  // Measured over every model row, not just the visible ones: a price column that moves each time
+  // the list pages reads as the list changing under the cursor.
+  const naturalWidth = Math.max(0, ...frame.rows.map((row) => row.kind === "model" ? visibleWidth(row.choice.model) : 0));
   const labelBudget = Math.max(0, Math.min(naturalWidth, Math.floor(Math.max(0, columns - 11) * 0.65)));
 
   const lines: string[] = [];
@@ -212,11 +248,10 @@ export function advanceModelPicker(state: PickerState, rows: readonly PickerRow[
   // can never be handed back, rendered, or resolved against rows that no longer have it.
   state = { ...state, selected: clamp(state.selected) };
 
-  if (name === "escape" || (input.key.ctrl && (name === "c" || name === "g"))) {
-    // Escape undoes the filter before it abandons the menu, which is what every editor
-    // has trained: clearing the search is not leaving.
-    return query ? { state: { selected: 0, query: "" } } : { state, done: {} };
-  }
+  // Escape undoes the filter before it abandons the menu, which is what every editor has trained:
+  // clearing the search is not leaving. Ctrl+C and Ctrl+G always leave, as in every other menu.
+  if (name === "escape" && query) return { state: { selected: 0, query: "" } };
+  if (name === "escape" || (input.key.ctrl && (name === "c" || name === "g"))) return { state, done: {} };
   if (name === "return" || name === "enter") {
     const row = visible.length > 0 ? visible[clamp(state.selected)] : undefined;
     if (!row) return { state, done: {} };
@@ -226,8 +261,12 @@ export function advanceModelPicker(state: PickerState, rows: readonly PickerRow[
   // having jumped somewhere at random.
   if (name === "up" || (input.key.ctrl && name === "p")) return { state: { selected: clamp(state.selected - 1), query } };
   if (name === "down" || (input.key.ctrl && name === "n")) return { state: { selected: clamp(state.selected + 1), query } };
-  if (name === "pageup") return { state: { selected: clamp(state.selected - height), query } };
-  if (name === "pagedown") return { state: { selected: clamp(state.selected + height), query } };
+  // A page is what is on screen less one row, so the row you were reading stays visible across the
+  // jump — measured from the real window, which holds fewer rows when headings take lines.
+  const window = pickerWindow(visible, state.selected, height - (query ? 1 : 0));
+  const page = Math.max(1, window.end - window.start - 1);
+  if (name === "pageup") return { state: { selected: clamp(state.selected - page), query } };
+  if (name === "pagedown") return { state: { selected: clamp(state.selected + page), query } };
   if (name === "home") return { state: { selected: 0, query } };
   if (name === "end") return { state: { selected: last, query } };
 
@@ -243,8 +282,8 @@ export function advanceModelPicker(state: PickerState, rows: readonly PickerRow[
     // Typing a number still works, because the printed list taught people to do that and a menu that
     // silently ignores the habit it created is worse than one that never offered numbers at all.
     // Only on an empty query, for the same reason as `t`: `gpt-5.6` is unfindable if `5` jumps.
-    const start = windowStart(state.selected, visible.length, height);
-    const shown = Math.min(height, visible.length - start);
+    const { start, end } = pickerWindow(visible, state.selected, height - (state.query ? 1 : 0));
+    const shown = end - start;
     const digit = Number(input.str);
     if (digit > shown) return { state };
     return { state: { selected: start + digit - 1, query } };

@@ -236,3 +236,14 @@ describe("mnemonic letter shortcuts", () => {
     expect(labels.has("/wander")).toBe(false);
   });
 });
+
+describe("the Escape key's wait for an escape sequence", () => {
+  it("is short by default and adjustable within sane bounds", async () => {
+    const { DEFAULT_ESCAPE_CODE_TIMEOUT_MS, escapeCodeTimeoutMs } = await import("./keybindings");
+    expect(escapeCodeTimeoutMs({})).toBe(DEFAULT_ESCAPE_CODE_TIMEOUT_MS);
+    expect(DEFAULT_ESCAPE_CODE_TIMEOUT_MS).toBeLessThan(100);
+    expect(escapeCodeTimeoutMs({ ARCHYMEDES_ESCAPE_MS: "150" })).toBe(150);
+    // Too small splits arrow keys into a stray Escape; too large is the half-second lag again.
+    for (const bad of ["0", "5", "abc", "99999", "12.5"]) expect(escapeCodeTimeoutMs({ ARCHYMEDES_ESCAPE_MS: bad })).toBe(DEFAULT_ESCAPE_CODE_TIMEOUT_MS);
+  });
+});

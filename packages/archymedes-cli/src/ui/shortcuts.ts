@@ -137,6 +137,18 @@ function menuColumns(host: KeyboardHost): number {
 /** The fixed workspace lends its body to every picker without moving the composer. */
 export function setWorkspaceMenu(surface: typeof workspaceMenu): void { workspaceMenu = surface; }
 
+/**
+ * Keys a menu received but never read, held briefly for the menu opened right after it.
+ *
+ * A keypress chunk is decoded all at once: a fast typist, a paste, or a terminal that batches input
+ * can deliver "Enter, r, w, a, n, d, a" in one go. The first menu takes the Enter and closes, and
+ * the rest used to be dropped with it — so choosing a field and typing its value straight away
+ * lost the value. Chained menus (a settings field, then its values) open within moments of each
+ * other; anything older than this belongs to nobody and is discarded as before.
+ */
+let typeAhead: { keys: PaletteKey[]; at: number } | undefined;
+const TYPE_AHEAD_MS = 1_000;
+
 export async function withBorrowedKeyboard<T>(
   host: KeyboardHost,
   self: unknown,
@@ -154,6 +166,8 @@ export async function withBorrowedKeyboard<T>(
   for (const listener of borrowed) host.input.off("keypress", listener as never);
 
   const pending: PaletteKey[] = [];
+  if (typeAhead && Date.now() - typeAhead.at <= TYPE_AHEAD_MS) pending.push(...typeAhead.keys);
+  typeAhead = undefined;
   let wake: (() => void) | undefined;
   const collect = (str: string | undefined, key: KeypressEvent) => {
     pending.push({ ...(str === undefined ? {} : { str }), key: key ?? {} });
@@ -179,6 +193,9 @@ export async function withBorrowedKeyboard<T>(
     surface.erase();
     host.output.off("resize", onResize);
     host.input.off("keypress", collect);
+    // Real keys only: a resize is delivered as an empty key and means nothing to the next menu.
+    const unread = pending.filter((key) => key.str !== undefined || key.key.name !== undefined);
+    typeAhead = unread.length > 0 ? { keys: unread, at: Date.now() } : undefined;
     for (const listener of borrowed) host.input.on("keypress", listener as never);
   }
 }

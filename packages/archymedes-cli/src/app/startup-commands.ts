@@ -11,7 +11,7 @@ import { PROVIDER_IDS, providerEnvPrefix, type ProviderId } from "@archymedes/co
 import { EXIT_CODES } from "../headless";
 import { renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "../commands/chat-history";
 import { galleryVariants, renderGallery } from "../ui/gallery";
-import { KeyBindingRegistry, parseBindingOverrides } from "../terminal/keybindings";
+import { KeyBindingRegistry, escapeCodeTimeoutMs, parseBindingOverrides } from "../terminal/keybindings";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "../platform/doctor";
 import { ARCHYMEDES_CLI_VERSION, runSelfUpdate } from "../platform/update";
 import { runSettingsMenu, saveSettings, type ArchymedesSettings } from "../platform/settings";
@@ -86,7 +86,7 @@ export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "e
       process.stderr.write("Archymedes settings needs an interactive terminal. Environment variables remain supported for automation.\n");
       return 1;
     }
-    const settingsReadline = createInterface({ input: process.stdin, output: process.stdout });
+    const settingsReadline = createInterface({ input: process.stdin, output: process.stdout, escapeCodeTimeout: escapeCodeTimeoutMs() });
     let savedSettings = context.savedSettings;
     try {
       savedSettings = await runSettingsMenu(savedSettings, {

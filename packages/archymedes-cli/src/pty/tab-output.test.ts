@@ -143,7 +143,8 @@ describe("what a tab keeps, under a real pty", () => {
     await p.waitFor(PROMPT, { timeoutMs: 30_000 });
 
     const before = p.output().length;
-    p.writeLine("/theme");
+    // `list` prints the theme names in the active theme's primary colour; bare /theme opens a picker.
+    p.writeLine("/theme list");
     await p.waitFor(/blueprint/, { timeoutMs: 20_000, since: before });
     expect(p.output().slice(before)).toContain("\x1b[38;2;124;197;255m");
 
