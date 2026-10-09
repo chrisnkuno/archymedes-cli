@@ -161,6 +161,11 @@ Plain `http` is accepted only for localhost. Once the official deployment exists
 
 ## Deploy
 
+Operating it — secrets, client-address verification, budgets, rotation, monitoring, abuse response,
+rollback, outage behaviour and the launch checklist — is in [RUNBOOK.md](RUNBOOK.md). The steps
+below are the mechanics; the runbook is what to check before and after.
+
+
 1. **Secrets.** In the host's secret store set `OPENROUTER_API_KEY`, `GATEWAY_TOKEN_SECRET`
    (`openssl rand -hex 32`; at least 32 characters, the same value on every instance) and
    `FREE_GATEWAY_SALT` (any random string, so per-address counts survive restarts).

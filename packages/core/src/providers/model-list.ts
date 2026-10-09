@@ -9,7 +9,7 @@
  */
 
 import type { ProviderId } from "./provider-specs";
-import { FREE_BASE_URL } from "./free-catalog";
+import { freeAccess, FREE_BASE_URL } from "./free-catalog";
 
 /**
  * Joins a base URL to the models path without doubling the version segment.
@@ -33,7 +33,17 @@ export function modelsUrl(base: string): string {
 export function modelsEndpoint(provider: ProviderId, environment: Record<string, string | undefined>): { url: string; headers: Record<string, string> } | undefined {
   const trimmed = (value: string | undefined) => value?.trim() || undefined;
   switch (provider) {
-    case "free": return { url: `${FREE_BASE_URL}/models`, headers: {} };
+    case "free": {
+      // The listing that free mode would actually select from. Keyless sessions resolve models
+      // through a gateway, which serves its own already-filtered `/v1/models` — asking OpenRouter
+      // instead showed a catalog the session could not necessarily use, and made `--doctor` probe
+      // a host the session never contacts. `freeAccess` keeps the credential rule: a user's own key
+      // always resolves to the fixed OpenRouter host, and only the keyless path yields a gateway.
+      const access = freeAccess(environment);
+      const base = access && "gatewayUrl" in access ? `${access.gatewayUrl}/v1` : FREE_BASE_URL;
+      // No credential either way: the gateway holds its own key and OpenRouter's listing is public.
+      return { url: `${base}/models`, headers: {} };
+    }
     case "openrouter": {
       const key = trimmed(environment.OPENROUTER_API_KEY);
       if (!key) return undefined;

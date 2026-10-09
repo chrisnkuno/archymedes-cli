@@ -72,3 +72,29 @@ describe("reading what came back", () => {
     }
   });
 });
+
+describe("the free listing follows where free mode actually sends requests", () => {
+  it("asks the gateway when the session is keyless", () => {
+    expect(modelsEndpoint("free", { ARCHYMEDES_FREE_GATEWAY_URL: "https://free.example.com" }))
+      .toEqual({ url: "https://free.example.com/v1/models", headers: {} });
+  });
+
+  it("asks OpenRouter when the user has their own key, whatever else is configured", () => {
+    // The credential rule: a request carrying the user's key only ever goes to the fixed host, so
+    // a gateway URL alongside a key must not redirect the listing either.
+    expect(modelsEndpoint("free", { OPENROUTER_API_KEY: "sk-or-user", ARCHYMEDES_FREE_GATEWAY_URL: "https://free.example.com" }))
+      .toEqual({ url: "https://openrouter.ai/api/v1/models", headers: {} });
+  });
+
+  it("never attaches a credential to the free listing", () => {
+    // The gateway holds its own key and OpenRouter's listing is public; sending one would hand a
+    // user credential to whichever host the gateway URL names.
+    expect(modelsEndpoint("free", { ARCHYMEDES_FREE_GATEWAY_URL: "https://free.example.com" })?.headers).toEqual({});
+    expect(modelsEndpoint("free", { OPENROUTER_API_KEY: "sk-or-user" })?.headers).toEqual({});
+  });
+
+  it("falls back to OpenRouter for a gateway URL that is refused", () => {
+    expect(modelsEndpoint("free", { ARCHYMEDES_FREE_GATEWAY_URL: "http://free.example.com" })?.url)
+      .toBe("https://openrouter.ai/api/v1/models");
+  });
+});

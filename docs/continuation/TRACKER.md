@@ -5,6 +5,60 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-7: Repository debt and free-tier readiness (2026-10-09)
+
+Branch `chore/repo-debt-2026-10`, off `master` at 2.6.0. Opened because the guard ratchet was
+failing on `master` and the published READMEs described a provider that no longer ships. Not merged,
+not pushed.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-7.1 | Delete the orphan `src/archimedes.ts` | done | `packages/archymedes-cli/src` | `bun run recheck` | 3,208 lines, added whole in `e6e76d5` as a typo'd copy, referenced by nothing: both build entrypoints, `bin`, the root script and the PTY harness all name `archymedes.ts`. It was being typechecked and guard-scanned for nothing |
+| WS-7.2 | Fix two layering inversions the guard caught on `master` | done | `platform/settings.ts`, `platform/update.ts`, `theme/theme.ts`, `terminal/keybindings.ts`, new `platform/escape-timing.ts` | `bun run recheck` | Both were upward imports into sections that already import `platform` — section cycles. `escapeCodeTimeoutMs` (one env read, no terminal knowledge) moved down to `platform`; the theme names stayed in `theme/` and reach the settings menu through a new `SettingsMenuOptions.themeChoices`, mirroring the existing `modelChoices` seam. Theme validation never consulted the list (regex-only, so a user's own theme file is valid), so nothing that gates a value changed |
+| WS-7.3 | Pay down `render/tui.ts` rather than rebaseline it | done | `render/tui.ts`, new `render/animation.ts` | `bun run recheck` | Had drifted 1,356 to 1,368. Spinner/countdown/spring touch no terminal and no palette; extracted and re-exported. 1,368 to 1,132, below the old baseline. Baseline regenerated: every count falls, layering 0 |
+| WS-7.4 | Correct the published package READMEs | done | `packages/archymedes-cli/README.md`, `packages/core/README.md` | read-through against `PROVIDER_INFO` | Removed three CircuitNotion / `circuit-2-turbo` references (absent from `PROVIDER_IDS` for several releases). The CLI package README documented no providers at all: added a table built from `PROVIDER_INFO`, including the paid `openrouter` provider shipped since 2.3.0 and never written down, plus a free-mode section stating plainly that this build has no gateway configured and is therefore **not** keyless |
+| WS-7.5 | Reconcile the free-catalog TTL across the two ports | done | `providers/free-catalog.ts`, desktop `free-adapter.ts` | `free-catalog.test.ts` | CLI cached 6h, desktop 1h, gateway refreshes hourly — so the CLI could serve a list five hours staler than its own source. Both 1h now, with a test pinning the CLI at or below the gateway's TTL |
+| WS-7.6 | Remove the dead reliability artifact | done | `reliability/latest.json`, `render/reliability-status.ts` | `reliability-status.test.ts` | Scored `circuitnotion`, so the renderer already refused to print it: a 91/100 nothing could display and no script could regenerate. Absence now stated in code, with instructions for shipping a real one |
+| WS-7.7 | Make the timing budgets hold on Windows without weakening them | done | `cli/optimization-map.ts` + test | `optimization-map.test.ts` | `cli.grep-latency` failed at 281-344ms against 250ms — not Windows and not a regression: `grepWorkspace` uses ripgrep when installed and a JS walk when not, and the budget was measured on the ripgrep path (measured here without it: 160/257/316/332/476ms). `cli.workspace-walk` failed at 60-65ms against 60ms, tightly clustered on a 662-file tree baselined at 6.1ms — a Windows syscall floor. Probes can now return `{ value, budget, detail }` naming the variant measured, so each path keeps a real guard; budgets leave 2-4x headroom over the worst sample. The comparison moved into `judgeMeasurement` because the test held a second copy that had stopped agreeing with the runner |
+| WS-7.8 | Free mode reported the wrong endpoint whenever a gateway was in use | done | `platform/endpoints.ts`, `providers/model-list.ts` + tests | `free-mode.test.ts`, `model-list.test.ts`, live `--doctor` | Found by running the keyless path end to end. `providerBaseUrl` and `modelsEndpoint` both hardcoded OpenRouter for `free`, so a failed turn told the user to check OpenRouter's status while their own gateway was down, `--doctor` probed a host the session never contacts, and `/models refresh` listed a catalog the session could not necessarily use. Both now derive from `freeAccess`, which preserves the credential rule: a user's own key always resolves to the fixed OpenRouter host, so no variable can redirect a request carrying it. Verified live: the error and `--doctor` now name the gateway |
+| WS-7.9 | Operations runbook for the gateway | done | `packages/free-gateway/RUNBOOK.md` | local verification only | Secrets, client-address verification (the check that per-address limiting is not defeated by a forgeable header), budgets, rotation, monitoring, abuse response, rollback, outage behaviour, launch checklist. Startup refusals verified locally; **nothing verified against a deployment** |
+| WS-7.10 | Deploy the gateway and set `FREE_GATEWAY_URL` | blocked (needs an OpenRouter account and owner authorization) | `free-catalog.ts`, desktop `free-adapter.ts` | — | The one thing standing between this and a keyless install. Everything else on the path is verified locally: keyless resolution, catalog verification through the gateway, zero-price enforcement, no paid fallback, and the failure message. A successful completion through a gateway holding a real key is unverified and cannot be verified here |
+
+### Keyless free tier: what is and is not verified
+
+Verified locally 2026-10-09, the CLI against a gateway started on `127.0.0.1:8799` with a
+deliberately fake upstream key:
+
+- With no `OPENROUTER_API_KEY`, the session resolves to `provider: free, model: openrouter/free`
+  purely from `ARCHYMEDES_FREE_GATEWAY_URL`.
+- The gateway serves `/health`, issues install tokens, and serves the **live** OpenRouter listing
+  correctly filtered to zero-price tool models.
+- The CLI verifies eligibility through the gateway, estimates `$0.00-$0.00`, shows the free-mode
+  privacy notice and takes a checkpoint before any work.
+- The upstream 401 is sanitised by the gateway to a generic 503 — the operator's key state never
+  reaches the client — and the CLI fails with an actionable message after bounded retries, with
+  **no fallback to any paid provider**.
+
+Not verified, and not verifiable without a funded account: a successful completion through the
+gateway, real token accounting from upstream usage, and multi-instance counter behaviour.
+
+## WS-6: Releases 2.3.0-2.6.0 (2026-10-06 to 2026-10-09) — recorded retrospectively
+
+This tracker stopped at WS-5 on 2026-09-17 while four releases and 36 commits landed on `master`.
+Reconstructed from Git history on 2026-10-09 so the record matches reality; the entries below are
+what the commits say, not re-verified work. `WORKFLOW.md` asks for the task before the code, which
+did not happen for any of these.
+
+| Release | Date | Contents |
+| --- | --- | --- |
+| 2.3.0 | 2026-10-06 | OpenRouter as a direct paid provider, Jev auto-review, `web_fetch` private-destination guard |
+| 2.4.0 | 2026-10-07 | Resilient transport, TUI teardown, menu invariants |
+| 2.5.0 | 2026-10-08 | Free-mode overhaul, Windows support, resilient transport, navigation fixes. Merged PR #2 (`overhaul/free-mode-windows-ux`) in both the CLI and desktop repositories |
+| 2.6.0 | 2026-10-09 | Archymedes blue (Solarized Dark) default theme, agent-style composer, masked key input |
+
+Known gap carried forward: the paid `openrouter` provider shipped in 2.3.0 and was absent from
+every README until WS-7.4.
+
 ## WS-5: Gap closure (2026-09-17)
 
 Gap study (docs, code, CI logs, competitor comparison) found the items below. User: "yes go for it and

@@ -36,6 +36,29 @@ describe("free access selection", () => {
     expect(() => validateSetting("FREE_MODEL", "lab/paid")).toThrow();
     expect(providerBaseUrl({ FREE_BASE_URL: "https://evil.example" }, "free")).toBe("https://openrouter.ai/api/v1");
   });
+
+  /**
+   * Which host free mode is reported as talking to. Not cosmetic: `--doctor` probes this URL and a
+   * failed turn names it, so pointing at OpenRouter while the session only ever reaches a gateway
+   * sent users to the wrong status page and probed an endpoint the session never uses.
+   */
+  it("names the gateway when free mode is keyless, and OpenRouter when it is not", () => {
+    expect(providerBaseUrl({ ARCHYMEDES_FREE_GATEWAY_URL: "https://free.example.com" }, "free"))
+      .toBe("https://free.example.com/v1");
+
+    // A key of the user's own always resolves to the fixed OpenRouter host. This is the credential
+    // rule, not a display preference: no environment variable may point a request carrying the
+    // user's key anywhere else, so a gateway URL alongside a key is ignored here too.
+    expect(providerBaseUrl({ OPENROUTER_API_KEY: "sk-or-user", ARCHYMEDES_FREE_GATEWAY_URL: "https://free.example.com" }, "free"))
+      .toBe("https://openrouter.ai/api/v1");
+
+    // Nothing configured: no gateway to name, so the default host stands.
+    expect(providerBaseUrl({}, "free")).toBe("https://openrouter.ai/api/v1");
+
+    // A gateway URL `freeAccess` refuses (plain http off localhost) must not become an endpoint.
+    expect(providerBaseUrl({ ARCHYMEDES_FREE_GATEWAY_URL: "http://free.example.com" }, "free"))
+      .toBe("https://openrouter.ai/api/v1");
+  });
   it("persists free selection and restores it ahead of a paid default, without credentials", async () => {
     const root = await temporary();
     const provider = new FreeAgentTurnProvider({ apiKey: "secret", model: "lab/code:free" });

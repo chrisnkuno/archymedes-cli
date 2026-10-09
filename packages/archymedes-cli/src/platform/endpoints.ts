@@ -1,4 +1,5 @@
 import { PROVIDER_IDS, PROVIDER_INFO, missingRequirements, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
+import { freeAccess } from "@archymedes/core/providers/free-catalog";
 
 /**
  * The network endpoints Archymedes depends on, in one place.
@@ -46,7 +47,21 @@ const DEFAULT_BASE_URL: Record<ProviderId, string> = {
 };
 
 export function providerBaseUrl(environment: ProviderEnvironment, provider: ProviderId): string {
-  if (provider === "free") return DEFAULT_BASE_URL.free;
+  if (provider === "free") {
+    // Where free mode actually sends this session's requests, which is not always OpenRouter: with
+    // no key of the user's own it goes to a gateway, and naming the wrong host is not cosmetic —
+    // `--doctor` probes this URL, so it was reporting OpenRouter reachable for a session that only
+    // ever talks to a gateway, and a failed turn told the user to check OpenRouter's status when
+    // their own gateway was down.
+    //
+    // Derived from `freeAccess` rather than from a `_BASE_URL` variable, which is what keeps the
+    // credential rule intact: a user's own key always resolves to the fixed OpenRouter host, so no
+    // environment variable can point this at somewhere else while a key is set, and only the
+    // keyless path yields a gateway — one `freeAccess` has already checked is https (or localhost
+    // http) and carries no embedded credentials.
+    const access = freeAccess(environment);
+    return access && "gatewayUrl" in access ? `${access.gatewayUrl}/v1` : DEFAULT_BASE_URL.free;
+  }
   const override = environment[`${providerEnvPrefix(provider)}_BASE_URL`]?.trim();
   return override || DEFAULT_BASE_URL[provider];
 }
