@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { hostOf } from "./endpoints";
 import { classifyNetworkError } from "./network";
-import { escapeCodeTimeoutMs } from "../terminal/keybindings";
+import { escapeCodeTimeoutMs } from "./escape-timing";
 import cliPackage from "../../package.json";
 
 export const ARCHYMEDES_CLI_PACKAGE = "archymedes-cli";

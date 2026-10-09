@@ -1,4 +1,6 @@
 import type { ColorDepth } from "../text/color-depth";
+// Type-only: no runtime edge to `platform`, and `theme` may import it in any case.
+import type { SettingChoice } from "../platform/settings";
 
 /**
  * Colour, as a set of named roles rather than a set of escape codes.
@@ -427,6 +429,22 @@ export function builtinThemes(): Theme[] {
 
 export function findBuiltinTheme(name: string): Theme | undefined {
   return builtinThemes().find((theme) => theme.name.toLowerCase() === name.trim().toLowerCase());
+}
+
+/**
+ * The built-in themes as settings-menu rows.
+ *
+ * Built here rather than in `platform/settings.ts`, which is where it used to be: the theme names
+ * are this section's to know, and `platform` sits below `theme` and may not import it. The settings
+ * menu receives this through `SettingsMenuOptions.themeChoices`, so the list still has exactly one
+ * definition and the menu cannot drift from `/theme list`.
+ */
+export function builtinThemeChoices(): SettingChoice[] {
+  return builtinThemes().map((theme) => ({
+    value: theme.name,
+    label: theme.name,
+    ...(theme.description ? { description: theme.description } : {}),
+  }));
 }
 
 /**

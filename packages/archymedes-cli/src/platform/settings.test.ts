@@ -209,6 +209,31 @@ describe("the settings menu with a chooser", () => {
     expect(legend).toContain("Esc done (saves)");
     expect(legend).toContain("Enter edit");
   });
+
+  /**
+   * The theme names live in `theme/`, a section `platform` may not import, so the theme field
+   * carries no static `choices` and the list arrives through `themeChoices` instead. These two
+   * cases are what make dropping the constant safe: the names still reach the user when the caller
+   * supplies them, and the field is still settable when nobody does.
+   */
+  it("offers the built-in themes when the caller supplies them", async () => {
+    const { builtinThemeChoices } = await import("../theme/theme");
+    const { choose, seen } = scriptedChooser(["Theme", undefined]);
+    await runSettingsMenu({}, { ...silent, choose }, { themeChoices: builtinThemeChoices() });
+    expect(seen[1].labels).toContain("parchment");
+  });
+
+  it("falls back to typing the theme when no theme list is supplied", async () => {
+    const asked: string[] = [];
+    const { choose } = scriptedChooser(["Theme", undefined]);
+    const result = await runSettingsMenu({}, {
+      ...silent,
+      ask: async (question) => { asked.push(question); return "my-theme"; },
+      choose,
+    });
+    expect(asked.join("")).toContain("Theme");
+    expect(result.ARCHYMEDES_THEME).toBe("my-theme");
+  });
 });
 
 describe("appearance, behaviour and free-mode settings", () => {
@@ -224,9 +249,18 @@ describe("appearance, behaviour and free-mode settings", () => {
     expect(() => validateSetting("ARCHYMEDES_CODE_COLORS", "monokai")).toThrow();
   });
 
-  it("offers the built-in themes and accepts a theme file's name", () => {
+  it("offers the built-in themes and accepts a theme file's name", async () => {
+    // The theme names live in `theme/`, which sits above `platform` and may not be reached from
+    // here, so the field carries no static choices: they arrive through `themeChoices`. Asserted
+    // through the menu rather than off a constant, which covers the wiring as well as the list.
+    const { builtinThemeChoices } = await import("../theme/theme");
+    expect(builtinThemeChoices().map((choice) => choice.value)).toContain("parchment");
+
+    // The field itself deliberately carries no `choices`; the menu test below proves the list
+    // still reaches the user through `themeChoices`.
     const theme = SETTING_FIELDS.find((field) => field.key === "ARCHYMEDES_THEME")!;
-    expect("choices" in theme && theme.choices.map((choice) => choice.value)).toContain("parchment");
+    expect("choices" in theme).toBe(false);
+
     expect(validateSetting("ARCHYMEDES_THEME", "Parchment")).toBe("parchment");
     expect(validateSetting("ARCHYMEDES_THEME", "my-theme")).toBe("my-theme");
     expect(() => validateSetting("ARCHYMEDES_THEME", "two words")).toThrow();

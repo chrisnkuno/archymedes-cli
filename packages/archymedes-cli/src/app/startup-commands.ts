@@ -16,6 +16,7 @@ import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "../platfo
 import { ARCHYMEDES_CLI_VERSION, runSelfUpdate } from "../platform/update";
 import { runSettingsMenu, saveSettings, type ArchymedesSettings } from "../platform/settings";
 import type { resolveControlLanguage } from "../platform/i18n";
+import { builtinThemeChoices } from "../theme/theme";
 import { detectColorDepth } from "../text/color-depth";
 import { resolveGlyphs } from "../text/glyphs";
 import { heading } from "../render/sections";
@@ -96,6 +97,7 @@ export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "e
         choose: settingsChooser(settingsReadline),
       }, {
         modelChoices: (field, current) => modelChoicesForSettingsField(field, current, processEnvironment, "USD", []),
+        themeChoices: builtinThemeChoices(),
       });
     } catch (error) {
       settingsReadline.close();

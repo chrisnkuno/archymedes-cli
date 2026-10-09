@@ -6,7 +6,6 @@ import { CONTROL_LANGUAGES, controlLabel, resolveControlLanguage } from "./i18n"
 import { SUPPORTED_COUNTRIES, currencyForCountry, normalizeCountryCode } from "./local-currency";
 import { isCurrency } from "@archymedes/core/money";
 import { PROVIDER_IDS, PROVIDER_INFO, isProviderId, type ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { builtinThemes } from "../theme/theme";
 
 /**
  * A value that can be picked from a list, with the human name shown beside the stored code.
@@ -63,8 +62,6 @@ const JEV_CHOICES: readonly SettingChoice[] = [
   { value: "off", label: "Off — never call Jev, even with a key configured" },
 ];
 
-const THEME_CHOICES: readonly SettingChoice[] = builtinThemes().map((theme) => ({ value: theme.name, label: theme.name, ...(theme.description ? { description: theme.description } : {}) }));
-
 const CODE_COLOR_CHOICES: readonly SettingChoice[] = [
   { value: "vscode", label: "VS Code colours — Dark+ or Light+ to match the theme (default)" },
   { value: "theme", label: "Theme colours — code painted in the theme's own palette" },
@@ -112,7 +109,11 @@ const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ v
  * Archymedes can price in is a fact it already holds.
  */
 export const SETTING_FIELDS = [
-  { key: "ARCHYMEDES_THEME", label: "Theme — colours for the whole CLI (/theme <name> also saves it)", choices: THEME_CHOICES, section: "Appearance" },
+  // No static `choices`: the built-in theme names live in `theme/`, which sits above `platform` and
+  // may not be reached from here. They arrive through `SettingsMenuOptions.themeChoices` instead,
+  // supplied by the `app/` caller — and a session that supplies none still sets a theme by typing,
+  // which is what `validateSetting` has always accepted anyway (a user's own theme file is valid).
+  { key: "ARCHYMEDES_THEME", label: "Theme — colours for the whole CLI (/theme <name> also saves it)", section: "Appearance" },
   { key: "ARCHYMEDES_CODE_COLORS", label: "Code colours", choices: CODE_COLOR_CHOICES },
   { key: "ARCHYMEDES_CODE_LINE_NUMBERS", label: "Line numbers in code blocks", choices: SHOW_HIDE_CHOICES },
   { key: "ARCHYMEDES_SIMPLE", label: "Simple mode — quiet start, short help", choices: SIMPLE_CHOICES },
@@ -408,6 +409,15 @@ export type SettingsMenuOptions = {
    * Returning an empty list is the honest "could not ask", and falls back to typing.
    */
   modelChoices?(field: SettingKey, settings: ArchymedesSettings): Promise<readonly SettingChoice[]>;
+  /**
+   * What the theme field should offer.
+   *
+   * Plain data rather than a callback, unlike `modelChoices`: the built-in themes are compiled in
+   * and answering costs nothing, so there is no reason to defer it. It is passed in rather than
+   * read here because the themes live in `theme/`, a section `platform` may not import — see the
+   * `ARCHYMEDES_THEME` field. Omitted, the field falls back to free text, which still sets a theme.
+   */
+  themeChoices?: readonly SettingChoice[];
 };
 
 /**
@@ -525,7 +535,9 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
     // to the free-text prompt, which is still a complete way to set this.
     const dynamic = MODEL_FIELD_PROVIDER[field.key] && options.modelChoices
       ? await options.modelChoices(field.key, settings).catch(() => [])
-      : [];
+      : field.key === "ARCHYMEDES_THEME" && options.themeChoices
+        ? options.themeChoices
+        : [];
     const choices: readonly SettingChoice[] = dynamic.length > 0
       ? dynamic
       : ("choices" in field && field.choices ? field.choices : []);

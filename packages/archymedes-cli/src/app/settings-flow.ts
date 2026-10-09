@@ -13,6 +13,7 @@ import { SETTING_FIELDS, mergedEnvironment, runSettingsMenu, saveSettings, type 
 import type { OpenClient } from "./agent-factory";
 import type { ParsedArgs } from "./args";
 import { hiddenQuestion, isReadlineExit, questionWithEscape, settingsChooser } from "./prompts";
+import { builtinThemeChoices } from "../theme/theme";
 import { codeStyleFromEnvironment, setCodeStyle } from "../render/syntax";
 import { modelChoicesForSettingsField } from "./providers";
 import type { Environment, SessionState } from "./session-state";
@@ -47,6 +48,7 @@ export function createSettingsFlow(options: {
         ...(focus ? { focus } : {}),
         // Prices in the currency this session is already reporting in, rather than the provider's.
         modelChoices: (field, current) => modelChoicesForSettingsField(field, current, processEnvironment, state.display, rates),
+        themeChoices: builtinThemeChoices(),
       });
     } catch (error) {
       if (!isReadlineExit(error)) throw error;
