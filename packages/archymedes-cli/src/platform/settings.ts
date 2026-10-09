@@ -472,13 +472,17 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
       const chosen = await prompts.choose({
         title: `Archymedes ${controlLabel(language, "settings")}`,
         items,
+        // Filterable: sixty rows is not a menu you arrow through to row fifty, and the value
+        // lists already filter — the field list refusing typed queries while they do would be
+        // the one screen where typing does nothing.
+        filter: true,
         // Reopens where the user was, not at the top. Setting three things in a row otherwise means
         // scrolling back down twice, and the list is long enough for that to be the whole cost of
         // using it.
         initialIndex: cursor,
         // Esc here is "I'm done", and what is done is kept — said on screen, because Esc in most
         // menus means "throw it away" and nobody should have to find out which by trying it.
-        legend: "↑↓ move · Enter edit · Esc done (saves)",
+        legend: "↑↓ move · Enter edit · type to filter · Esc done (saves)",
       });
       // Escape means "leave the menu", the same as choosing the exit row.
       selection = chosen ?? { kind: "done" };

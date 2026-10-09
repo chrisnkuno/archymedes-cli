@@ -17,7 +17,9 @@ import { nextUtcMidnight, OpenRouterKeyInfoCache } from "./openrouter-key-info";
 import { repairToolCalls } from "./tool-call-repair";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { collectChatStream, toWireMessages, turnFromChatResponse, withOpenRouterCacheControl, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
-import { createStreamDeadline, streamTimeoutsFor, StreamTimeoutError, type StreamDeadline } from "./stream-deadline";
+import { DEFAULT_TOTAL_TIMEOUT_MS, StreamTimeoutError, streamTimeoutsFor, withStreamDeadline, type StreamDeadline } from "./stream-deadline";
+import { providerRetryAfterMs } from "../agent-runtime";
+import { RequestPacer } from "./request-pacer";
 
 export { withFreeResetTime } from "./free-errors";
 
@@ -89,6 +91,9 @@ export function freeModelCapabilities(router: ModelCapabilities, model: Pick<Fre
   };
 }
 
+/** A model that failed with 429/5xx stays deprioritized this long, so retries try a different model instead of reconnecting to the one that just failed. */
+const MODEL_COOLDOWN_MS = 60_000;
+
 class FreeAccessError extends Error {
   /** Undefined for a network failure, so it is reported as one rather than as an HTTP error. */
   readonly status: number | undefined;
@@ -112,6 +117,11 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   private catalog?: FreeCatalog;
   /** Models OpenRouter refused (403/404) for this key; skipped by the router for this process. */
   private readonly refused = new Set<string>();
+  /** Models that failed with 429/5xx, with the epoch-ms when they may be tried again. Unlike `refused` this expires: the outage, not the model, is the problem. */
+  private readonly cooling = new Map<string, number>();
+
+  /** Learned request pacing for the free tier: survives across turns so a session that hit the limiter keeps spacing its requests. */
+  private readonly pacer: RequestPacer;
 
   private readonly baseUrl: string;
   private readonly viaGateway: boolean;
@@ -128,6 +138,8 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
    */
   constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number; firstByteTimeoutMs?: number; tokenSaver?: boolean }, private readonly dependencies: {
     call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number;
+    /** Learned request pacing; a fresh, unthrottled pacer by default. */
+    pacer?: RequestPacer;
     /**
      * Install-token source for gateway requests. Defaults to one stored in the config directory,
      * except when `call` is injected (tests), where it defaults to none; `null` disables it.
@@ -145,6 +157,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   } = {}) {
     this.selection = { provider: "free", model: options.model };
     this.tokenSaver = options.tokenSaver ?? true;
+    this.pacer = dependencies.pacer ?? new RequestPacer();
     // Only a fully real provider writes the user's config directory: one with an injected call or
     // catalog is a test, and must not add to anyone's daily count.
     const usage = dependencies.usage === undefined
@@ -161,9 +174,16 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode is not configured: point ARCHYMEDES_FREE_GATEWAY_URL at a free gateway, or save your own OPENROUTER_API_KEY (archymedes settings). Free mode never falls back to a paid provider.");
     if (!isFreeModelId(options.model)) throw new FreeAccessError("Free mode accepts openrouter/free or an exact publisher/model:free ID; paid models are not allowed.");
     this.baseUrl = this.viaGateway ? `${options.gatewayUrl}/v1` : FREE_BASE_URL;
+    // Stream deadlines (first byte, idle, total) are applied per candidate at the call boundary in
+    // `complete`, not in a fetch wrapper: the router needs a shorter first-byte deadline for every
+    // candidate but the last, and one fixed transport-level budget cannot express that. Applying
+    // both would race two timers over the same stream. Redirects stay refused: a 3xx from either
+    // endpoint is a configuration or interception signal, not a detour to follow with a credential.
     const client = dependencies.call ? undefined : new OpenAI({
       // The gateway ignores Authorization; the placeholder only satisfies the SDK.
       apiKey: apiKey ?? "archymedes-free-gateway", baseURL: this.baseUrl, maxRetries: 0,
+      // A minute past the stream deadline's total so the descriptive timeout always wins the race.
+      timeout: Math.max(DEFAULT_TOTAL_TIMEOUT_MS, streamTimeoutsFor(options.timeoutMs).totalMs) + 60_000,
       fetch: (input, init) => globalThis.fetch(input, { ...init, redirect: "error" }),
     });
     if (apiKey) {
@@ -235,13 +255,28 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       // OpenRouter pick an unverified model. Some zero-priced models are gated to listed apps (403) or
       // briefly rate-limited upstream (429), so a refusal moves to the next candidate — only before
       // any text has streamed, and never to anything outside the verified free list.
+      // A model that just failed (429/5xx, or silence until its first-byte deadline) sorts last
+      // while its cooldown runs, so the next attempt (the runtime's retry of this same turn, or the
+      // user's next turn) tries a model that has not just failed instead of reconnecting to the
+      // outage. When every candidate is cooling the router still tries them, earliest-recovered
+      // first: a slow chance beats none.
+      const coolUntil = (id: string): number => {
+        const until = this.cooling.get(id);
+        if (until === undefined) return 0;
+        if (until <= now) { this.cooling.delete(id); return 0; }
+        return until;
+      };
       const preferred = this.options.model === FREE_ROUTER
         ? fitting.filter((model) => !this.refused.has(model.id)).sort((a, b) => rank(a.id) - rank(b.id) || (b.context_window ?? 0) - (a.context_window ?? 0) || a.id.localeCompare(b.id))
         : fitting;
       // Models that have been answering lately go first; the static preference breaks ties.
-      const ordered = this.options.model === FREE_ROUTER && this.health
+      const healthy = this.options.model === FREE_ROUTER && this.health
         ? orderByFreeHealth(preferred, await this.health.records(), now)
         : preferred;
+      // Cooling sorts after health (a stable sort keeps the health order within each group).
+      const ordered = this.options.model === FREE_ROUTER
+        ? [...healthy].sort((a, b) => (coolUntil(a.id) ? 1 : 0) - (coolUntil(b.id) ? 1 : 0) || coolUntil(a.id) - coolUntil(b.id))
+        : healthy;
       if (!ordered.length) throw new FreeAccessError("Every free model refused this key. Choose a specific model with /model or try again later.", 403);
       // Any output at all (text, reasoning or a tool-call fragment) ends failover: the turn has
       // started, and moving to another model would bill and stream a second, different answer.
@@ -256,18 +291,20 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
         const last = attempt === attempts.length - 1;
         // A short first-byte deadline only where another candidate can take over; the last (or an
         // explicitly chosen) model gets the full allowance, since giving up early gains nothing.
-        const deadline = createStreamDeadline({
-          ...timeouts,
-          ...(router && !last ? { firstByteMs: this.options.firstByteTimeoutMs ?? FREE_CANDIDATE_FIRST_BYTE_TIMEOUT_MS } : {}),
-          signal: userSignal,
-        });
+        // Space upstream requests by the learned pace: firing four candidates back-to-back is
+        // exactly the burst shape that trips the free tier's limiter. Waited out before this
+        // candidate's deadline starts, so pacing never eats into its first-byte allowance.
+        await this.pacer.wait(userSignal);
         try {
-          const turn = await this.attempt(candidate.id, messages, output, request, onTextDelta, onOutputProgress, deadline);
+          // withStreamDeadline reports a deadline as itself rather than as the SDK's abort error.
+          const turn = await withStreamDeadline({
+            ...timeouts,
+            ...(router && !last ? { firstByteMs: this.options.firstByteTimeoutMs ?? FREE_CANDIDATE_FIRST_BYTE_TIMEOUT_MS } : {}),
+          }, userSignal, (deadline) => this.attempt(candidate.id, messages, output, request, onTextDelta, onOutputProgress, deadline));
+          this.pacer.reportSuccess();
           void this.health?.record(candidate.id, { ok: true });
           return turn;
-        } catch (caught) {
-          // The SDK reports a deadline abort as its own abort error; the deadline is the real cause.
-          const error = deadline.timedOut ?? caught;
+        } catch (error) {
           // Includes the gateway's retryable in-stream error event (504/502), which has no HTTP status.
           const status = freeFailureStatus(error);
           // A gateway's own limit or outage applies to every model behind it; switching would only spend more of it.
@@ -286,10 +323,16 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
           if (!userSignal?.aborted && !gatewayOwned && !accountDaily && (silent || refusedStatus || error instanceof FreeAccessError)) {
             void this.health?.record(candidate.id, { ok: false, reason: silent ? "timeout" : status !== undefined ? `HTTP ${status}` : "invalid response" });
           }
-          if (router && !streamed && (status === 403 || status === 404)) this.refused.add(candidate.id);
+          // A 429 teaches the pacer, so the next request waits out the limiter instead of racing
+          // it; not the account's daily cap, which no amount of pacing can wait out.
+          if (status === 429 && !accountDaily) this.pacer.reportRateLimited(providerRetryAfterMs(error));
+          if (router && !streamed) {
+            if (status === 403 || status === 404) this.refused.add(candidate.id);
+            // Remember rate limits, server errors and silent timeouts briefly: without this the
+            // runtime's retry of the same turn reconnects to the model that just failed.
+            else if (silent || status === 429 || (typeof status === "number" && status >= 500)) this.cooling.set(candidate.id, now + MODEL_COOLDOWN_MS);
+          }
           if (!switchable || last) throw error;
-        } finally {
-          deadline.dispose();
         }
       }
       throw new FreeAccessError("No free model accepted the request.", 503, true);
@@ -318,7 +361,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
         ...(daily?.limit !== undefined ? { requestLimit: daily.limit } : {}),
         ...(daily?.remaining !== undefined ? { requestsLeft: daily.remaining } : {}),
       });
-      throw new FreeAccessError(failure.message, status, failure.retryable, failure.retryAfterMs);
+      // A retry-after given as an HTTP date (or on a wrapped cause) is still honoured.
+      const retryAfterMs = failure.retryAfterMs ?? (failure.retryable ? providerRetryAfterMs(error) : undefined);
+      throw new FreeAccessError(failure.message, status, failure.retryable, retryAfterMs);
     }
   }
 

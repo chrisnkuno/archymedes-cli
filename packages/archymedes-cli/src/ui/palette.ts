@@ -167,15 +167,18 @@ export function advancePalette(
 } {
   const name = input.key.name;
   const matches = (options.rank ?? rankPaletteEntries)(entries, state.query);
+  const last = Math.max(0, matches.length - 1);
+  const clamp = (index: number): number => Math.max(0, Math.min(last, index));
+  // Normalized once, up front: a selection left over from a longer match list can never be handed
+  // back, rendered, or resolved against rows that no longer have it.
+  state = { ...state, selected: clamp(state.selected) };
 
   if (name === "escape" || (input.key.ctrl && (name === "c" || name === "g"))) return { state, done: {} };
   if (name === "return" || name === "enter") {
     // Clamped when used: a selection left over from a longer match list must not cancel Enter.
-    const chosen = matches.length > 0 ? matches[Math.max(0, Math.min(state.selected, matches.length - 1))] : undefined;
+    const chosen = matches.length > 0 ? matches[clamp(state.selected)] : undefined;
     return { state, done: { ...(chosen ? { command: chosen.args ? `${chosen.command} ` : chosen.command } : {}) } };
   }
-  const last = Math.max(0, matches.length - 1);
-  const clamp = (index: number): number => Math.max(0, Math.min(last, index));
   // A page is one row short of the window so the row you were reading stays on screen across the
   // jump — the same overlap `less` and every pager keep, and what makes paging feel continuous
   // rather than teleporting.

@@ -13,6 +13,7 @@ import {
   type FilePreview,
 } from "./file-browser";
 import { NO_COLOR_PALETTE, type Palette } from "../theme/theme";
+import { exitTopTermUIApp } from "../terminal/screen-host";
 
 /**
  * The project tree, as a screen you look around in.
@@ -115,6 +116,7 @@ export async function runFileScreen(options: {
     const finish = (picked: FileScreenChoice | undefined) => {
       if (settled) return;
       settled = true;
+      exitTopTermUIApp();
       resolve(picked);
     };
     void renderApp(FileScreen as never, {

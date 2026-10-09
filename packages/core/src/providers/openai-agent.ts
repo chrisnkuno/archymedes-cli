@@ -2,7 +2,8 @@ import OpenAI from "openai";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
 import { collectChatStream, isOpenRouterBaseUrl, toWireMessages, turnFromChatResponse, withOpenRouterCacheControl, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
-import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
+import { withStreamDeadline, type StreamTimeouts as DeadlineTimeouts } from "./stream-deadline";
+import { fetchWithStreamTimeouts, resolveStreamTimeouts, type StreamTimeouts } from "./stream-fetch";
 
 /**
  * OpenAI adapter for the agent loop.
@@ -12,12 +13,18 @@ import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
  * the message shape. Two copies of that translation is two places for a tool-call bug to hide.
  */
 
-/**
- * `timeoutMs` is the stream's *idle* timeout (longest silence between chunks), not a wall-clock
- * limit on the whole reply; see `streamTimeoutsFor` for how it maps onto the first-byte and overall
- * deadlines.
- */
-export type OpenAIAgentOptions = { apiKey: string; model: string; baseURL?: string; timeoutMs?: number; defaultHeaders?: Record<string, string> };
+export type OpenAIAgentOptions = {
+  apiKey: string; model: string; baseURL?: string; defaultHeaders?: Record<string, string>;
+  /**
+   * The stream's *idle* timeout (longest silence between chunks), not a wall-clock limit on the
+   * whole reply; see `streamTimeoutsFor` for how it maps onto the first-byte and overall deadlines.
+   */
+  timeoutMs?: number;
+  /** Underlying fetch, wrapped with byte-level stream timeouts. Defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+  /** TTFB/idle/total budget for the stream; overrides what `timeoutMs` implies. */
+  streamTimeouts?: StreamTimeouts;
+};
 
 export type OpenAIChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<ChatResponse | AsyncIterable<ChatStreamChunk>>;
 
@@ -29,6 +36,10 @@ function usesInklingToolContract(model: string): boolean {
 
 export class OpenAIAgentTurnProvider implements AgentTurnProvider {
   private readonly call: ChatCall;
+  /** True when the transport was injected, so the deadline is applied at the call boundary. */
+  private readonly injected: boolean;
+  /** The stream's first-byte, idle and total deadlines. */
+  private readonly timeouts: DeadlineTimeouts;
   /** What this model can hold and produce, so the session sizes its budgets from the model. */
   readonly capabilities: ModelCapabilities;
 
@@ -36,11 +47,19 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
     if (!options.apiKey.trim()) throw new Error("OPENAI_API_KEY is required");
     if (!options.model.trim()) throw new Error("OPENAI_MODEL is required");
     this.capabilities = capabilitiesFor(options.model);
+    this.timeouts = resolveStreamTimeouts(options.timeoutMs, options.streamTimeouts);
+    this.injected = Boolean(call);
     if (call) this.call = call;
     else {
       // Retry policy is centralized in BoundedAgentRuntime so attempt counts, cancellation and
-      // messages stay truthful instead of being multiplied invisibly by the SDK.
-      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}), maxRetries: 0 });
+      // messages stay truthful instead of being multiplied invisibly by the SDK. Timeouts are
+      // byte-level (time-to-first-byte, silence between chunks, total) rather than one wall-clock
+      // timer over the whole stream, so a slow-but-alive response is never mistaken for a stuck
+      // one and killed mid-sentence. The SDK's own timeout sits a minute past the total so the
+      // descriptive byte-level error always wins the race.
+      const { firstByteMs, idleMs, totalMs } = this.timeouts;
+      const streamFetch = fetchWithStreamTimeouts(options.fetchImpl ?? globalThis.fetch, { ttfbMs: firstByteMs, idleMs, totalMs });
+      const client = new OpenAI({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}), maxRetries: 0, timeout: totalMs + 60_000, fetch: streamFetch });
       this.call = async (body, signal) => (await client.chat.completions.create(body as never, { signal })) as unknown as ChatResponse | AsyncIterable<ChatStreamChunk>;
     }
   }
@@ -82,23 +101,26 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       stream: true,
       stream_options: { include_usage: true },
     };
-    // Deadlines that follow the stream rather than the clock: a long, healthy generation is never
-    // cut off mid-answer, while a stalled connection still fails promptly.
-    const deadline = createStreamDeadline({ ...streamTimeoutsFor(this.options.timeoutMs), signal: request.signal });
-    try {
+    // One deadline per request, enforced in one place: by the byte-level fetch wrapper when this
+    // adapter built the SDK client (SSE keepalives count as life there), or here, over the parsed
+    // chunks, when the transport was injected. Either way a long, healthy generation is never cut
+    // off mid-answer, while a stalled connection still fails promptly.
+    if (!this.injected) {
+      // Cancellation comes from the caller alone; liveness is the fetch wrapper's job.
+      const response = await this.call(body, request.signal ?? AbortSignal.any([]));
+      return turnFromChatResponse(
+        Symbol.asyncIterator in Object(response)
+          ? await collectChatStream(response as AsyncIterable<ChatStreamChunk>, request.onTextDelta, request.onOutputProgress)
+          : (response as ChatResponse),
+      );
+    }
+    return await withStreamDeadline(this.timeouts, request.signal, async (deadline) => {
       const response = await deadline.race(this.call(body, deadline.signal));
       return turnFromChatResponse(
         Symbol.asyncIterator in Object(response)
           ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), request.onTextDelta, request.onOutputProgress)
           : (response as ChatResponse),
       );
-    } catch (error) {
-      // The SDK reports its own abort as APIUserAbortError, which reads as "you cancelled". When the
-      // abort was a deadline, the deadline is what the user needs to see.
-      if (deadline.timedOut) throw deadline.timedOut;
-      throw error;
-    } finally {
-      deadline.dispose();
-    }
+    });
   }
 }

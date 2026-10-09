@@ -74,10 +74,11 @@ describe("settings under a real pty", () => {
     // Location sits in the Money section; arrow down to it, then open it.
     const opened = p.output().length;
     p.write(`${downTo("ARCHYMEDES_COUNTRY")}${ENTER}`);
-    const list = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: opened });
-    // Sorted by name, so the window opens on the A's — Rwanda is below the fold, which is exactly
-    // why the list filters rather than expecting anyone to page to it.
-    expect(list.slice(opened)).toMatch(/Australia \(AU\) — AUD/);
+    // The country list, not the field list: both advertise filtering in their legends, so wait for
+    // a row only the country list can show. Sorted by name, so the window opens on the A's — Rwanda
+    // is below the fold, which is exactly why the list filters rather than expecting anyone to page
+    // to it.
+    await p.waitFor(/Australia \(AU\) — AUD/, { timeoutMs: 15_000, since: opened });
 
     // Type to narrow, then take it.
     const filtered = p.output().length;
@@ -112,8 +113,9 @@ describe("settings under a real pty", () => {
     await p.waitFor(/❯/, { timeoutMs: 15_000, since: jumped });
     p.write(ENTER);
     // Row 2 is Code colours, so typing its number opened the same list arrowing to it would have.
-    const seen = await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: jumped });
-    expect(seen.slice(jumped)).toContain("VS Code colours");
+    // The field list itself advertises filtering too, so only a row of the opened list proves it.
+    const seen = await p.waitFor(/VS Code colours/, { timeoutMs: 15_000, since: jumped });
+    expect(seen.slice(jumped)).toContain("Dark+ or Light+");
     p.kill();
   }, 90_000);
 

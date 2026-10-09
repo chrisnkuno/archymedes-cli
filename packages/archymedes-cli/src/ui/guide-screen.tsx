@@ -9,6 +9,7 @@ import {
   type GuideBrowserState,
 } from "./guide-browser";
 import { NO_COLOR_PALETTE, type Palette } from "../theme/theme";
+import { exitTopTermUIApp } from "../terminal/screen-host";
 
 /**
  * The guide, as a screen you read in.
@@ -84,6 +85,7 @@ export async function runGuideScreen(options: { columns: number; rows: number; s
     const finish = () => {
       if (settled) return;
       settled = true;
+      exitTopTermUIApp();
       resolve();
     };
     void renderApp(GuideScreen as never, {

@@ -335,7 +335,15 @@ async function main(): Promise<number> {
   };
   let uninstallShortcuts = interactive ? installShortcuts(shortcutOptions) : () => {};
   const pastes = createPasteStore();
-  const uninstallPaste = interactive && process.stdout.isTTY ? installBracketedPaste({ readline, output: process.stdout, store: pastes }) : () => {};
+  // Mutable: a fullscreen's own teardown disables bracketed-paste mode on the way out (TermUI's
+  // `restore()` writes its disable sequence), so the CLI's handler must be reinstalled after
+  // every screen, not merely uninstalled at exit.
+  let uninstallPaste = interactive && process.stdout.isTTY ? installBracketedPaste({ readline, output: process.stdout, store: pastes }) : () => {};
+  const reinstallPaste = (): void => {
+    if (!interactive || !process.stdout.isTTY) return;
+    uninstallPaste();
+    uninstallPaste = installBracketedPaste({ readline, output: process.stdout, store: pastes });
+  };
   const installShortcutsAgain = (): void => {
     if (interactive) uninstallShortcuts = installShortcuts(shortcutOptions);
   };
@@ -493,6 +501,7 @@ async function main(): Promise<number> {
       uninstallShortcuts: () => uninstallShortcuts(),
       installShortcuts: () => installShortcutsAgain(),
       bindFixedNavigation: () => bindFixedNavigation(),
+      reinstallPaste: () => reinstallPaste(),
     },
   });
   const { editFile } = createFileEditing({ state, screenCapabilities, terminalControls, autosave: () => environment.ARCHYMEDES_EDITOR_AUTOSAVE?.trim().toLowerCase() === "on" });
@@ -537,6 +546,13 @@ async function main(): Promise<number> {
   let exitRequested = false;
   const { bindSigint, unbindSigint } = createSigintHandling({ readline, state, exitCleanly: () => exitCleanly() });
   bindSigint();
+  // Bun's `readline/promises` never settles a pending `question()` on Ctrl+D — no resolve, no
+  // rejection — so without this the session sits on a dead prompt, or the loop drains and the
+  // process exits 0 with no goodbye, no history save and no sandbox cleanup. Node rejects with
+  // AbortError, which `isReadlineExit` already turns into the same break. Ending the parked
+  // question with the close message reaches that break on both runtimes; after it runs
+  // `rejectPrompt` is cleared, so the `readline.close()` inside `exitCleanly` cannot re-fire it.
+  readline.on("close", () => abandonPrompt());
   exitCleanly = () => { unbindSigint(); watched.stopAll(); screen?.exit(); setWorkspaceMenu(undefined); unbindFixedNavigation(); uninstallShortcuts(); uninstallPaste(); readline.close(); abandonPrompt(); };
 
   /** Set when the turn about to run is a wander lab, so its results chart is printed once, after it. */

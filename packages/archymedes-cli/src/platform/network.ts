@@ -35,6 +35,12 @@ export type ClassifyOptions = {
   attempts?: number;
   /** Why a safe automatic retry was not attempted. */
   retrySuppressed?: "output_started" | null;
+  /** The HTTP status the provider returned, when the error carried one. */
+  status?: number;
+  /** Which phase timed out, e.g. "waiting for response headers". Appended to timeout diagnoses. */
+  detail?: string;
+  /** Milliseconds already spent waiting between retries, normally inferred from ProviderRequestError. */
+  waitedMs?: number;
 };
 
 /** Error codes the transport layer emits for each failure class. */
@@ -107,6 +113,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
   const host = options.host ?? "the server";
   const purpose = options.purpose ? `${options.purpose} to ${host}` : `The request to ${host}`;
   const afterAttempts = options.attempts && options.attempts > 1 ? ` after ${options.attempts} attempts` : "";
+  const afterWaiting = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(0)}s of retries` : "";
   const duplicateRisk = options.retrySuppressed === "output_started"
     ? " Archymedes did not retry because output had already started; retrying automatically could duplicate output, charges, or tool actions."
     : "";
@@ -118,9 +125,19 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
         hint: KIND_HINTS.dns,
       };
     case "timeout":
+      // When the transport names the phase ("waiting for response headers", "no data received
+      // for 120s"), that replaces the generic slow-network sentence — it tells the user whether
+      // the provider never answered or died mid-answer, which need different next steps.
+      if (options.detail) {
+        return {
+          kind,
+          message: `${purpose} timed out${afterAttempts}${afterWaiting} — ${options.detail}`,
+          hint: "Retry, or run `archymedes --doctor` to see exactly which endpoint is slow or blocked.",
+        };
+      }
       return {
         kind,
-        message: `${purpose} timed out${afterAttempts} — ${host} is slow, or the network is blocking it.${duplicateRisk}`,
+        message: `${purpose} timed out${afterAttempts}${afterWaiting} — ${host} is slow, or the network is blocking it.${duplicateRisk}`,
         hint: options.retrySuppressed ? "Review any partial output before retrying manually." : KIND_HINTS.timeout,
       };
     case "refused":
@@ -173,7 +190,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
     case "rate_limit":
       return {
         kind,
-        message: `${purpose} is still rate-limited${afterAttempts}.`,
+        message: `${purpose} is still rate-limited${afterAttempts}${afterWaiting}.`,
         hint: "Wait briefly and retry, or choose another available model with `/model`.",
       };
     case "bad_request":
@@ -185,8 +202,8 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
     case "server_error":
       return {
         kind,
-        message: `${purpose} remained unavailable${afterAttempts} because the provider returned a server error.`,
-        hint: "The request was retried safely. Wait briefly, check the provider status, or select another model with `/model`.",
+        message: `${purpose} remained unavailable${afterAttempts}${afterWaiting} because the provider returned a server error${options.status ? ` (HTTP ${options.status})` : ""}.`,
+        hint: "The request was retried safely. Wait briefly, check the provider status, or select another model with `/model` — free-tier models share capacity and saturate first.",
       };
   }
 }
@@ -200,24 +217,38 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
  */
 export function classifyNetworkError(error: unknown, options: ClassifyOptions = {}): NetworkDiagnosis | null {
   const raw = unwrap(error);
-  const retry = error !== null && typeof error === "object" ? error as { attempts?: unknown; retrySuppressed?: unknown } : undefined;
+  const retry = error !== null && typeof error === "object" ? error as { attempts?: unknown; retrySuppressed?: unknown; waitedMs?: unknown } : undefined;
   const context: ClassifyOptions = {
     ...options,
     ...(typeof retry?.attempts === "number" ? { attempts: retry.attempts } : {}),
+    ...(typeof retry?.waitedMs === "number" ? { waitedMs: retry.waitedMs } : {}),
     ...(retry?.retrySuppressed === "output_started" ? { retrySuppressed: "output_started" as const } : {}),
   };
   const name = nameOf(raw) ?? nameOf(error);
   const code = codeOf(raw) ?? codeOf(error);
   const message = messageOf(raw);
+  // The provider's HTTP status, when the error carried one: it turns a vague
+  // "server error" into the answer to "which server error", which is the
+  // difference between waiting (503) and switching models (502/504).
+  const status = statusOf(error) ?? statusOf(raw);
+  if (status !== undefined) context.status = status;
+  // The transport's own timeout wording names the phase that failed. Lift it out so the
+  // timeout diagnosis can say "waiting for response headers" instead of "slow or blocked".
+  // Matched narrowly: the retry wrapper's own "(timeout error) … Provider message:" text must
+  // never become the detail.
+  const phase = /timed?\s*out[:\s]+([^.]{1,160})/i.exec(message)?.[1]?.trim().replace(/\s+/g, " ");
+  if (phase && !context.detail && /\b(waiting|headers?|first byte|no data|stalled?|without completing|exceeded|silence|idle)\b/i.test(phase)
+    && !/\battempt|retry|provider message/i.test(phase)) {
+    context.detail = phase.replace(/[.\s]+$/, "");
+  }
 
   // OpenAI-compatible SDKs attach the HTTP status to the outer API error. A 404 is not a broken
   // network: it is almost always an omitted `/v1` base path or a model id no longer in the live
   // catalog, and both have concrete fixes the raw "404 not found" fails to name.
-  if (statusOf(error) === 404 || statusOf(raw) === 404 || /^404\b|\b404 not found\b/i.test(messageOf(error))) {
+  if (status === 404 || /^404\b|\b404 not found\b/i.test(messageOf(error))) {
     return diagnosisFor("not_found", context);
   }
 
-  const status = statusOf(error) ?? statusOf(raw);
   if (status === 401) return diagnosisFor("authentication", context);
   if (status === 403) return diagnosisFor("permission", context);
   if (status === 429) return diagnosisFor("rate_limit", context);
@@ -246,6 +277,21 @@ export function classifyNetworkError(error: unknown, options: ClassifyOptions = 
     if (code && CODES[kind].some((candidate) => code === candidate || (candidate.endsWith("_") && code.startsWith(candidate)))) {
       return diagnosisFor(kind, { ...context, host });
     }
+  }
+  // The provider said "server error" in words rather than in a status: an overloaded
+  // gateway, a failed retry wrapper, or a plain-Error cause all arrive here. This mirrors
+  // `providerFailureKind` in the core runtime so the two never disagree about what failed.
+  if (/\b(?:service unavailable|bad gateway|gateway timeout|internal server error|overload(?:ed)?|temporar(?:y|ily) unavailable)\b/i.test(message)
+    || /\b(?:service unavailable|bad gateway|gateway timeout|internal server error|overload(?:ed)?|temporar(?:y|ily) unavailable)\b/i.test(messageOf(error))) {
+    return diagnosisFor("server_error", context);
+  }
+  // A timeout described in words rather than carried as a code or status: the byte-level stream
+  // timeouts phrase their errors this way ("no data received for 120s (stream stalled)"), and so
+  // do bare `AbortSignal.timeout` rejections that lost their `TimeoutError` name in an SDK wrap.
+  // Word-boundaried so a `timeoutMs` validation complaint stays a non-network error.
+  const timeoutWords = /\btimed?\s*out\b|\btimeouts?\b|\bstalled?\b|\bstalling\b/i;
+  if (timeoutWords.test(message) || timeoutWords.test(messageOf(error))) {
+    return diagnosisFor("timeout", context);
   }
   // Node's fetch wraps undici failures in `TypeError: fetch failed` whose `cause` has the code;
   // if unwrapping already happened, the raw error itself may carry the useful text.

@@ -336,23 +336,45 @@ export type AgentRuntimeResult = {
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 1;
-/** Provider calls are safe to retry here because no tool from the returned turn has run yet. */
-const MAX_PROVIDER_RETRIES = 2;
-/**
- * A timed-out request is retried at most once. Timeouts are now measured against the stream
- * (first byte, idle, overall cap), so one firing means minutes already spent; repeating that
- * several times would leave the user staring at a frozen turn for most of an hour.
- */
-const MAX_TIMEOUT_RETRIES = 1;
-/** Exponential backoff: 1s, 2s, 4s, ... capped here. */
-const PROVIDER_BACKOFF_BASE_MS = 1_000;
-const PROVIDER_BACKOFF_CAP_MS = 30_000;
-/** A server's own `retry-after` is honoured up to this; beyond it the user is better told now. */
-const PROVIDER_RETRY_AFTER_CAP_MS = 60_000;
 /** A malformed tool turn is model output, so let the model repair it before failing the run. */
 const MAX_TOOL_TURN_RECOVERIES = 2;
 
 export type ProviderFailureKind = "timeout" | "rate_limit" | "server" | "network" | "unknown";
+
+/**
+ * How many attempts a provider call gets, and how long it waits between them,
+ * by failure class.
+ *
+ * Provider calls are safe to retry here because no tool from the returned turn
+ * has run yet. What is not safe is treating every failure alike: a single
+ * connection reset wants a quick second try, while a 5xx from the provider —
+ * the free tier's shared capacity in particular is saturated for seconds at a
+ * time — wants longer waits and more of them. Retrying a 503 three times in
+ * 300ms is a burst, not a retry policy, and it is how "remained unavailable
+ * after 3 attempts" gets reported for an outage that cleared a second later.
+ */
+export type ProviderRetryPolicy = {
+  /** Attempts allowed in total, including the first. */
+  maxAttempts: number;
+  /** Wait before the second attempt; doubles per attempt until `maxDelayMs`. */
+  baseDelayMs: number;
+  maxDelayMs: number;
+};
+
+export const RETRY_POLICIES: Record<ProviderFailureKind, ProviderRetryPolicy> = {
+  server: { maxAttempts: 4, baseDelayMs: 1_000, maxDelayMs: 15_000 },
+  // Rate limits are the one failure where waiting longer beats failing fast: the request is
+  // still valid, the window always reopens, and forcing the user to babysit a `/retry` is the
+  // process stopping for something it could have slept through. Six attempts with doubling
+  // waits ride out a minute-boundary limit; an explicit `Retry-After` is honored first.
+  rate_limit: { maxAttempts: 6, baseDelayMs: 2_000, maxDelayMs: 60_000 },
+  // A timeout is retried once. Timeouts are measured against the stream (first byte, idle,
+  // overall cap), so one firing means minutes already spent; repeating that several times would
+  // leave the user staring at a frozen turn for most of an hour.
+  timeout: { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 8_000 },
+  network: { maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 4_000 },
+  unknown: { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8_000 },
+};
 
 /**
  * Adds retry context without discarding the provider's original error shape.
@@ -363,16 +385,22 @@ export type ProviderFailureKind = "timeout" | "rate_limit" | "server" | "network
  */
 export class ProviderRequestError extends Error {
   readonly attempts: number;
+  readonly kind?: ProviderFailureKind;
+  readonly waitedMs?: number;
   readonly retrySuppressed: "output_started" | null;
 
-  constructor(cause: unknown, options: { attempts: number; retrySuppressed?: "output_started" }) {
+  constructor(cause: unknown, options: { attempts: number; kind?: ProviderFailureKind; waitedMs?: number; retrySuppressed?: "output_started" }) {
     const original = cause instanceof Error ? cause.message : String(cause);
+    const kind = options.kind ? ` (${options.kind} error)` : "";
+    const waited = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(1)}s of retries` : "";
     const detail = options.retrySuppressed === "output_started"
       ? "The model connection failed after output began, so Archymedes did not retry to avoid duplicated output, charges, or tool actions."
-      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}.`;
+      : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}${kind}${waited}.`;
     super(`${detail} Provider message: ${original}`, { cause });
     this.name = "ProviderRequestError";
     this.attempts = options.attempts;
+    this.kind = options.kind;
+    this.waitedMs = options.waitedMs;
     this.retrySuppressed = options.retrySuppressed ?? null;
   }
 }
@@ -488,21 +516,50 @@ export function providerFailureKind(error: unknown): ProviderFailureKind {
   return "unknown";
 }
 
+export function providerRetryDelayMs(
+  error: unknown,
+  attempt: number,
+  policy: ProviderRetryPolicy = RETRY_POLICIES.unknown,
+  random: () => number = Math.random,
+): number {
+  const retryAfter = providerRetryAfterMs(error);
+  const backoff = Math.min(policy.maxDelayMs, policy.baseDelayMs * 2 ** Math.min(6, Math.max(0, attempt)));
+  // ±20% jitter: identical clients retrying in lockstep hit an already
+  // saturated endpoint at the same instants — the retry storm that turns
+  // one provider's blip into an outage for everyone.
+  const jittered = backoff * (0.8 + 0.4 * random());
+  return typeof retryAfter === "number"
+    ? Math.max(jittered, Math.min(policy.maxDelayMs, retryAfter)) : jittered;
+}
+
 /**
- * How long to wait before retry number `attempt + 1`.
+ * How long the provider asked us to wait, in milliseconds.
  *
- * Exponential (1s, 2s, 4s, ... capped at 30s) with +/-25% jitter, so many clients that failed
- * together (a provider blip, a shared rate limit) do not all come back in the same instant. A
- * `retry-after` the server sent is honoured up to 60s and never undercut by the backoff.
- * `random` is injectable so tests and logs can be deterministic; 0.5 yields the un-jittered value.
+ * Read from an explicit `retryAfterMs` first, then from the response's `retry-after` header —
+ * the form Anthropic and OpenAI actually send on a 429 (`"120"` seconds, or an HTTP date). SDK
+ * errors carry the headers; the cause is checked too, because transports wrap. Undefined when
+ * the provider named no wait, so callers fall back to backoff rather than inventing one.
  */
-export function providerRetryDelayMs(error: unknown, attempt: number, random: () => number = Math.random): number {
-  const retryAfter = errorRecord(error)?.retryAfterMs;
-  const base = Math.min(PROVIDER_BACKOFF_CAP_MS, PROVIDER_BACKOFF_BASE_MS * 2 ** Math.min(10, Math.max(0, attempt)));
-  const jitter = 0.75 + 0.5 * Math.min(1, Math.max(0, random()));
-  const backoff = Math.min(PROVIDER_BACKOFF_CAP_MS, Math.round(base * jitter));
-  return typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0
-    ? Math.max(backoff, Math.min(PROVIDER_RETRY_AFTER_CAP_MS, Math.round(retryAfter))) : backoff;
+export function providerRetryAfterMs(error: unknown): number | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 2 && current !== undefined && current !== null; depth += 1) {
+    const record = errorRecord(current);
+    if (!record) break;
+    const explicit = record.retryAfterMs;
+    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) return explicit;
+    const headers = record.headers as { get?: (name: string) => string | null } | Record<string, unknown> | undefined;
+    const raw = typeof headers?.get === "function"
+      ? headers.get("retry-after")
+      : (headers as Record<string, unknown> | undefined)?.["retry-after"] ?? (headers as Record<string, unknown> | undefined)?.["retryAfter"];
+    if (typeof raw === "string" && raw.trim() !== "") {
+      const text = raw.trim();
+      if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text) * 1000;
+      const at = Date.parse(text);
+      if (Number.isFinite(at)) return Math.max(0, at - Date.now());
+    }
+    current = record.cause;
+  }
+  return undefined;
 }
 
 function providerRetryDelay(delayMs: number, signal?: AbortSignal): Promise<boolean> {
@@ -734,11 +791,10 @@ export class BoundedAgentRuntime {
   constructor(
     private readonly dependencies: {
       model: AgentTurnProvider; tools: AgentTool[]; control: AgentRuntimeControl; prices: ModelPriceCatalog; artifacts?: ToolResultArtifactStore;
-      /**
-       * Retry timing seams, for tests and embedders. `sleep` resolves false when cancelled; `random`
-       * drives backoff jitter. Both default to the real thing.
-       */
-      retry?: { sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean>; random?: () => number };
+      /** Injectable so tests are deterministic; production leaves retry jitter to Math.random. */
+      random?: () => number;
+      /** Injectable so tests do not wait out real backoff; defaults to the abort-aware delay. */
+      sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean>;
     },
   ) {
     this.toolsByName = new Map();
@@ -890,8 +946,10 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         onTextDelta: (text) => void this.dependencies.control.persistEvent({ type: "assistant_delta", iteration, text }),
       };
       let turn: AgentModelTurn | undefined;
-      let timeoutRetries = 0;
-      for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt += 1) {
+      // Total time spent waiting between provider retries, named in the error that
+      // finally surfaces, so a user can tell a 300ms blip from a 15s outage.
+      let waitedMs = 0;
+      for (let attempt = 0; ; attempt += 1) {
         // Any streamed output (text, reasoning or a tool-call fragment) makes the attempt visible
         // and billed; only an attempt that produced nothing at all may be sent again.
         let emittedOutput = false;
@@ -913,22 +971,24 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           // retry is safe only while the failed attempt has remained completely invisible.
           if (emittedOutput) throw new ProviderRequestError(error, { attempts: attempt + 1, retrySuppressed: "output_started" });
           if (!isRetryableProviderError(error)) throw error;
-          const reason = providerFailureKind(error);
-          if (attempt >= MAX_PROVIDER_RETRIES || (reason === "timeout" && timeoutRetries >= MAX_TIMEOUT_RETRIES)) {
-            throw new ProviderRequestError(error, { attempts: attempt + 1 });
-          }
-          if (reason === "timeout") timeoutRetries += 1;
-          const delayMs = providerRetryDelayMs(error, attempt, this.dependencies.retry?.random);
+          // The failure class picks the budget: a 5xx gets more attempts and longer
+          // waits than a connection reset, because the two have different causes and
+          // different recovery times.
+          const kind = providerFailureKind(error);
+          const policy = RETRY_POLICIES[kind];
+          if (attempt + 1 >= policy.maxAttempts) throw new ProviderRequestError(error, { attempts: attempt + 1, kind, waitedMs });
+          const delayMs = providerRetryDelayMs(error, attempt, policy, this.dependencies.random);
+          waitedMs += delayMs;
           await this.dependencies.control.persistEvent({
             type: "provider_retry",
             iteration,
             nextAttempt: attempt + 2,
-            // A timeout gets one retry, so the attempt after it is the last one.
-            maxAttempts: reason === "timeout" ? attempt + 2 : MAX_PROVIDER_RETRIES + 1,
+            maxAttempts: policy.maxAttempts,
             delayMs,
-            reason,
+            reason: kind,
           });
-          if (!await (this.dependencies.retry?.sleep ?? providerRetryDelay)(delayMs, request.signal)) {
+          const sleep = this.dependencies.sleep ?? providerRetryDelay;
+          if (!await sleep(delayMs, request.signal)) {
             return stop("cancelled", "Run cancelled while waiting to retry the model provider.", iteration - 1);
           }
           if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) {

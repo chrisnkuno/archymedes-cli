@@ -1,7 +1,8 @@
 import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
-import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
+import { withStreamDeadline, type StreamTimeouts as DeadlineTimeouts } from "./stream-deadline";
+import { fetchWithStreamTimeouts, resolveStreamTimeouts, type StreamTimeouts } from "./stream-fetch";
 
 /**
  * Anthropic Messages API adapter.
@@ -21,6 +22,10 @@ export type AnthropicAgentOptions = {
   baseURL?: string;
   /** The stream's idle timeout, not a wall-clock limit; see `streamTimeoutsFor`. */
   timeoutMs?: number;
+  /** Underlying fetch, wrapped with byte-level stream timeouts. Defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+  /** TTFB/idle/total budget for the stream; overrides what `timeoutMs` implies. */
+  streamTimeouts?: StreamTimeouts;
 };
 
 type AnthropicMessage = { role: "user" | "assistant"; content: unknown };
@@ -272,6 +277,10 @@ function withBlockBreakpoint(message: AnthropicMessage): AnthropicMessage {
 
 export class AnthropicAgentTurnProvider implements AgentTurnProvider {
   private readonly call: MessagesCall;
+  /** True when the transport was injected, so the deadline is applied at the call boundary. */
+  private readonly injected: boolean;
+  /** The stream's first-byte, idle and total deadlines. */
+  private readonly timeouts: DeadlineTimeouts;
   /** Read from the published table for this model id, so the session can size its own budgets. */
   readonly capabilities: ModelCapabilities;
 
@@ -279,6 +288,8 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
     if (!options.apiKey.trim()) throw new Error("ANTHROPIC_API_KEY is required");
     if (!options.model.trim()) throw new Error("ANTHROPIC_MODEL is required");
     this.capabilities = capabilitiesFor(options.model);
+    this.timeouts = resolveStreamTimeouts(options.timeoutMs, options.streamTimeouts);
+    this.injected = Boolean(call);
     if (call) this.call = call;
     else {
       // The SDK is loaded on first use, not at module load. It is an optional peer dependency, and
@@ -294,8 +305,13 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
             throw new Error("The Anthropic provider needs the @anthropic-ai/sdk package. Install it with: npm install @anthropic-ai/sdk");
           });
           // Retry policy is centralized in BoundedAgentRuntime; hidden SDK retries would make its
-          // bounded attempt count and live progress messages inaccurate.
-          client = new Anthropic({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), maxRetries: 0 }) as never;
+          // bounded attempt count and live progress messages inaccurate. Timeouts are byte-level
+          // (first byte, silence between events, total) rather than one wall-clock timer, so a
+          // slow-but-alive stream is never killed mid-sentence. The SDK's own timeout sits a
+          // minute past the total so the descriptive byte-level error always wins the race.
+          const { firstByteMs, idleMs, totalMs } = this.timeouts;
+          const streamFetch = fetchWithStreamTimeouts(options.fetchImpl ?? globalThis.fetch, { ttfbMs: firstByteMs, idleMs, totalMs });
+          client = new Anthropic({ apiKey: options.apiKey, ...(options.baseURL ? { baseURL: options.baseURL } : {}), maxRetries: 0, timeout: totalMs + 60_000, fetch: streamFetch }) as never;
         }
         return (await client!.messages.create(body as never, { signal })) as AnthropicResponse | AsyncIterable<AnthropicStreamEvent>;
       };
@@ -333,20 +349,23 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
     };
 
     // Deadlines that follow the stream (first event, silence between events, generous overall cap)
-    // rather than one wall-clock limit that cut long, healthy generations off mid-answer.
-    const deadline = createStreamDeadline({ ...streamTimeoutsFor(this.options.timeoutMs), signal: request.signal });
-    let response: AnthropicResponse;
-    try {
-      const raw = await deadline.race(this.call(body, deadline.signal));
-      response = Symbol.asyncIterator in Object(raw)
-        ? await collectAnthropicStream(deadline.wrap(raw as AsyncIterable<AnthropicStreamEvent>), request.onTextDelta, request.onOutputProgress)
-        : (raw as AnthropicResponse);
-    } catch (error) {
-      if (deadline.timedOut) throw deadline.timedOut;
-      throw error;
-    } finally {
-      deadline.dispose();
-    }
+    // rather than one wall-clock limit that cut long, healthy generations off mid-answer. One
+    // deadline per request, enforced in one place: by the byte-level fetch wrapper when this adapter
+    // built the SDK client, or here, over the parsed events, when the transport was injected.
+    const response: AnthropicResponse = this.injected
+      ? await withStreamDeadline(this.timeouts, request.signal, async (deadline) => {
+        const raw = await deadline.race(this.call(body, deadline.signal));
+        return Symbol.asyncIterator in Object(raw)
+          ? await collectAnthropicStream(deadline.wrap(raw as AsyncIterable<AnthropicStreamEvent>), request.onTextDelta, request.onOutputProgress)
+          : (raw as AnthropicResponse);
+      })
+      : await (async () => {
+        // Cancellation comes from the caller alone; liveness is the fetch wrapper's job.
+        const raw = await this.call(body, request.signal ?? AbortSignal.any([]));
+        return Symbol.asyncIterator in Object(raw)
+          ? await collectAnthropicStream(raw as AsyncIterable<AnthropicStreamEvent>, request.onTextDelta, request.onOutputProgress)
+          : (raw as AnthropicResponse);
+      })();
 
     const toolCalls = response.content
       .filter((block): block is { type: "tool_use"; id: string; name: string; input: unknown } => block.type === "tool_use")

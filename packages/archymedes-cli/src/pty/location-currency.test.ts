@@ -52,7 +52,9 @@ async function setField(p: Awaited<ReturnType<typeof boot>>["p"], key: string, f
   await p.waitFor(/Enter choose/, { timeoutMs: 15_000 });
   const mark = p.output().length;
   p.write(`${position(key)}${ENTER}`);
-  await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: mark });
+  // The field list itself now filters, so its legend is no longer proof a value list opened —
+  // only a country row (or a different field's own values) is.
+  await p.waitFor(/\(AU\)|English|install|On —|Off —/, { timeoutMs: 15_000, since: mark });
   p.write(filter);
   const narrowed = p.output().length;
   p.write(ENTER);
@@ -116,7 +118,7 @@ describe("choosing a location under a real pty", () => {
     await p.waitFor(/Enter choose/, { timeoutMs: 15_000 });
     const mark = p.output().length;
     p.write(`${position("ARCHYMEDES_COUNTRY")}${ENTER}`);
-    await p.waitFor(/type to filter/, { timeoutMs: 15_000, since: mark });
+    await p.waitFor(/\(AU\)/, { timeoutMs: 15_000, since: mark });
 
     const searched = p.output().length;
     p.write("zz");

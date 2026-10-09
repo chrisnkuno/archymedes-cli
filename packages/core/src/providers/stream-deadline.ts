@@ -15,11 +15,23 @@
  *
  * Whichever fires aborts the request with a {@link StreamTimeoutError}, which is named
  * `TimeoutError`, carries `code: "ETIMEDOUT"` and says "timed out" — so the runtime's existing
- * failure classification reads it as a timeout and the CLI's network diagnosis as one too.
+ * failure classification reads it as a timeout and the CLI's network diagnosis as one too. Its
+ * message names the phase in the words the CLI's diagnosis lifts out ("waiting for response
+ * headers", "no data received … (stream stalled)", "without completing").
+ *
+ * This is the one timeout engine for model streams. It is applied in exactly one place per
+ * request: at the byte level by `fetchWithStreamTimeouts` (stream-fetch.ts) when an adapter owns
+ * the SDK transport, so SSE keepalives count as life; or at the call boundary, over the parsed
+ * chunks, when the transport is injected or a caller needs a deadline per attempt (the free
+ * router's per-candidate first-byte failover). Never both on one request: two timers racing over
+ * the same stream would make whichever is stricter the real limit.
  */
 
+/** Reasoning models can think for minutes, and free-tier queues hold requests, before the first token. */
 export const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 300_000;
-export const DEFAULT_IDLE_TIMEOUT_MS = 90_000;
+/** Slow providers pause between tokens; two silent minutes means stuck, not slow. */
+export const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
+/** A backstop, not a budget: with idle detection working, a stream that keeps producing is never cut off. */
 export const DEFAULT_TOTAL_TIMEOUT_MS = 30 * 60_000;
 
 export type StreamTimeoutPhase = "first_byte" | "idle" | "total";
@@ -33,12 +45,12 @@ export class StreamTimeoutError extends Error {
   readonly code = "ETIMEDOUT";
 
   constructor(readonly phase: StreamTimeoutPhase, readonly timeoutMs: number) {
-    const seconds = Math.round(timeoutMs / 1000);
+    const seconds = `${Math.max(1, Math.round(timeoutMs / 1000))}s`;
     super(phase === "first_byte"
-      ? `Model request timed out: no response within ${seconds}s.`
+      ? `Provider timed out waiting for response headers (no first byte within ${seconds})`
       : phase === "idle"
-        ? `Model stream timed out: no data received for ${seconds}s.`
-        : `Model request timed out: exceeded the ${seconds}s overall limit.`);
+        ? `Provider connection timed out: no data received for ${seconds} (stream stalled)`
+        : `Provider request timed out after ${seconds} without completing`);
   }
 }
 
@@ -70,7 +82,8 @@ export type StreamDeadline = {
   touch(): void;
   /**
    * Resolves or rejects as `promise` does, unless a deadline fires first, in which case it rejects
-   * with the timeout. Guards against a transport that ignores its abort signal.
+   * with the timeout. Guards against a transport that ignores its abort signal. A parent (user)
+   * abort is left to the transport, so the caller sees the transport's own cancellation error.
    */
   race<T>(promise: Promise<T>): Promise<T>;
   /** Yields `stream`'s items, touching the deadline for each and racing every `next()`. */
@@ -169,4 +182,21 @@ export function createStreamDeadline(options: Partial<StreamTimeouts> & { signal
     wrap,
     dispose() { disposed = true; clear(); waiters.clear(); },
   };
+}
+
+/**
+ * Runs `run` under a fresh deadline at the call boundary, for a transport this code does not own
+ * (an injected call) or a deadline that must differ per attempt. A deadline that fired is reported
+ * as itself: the SDK's own abort error would read as "you cancelled", which is not what happened.
+ */
+export async function withStreamDeadline<T>(timeouts: Partial<StreamTimeouts>, signal: AbortSignal | undefined, run: (deadline: StreamDeadline) => Promise<T>): Promise<T> {
+  const deadline = createStreamDeadline({ ...timeouts, ...(signal ? { signal } : {}) });
+  try {
+    return await run(deadline);
+  } catch (error) {
+    if (deadline.timedOut) throw deadline.timedOut;
+    throw error;
+  } finally {
+    deadline.dispose();
+  }
 }
