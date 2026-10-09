@@ -23,6 +23,12 @@ describe("the startup reliability signal", () => {
     expect(renderReliabilityStatus(100, "·", { ...snapshot, provider: undefined })).toBe("");
   });
 
+  it("shows nothing at all when the build ships no measurement", () => {
+    // The default is deliberately empty: the old bundled report scored a provider this build
+    // removed, and a dated score for a model the user cannot run is worse than no score.
+    expect(renderReliabilityStatus(100, "·")).toBe("");
+  });
+
   it("keeps the useful signal in a narrow terminal", () => {
     const rendered = renderReliabilityStatus(40, ".", snapshot);
     expect(rendered).toBe("benchmark 98/100 . 2026-08-23");

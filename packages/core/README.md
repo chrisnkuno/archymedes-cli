@@ -9,7 +9,7 @@ npm install @archymedes/core
 ## What's in it
 
 - **`BoundedAgentRuntime`** — a tool-use loop that turns a list of `AgentTool`s and an `AgentTurnProvider` into a bounded, event-driven run. Emits `assistant_delta` events as the model streams text, so a caller can render output live instead of waiting for a full turn.
-- **Model adapters** — `resolveProvider()` / `PROVIDERS` give you Anthropic, OpenAI and arbitrary OpenAI-compatible endpoints, CircuitNotion, and local Ollama behind one interface. CircuitNotion defaults to `circuit-2-turbo`.
+- **Model adapters** — `resolveProvider()` / `PROVIDERS` give you Anthropic, OpenAI, OpenRouter, Google Gemini, xAI, DeepSeek, Mistral, Groq, local Ollama, any OpenAI-compatible endpoint, and the zero-priced `free` provider behind one interface.
 - **`ArchymedesAgent`** — the higher-level agent Archymedes's CLI runs: wires the runtime to a workspace, a permission ledger, checkpoints, and a todo list.
 - **Workspace backends** — `LocalWorkspace` runs against a real directory; `E2BWorkspace` and `DockerWorkspace` run the same contracts in remote or local isolation (`e2b` is optional).
 - **`PermissionLedger`** — per-tool approval state for `plan`, `build`, `auto`, and `defender`, so callers do not reimplement the safety posture.

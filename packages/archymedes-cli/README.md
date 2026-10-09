@@ -35,7 +35,7 @@ archymedes update                 Check and install the latest published CLI
 archymedes update --check         Check without changing the installed version
 ```
 
-With a CircuitNotion key, Archymedes defaults to `circuit-2-turbo`. `/models refresh` asks configured
+`/models refresh` asks configured
 providers for their current catalog; ordinary `/models` uses the cache so opening a menu does not
 wait on the network. Slash commands belong inside an interactive session. Passing one as a one-shot
 objective is rejected before model contact, preventing an invocation mistake from becoming a paid
@@ -58,9 +58,50 @@ The menu is navigable with the arrow keys — Up/Down, PageUp/PageDown, Home/End
 Settings use the native per-user config directory on Windows, macOS, and Linux. Secret values are masked in the menu and the file is written with user-only permissions where the operating system supports POSIX modes. Environment variables always override saved settings, which keeps CI and one-off shell configuration predictable.
 
 ```bash
-export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY, or CIRCUITNOTION_API_KEY
+export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, ...
 archymedes --providers                    # shows exactly what's set and what's missing
 ```
+
+### Providers
+
+| Provider | Select with | Needs | Default model |
+| --- | --- | --- | --- |
+| Anthropic | `--provider anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-5.6-terra` |
+| OpenRouter | `--provider openrouter` | `OPENROUTER_API_KEY` | `openrouter/auto` |
+| Google Gemini | `--provider google` | `GOOGLE_API_KEY` | `gemini-2.5-pro` |
+| xAI Grok | `--provider xai` | `XAI_API_KEY` | `grok-4` |
+| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| Mistral | `--provider mistral` | `MISTRAL_API_KEY` | `mistral-large-latest` |
+| Groq | `--provider groq` | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| Ollama (local) | `--provider ollama` | — | `llama3.1` |
+| OpenAI-compatible | `--provider openai-compatible` | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | your choice |
+| Archymedes Cloud | `--provider archymedes-cloud` | `ARCHYMEDES_CLOUD_TOKEN` + `ARCHYMEDES_CLOUD_BASE_URL` | `auto` (not generally available) |
+| Free models | `--free` | see below | `openrouter/free` |
+
+`<PROVIDER>_MODEL` picks a different model; `<PROVIDER>_BASE_URL` points at a regional endpoint or
+proxy. `archymedes --providers` prints what is set and what is missing.
+
+### Free mode
+
+`archymedes --free` runs on zero-priced OpenRouter models and **never falls back to a paid
+provider**. Only `openrouter/free` or an exact `publisher/model:free` id that OpenRouter's own live
+listing shows at zero price with tool support is accepted; every request carries a zero maximum
+price with provider fallbacks disabled, and a response reporting a nonzero cost is refused before
+any tool runs.
+
+It needs one of two things, and **this build ships with neither configured**:
+
+- `OPENROUTER_API_KEY` — your own free key from [openrouter.ai/keys](https://openrouter.ai/keys).
+  Requests go straight to OpenRouter. In a terminal, `archymedes` walks you through creating one on
+  first run.
+- `ARCHYMEDES_FREE_GATEWAY_URL` — a [free gateway](https://github.com/chrisnkuno/archymedes-cli/tree/main/packages/free-gateway)
+  you or someone else runs, which holds the key server-side. Your own key is never sent to it.
+
+There is no hosted public gateway yet, so free mode is not keyless today: without one of the two
+above it prints setup instructions and exits rather than starting a session it cannot run. Free
+endpoints may log or train on what they are sent — don't send secrets, and use a paid provider for
+private code.
 
 Anthropic models are priced in this build, so costs are reported without further setup. For any other model, set its published rate — otherwise Archymedes reports `cost unknown` rather than inventing a number:
 

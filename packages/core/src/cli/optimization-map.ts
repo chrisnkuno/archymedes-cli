@@ -67,8 +67,24 @@ export type OptimizationTarget = {
   /** What to do when the budget is broken. Written for whoever — or whatever — reads it next. */
   remediation: string;
   /** Absent means not yet automatable; the target still appears, reported as unmeasured. */
-  measure?: (context: ProbeContext) => Promise<number>;
+  measure?: (context: ProbeContext) => Promise<Measurement>;
 };
+
+/**
+ * What a probe returns: a number, or a number that knows which budget it should be judged against.
+ *
+ * The second form exists because a probe can measure a genuinely different thing depending on the
+ * machine it runs on, and judging both against one number is how a map reports a regression that
+ * did not happen. `cli.grep-latency` is the case that forced it: `grepWorkspace` shells out to
+ * ripgrep when it is installed and walks the tree in JavaScript when it is not, and those are not
+ * the same operation — the 250ms budget was measured with ripgrep present, so on a machine without
+ * it the probe failed for a reason no change to this repository could fix, while a real regression
+ * in whichever path was *not* taken stayed invisible.
+ *
+ * A probe returning a budget is saying "here is what I actually measured, and here is the bound
+ * that applies to it". `detail` names the variant, so a failure says which one.
+ */
+export type Measurement = number | { value: number; budget?: { max?: number; min?: number }; detail?: string };
 
 export type ProbeContext = {
   /** A real project to measure against. The repository root when a probe needs one. */
@@ -80,6 +96,8 @@ export type ProbeResult = {
   status: "pass" | "fail" | "unmeasured" | "error";
   measured?: number;
   detail?: string;
+  /** The bound actually applied — the target's, unless the probe narrowed it to what it measured. */
+  budget?: { max?: number; min?: number };
 };
 
 /** Rough tokens for a length of prose, at this repository's measured 2.98 characters per token. */
@@ -647,7 +665,17 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
       // These probes share a machine with the full test suite. The fastest warm sample represents
       // the implementation; a one-off scheduler or disk-contention stall does not. A structural
       // regression is slow on every sample and still crosses the deliberately coarse budget.
-      return Math.min(...samples);
+      const value = Math.min(...samples);
+      // Same code, different syscall cost. This walk is thousands of `readdir`/`stat` calls, and on
+      // Windows each one is far more expensive than on the Linux machine the 60ms budget was
+      // measured on: the same 662-file tree measured 60.2/60.5/61.1/61.8/64.2/64.8ms there
+      // (2026-10-09, min-of-3 across six runs) — tightly clustered, so a platform floor rather than
+      // load. 250ms is roughly 4x that worst sample, so it is not tuned to one machine, and it still
+      // catches both regressions the remediation names: serial readdir or a generated directory
+      // escaping `ignoredDirectories` each cost an order of magnitude, not 20%.
+      return process.platform === "win32"
+        ? { value, budget: { max: 250 }, detail: "win32 — filesystem metadata calls cost roughly an order of magnitude more than on the machine the default budget was measured on" }
+        : value;
     },
   },
   {
@@ -663,7 +691,16 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     remediation:
       "Three things got it here and any of them regressing shows up as this number: generated directories excluded from ignoredDirectories (coverage/ alone was 30% of every byte read), files read concurrently rather than one at a time, and a raw Buffer.indexOf prefilter that rules a file out before decoding it into a line array (~3x the file's size, allocated and thrown away).",
     measure: async ({ root }) => {
-      const { grepWorkspace } = await import("./workspace");
+      const { grepWorkspace, findRipgrep } = await import("./workspace");
+      // Which backend answered decides which budget applies. `grepWorkspace` shells out to ripgrep
+      // when it is on PATH and walks the tree in JavaScript when it is not; the 250ms budget above
+      // was measured with ripgrep present. Measured here without it (Windows, 2026-10-09): min-of-3
+      // came out 160/257/316/332/476ms across five runs — the fallback is simply a different, much
+      // heavier operation, not a regression, so it gets its own measured bound. 1,000ms leaves
+      // roughly 2x headroom over the worst of those while still catching the regressions the
+      // remediation names: losing the concurrent reads or the Buffer.indexOf prefilter multiplies
+      // this number rather than nudging it.
+      const ripgrep = await findRipgrep();
       await grepWorkspace(root, "compactionUrgency", {});
       const samples: number[] = [];
       for (let sample = 0; sample < 3; sample += 1) {
@@ -671,7 +708,10 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
         await grepWorkspace(root, "compactionUrgency", {});
         samples.push(performance.now() - started);
       }
-      return Math.min(...samples);
+      const value = Math.min(...samples);
+      return ripgrep
+        ? { value, detail: `ripgrep at ${ripgrep}` }
+        : { value, budget: { max: 1_000 }, detail: "JavaScript fallback — ripgrep is not on PATH, so this is the heavier of the two search paths" };
     },
   },
   {
@@ -687,6 +727,31 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
 ];
 
 /** Runs every measurable target against the live code. Never throws: a probe that fails is a result. */
+/**
+ * One measurement against its budget.
+ *
+ * Exported so the only place this comparison exists is here. The test suite used to hold a second
+ * copy, which is how it came to disagree with the runner the moment probes could narrow their own
+ * budget — the duplicated two-line comparison is exactly the kind of drift the map itself is
+ * written to catch elsewhere.
+ */
+export function judgeMeasurement(target: OptimizationTarget, raw: Measurement): ProbeResult {
+  const measurement = typeof raw === "number" ? { value: raw } : raw;
+  // A probe that narrowed its own budget measured something the target's static bound does not
+  // describe; judging it against that bound would report a regression that did not happen.
+  const budget = measurement.budget ?? target.budget;
+  const measured = measurement.value;
+  const tooHigh = budget.max !== undefined && measured > budget.max;
+  const tooLow = budget.min !== undefined && measured < budget.min;
+  return {
+    target,
+    status: tooHigh || tooLow ? "fail" : "pass",
+    measured,
+    budget,
+    ...(measurement.detail ? { detail: measurement.detail } : {}),
+  };
+}
+
 export async function runOptimizationProbes(context: ProbeContext, only?: readonly string[]): Promise<ProbeResult[]> {
   const selected = only?.length ? OPTIMIZATION_TARGETS.filter((target) => only.includes(target.id)) : OPTIMIZATION_TARGETS;
   const results: ProbeResult[] = [];
@@ -696,10 +761,7 @@ export async function runOptimizationProbes(context: ProbeContext, only?: readon
       continue;
     }
     try {
-      const measured = await target.measure(context);
-      const tooHigh = target.budget.max !== undefined && measured > target.budget.max;
-      const tooLow = target.budget.min !== undefined && measured < target.budget.min;
-      results.push({ target, status: tooHigh || tooLow ? "fail" : "pass", measured });
+      results.push(judgeMeasurement(target, await target.measure(context)));
     } catch (error) {
       // An erroring probe is a broken probe, not a passing target. Saying so keeps the map honest.
       results.push({ target, status: "error", detail: error instanceof Error ? error.message : String(error) });

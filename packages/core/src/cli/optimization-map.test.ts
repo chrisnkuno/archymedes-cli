@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   OPTIMIZATION_TARGETS,
   describeBudget,
+  judgeMeasurement,
   runOptimizationProbes,
   type OptimizationTarget,
   type ProbeResult,
@@ -20,7 +21,16 @@ import {
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 function describeFailure(result: ProbeResult): string {
-  return `${result.target.id}: measured ${result.measured}, budget ${describeBudget(result.target)}\n  → ${result.target.remediation}`;
+  // The applied budget, not the target's static one: a probe may narrow it to the variant it
+  // actually measured (see `Measurement`), and printing the wrong bound in the failure that
+  // reports it would send the reader after a regression that did not happen.
+  const applied = result.budget ?? result.target.budget;
+  const bound = applied === result.target.budget
+    ? describeBudget(result.target)
+    : [applied.max !== undefined ? `<= ${applied.max}` : "", applied.min !== undefined ? `>= ${applied.min}` : ""]
+      .filter(Boolean).join(" and ") + ` ${result.target.metric}`;
+  return `${result.target.id}: measured ${result.measured}, budget ${bound}`
+    + `${result.detail ? ` (${result.detail})` : ""}\n  → ${result.target.remediation}`;
 }
 
 describe("the optimization map", () => {
@@ -31,6 +41,18 @@ describe("the optimization map", () => {
     // A map where nothing is actually measured would pass this vacuously.
     expect(results.filter((result) => result.status === "pass").length).toBeGreaterThanOrEqual(8);
   });
+
+  it("judges a probe against the variant it actually measured", async () => {
+    // `cli.grep-latency` measures ripgrep when it is installed and the JavaScript walker when it is
+    // not — different operations with different costs. Before probes could narrow their own budget,
+    // a machine without ripgrep failed this target for a reason no change here could fix.
+    const [result] = await runOptimizationProbes({ root: repositoryRoot }, ["cli.grep-latency"]);
+    expect(result.status).toBe("pass");
+    expect(result.detail).toBeTruthy();
+    const applied = result.budget ?? result.target.budget;
+    const viaRipgrep = result.detail!.startsWith("ripgrep");
+    expect(applied.max).toBe(viaRipgrep ? result.target.budget.max : 1_000);
+  }, 120_000);
 
   it("describes every target well enough for someone to act on a failure", () => {
     for (const target of OPTIMIZATION_TARGETS) {
@@ -69,10 +91,13 @@ describe("the optimization map", () => {
   });
 });
 
-/** Runs one ad-hoc target through the same code path the registry uses. */
+/**
+ * Runs one ad-hoc target through the same comparison the registry uses.
+ *
+ * `judgeMeasurement` is imported rather than reimplemented: this helper used to carry its own copy
+ * of the two-line budget check, and that copy silently stopped matching the runner the moment a
+ * probe could narrow its own budget.
+ */
 async function runProbeDirectly(target: OptimizationTarget): Promise<ProbeResult[]> {
-  const measured = await target.measure!({ root: repositoryRoot });
-  const tooHigh = target.budget.max !== undefined && measured > target.budget.max;
-  const tooLow = target.budget.min !== undefined && measured < target.budget.min;
-  return [{ target, status: tooHigh || tooLow ? "fail" : "pass", measured }];
+  return [judgeMeasurement(target, await target.measure!({ root: repositoryRoot }))];
 }

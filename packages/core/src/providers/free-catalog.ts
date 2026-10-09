@@ -19,7 +19,21 @@ export const FREE_BASE_URL = "https://openrouter.ai/api/v1";
  */
 export const FREE_GATEWAY_URL = "";
 export const FREE_DISCOVERY_URL = "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json";
-export const FREE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * How long a fetched eligibility listing is reused before it is fetched again.
+ *
+ * One hour, which is the cadence the sources themselves move at: the free gateway refreshes its own
+ * model list hourly (`DEFAULT_CATALOG_TTL_MS` in `packages/free-gateway/src/catalog.ts`), so a
+ * client holding six hours of cache — which this was — could serve a candidate list five hours
+ * staler than the server it got it from, offering models that had since stopped qualifying. The
+ * desktop's port already used an hour; the two are now one documented policy rather than two
+ * numbers that drifted apart.
+ *
+ * This is a freshness budget, never a safety one. Eligibility is re-asserted on the wire for every
+ * single request (zero `max_price`, no fallbacks, and a nonzero reported cost refuses the turn
+ * before any tool runs), so a stale cache can cost a wasted candidate attempt and never a charge.
+ */
+export const FREE_CATALOG_TTL_MS = 60 * 60 * 1000;
 export const FREE_CATALOG_MAX_RECORDS = 10_000;
 /**
  * Order the free router tries verified candidates in. Probed 2026-09-15 with a real tool call:

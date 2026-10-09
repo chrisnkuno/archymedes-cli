@@ -2,8 +2,10 @@
  * Free mode's token meter: how much of today's allowance this machine has spent, and what the
  * gateway says is left.
  *
- * The hosted free gateway grants each install a fixed daily token allowance (100,000 tokens and 25
- * requests by default), and an agent turn is several requests, each resending the whole
+ * The hosted free gateway grants each install a fixed daily allowance — 100,000 tokens and 300
+ * requests by default (`FREE_GATEWAY_INSTALL_TOKENS_PER_DAY` / `_INSTALL_PER_DAY`, with a 20/minute
+ * burst cap); tokens are the budget that actually binds, and the request caps only stop a runaway
+ * client. An agent turn is several requests, each resending the whole
  * conversation. Without a meter the first sign of the limit is the 429 that ends the day's work, so
  * two independent numbers are kept:
  *

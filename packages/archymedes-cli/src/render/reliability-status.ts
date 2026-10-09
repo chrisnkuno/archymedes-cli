@@ -1,4 +1,3 @@
-import bundledEvidence from "../../../../reliability/latest.json";
 import { isProviderId } from "@archymedes/core/providers/provider-specs";
 import { clipTo } from "../text/text-width";
 
@@ -11,7 +10,21 @@ export type ReliabilitySnapshot = {
   model?: string;
 };
 
-export const BUNDLED_RELIABILITY = bundledEvidence as ReliabilitySnapshot;
+/**
+ * The measurement this build ships with: none.
+ *
+ * `reliability/latest.json` used to be imported here. It scored `circuitnotion`, a provider this
+ * build no longer has, so `renderReliabilityStatus` already refused to print it — leaving a
+ * 91/100 in the tree that nothing could display and nothing could regenerate, since no script
+ * writes this artifact. A dated score for a model the user cannot run is worse than no score, so
+ * the file is gone and the absence is stated here instead of implied by a filter.
+ *
+ * To ship one again: measure a *shipped* provider with `scoreReliability`
+ * (`@archymedes/core/cli/reliability`), put the report back under `reliability/`, and import it
+ * here. The guard in `renderReliabilityStatus` stays either way — it is what stops a future
+ * measurement on a since-removed provider from being shown at startup.
+ */
+export const BUNDLED_RELIABILITY: ReliabilitySnapshot = { score: NaN, grade: "unmeasured", generatedAt: "" };
 
 /**
  * A release-baked trust signal: instant and offline, with a date so it can never pose as live data.

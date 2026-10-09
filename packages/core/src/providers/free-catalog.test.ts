@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FREE_CATALOG_MAX_RECORDS, isFreeModelId, mergeFreeCatalog, parseFreeDiscovery, parseFreeOpenRouterModels } from "./free-catalog";
+import { FREE_CATALOG_MAX_RECORDS, FREE_CATALOG_TTL_MS, isFreeModelId, mergeFreeCatalog, parseFreeDiscovery, parseFreeOpenRouterModels } from "./free-catalog";
+import { DEFAULT_CATALOG_TTL_MS } from "../../../free-gateway/src/catalog";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
 
 const row = { id: "lab/code:free", name: "Code", context_length: 65536, top_provider: { max_completion_tokens: 8192 },
@@ -40,6 +41,18 @@ describe("free catalog policy", () => {
     for (const source of ["http://openrouter.ai/x", "https://openrouter.ai.evil/x", "https://secret@openrouter.ai/x", "file:///etc/passwd"]) {
       expect(parseFreeDiscovery({ models: [{ ...item, source }] })).toEqual([]);
     }
+  });
+});
+
+describe("the catalog freshness budget", () => {
+  it("never holds a listing longer than the gateway takes to refresh its own", () => {
+    // A client cache staler than its source offers models that have stopped qualifying. The two
+    // were 6h (CLI) and 1h (gateway) and drifted apart unnoticed because nothing compared them.
+    expect(FREE_CATALOG_TTL_MS).toBeLessThanOrEqual(DEFAULT_CATALOG_TTL_MS);
+  });
+
+  it("is a freshness budget, not a spending one — an hour, not a day", () => {
+    expect(FREE_CATALOG_TTL_MS).toBe(60 * 60 * 1000);
   });
 });
 
