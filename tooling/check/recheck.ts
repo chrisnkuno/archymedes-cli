@@ -38,7 +38,9 @@ const current = collectMetrics(REPO, sectionConfig.sourceRoot, sectionConfig.all
 {
   const allow = JSON.parse(readFileSync(path.join(HERE, "unwired-allow.json"), "utf8")) as Record<string, string>;
   const sources = readTree(path.join(REPO, sectionConfig.sourceRoot));
-  const consumers = Object.values(readTree(path.join(REPO, "tooling/dev")));
+  // Dev scripts that use source exports count as consumers; the folder may not exist.
+  const devTools = path.join(REPO, "tooling/dev");
+  const consumers = existsSync(devTools) ? Object.values(readTree(devTools)) : [];
   const unwired = findUnwiredExports(sources, consumers, new Set(Object.keys(allow)));
   current.unwired = Object.fromEntries(Object.entries(unwired).map(([file, names]) => [`${sectionConfig.sourceRoot}/${file}`, names.length]));
   if (args.has("--unwired")) for (const [file, names] of Object.entries(unwired)) console.log(`  unwired ${file}: ${names.join(", ")}`);

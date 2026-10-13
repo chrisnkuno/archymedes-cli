@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 // The npm launcher's decision logic; it ships in packages/archymedes-cli/bin, where a test file
 // would be published, so its tests live here.
-import { fallbackNotice, PUBLISHED_PLATFORMS, resolveInterface } from "../../packages/archymedes-cli/bin/launcher.mjs";
+import { missingInterfaceNotice, PUBLISHED_PLATFORMS, resolveInterface } from "../../packages/archymedes-cli/bin/launcher.mjs";
 import { TARGETS } from "./build-go";
 
 const join = path.posix.join;
@@ -18,15 +18,20 @@ describe("npm launcher", () => {
     // The 3.0.0 launch: npm asked for the package before the registry served it, and skipped it.
     const missing = resolveInterface({ platform: "linux", arch: "x64", resolvePackage: () => undefined, exists: () => true, join });
     expect(missing).toEqual({ reason: "not-installed", packageName: "@archymedes/cli-linux-x64" });
-    expect(fallbackNotice(missing, "linux", "x64").join("\n")).toMatch(/was not installed[\s\S]*npm install -g archymedes-cli@latest/);
+    expect(missingInterfaceNotice(missing, "linux", "x64").join("\n")).toMatch(/was not installed[\s\S]*npm install -g archymedes-cli@latest/);
 
     const empty = resolveInterface({ platform: "darwin", arch: "arm64", resolvePackage: () => "/d", exists: () => false, join });
     expect(empty).toMatchObject({ reason: "missing-binary" });
-    expect(fallbackNotice(empty, "darwin", "arm64").join("\n")).toContain("Fix:");
+    expect(missingInterfaceNotice(empty, "darwin", "arm64").join("\n")).toContain("Fix:");
 
     const unsupported = resolveInterface({ platform: "freebsd", arch: "x64", resolvePackage: () => "/never", exists: () => true, join });
     expect(unsupported).toMatchObject({ reason: "unsupported" });
-    expect(fallbackNotice({ reason: "start-failed", detail: "EACCES" }, "linux", "x64").join("\n")).toContain("EACCES");
+    expect(missingInterfaceNotice({ reason: "start-failed", detail: "EACCES" }, "linux", "x64").join("\n")).toContain("EACCES");
+    // Every case says the same about what still works, and none promises a substitute interface.
+    for (const notice of [missing, empty, unsupported].map((r) => missingInterfaceNotice(r, "linux", "x64").join("\n"))) {
+      expect(notice).toContain("only non-interactive modes work");
+      expect(notice).not.toMatch(/bundled (one|interface)/);
+    }
   });
 
   it("honours an explicit binary, and publishes exactly the platforms the build produces", () => {

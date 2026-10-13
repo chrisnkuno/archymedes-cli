@@ -12,7 +12,6 @@ export type ParsedArgs = {
   /** Speak the Agent Client Protocol on stdio instead of running a terminal session. */
   acp: boolean;
   /** Draw every UI component once and exit, for looking at rendering rather than behaviour. */
-  gallery: boolean;
   prompt: string | null;
   resume: string | null;
   /**
@@ -116,14 +115,13 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     update: updateRequested, checkUpdate: false, updateYes: false, packageManager: undefined, version: false, settings: settingsRequested, estimateOnly: false,
     root: process.cwd(), help: false, pace: "off", ascii: false, theme: undefined, pin: false,
     acp: acpRequested,
-    gallery: argv[0] === "gallery" || argv.includes("--gallery"),
     backend: "local", dockerImage: DEFAULT_DOCKER_IMAGE, upload: false, preset: undefined, sandboxMinutes: 30, budget: undefined, provider: undefined, model: undefined, currency: undefined, country: undefined, language: undefined, allowSensitive: false, json: false,
   };
   const rest: string[] = [];
   let freeRequested = false;
   let otherProviderRequested = false;
 
-  for (let index = argv[0] === "update" || argv[0] === "settings" || argv[0] === "acp" || argv[0] === "gallery" || argv[0] === "doctor" || historyRequested ? 1 : 0; index < argv.length; index += 1) {
+  for (let index = argv[0] === "update" || argv[0] === "settings" || argv[0] === "acp" || argv[0] === "doctor" || historyRequested ? 1 : 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--plan" || argument === "-p") { parsed.mode = "plan"; parsed.modeExplicit = true; }
     else if (argument === "--auto" || argument === "-y") { parsed.mode = "auto"; parsed.modeExplicit = true; }
@@ -134,7 +132,6 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     else if (argument === "--version" || argument === "-v") parsed.version = true;
     else if (argument === "--settings") parsed.settings = true;
     else if (argument === "--acp") parsed.acp = true;
-    else if (argument === "--gallery") parsed.gallery = true;
     else if (argument === "--estimate") parsed.estimateOnly = true;
     else if (argument === "--allow-sensitive") parsed.allowSensitive = true;
     else if (argument === "--json" || argument === "--headless") parsed.json = true;

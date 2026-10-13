@@ -51,8 +51,6 @@ ${style.bold(t(language, "help.running"))}
 
 ${style.bold(t(language, "help.files"))}
   archymedes acp                  Speak the Agent Client Protocol on stdio (for editors)
-  archymedes gallery              Draw every UI component once, to see how this terminal renders it
-  archymedes gallery all          The same, plus the ASCII, no-colour and narrow fallbacks
   archymedes --sandbox            Work in a remote E2B sandbox, not on this machine
   archymedes --sandbox docker     Work in a local Docker container instead of a remote one
   archymedes --docker-image IMG   Image for --sandbox docker (or set DOCKER_CODING_IMAGE)

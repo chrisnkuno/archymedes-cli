@@ -1,6 +1,5 @@
 import path from "node:path";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
-import { screen } from "./transcript";
 import { resolveSessionProvider } from "./session-provider";
 import { createExaClient } from "@archymedes/core/providers/exa";
 import { loadSettings, mergedEnvironment } from "../platform/settings";

@@ -1,5 +1,5 @@
 // What `archymedes` runs, decided before anything is drawn: the Go interface for this platform, or
-// the bundled TypeScript interface with the reason why. Pure apart from the lookups passed in, so
+// — where it cannot be used — the bundled agent alone, which still serves every non-interactive mode. Pure apart from the lookups passed in, so
 // every outcome is testable without installing anything (tooling/build/launcher.test.ts).
 
 /** The platforms a Go interface is published for, as `${process.platform}-${process.arch}`. */
@@ -26,25 +26,28 @@ export function resolveInterface({ platform, arch, override, resolvePackage, exi
 }
 
 /**
- * Why the bundled interface is running instead, and the one command that fixes it — said before
- * it starts and again after it exits, because a full-screen interface hides whatever was printed
- * before it took the screen.
+ * Why there is no interactive interface, the one command that fixes it, and what still works.
+ *
+ * The bundled agent shows it only when someone asks it for the interface (no request): a one-shot
+ * run, `--json` or `settings` work the same with or without the binary, so they say nothing.
  */
-export function fallbackNotice(resolution, platform, arch) {
+export function missingInterfaceNotice(resolution, platform, arch) {
   const reinstall = "npm install -g archymedes-cli@latest";
+  const works = `  Without it, only non-interactive modes work: archymedes "your request", --json, settings, history, doctor, update.`;
   switch (resolution.reason) {
     case "unsupported":
-      return [`archymedes: no Go interface is published for ${platform}-${arch}; using the bundled one.`];
+      return [`archymedes: no interactive interface is published for ${platform}-${arch}.`, works];
     case "not-installed":
       return [
-        `archymedes: the Go interface (${resolution.packageName}) was not installed, so the bundled one is running.`,
+        `archymedes: the interactive interface (${resolution.packageName}) was not installed.`,
         `  npm skips it when optional dependencies are off, or when the install ran before it reached the registry.`,
         `  Fix: ${reinstall}`,
+        works,
       ];
     case "missing-binary":
-      return [`archymedes: ${resolution.packageName} is installed without its binary; using the bundled interface.`, `  Fix: ${reinstall}`];
+      return [`archymedes: ${resolution.packageName} is installed without its binary.`, `  Fix: ${reinstall}`, works];
     case "start-failed":
-      return [`archymedes: the Go interface could not start (${resolution.detail}); using the bundled one.`, `  Fix: ${reinstall}`];
+      return [`archymedes: the interactive interface could not start (${resolution.detail}).`, `  Fix: ${reinstall}`, works];
     default:
       return [];
   }

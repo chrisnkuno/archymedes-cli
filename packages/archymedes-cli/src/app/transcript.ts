@@ -2,9 +2,7 @@ import path from "node:path";
 import { type ArchymedesEvent } from "@archymedes/core/cli/agent";
 import type { ModelAllowance } from "@archymedes/core/agent-runtime";
 import { detectColorDepth } from "../text/color-depth";
-import { WorkspaceFrame } from "../ui/workspace-frame";
 import { box, MarkdownStream, ReplaceableBlock, Spinner, StatusBar, table, wrapPlain } from "../render/tui";
-import { PinnedScreen } from "../terminal/screen";
 import { describeToolCall, summarizeToolResult } from "../render/transcript";
 import { OutputRouter, terminalStream } from "../terminal/output";
 import { RESET } from "../text/ansi";
@@ -95,9 +93,8 @@ export const statusBar = new StatusBar();
 export const toolLines = new ReplaceableBlock(out);
 export let markdown = new MarkdownStream(out, "none");
 export let spinner: Spinner | undefined;
-export let screen: PinnedScreen | undefined;
 export const sessionStream = {
-  write: (text: string) => screen instanceof WorkspaceFrame ? screen.write(text) : terminalStream.write(text),
+  write: (text: string) => terminalStream.write(text),
   get columns() { return process.stdout.columns; },
   get rows() { return process.stdout.rows; },
 };
@@ -113,9 +110,9 @@ export let renderDepth: ReturnType<typeof detectColorDepth> = "none";
 /** Folded blocks from this session, addressable by `/expand`. */
 export const expandables = new ExpandableStore();
 
-/** Wrapping width for prose: the pinned screen's golden-ratio-capped measure, or the raw terminal otherwise. */
+/** Wrapping width for prose: the terminal's. */
 export function contentWidth(): number {
-  return screen?.current.contentWidth ?? (process.stdout.columns ?? 80);
+  return process.stdout.columns ?? 80;
 }
 /**
  * A one-line note, word-wrapped to the terminal with its continuation lines aligned under the text.
@@ -125,7 +122,7 @@ export function contentWidth(): number {
  * word boundaries before writing, with a hanging indent, keeps them readable at any width.
  */
 export function wrapNote(lead: string, text: string): string {
-  const columns = screen?.current.columns ?? process.stdout.columns ?? 80;
+  const columns = process.stdout.columns ?? 80;
   const indent = " ".repeat(visibleWidth(lead));
   const lines = wrapPlain(text, Math.max(20, columns - indent.length - 1));
   return lines.map((line, index) => `${index === 0 ? lead : indent}${line}`).join("\n");
@@ -556,10 +553,6 @@ export function renderEvent(event: ArchymedesEvent): void {
 
 export function setSpinner(next: Spinner | undefined): void {
   spinner = next;
-}
-
-export function setScreen(next: PinnedScreen | undefined): void {
-  screen = next;
 }
 
 /** Per-turn counters, and a clean markdown state: an unclosed code fence from the last answer must not colour the next one as code. */

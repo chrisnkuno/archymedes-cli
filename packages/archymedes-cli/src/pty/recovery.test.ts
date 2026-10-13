@@ -14,10 +14,9 @@ import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
  * file is the other kind: the connection drops with bytes still owed, the process is killed with a
  * signal it cannot catch, a turn ends halfway through its tool calls. The measure is not what the
  * model finally said — it is whether an effect happened exactly once and whether the next session
- * is usable. Everything runs against the local SSE stub over a real socket.
+ * is usable. Each turn is a one-shot run of the agent against the local SSE stub over a real socket.
  */
 
-const PROMPT = /›|auto >/;
 const plain = (value: string) => value.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
 
 describe("recovery from an unclean failure", () => {
@@ -64,16 +63,12 @@ describe("recovery from an unclean failure", () => {
   }
 
   it("retries within the turn when the model connection drops mid-stream, without doubling the partial answer", async () => {
-    const p = boot();
-    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
-
     stub.enqueue({ kind: "disconnect", text: "the first half of a sentence" });
     stub.enqueue({ kind: "text", text: "the whole answer, delivered on the retry" });
 
-    const mark = p.output().length;
-    p.writeLine("answer the question");
-    await p.waitFor(/the whole answer, delivered on the retry/, { timeoutMs: 30_000, since: mark });
-    await p.waitFor(PROMPT, { timeoutMs: 15_000, since: mark });
+    const p = boot({ args: ["answer the question"] });
+    await p.waitFor(/the whole answer, delivered on the retry/, { timeoutMs: 30_000 });
+    expect((await p.waitForExit(20_000)).exitCode).toBe(0);
 
     const screen = plain(p.output());
     // The drop is surfaced as a bounded retry, not a crash and not a silent stall.
@@ -83,23 +78,14 @@ describe("recovery from an unclean failure", () => {
     // The abandoned partial is not stitched in front of the retry's answer.
     expect((screen.match(/the first half of a sentence/g) ?? []).length).toBeLessThanOrEqual(1);
 
-    // Usable afterwards: a fresh turn completes.
-    stub.enqueue({ kind: "text", text: "and a later turn still works" });
-    const after = p.output().length;
-    p.writeLine("one more");
-    await p.waitFor(/and a later turn still works/, { timeoutMs: 30_000, since: after });
   }, 90_000);
 
   it("keeps a tool's effect exactly once when the process is killed before the turn ends", async () => {
-    const first = boot();
-    await first.waitFor(PROMPT, { timeoutMs: 30_000 });
-
     stub.enqueue({ kind: "tool_call", toolName: "write_file", input: { path: "out.txt", content: "written once\n" } });
     // The model's closing message is deliberately never queued: the turn is still in flight when
     // the signal lands.
-    const mark = first.output().length;
-    first.writeLine("write out.txt");
-    await first.waitFor(/new file|out\.txt/, { timeoutMs: 30_000, since: mark });
+    const first = boot({ args: ["write out.txt"] });
+    await first.waitFor(/new file|out\.txt/, { timeoutMs: 30_000 });
 
     // Wait until the write has actually reached disk, then kill hard with the turn still open
     // (no closing model message was ever queued).
@@ -128,42 +114,16 @@ describe("recovery from an unclean failure", () => {
     expect(await readFile(target, "utf8")).toBe("written once\n");
 
     // The turn is saved after each tool step, so `--resume` finds this interrupted turn — request,
-    // tool call and result — rather than depending on when the signal landed. The CLI comes back to
-    // a usable prompt, does not re-apply the write, and takes a new turn with that history.
-    // `latest` explicitly: a bare `--resume` in a terminal opens the session picker instead.
-    const afterKill = boot({ args: ["--resume", "latest"] });
-    await afterKill.waitFor(PROMPT, { timeoutMs: 30_000 });
-    expect(await readFile(target, "utf8")).toBe("written once\n");
+    // tool call and result — rather than depending on when the signal landed. A resumed run does
+    // not re-apply the write, and takes a new turn with that history.
     stub.enqueue({ kind: "text", text: "recovered and responsive" });
-    const mark2 = afterKill.output().length;
-    afterKill.writeLine("are you there?");
-    await afterKill.waitFor(/recovered and responsive/, { timeoutMs: 30_000, since: mark2 });
+    const afterKill = boot({ args: ["--resume", "latest", "are you there?"] });
+    await afterKill.waitFor(/recovered and responsive/, { timeoutMs: 30_000 });
+    expect(await readFile(target, "utf8")).toBe("written once\n");
     const history = JSON.stringify(stub.requests().at(-1)?.messages ?? []);
     // The interrupted request and its tool work are in the resumed conversation. (Whether the note
     // closing it appears depends on whether the model's next step had also finished before the kill.)
     expect(history).toContain("write out.txt");
     expect(history).toContain("Wrote out.txt");
   }, 120_000);
-
-  it("does not hang when interrupted twice in quick succession mid-turn", async () => {
-    const p = boot();
-    await p.waitFor(PROMPT, { timeoutMs: 30_000 });
-
-    stub.enqueue({ kind: "text", text: "slow ".repeat(300), chunkSize: 8, chunkDelayMs: 200 });
-    const mark = p.output().length;
-    p.writeLine("stream slowly");
-    await p.waitFor(/slow slow/, { timeoutMs: 15_000, since: mark });
-
-    const interruptedAt = Date.now();
-    p.write("\x03");
-    p.write("\x03");
-    await p.waitFor(/interrupted/i, { timeoutMs: 8_000, since: mark });
-    await p.waitFor(PROMPT, { timeoutMs: 15_000, since: p.output().length });
-    expect(Date.now() - interruptedAt).toBeLessThan(4_000);
-
-    // Still a working prompt, not a wedged one under a readline artifact.
-    const afterPrompt = p.output().length;
-    p.writeLine("/help");
-    await p.waitFor(/Find your way around|\/palette/i, { timeoutMs: 10_000, since: afterPrompt });
-  }, 90_000);
 });

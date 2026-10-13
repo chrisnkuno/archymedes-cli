@@ -20,10 +20,27 @@ import type { ArchymedesSettings } from "../platform/settings";
 import type { resolveControlLanguage } from "../platform/i18n";
 import type { findTheme } from "../theme/theme-files";
 import type { NavContext } from "../ui/navigation";
+import type { SandboxBackend } from "../session/location";
+import type { TabSink } from "../terminal/output";
 
 export type SessionModel = ResolvedProvider["provider"];
 export type SessionSpec = ResolvedProvider["spec"];
 export type SessionPrices = ResolvedProvider["prices"];
+
+/** What one tab of work carries: its agent, spend, model and workspace. */
+export type TabPayload = {
+  agent: ArchymedesDaemonClient;
+  ledger: CostLedger;
+  mode: ArchymedesMode;
+  sink: TabSink;
+  provider: SessionModel;
+  spec: SessionSpec;
+  prices: SessionPrices;
+  modelId: string;
+  backend: SandboxBackend;
+  workspace: ArchymedesWorkspace;
+  ownsWorkspace: boolean;
+};
 export type Environment = Record<string, string | undefined>;
 
 export type SessionState = {

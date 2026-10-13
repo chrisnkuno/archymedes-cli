@@ -4,7 +4,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { eventJournalPath } from "@archymedes/core/cli/protocol";
 import { listSessions, loadSession, saveSession, sessionDirectory, type SessionRecord } from "@archymedes/core/cli/session";
-import { findRecentSession } from "../app/resume-offer";
 import { deleteAllSessions, deleteSession } from "./delete-session";
 
 const roots: string[] = [];
@@ -63,7 +62,7 @@ describe("deleting a past chat", () => {
 });
 
 describe("chats stay in their own project", () => {
-  it("never lists or offers a chat recorded against another project, even if its file is copied in", async () => {
+  it("never lists or loads a chat recorded against another project, even if its file is copied in", async () => {
     const here = await project();
     const elsewhere = await project();
     await saveSession(record(elsewhere, A, "a chat from another project"));
@@ -72,14 +71,5 @@ describe("chats stay in their own project", () => {
 
     expect(await listSessions(here)).toEqual([]);
     expect(await loadSession(here, A)).toBeNull();
-
-    // Even a stale index row naming it is not offered: ownership is checked against the snapshot.
-    const staleIndex = { sessions: async () => [{ sessionId: A, title: "a chat from another project", createdAt: null, updatedAt: Date.now(), revision: 0, eventCount: 1, lastSequence: 1, hasSnapshot: true, hasJournal: false }] };
-    const offered = await findRecentSession({
-      stateHistory: staleIndex,
-      listSessions: (limit) => listSessions(here, limit),
-      owns: async (id) => (await loadSession(here, id)) !== null,
-    });
-    expect(offered).toBeUndefined();
   });
 });

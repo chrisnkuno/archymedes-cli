@@ -1,11 +1,11 @@
 import { type Interface } from "node:readline/promises";
 import path from "node:path";
-import { FOLD_AFTER_LINES, activity, endStreamedLine, glyphs, markdown, out, renderEvent, screen, sectionStyle, spinner, statusBar, style } from "./transcript";
+import { FOLD_AFTER_LINES, activity, endStreamedLine, glyphs, markdown, out, renderEvent, sectionStyle, spinner, statusBar, style } from "./transcript";
 import { type DaemonApprovalRequest } from "@archymedes/core/cli/daemon";
 import type { ApprovalPattern, PermissionDecision } from "@archymedes/core/cli/permissions";
 import { type SafetyAssessment } from "@archymedes/core/cli/safety";
 import { type JevToolCheck } from "@archymedes/core/cli/jev";
-import { openChooser } from "../ui/shortcuts";
+import { openChooser } from "../ui/borrowed-keyboard";
 import { SETTING_CANCELLED, type SettingsPrompts } from "../platform/settings";
 import { renderFileChange } from "../render/code-view";
 

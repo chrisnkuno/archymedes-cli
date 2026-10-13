@@ -2,7 +2,6 @@ import { COMMANDS } from "../catalog/commands";
 import { terminalColumns, windowStart } from "./chooser";
 import { clipTo, visibleWidth } from "../text/text-width";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
-import type { KeypressEvent } from "../terminal/keybindings";
 
 /**
  * The command palette.
@@ -146,7 +145,8 @@ export function renderPalette(frame: PaletteFrame, options: PaletteOptions = {})
     : [queryLine, ...rendered, ...footer].join("\n");
 }
 
-export type PaletteKey = { str?: string; key: KeypressEvent };
+export type { PaletteKey } from "./borrowed-keyboard";
+import type { PaletteKey } from "./borrowed-keyboard";
 
 /**
  * Advances the palette one keystroke.

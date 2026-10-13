@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../catalog/commands";
 import { visibleWidth } from "../text/text-width";
 import { advanceChooser, filterItems, renderChooser, windowStart, type ChooserItem } from "./chooser";
-import { dropupWindow, renderDropup, type DropupEntry } from "./dropup";
-import { advanceModelPicker, buildPickerRows, filterPickerRows, renderModelPicker, type PickerRow } from "./model-picker";
 import { advancePalette, rankPaletteEntries, renderPalette, type PaletteEntry } from "./palette";
 import { advanceTable, renderTable, type TableRow } from "./table";
 import { DEFAULT_BINDINGS, parseChord, chordId, resolveBindings, type KeypressEvent } from "../terminal/keybindings";
@@ -45,26 +43,11 @@ const CHOOSER_ITEMS: ChooserItem<string>[] = [
   { value: "done", label: "Done", pinned: true },
 ];
 
-const DROPUP_ENTRIES: DropupEntry[] = [
-  { command: "/mode", description: "permission mode" },
-  { command: "/model", args: "<name>", description: "switch model" },
-  { command: "/models", description: "list models" },
-];
-
 const PALETTE_ENTRIES: PaletteEntry[] = [
   { command: "/undo", description: "revert the last turn" },
   { command: "/diff", description: "what changed" },
   { command: "/model", args: "<name>", description: "switch model" },
 ];
-
-const PICKER_ROWS: PickerRow[] = buildPickerRows({
-  choices: [
-    { provider: "anthropic", providerLabel: "Anthropic", model: "claude-sonnet-5", isProviderDefault: true, prices: undefined },
-    { provider: "anthropic", providerLabel: "Anthropic", model: "claude-opus-4-6", isProviderDefault: false, prices: undefined },
-    { provider: "openai", providerLabel: "OpenAI", model: "gpt-5.6-terra", isProviderDefault: true, prices: undefined },
-  ],
-  unconfigured: [{ provider: "groq", label: "Groq", missing: ["GROQ_API_KEY"] }],
-});
 
 const TABLE_ROWS: TableRow[] = [["a", "1"], ["b", "2"], ["c", "3"]];
 
@@ -96,27 +79,6 @@ describe("menu selection invariants", () => {
         const step = advanceChooser({ selected: 7, query: "" }, [], input, { filter: true });
         expect(step.state.selected).toBe(0);
         if (step.done) expect(step.done.index).toBeUndefined();
-      }
-    }
-  });
-
-  it("model picker: same guarantees, including the settings rows", () => {
-    const states = [
-      { selected: 0, query: "" },
-      { selected: 0, query: "zzz-no-match" },
-      { selected: 99, query: "" },
-      { selected: 3, query: "claude" },
-    ];
-    for (const start of states) {
-      for (const input of KEY_CORPUS) {
-        const step = advanceModelPicker({ ...start }, PICKER_ROWS, input);
-        const visible = filterPickerRows(PICKER_ROWS, step.state.query);
-        expect(inRange(step.state.selected, visible.length), `picker ${JSON.stringify(input)} from ${JSON.stringify(start)}`).toBe(true);
-        if (step.done?.result?.kind === "model") {
-          const wanted = step.done.result.choice.model;
-          const found = visible.some((row) => row.kind === "model" && row.choice.model === wanted);
-          expect(found, `picker choice ${wanted} for ${JSON.stringify(input)}`).toBe(true);
-        }
       }
     }
   });
@@ -183,23 +145,6 @@ describe("windowing invariants", () => {
     }
   });
 
-  it("dropupWindow never exceeds the list and pins an unbrowsed list to the top", () => {
-    for (let count = 0; count < 12; count += 1) {
-      for (const rows of [0, 1, 3, 8, 100]) {
-        const plain = dropupWindow(count, rows, undefined);
-        expect(plain.start).toBe(0);
-        expect(plain.length).toBeLessThanOrEqual(count);
-        for (let selected = 0; selected < count + 1; selected += 1) {
-          const window = dropupWindow(count, rows, selected);
-          expect(window.length).toBeLessThanOrEqual(count);
-          if (window.length > 0 && selected < count) {
-            expect(window.start).toBeLessThanOrEqual(selected);
-            expect(selected).toBeLessThan(window.start + window.length);
-          }
-        }
-      }
-    }
-  });
 });
 
 describe("render width invariants", () => {
@@ -211,23 +156,11 @@ describe("render width invariants", () => {
       for (const line of renderChooser({ selected: 2, query: "a" }, CHOOSER_ITEMS, { width, paint }).split("\n")) {
         expect(visibleWidth(line), `chooser w=${width}`).toBeLessThanOrEqual(width);
       }
-      for (const line of renderModelPicker(
-        { rows: filterPickerRows(PICKER_ROWS, ""), selected: 1 },
-        { width, current: { provider: "anthropic", model: "claude-sonnet-5" }, price: () => "$1.00", paint, query: "cl" },
-      ).split("\n")) {
-        expect(visibleWidth(line), `picker w=${width}`).toBeLessThanOrEqual(width);
-      }
       for (const line of renderPalette(
         { query: "mo", matches: rankPaletteEntries(PALETTE_ENTRIES, "mo"), selected: 5 },
         { width },
       ).split("\n")) {
         expect(visibleWidth(line), `palette w=${width}`).toBeLessThanOrEqual(width);
-      }
-      for (const line of renderDropup(DROPUP_ENTRIES, { width, maxRows: 8 })) {
-        expect(visibleWidth(line), `dropup w=${width}`).toBeLessThanOrEqual(width);
-      }
-      for (const line of renderDropup(DROPUP_ENTRIES, { width, maxRows: 8, selected: 99 })) {
-        expect(visibleWidth(line), `dropup-selected w=${width}`).toBeLessThanOrEqual(width);
       }
     }
   });
@@ -237,7 +170,6 @@ describe("filter invariants", () => {
   it("an empty query returns everything in order", () => {
     expect(filterItems(CHOOSER_ITEMS, "")).toHaveLength(CHOOSER_ITEMS.length);
     expect(rankPaletteEntries(PALETTE_ENTRIES, "")).toHaveLength(PALETTE_ENTRIES.length);
-    expect(filterPickerRows(PICKER_ROWS, "")).toHaveLength(PICKER_ROWS.length);
   });
 
   it("every filtered row actually matches, or is pinned", () => {

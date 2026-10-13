@@ -6,16 +6,12 @@ import { spawnArchymedes, type ArchymedesProcess } from "./harness";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 
 /**
- * What a resumed session looks like to someone sitting in front of it.
+ * What a resumed one-shot run prints, on a real tty.
  *
  * `src/resume.test.ts` proves the mechanics — the right record is found, the transcript reaches
- * the model, the same file keeps being written. None of that is visible from the terminal, and a
- * resume you cannot see is one you have to take on faith: the screen is empty, the prompt looks
- * exactly like a fresh session's, and the usual way to check — scroll up — has nothing to scroll
- * to. This covers the part that is only true on a real tty.
+ * the model, the same file keeps being written. The Go interface's own resume is covered in
+ * `go-frontend.test.ts`; this is the agent's one-shot `--resume`.
  */
-
-const PROMPT = /›|auto >/;
 
 describe("resuming, from the terminal", () => {
   let stub: AnthropicStub;
@@ -54,75 +50,13 @@ describe("resuming, from the terminal", () => {
     return proc;
   }
 
-  it("starts simply, offers the last chat, and takes it on an empty Enter", async () => {
-    stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
-    const first = boot();
-    await first.waitFor(PROMPT, { timeoutMs: 60_000 });
-    const asked = first.output().length;
-    first.writeLine("where does the migration live?");
-    await first.waitFor(/0007-add-index/, { timeoutMs: 40_000, since: asked });
-    await first.waitFor(PROMPT, { timeoutMs: 20_000, since: asked });
-    first.write("\x03");
-    await first.waitForExit(20_000);
-
-    // Simple mode and the resume offer are the defaults; the harness turns both off for older tests.
-    const second = boot([], { ARCHYMEDES_SIMPLE: "on", ARCHYMEDES_RESUME: "ask" });
-    await second.waitFor(/Continue your last chat/, { timeoutMs: 60_000 });
-    await second.waitFor(PROMPT, { timeoutMs: 20_000 });
-    const banner = second.output();
-    expect(banner).toContain("Type what you want done.");
-    expect(banner).toContain("where does the migration live?");
-    expect(banner).not.toContain("No session spend cap set");
-    const answered = second.output().length;
-    second.write("\r");
-    await second.waitFor(/resumed \d{8}T\d{6}Z-/i, { timeoutMs: 30_000, since: answered });
-  }, 120_000);
-
-  it("opens on the end of the conversation it resumed, not on an empty screen", async () => {
-    stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
-    const first = boot();
-    await first.waitFor(PROMPT, { timeoutMs: 60_000 });
-    const asked = first.output().length;
-    first.writeLine("where does the migration live?");
-    await first.waitFor(/0007-add-index/, { timeoutMs: 40_000, since: asked });
-    // The answer streaming and the turn's "completed" trailer are separate prints; leaving before
-    // the second one means leaving with the turn technically in flight, and the session is only
-    // written to disk once the turn ends.
-    await first.waitFor(PROMPT, { timeoutMs: 20_000, since: asked });
-    first.write("\x03"); // Ctrl+C at an idle prompt is the clean way out
-    await first.waitForExit(20_000);
-
-    // `--resume` with no id in a terminal opens the picker; Enter takes the newest chat.
-    const second = boot(["--resume"]);
-    await second.waitFor(/Pick up a past conversation/, { timeoutMs: 60_000 });
-    const picking = second.output().length;
-    second.write("\r");
-    await second.waitFor(/resumed \d{8}T\d{6}Z-/i, { timeoutMs: 30_000, since: picking });
-    await second.waitFor(PROMPT, { timeoutMs: 20_000, since: picking });
-    const screen = second.output();
-
-    // Both halves matter: which session (so you can tell it picked the right one) and what was
-    // said in it (so you can tell it actually loaded).
-    expect(screen).toMatch(/resumed \d{8}T\d{6}Z-/i);
-    expect(screen).toContain("where does the migration live?");
-    expect(screen).toContain("0007-add-index");
-  }, 120_000);
-
   it("keeps the past conversation out of the way of a one-shot run", async () => {
     // A replay is orientation for someone about to type. `archymedes --resume "…"` is not that: the
     // answer is the output, and the transcript in front of it is noise a script has to skip.
     stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
-    const first = boot();
-    await first.waitFor(PROMPT, { timeoutMs: 60_000 });
-    const asked = first.output().length;
-    first.writeLine("where does the migration live?");
-    await first.waitFor(/0007-add-index/, { timeoutMs: 40_000, since: asked });
-    // The answer streaming and the turn's "completed" trailer are separate prints; leaving before
-    // the second one means leaving with the turn technically in flight, and the session is only
-    // written to disk once the turn ends.
-    await first.waitFor(PROMPT, { timeoutMs: 20_000, since: asked });
-    first.write("\x03"); // Ctrl+C at an idle prompt is the clean way out
-    await first.waitForExit(20_000);
+    const first = boot(["where does the migration live?"]);
+    await first.waitFor(/0007-add-index/, { timeoutMs: 60_000 });
+    await first.waitForExit(30_000);
 
     stub.enqueue({ kind: "text", text: "Still db/0007-add-index.sql." });
     const oneShot = boot(["--resume", "and now?"]);

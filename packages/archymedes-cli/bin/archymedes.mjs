@@ -6,14 +6,13 @@
 // it is the bundled dist/archymedes.mjs, run with this same Node: the binary is told where it is
 // through ARCHYMEDES_AGENT, as a JSON array so an install path with spaces survives.
 //
-// Where the binary cannot be used, the bundled interface runs instead — and says why, before it
-// starts and again after it exits. A missing binary is never a reason for `archymedes` not to start,
-// and never a silent one.
+// Where the binary cannot be used, the bundled agent runs alone: every non-interactive mode works as
+// before, and asked for the interface it says why there is none and how to get it.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fallbackNotice, resolveInterface } from "./launcher.mjs";
+import { missingInterfaceNotice, resolveInterface } from "./launcher.mjs";
 
 const require = createRequire(import.meta.url);
 const agentEntry = path.join(import.meta.dirname, "..", "dist", "archymedes.mjs");
@@ -27,14 +26,9 @@ function packageDirectory(name) {
   }
 }
 
-async function runBundled(resolution) {
-  const notice = fallbackNotice(resolution, platform, arch);
-  // Only where a person will read it: a pipe or a --json run must get exactly what it asked for.
-  if (notice.length > 0 && process.stderr.isTTY) {
-    const say = () => process.stderr.write(`${notice.join("\n")}\n`);
-    say();
-    process.on("exit", say);
-  }
+async function runAgentAlone(resolution) {
+  // Read by the agent when it is asked for an interface it does not have (src/archymedes.ts).
+  process.env.ARCHYMEDES_INTERFACE_MISSING = missingInterfaceNotice(resolution, platform, arch).join("\n");
   await import(agentEntry);
 }
 
@@ -44,7 +38,7 @@ const resolution = resolveInterface({
 });
 
 if (!("binary" in resolution)) {
-  await runBundled(resolution);
+  await runAgentAlone(resolution);
 } else {
   const env = { ...process.env, ARCHYMEDES_AGENT: process.env.ARCHYMEDES_AGENT || JSON.stringify([process.execPath, agentEntry]) };
   const child = spawn(resolution.binary, process.argv.slice(2), { stdio: "inherit", env });
@@ -57,7 +51,7 @@ if (!("binary" in resolution)) {
 
   child.on("error", (error) => {
     // Present but not runnable: a stripped executable bit, a foreign architecture under emulation.
-    void runBundled({ reason: "start-failed", detail: error.code ?? error.message });
+    void runAgentAlone({ reason: "start-failed", detail: error.code ?? error.message });
   });
   child.on("exit", (code, signal) => {
     if (signal) {

@@ -5,6 +5,7 @@ import { readFxRates, renderProviders } from "./app/providers";
 import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit } from "./app/prompts";
 import { configureRendering, renderEvent, renderUserMessage } from "./app/transcript";
 import { parseArgs } from "./app/args";
+import { EXIT_CODES } from "./headless";
 
 const ESCAPE = /\x1b\[[0-9;]*m/g;
 const plain = (value: string) => value.replace(/\[[0-9;]*m/g, "");
@@ -659,14 +660,17 @@ describe("main() — branches that resolve before any interactive input is neede
     expect(stdout).not.toContain("Estimated:");
   });
 
-  it("refuses an interactive session with no terminal attached and no one-shot request", async () => {
+  it("is the agent, not an interface: with no request it says where the interface is, terminal or not", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
     const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
-    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
     try {
-      const { code, stderr } = await run(["--cwd", tmpRoot]);
-      expect(code).toBe(1);
-      expect(stderr).toContain("No terminal attached");
+      for (const tty of [false, true]) {
+        Object.defineProperty(process.stdin, "isTTY", { value: tty, configurable: true });
+        const { code, stderr } = await run(["--cwd", tmpRoot]);
+        expect(code).toBe(EXIT_CODES.usage);
+        expect(stderr).toContain("This is the Archymedes agent, not its interface.");
+        expect(stderr).toContain("bun run archymedes");
+      }
     } finally {
       if (originalIsTTY) Object.defineProperty(process.stdin, "isTTY", originalIsTTY);
     }

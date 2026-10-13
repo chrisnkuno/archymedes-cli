@@ -49,6 +49,8 @@ Save a prompt you reuse as Markdown: `.archymedes/commands/review.md` becomes `/
 project, and `commands/review.md` in the Archymedes config directory is yours alone (the project
 file wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
 `description:` line in `---` front matter describes it. Built-in commands cannot be replaced.
+The Go interface does not run custom commands yet; WS-7 in
+[`TRACKER.md`](docs/continuation/TRACKER.md) tracks it.
 
 ```markdown
 ---
@@ -79,6 +81,9 @@ design, architecture, security, research, deployment) tells the exchange what ki
 routing. Billing and hosted execution are operated from isolated private services; this public
 repository contains only their client contract.
 
+`/balance` and `/route` are not in the Go interface yet (WS-7); `/cost` shows what a session has
+spent, and a one-shot `--json` run reports its own cost.
+
 ## Languages
 
 The control surfaces are localized into 16 languages — `archymedes --language <code>` or
@@ -88,7 +93,8 @@ The control surfaces are localized into 16 languages — `archymedes --language 
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `packages/archymedes-cli` | `archymedes-cli` | The terminal app and its `archymedes` binary. |
+| `cmd/archymedes`, `internal/` | `@archymedes/cli-<platform>-<arch>` (Go) | The interactive interface: Bubble Tea v2, driving the agent over ACP. |
+| `packages/archymedes-cli` | `archymedes-cli` | The agent (`archymedes acp`, one-shot, `--json`, `settings`, `doctor`) and the npm launcher that runs the Go interface. |
 | `packages/core` | `@archymedes/core` | Provider-neutral agent runtime, model adapters, workspace backends, cost accounting. Internal CLI-only code lives under `src/cli/`. |
 | `packages/archymedes-state` | `archymedes-state` (Rust) | The local, rebuildable history and memory index. Optional at runtime — the CLI falls back to a portable TypeScript projection. |
 | `packages/free-gateway` | `@archymedes/free-gateway` (private) | Separately deployed server behind `archymedes --free`: holds the OpenRouter key, serves only verified free models, rate limits. |
@@ -98,7 +104,8 @@ The control surfaces are localized into 16 languages — `archymedes --language 
 
 ```bash
 bun install
-bun run archymedes            # run the CLI from source
+bun run archymedes            # run the CLI from source: the Go interface, with this checkout's agent
+bun run agent "a request"     # the TypeScript agent alone, for one-shot and --json runs
 bun run test                  # vitest
 bun run typecheck             # tsc --noEmit
 bun run build:packages        # emit packages/*/dist
@@ -111,12 +118,14 @@ The terminal interface is a Go program on [Bubble Tea v2](https://github.com/cha
 (`cmd/archymedes`, `internal/`). The agent behind it is still the TypeScript package, run as
 `archymedes acp` and driven over the Agent Client Protocol with Archymedes's `_archymedes/*`
 extensions; non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
-`settings`) go to the agent unchanged. The npm package ships one static binary per platform as an
-optional dependency (`@archymedes/cli-<platform>-<arch>`) and falls back to the bundled TypeScript
-interface where none matches.
+`settings`) go to the agent unchanged. There is no TypeScript interface: the agent run with no
+request says where the interface is. The npm package ships one static binary per platform as an
+optional dependency (`@archymedes/cli-<platform>-<arch>`); where none can be used, the bundled
+agent still serves every non-interactive mode, and asked for the interface it says why there is
+none and how to install it.
 
 ```bash
-go run ./cmd/archymedes                 # from a checkout (the agent runs with bun)
+bun run archymedes                      # from a checkout: go run ./cmd/archymedes (`bun run dev` too)
 go test ./...                           # Go tests; `bun run check` runs these too
 bun run build:go                        # all six platform binaries → artifacts/npm
 ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/archymedes   # log every protocol frame
@@ -149,32 +158,15 @@ See `CONTRIBUTING.md`. Commits are signed off under the [DCO](https://developerc
 Apache License 2.0. See `LICENSE` and `NOTICE`. The Apache license does not grant rights to the
 "Archymedes" name or marks — see `TRADEMARK.md`.
 
-
-## Terminal identity and release checks
-
-Interactive sessions open in the fixed workspace. The mode bar and composer stay anchored while the
-transcript scrolls. `/mode` opens a permission picker, and Ctrl+G opens the command menu. The mouse
-wheel or Page Up / Page Down browses retained history; Alt+Up / Alt+Down moves one line, and Escape
-returns to live output. Use `archymedes --layout scrollback`, `ARCHYMEDES_LAYOUT=scrollback`, or
-`/layout` for the plain terminal log. Set `ARCHYMEDES_MOUSE=0` to keep terminal text selection
-instead of wheel scrolling, and `ARCHYMEDES_NO_MOTION=1` for still frames.
-Try the actual interface offline with `bun run preview:workspace` (temporary project, local model fixture).
-
-Archymedes now opens with a graduated-ring instrument and a bronze, limestone and olive palette. The input
-composer and workspace follow the selected theme; light terminals retain parchment. Preview the
-interface without credentials or model requests:
+## Release checks
 
 ```bash
-bun run preview:tui
-bun run preview:tui parchment
 bun run release:check
-bun run bench:journeys
 ```
 
-The release check validates the packed CLI in a separate consumer project. `bench:journeys`
-drives the real terminal binary against a deterministic stub and times five installed journeys
-(first prompt, first edit, verified turn, cancel, resume) on a small and a large repository,
-writing `benchmarks/journeys/latest.json`. See the
+The release check runs every test (TypeScript, Go and the terminal suites), type-checks, builds,
+and validates the packed CLI in a separate consumer project: the Go interface, the agent behind
+it, and what an install without the interface says. See the
 [release assessment](docs/RELEASE_ASSESSMENT.md) for findings, priorities and publishing requirements.
 
 ## Continuing development

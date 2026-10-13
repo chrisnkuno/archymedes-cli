@@ -5,16 +5,14 @@
  * Moved out of `runTurn` unchanged; always resolves to `false`, the turn's result.
  */
 import { fromUnits, formatMoney } from "@archymedes/core/money";
-import { resolveProvider } from "@archymedes/core/providers/agent-matrix";
 import { hostOf, providerBaseUrl } from "../platform/endpoints";
 import { classifyNetworkError } from "../platform/network";
-import { parseFallbackPreference } from "../session/fallback";
 import { renderRecovery } from "../ui/navigation";
 import type { TurnContext } from "./turn-runner";
 import { activity, endStreamedLine, out, sectionStyle, spinner, statusBar, style, touchedFiles } from "./transcript";
 
 export async function handleTurnFailure(error: unknown, request: string, context: TurnContext): Promise<false> {
-  const { args, environment, interactive, headless, queuedInput, recoveryState, state, openClient, navContext } = context;
+  const { args, environment, interactive, headless, recoveryState, state, navContext } = context;
   if (recoveryState.last?.request === request) {
     recoveryState.last = {
       ...recoveryState.last,
@@ -52,27 +50,6 @@ export async function handleTurnFailure(error: unknown, request: string, context
     if (diagnosis.hint) out.write(`  ${style.dim(diagnosis.hint)}\n`);
   } else {
     out.write(`${style.red("error")} ${message}\n`);
-  }
-  const fallback = state.spec.id === "free" ? null : parseFallbackPreference(environment.ARCHYMEDES_FALLBACK_MODEL);
-  const transient = diagnosis && ["timeout", "dns", "refused", "reset", "unreachable", "rate_limit", "server_error"].includes(diagnosis.kind);
-  // Cross-provider retry is safe only before visible output, tool execution, or file changes.
-  // A specific target is explicit consent; `ask` merely offers the choice and never spends.
-  if (interactive && transient && !state.streamedAnswer && activity.toolCalls === 0 && touchedFiles.size === 0 && fallback?.kind === "target") {
-    const attempt = resolveProvider(environment, { provider: fallback.provider, model: fallback.model });
-    if (!("error" in attempt) && (attempt.spec.id !== state.spec.id || attempt.model !== state.resolvedModelId)) {
-      const previous = state.agent;
-      const carried = await previous.relinquish();
-      state.model = attempt.provider;
-      state.spec = attempt.spec;
-      state.prices = attempt.prices;
-      state.resolvedModelId = attempt.model;
-      state.ledger.setPrices(state.prices);
-      state.agent = await openClient(carried);
-      queuedInput.unshift("/retry");
-      out.write(style.yellow(`  falling back once to ${state.spec.label} ${state.resolvedModelId}; the unchanged request is queued for retry\n`));
-    }
-  } else if (interactive && transient && fallback?.kind === "ask") {
-    out.write(style.dim("  fallback is set to ask — use /model to choose an alternate, then /retry\n"));
   }
   // An error says what broke; this says what to do about it. The rules only speak when they
   // recognise the failure — an invented next step after a real error costs a detour to

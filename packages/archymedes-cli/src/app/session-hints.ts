@@ -6,7 +6,7 @@ import type { WorkspaceController } from "../session/tabs";
 import type { WatchRegistry } from "../terminal/job-stream";
 import { renderHint, type CommandUsage, type NavContext } from "../ui/navigation";
 import type { SessionState } from "./session-state";
-import type { TabPayload } from "./tab-switching";
+import type { TabPayload } from "./session-state";
 import { out, sectionStyle, touchedFiles } from "./transcript";
 
 /**

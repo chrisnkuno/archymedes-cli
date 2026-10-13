@@ -14,7 +14,7 @@ export declare function resolveInterface(options: {
   join: (...parts: string[]) => string;
 }): Resolution;
 
-export declare function fallbackNotice(
+export declare function missingInterfaceNotice(
   resolution: Resolution | { reason: "start-failed"; detail: string },
   platform: string,
   arch: string,

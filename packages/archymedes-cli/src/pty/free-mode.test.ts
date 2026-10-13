@@ -10,7 +10,8 @@ afterEach(async () => { proc?.kill(); if (root) await rm(root, { recursive: true
 
 it("explains free mode is unavailable without a key or gateway, and never opens the settings menu", async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "archymedes-free-pty-"));
-  proc = spawnArchymedes({ cwd: root, args: ["--free", "--currency", "USD"], env: {
+  // A request: with none, the agent says where the interface is before it ever resolves a provider.
+  proc = spawnArchymedes({ cwd: root, args: ["--free", "--currency", "USD", "hello"], env: {
     ARCHYMEDES_CONFIG_DIR: path.join(root, "config"), OPENROUTER_API_KEY: "", OPENAI_API_KEY: "paid-test-key",
     ARCHYMEDES_PROVIDER: "openai", ARCHYMEDES_FX_OFFLINE: "true",
   } });

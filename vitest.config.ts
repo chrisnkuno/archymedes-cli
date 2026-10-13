@@ -42,7 +42,7 @@ export default defineConfig({
     /**
      * Terminal tests get the machine to themselves.
      *
-     * The pty suites spawn a real `bun run archymedes.ts` per case — a 32,000-line transpile and a full
+     * The pty suites spawn the Go interface or the agent per case — a Go build or a TypeScript transpile and a full
      * agent boot behind a pseudo-terminal — and they assert by *waiting* for a prompt to be
      * painted. Run alongside every other worker they lose the CPU race and time out, which reads
      * as a broken feature when it is only a busy machine: the same case passes on its own every

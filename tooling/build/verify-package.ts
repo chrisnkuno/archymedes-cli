@@ -58,7 +58,6 @@ try {
   assert(!help.includes("\x1b"), "Piped help must not contain terminal escapes");
   const providers = run(["node", executable, "--providers"], consumer, env);
   assert.match(providers, /anthropic/i);
-  // The optional workspace renderer is external to the bundle; verify installed resolution too.
   // The installed command: the shim, which runs the Go interface, which hands one-shot modes to the
   // bundled agent with this same Node.
   const command = path.join(installed, "bin/archymedes.mjs");
@@ -67,15 +66,18 @@ try {
   const goHelp = run(["node", command, "--help"], consumer, env);
   assert(goHelp.includes("--theme") && goHelp.includes("--resume") && goHelp.includes("--json") && !goHelp.includes("\x1b"));
   assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must reach the agent through the interface");
-  // No binary for the platform: the bundled interface runs instead of nothing.
+  // No binary for the platform: the agent still serves non-interactive modes, and asked for the
+  // interface it says why there is none — the launcher's notice, not a stand-in interface.
   await rm(path.join(consumer, "node_modules", ...platformPackage.split("/")), { recursive: true, force: true });
   assert.match(run(["node", command, "--version"], consumer, env), new RegExp(manifest.version.replace(/\./g, "\\.")));
-  await writeFile(path.join(installed, "smoke.mjs"), 'await import("@termuijs/core"); await import("@termuijs/jsx"); await import("@termuijs/widgets");');
-  run(["node", path.join(installed, "smoke.mjs")], consumer, env);
+  assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must work without the interface");
+  const alone = spawnSync("node", [command], { cwd: consumer, env, encoding: "utf8", input: "" });
+  assert.equal(alone.status, 2, `asked for the interface without one: exit ${alone.status}`);
+  assert.match(alone.stderr, /was not installed[\s\S]*only non-interactive modes work/, `missing-interface notice: ${alone.stderr}`);
 } finally {
   await rm(consumer, { recursive: true, force: true });
 }
 
 const sha256 = createHash("sha256").update(await readFile(archive)).digest("hex");
 await writeFile(`${archive}.sha256`, `${sha256}  ${path.basename(archive)}\n`);
-console.log(`Verified ${path.basename(archive)}: ${entries.length} entries; clean install, Go interface, agent passthrough, fallback, providers and TUI dependencies passed.\nSHA256 ${sha256}`);
+console.log(`Verified ${path.basename(archive)}: ${entries.length} entries; clean install, Go interface, agent passthrough, the no-interface notice and providers passed.\nSHA256 ${sha256}`);

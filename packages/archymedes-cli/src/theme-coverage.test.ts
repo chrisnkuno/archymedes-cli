@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setCodeStyle } from "./render/syntax";
 import { highlightCode } from "./render/code-view";
-import { composeExplainPanel, initialExplainPanelState } from "./ui/explain-view";
 import { renderMarkdown } from "./render/markdown";
-import { renderPatch, parsePatch } from "./render/patch-view";
 import { outcomeMark, toneCode } from "./render/sections";
 import { ANSI_PALETTE, buildPalette, findBuiltinTheme, roleCode } from "./theme/theme";
 import { box, renderPromptBox } from "./render/tui";
@@ -41,15 +39,6 @@ describe("theme coverage", () => {
     expect(toneCode("bad", style)).toBe(archymedes.error);
     expect(outcomeMark("pass", style)).toContain(archymedes.success);
     expect(highlightCode('const s = "x";', "truecolor", archymedes)).toContain(archymedes.primary);
-    const patch = "diff --git a/f.ts b/f.ts\n--- a/f.ts\n+++ b/f.ts\n@@ -1 +1 @@\n-old\n+new\n";
-    expect(parsePatch(patch)).toHaveLength(1);
-    expect(renderPatch(patch, style).text).toContain(archymedes.success);
   });
 
-  it("hands the editor's explain panel theme token values, not escape codes", () => {
-    const panel = { ...initialExplainPanelState(), open: true, tab: "diff" as const };
-    const rows = composeExplainPanel({ path: "a.ts", before: "old\n", after: "new\n", panel }, 40, 10, archymedes.tokens);
-    expect(rows.map((row) => row.color)).toContain(archymedes.tokens.success);
-    expect(rows.every((row) => !row.color?.includes("\x1b"))).toBe(true);
-  });
 });

@@ -30,32 +30,28 @@ afterAll(async () => { await stub.close(); });
 
 async function boot() {
   const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-arrowscfg-"));
-  const p = spawnArchymedes({ cwd, args: [], env: {
+  const p = spawnArchymedes({ cwd, args: ["settings"], env: {
     ANTHROPIC_API_KEY: "sk-ant-test", ANTHROPIC_BASE_URL: stub.url,
     ARCHYMEDES_CONFIG_DIR: configDir, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC", ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "RWF", ARCHYMEDES_FX_RATE: "1300",
   }});
-  await p.waitFor(/›/, { timeoutMs: 30_000 });
+  await p.waitFor(/Enter edit/, { timeoutMs: 30_000 });
   return { p, configDir };
 }
 
-describe("settings under a real pty", () => {
+describe("archymedes settings under a real pty", () => {
   it("opens as a navigable list showing each setting's current value", async () => {
     const { p } = await boot();
-    const mark = p.output().length;
-    p.write(`/settings${ENTER}`);
-    const seen = await p.waitFor(/Enter edit/, { timeoutMs: 20_000, since: mark });
+    const seen = p.output();
     // The first rows are the Appearance section, which is what most people open settings to change.
-    expect(seen.slice(mark)).toContain("Appearance");
-    expect(seen.slice(mark)).toContain("Theme");
+    expect(seen).toContain("Appearance");
+    expect(seen).toContain("Theme");
     // Values are on the rows, so the menu answers "what is set?" without opening each field.
-    expect(seen.slice(mark)).toContain("not set");
+    expect(seen).toContain("not set");
     p.kill();
   }, 90_000);
 
   it("moves the highlight with the arrow keys", async () => {
     const { p } = await boot();
-    p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const moved = p.output().length;
     p.write(DOWN);
@@ -68,8 +64,6 @@ describe("settings under a real pty", () => {
 
   it("picks a location from a named list, without anyone needing to know the code", async () => {
     const { p, configDir } = await boot();
-    p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     // Location sits in the Money section; arrow down to it, then open it.
     const opened = p.output().length;
@@ -93,8 +87,7 @@ describe("settings under a real pty", () => {
     // Leaving the menu is what saves and applies it.
     const left = p.output().length;
     p.write(ESCAPE);
-    await p.waitFor(/settings saved/, { timeoutMs: 20_000, since: left });
-    await p.waitFor(/costs now shown in RWF/, { timeoutMs: 20_000, since: left });
+    await p.waitFor(/settings saved/i, { timeoutMs: 20_000, since: left });
     p.kill();
 
     expect(JSON.parse(await fs.readFile(path.join(configDir, "settings.json"), "utf8"))).toMatchObject({ ARCHYMEDES_COUNTRY: "RW" });
@@ -104,8 +97,6 @@ describe("settings under a real pty", () => {
     // Arrows were added beside the numbers, not over them: a screen reader announces "2. Location"
     // perfectly well and a moving highlight badly.
     const { p } = await boot();
-    p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const jumped = p.output().length;
     p.write("2");
@@ -119,20 +110,16 @@ describe("settings under a real pty", () => {
 
   it("leaves the menu on Escape without saving a change nobody made", async () => {
     const { p } = await boot();
-    p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const dismissed = p.output().length;
     p.write(ESCAPE);
-    const seen = await p.waitFor(/settings saved|›/, { timeoutMs: 20_000, since: dismissed });
+    const seen = await p.waitFor(/settings saved/i, { timeoutMs: 20_000, since: dismissed });
     expect(seen.slice(dismissed)).not.toContain("cleared");
     p.kill();
   }, 90_000);
 
   it("returns to the field list after setting a value, rather than dropping out", async () => {
     const { p } = await boot();
-    p.write(`/settings${ENTER}`);
-    await p.waitFor(/Enter edit/, { timeoutMs: 20_000 });
 
     const opened = p.output().length;
     p.write(`${downTo("ARCHYMEDES_PROVIDER")}${ENTER}`);  // Default provider
@@ -147,4 +134,27 @@ describe("settings under a real pty", () => {
     p.write(UP);
     p.kill();
   }, 90_000);
+});
+
+describe("archymedes settings outside a session", () => {
+  it("opens the full menu and cancels cleanly", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-settingscmd-"));
+    const cfg = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-settingscmdcfg-"));
+    const session = spawnArchymedes({ cwd: dir, rows: 30, args: ["settings", "--currency", "USD"], env: {
+      ARCHYMEDES_CONFIG_DIR: cfg, ARCHYMEDES_FX_OFFLINE: "true", TZ: "UTC",
+    }});
+    try {
+      // Full list (not the providers focus). Escape leaves via done, which saves (a no-op when
+      // nothing changed) and exits zero.
+      await session.waitFor(/Control language/i, { timeoutMs: 60_000 });
+      session.write(ESCAPE);
+      const result = await session.waitForExit(20_000);
+      expect(result.exitCode).toBe(0);
+      expect(session.output().replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").toLowerCase()).toMatch(/settings saved to/);
+    } finally {
+      try { session.kill(); } catch { /* exited */ }
+      await fs.rm(dir, { recursive: true, force: true });
+      await fs.rm(cfg, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

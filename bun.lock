@@ -6,7 +6,6 @@
       "name": "archymedes-cli",
       "devDependencies": {
         "@anthropic-ai/sdk": "^0.116.0",
-        "@termuijs/testing": "^0.1.7",
         "@types/node": "^22.0.0",
         "@vitest/coverage-v8": "3.2.7",
         "@xterm/headless": "5.5.0",
@@ -18,22 +17,17 @@
     },
     "packages/archymedes-cli": {
       "name": "archymedes-cli",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "bin": {
         "archymedes": "bin/archymedes.mjs",
       },
-      "dependencies": {
-        "@termuijs/core": "0.1.7",
-        "@termuijs/jsx": "0.1.7",
-        "@termuijs/widgets": "0.1.7",
-      },
       "optionalDependencies": {
-        "@archymedes/cli-darwin-arm64": "3.0.0",
-        "@archymedes/cli-darwin-x64": "3.0.0",
-        "@archymedes/cli-linux-arm64": "3.0.0",
-        "@archymedes/cli-linux-x64": "3.0.0",
-        "@archymedes/cli-win32-arm64": "3.0.0",
-        "@archymedes/cli-win32-x64": "3.0.0",
+        "@archymedes/cli-darwin-arm64": "3.1.0",
+        "@archymedes/cli-darwin-x64": "3.1.0",
+        "@archymedes/cli-linux-arm64": "3.1.0",
+        "@archymedes/cli-linux-x64": "3.1.0",
+        "@archymedes/cli-win32-arm64": "3.1.0",
+        "@archymedes/cli-win32-x64": "3.1.0",
         "@archymedes/state-darwin-arm64": "0.4.0",
         "@archymedes/state-darwin-x64": "0.4.0",
         "@archymedes/state-linux-arm64-gnu": "0.4.0",
@@ -213,16 +207,6 @@
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.63.1", "", { "os": "win32", "cpu": "x64" }, "sha512-at8QVep6S3h5Y6gSbdGU06bRY5WJkf6WUduM9YtvYMbYhB1MOFfUgc6kehitQXzOtMSaT70q7f9ydPhpqu821w=="],
 
     "@stablelib/base64": ["@stablelib/base64@1.0.1", "", {}, "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="],
-
-    "@termuijs/core": ["@termuijs/core@0.1.7", "", {}, "sha512-gVFlizo4+gyvC1DY/RhREkNW157R4tvL4Z2S5I+JGuCbLFfdf07q6hGp3KpbMHO48s6Nny+6hS2QKVQb3QJP/g=="],
-
-    "@termuijs/jsx": ["@termuijs/jsx@0.1.7", "", { "dependencies": { "@termuijs/core": "0.1.7", "@termuijs/motion": "0.1.7", "@termuijs/widgets": "0.1.7" } }, "sha512-oTL1AQGZwUM8k12sV8PT2DAuuolFqTaJ3A+wgltdrtRR0kreODq0EDjHQ6iZWb4BQV3/5VyBHHykK/9yGkMr4w=="],
-
-    "@termuijs/motion": ["@termuijs/motion@0.1.7", "", { "dependencies": { "@termuijs/core": "0.1.7" } }, "sha512-j+gCcBYNFYw3RmC2zETXRT2AyJf5TxHV6hf0QQv3H2nvyZAxEyduhDcPlVwFzlhfRvSdXdPI9JtMLaHbLyRnFg=="],
-
-    "@termuijs/testing": ["@termuijs/testing@0.1.7", "", { "dependencies": { "@termuijs/core": "0.1.7", "@termuijs/jsx": "0.1.7", "@termuijs/motion": "0.1.7", "@termuijs/widgets": "0.1.7" } }, "sha512-9K4N+mn1nhf+SGbYcQnE7WVIV2WyQQ08OSSkWw3+qLJqdHrlndBBFeuklYux0j3/rkMY6sfsMtG8YYVcjN0dtg=="],
-
-    "@termuijs/widgets": ["@termuijs/widgets@0.1.7", "", { "dependencies": { "@termuijs/core": "0.1.7", "@termuijs/motion": "0.1.7" } }, "sha512-Duo/hEzkWXa5yTuIlK6cBxgPyni1UoaqAXkMwIsJS0Mut3AqoJ/E0us9Ca1P+RphDfFLRcuqQebbS0LPdfFM+w=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 

@@ -1,6 +1,6 @@
 /**
  * The invocations that answer and exit before any session exists: `--help`, `--version`,
- * `--gallery`, `--update`, `settings`, `--providers`, `--doctor`, `--sessions` and `history`.
+ * `--update`, `settings`, `--providers`, `--doctor`, `--sessions` and `history`.
  *
  * Moved out of `main()` unchanged. Each returns the process exit code when it handled the
  * invocation, and `undefined` when the invocation is an ordinary session that should carry on.
@@ -10,7 +10,6 @@ import { listSessions, loadSession } from "@archymedes/core/cli/session";
 import { PROVIDER_IDS, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
 import { EXIT_CODES } from "../headless";
 import { renderHistoryList, renderHistoryUsage, renderReplay, searchHistory, summarizeSession, type HistoryEntry } from "../commands/chat-history";
-import { galleryVariants, renderGallery } from "../ui/gallery";
 import { KeyBindingRegistry, escapeCodeTimeoutMs, parseBindingOverrides } from "../terminal/keybindings";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "../platform/doctor";
 import { ARCHYMEDES_CLI_VERSION, runSelfUpdate } from "../platform/update";
@@ -39,7 +38,7 @@ export type StartupCommandContext = {
   savedSettings: ArchymedesSettings;
 };
 
-/** `--help`, `--version` and `--gallery`: printed from the early rendering setup, before `--acp`. */
+/** `--help` and `--version`: printed from the early rendering setup, before `--acp`. */
 export function runInformationFlag(context: Pick<StartupCommandContext, "args" | "environment" | "language" | "earlyDepth">): number | undefined {
   const { args, environment, language, earlyDepth } = context;
   if (args.help) {
@@ -56,15 +55,6 @@ export function runInformationFlag(context: Pick<StartupCommandContext, "args" |
     return 0;
   }
 
-  if (args.gallery) {
-    // Drawn at the real terminal's width and glyph set, because the point is to see what this
-    // terminal does with it. `gallery all` adds the fallback matrix: ASCII, no colour and narrow.
-    const width = Math.max(24, (process.stdout.columns ?? 80) - 1);
-    const here = { width, depth: earlyDepth, glyphs: args.ascii ? resolveGlyphs({ ...environment, ARCHYMEDES_GLYPHS: "ascii" }) : resolveGlyphs(environment) };
-    const variants = args.prompt === "all" ? galleryVariants(width) : [{ title: "", options: here }];
-    for (const variant of variants) out.write(`${variant.title ? `\n== ${variant.title} ==\n` : ""}${renderGallery(variant.options)}\n`);
-    return 0;
-  }
   return undefined;
 }
 

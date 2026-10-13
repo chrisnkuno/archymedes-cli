@@ -5,6 +5,28 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-11: The TypeScript interface is gone (2026-10-13)
+
+User: "remove the TS interface". The interactive interface is the Go program only; the TypeScript
+package is the agent behind it (`archymedes acp`) and keeps every non-interactive mode. Method: cut
+the REPL out of `main`, then delete whatever is no longer reachable from `src/archymedes.ts` by
+import graph, with the tests of what was deleted. 213 files changed, about 28,000 lines removed.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-11.1 | The agent run with no request refuses and says where the interface is; the REPL loop and its setup are gone from `main` | done | `src/archymedes.ts` | unit | "is the agent, not an interface" in `archymedes.test.ts` (terminal and pipe) |
+| WS-11.2 | Cut the threads that kept screens alive: the transcript's `screen`, the turn runner's status bar and composer, the REPL-only model fallback; `TabPayload` to `session-state`; the menu core split from `shortcuts` into `ui/borrowed-keyboard.ts` | done | `app/transcript.ts`, `app/turn-runner.ts`, `app/turn-failure.ts`, `ui/` | typecheck | |
+| WS-11.3 | Delete every module no longer reachable (85, incl. the unreferenced 3,208-line `archimedes.ts` copy) and their tests; `gallery` removed (TS and Go passthrough); `tooling/dev` demos and `preview:*` scripts removed; render benchmark keeps markdown/highlight | done | `packages/archymedes-cli/src`, `internal/cli`, `tooling/dev`, `benchmarks/render` | unit | reachability script over the import graph: 0 unreachable |
+| WS-11.4 | PTY suite: REPL-driven files removed (and `journeys`, `nav-audit`, `audit:nav`, `bench:journeys`); `settings-arrows` now drives `archymedes settings`; `recovery`, `resume`, `free-mode` run one-shot | done | `src/pty` | PTY | 6 files, 24 tests pass |
+| WS-11.5 | npm launcher without the Go binary runs the agent alone; asked for the interface it says why there is none, the fix, and that only non-interactive modes work (`ARCHYMEDES_INTERFACE_MISSING`) | done | `bin/archymedes.mjs`, `bin/launcher.mjs`, `tooling/build/verify-package.ts` | unit + package | `launcher.test.ts`; verify-package asserts exit 2 and the notice |
+| WS-11.6 | `bun run archymedes` runs the Go interface (`dev` kept as an alias, `agent` runs the TS agent); `@termuijs/*` dependencies and bundle externals dropped | done | `package.json`, `packages/archymedes-cli/package.json`, `build-packages.ts` | build | |
+| WS-11.7 | README and tracker | done | `README.md` | | |
+| WS-11.8 | Verification | done | | | `release:check`: 192 files / 2,951 tests, Go tests, typecheck, build, package verify (22 entries, the no-interface notice); PTY 6 files / 24 tests; all six 3.1.0 binaries rebuilt |
+
+Still TypeScript screens: `archymedes settings` and `history` open small menus (`ui/chooser.ts`,
+`ui/table.ts`). They are commands, not the chat interface, and are kept until the Go interface has
+the same settings. Not in the Go interface yet: custom commands, `/balance`, `/route` (WS-7).
+
 ## WS-10: Charts and mouse zones (2026-10-13)
 
 User: "integrate well the graphs and so on, do these" (ntcharts, bubblezone). Prompt:

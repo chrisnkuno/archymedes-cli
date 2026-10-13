@@ -20,7 +20,7 @@ import { renderCompletionCard } from "../render/completion-card";
 import { renderMarkdown } from "../render/markdown";
 import { renderRoutingReceipt } from "../render/routing-receipt";
 import { rule } from "../render/sections";
-import { formatStatusLine, Spinner } from "../render/tui";
+import { Spinner } from "../render/tui";
 import type { CliStateHistory } from "../session/state-history";
 import type { detectColorDepth } from "../text/color-depth";
 import { colorCode, rainbowHex } from "../theme/theme";
@@ -30,14 +30,13 @@ import type { ParsedArgs } from "./args";
 import type { BalanceTracking } from "./balance-tracking";
 import { failureStatus } from "./session-hints";
 import type { Environment, RecoverableTurn, SessionState } from "./session-state";
-import type { StatusLine } from "./status-line";
 import { showFreePrivacyNoticeOnce } from "./free-setup";
 import { handleTurnFailure } from "./turn-failure";
 import { saveSettings } from "../platform/settings";
 import { runTurnPreflight } from "./turn-preflight";
 import {
-  SPINNER_START_DELAY_MS, activity, beginTranscriptTurn, contentWidth, endStreamedLine, glyphs, out, palette, renderUserTurn,
-  screen, sectionStyle, setSpinner, spinner, statusBar, style, touchedFiles, turnLineDelta, verificationChecks,
+  SPINNER_START_DELAY_MS, activity, beginTranscriptTurn, contentWidth, endStreamedLine, glyphs, out, palette,
+  sectionStyle, setSpinner, spinner, statusBar, style, touchedFiles, turnLineDelta, verificationChecks,
 } from "./transcript";
 
 export type TurnContext = {
@@ -52,14 +51,10 @@ export type TurnContext = {
   headless: HeadlessEmitter | null;
   stateHistory: CliStateHistory;
   /** Lines the loop runs next as though typed; a provider fallback queues `/retry` here. */
-  queuedInput: string[];
-  /** The input box during a turn (see `turn-composer.ts`); absent when nobody is typing. */
-  composer?: { begin(): void; end(): void };
   /** Kept behind an object because a turn mutates it from an async closure. */
   recoveryState: { last: RecoverableTurn | null };
   state: SessionState;
   balance: Pick<BalanceTracking, "currentBalance" | "balanceWatch" | "sessionSpend" | "persistManualBalance" | "checkBalance" | "balanceHeader">;
-  status: Pick<StatusLine, "showStatus" | "statusRoomFor">;
   openClient: OpenClient;
   navContext: () => NavContext;
   refreshProjectFiles: () => void;
@@ -78,7 +73,6 @@ const addModelUsage = (left: ModelUsage, right: ModelUsage): ModelUsage => ({
 export function createTurnRunner(context: TurnContext): (request: string) => Promise<boolean> {
   const { environment, interactive, ttyMode, depth, rates, headless, stateHistory, recoveryState, state, navContext, refreshProjectFiles } = context;
   const { persistManualBalance, checkBalance, balanceHeader, sessionSpend } = context.balance;
-  const { showStatus, statusRoomFor } = context.status;
 
   /** Whether the extra model pass is on. A setting, read once, defaulting to off. */
   const suggestModel = (environment.ARCHYMEDES_SUGGEST_MODEL ?? "").trim().toLowerCase() === "on";
@@ -118,16 +112,6 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
       headless?.turnStart(request);
       state.sessionRequest ??= request; // the opening ask, kept for `/task`
       state.streamedAnswer = false;
-      if (screen) {
-        // A queued message starts without a keystroke, so the previous turn's suggestion rows are
-        // still up; the request's bubble would be drawn across them.
-        screen.clearSuggestions();
-        screen.parkInTranscript();
-        // The bubble already carries its own "you" label on the box border — a rule printed above
-        // it duplicated that label as a second, redundant divider (a leftover from before the two
-        // terminal UIs were merged into one). One clearly delimited speaker marker, not two.
-        out.write(`${renderUserTurn(request)}\n`);
-      }
 
       if (!await runTurnPreflight(request, context)) return false;
       // Once ever, the first time free mode actually sends something: free endpoints may log it.
@@ -175,15 +159,12 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
         const spinnerAccent = () => state.activeTheme?.name === "rainbow"
           ? colorCode(rainbowHex(Date.now() / 1500), depth)
           : palette.primary;
-        const turnSpinner = new Spinner(() => screen?.pinned
-          ? showStatus(formatStatusLine(fields(), statusRoomFor(screen.current.columns), depth, glyphs, spinnerAccent()))
-          : statusBar.render(fields(), depth, glyphs, spinnerAccent()), 120, glyphs, SPINNER_START_DELAY_MS);
+        const turnSpinner = new Spinner(() => statusBar.render(fields(), depth, glyphs, spinnerAccent()), 120, glyphs, SPINNER_START_DELAY_MS);
         setSpinner(turnSpinner);
         turnSpinner.start();
       }
       state.turnActive = true;
       state.currentTurnAbort = new AbortController();
-      context.composer?.begin();
       // Recorded only once the request is about to contact the model. A task rejected by safety,
       // balance or budget preflight was never attempted and must not become a misleading /retry.
       recoveryState.last = { request, status: "failed", toolCalls: 0, changedFiles: 0 };
@@ -344,7 +325,6 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
       } catch (error) {
         return await handleTurnFailure(error, request, context);
       } finally {
-        context.composer?.end();
         state.turnActive = false;
         state.currentTurnAbort = undefined;
         state.lastTurnEndedAt = Date.now();
