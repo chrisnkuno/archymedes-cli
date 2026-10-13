@@ -25,11 +25,11 @@ await mkdir(artifactRoot, { recursive: true });
 run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", archive], packageRoot);
 const entries = run(["tar", "-tzf", archive], root).trim().split(/\r?\n/);
 for (const entry of entries) {
-  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|bin\/archymedes\.mjs$|dist(?:\/|$))/);
+  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|bin\/(?:archymedes\.mjs|launcher\.mjs|launcher\.d\.mts)$|dist(?:\/|$))/);
   assert(!entry.split("/").some((part) => ["..", ".private", ".env", ".archymedes", "node_modules"].includes(part)), `Unexpected packed path: ${entry}`);
   assert(!/\.(?:test\.[cm]?[jt]sx?|map)$/.test(entry), `Development artifact: ${entry}`);
 }
-for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "bin/archymedes.mjs", "dist/archymedes.mjs"]) {
+for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "bin/archymedes.mjs", "bin/launcher.mjs", "bin/launcher.d.mts", "dist/archymedes.mjs"]) {
   assert(entries.includes(`package/${required}`), `Missing ${required}`);
 }
 
