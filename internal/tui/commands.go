@@ -36,6 +36,8 @@ func init() {
 		{"undo", "[code|conversation]", "Revert the last turn: files, conversation, or both", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("undo", arg) }},
 		{"cost", "", "What this session has spent, and on what", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("cost", "") }},
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
+		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
+		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"pager", "", "Read the whole session, with line numbers, search and copy", func(m *Model, _ string) tea.Cmd { m.openWindow(m.transcriptPager()); return nil }},
 		{"find", "<text>", "Search the session and jump to the newest match", (*Model).cmdFind},

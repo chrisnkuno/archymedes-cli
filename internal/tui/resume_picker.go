@@ -10,6 +10,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 )
 
@@ -97,7 +99,10 @@ func (p *resumePicker) view(m *Model) string {
 	case p.err != "":
 		b.WriteString(th.Bad.Render(ansi.Wrap(p.err, inner, "")) + "\n")
 	case len(p.sessions) == 0:
-		b.WriteString(th.Faint.Render("No earlier sessions in this project.") + "\n")
+		if photo := m.photoCard(gallery.OfTheme("greek", 2), min(24, inner), 7); photo != nil {
+			b.WriteString(strings.Join(centreLines(photo, inner), "\n") + "\n\n")
+		}
+		b.WriteString(th.Faint.Render("No earlier sessions in this project; this one is the first.") + "\n")
 	default:
 		now := time.Now()
 		rows := min(len(p.shown), max(m.transcriptHeight()-6, 3))

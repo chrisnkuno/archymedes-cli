@@ -68,14 +68,19 @@ func LoadKeys(dir string) (map[string][]string, error) {
 // SaveKeys writes the changed bindings atomically (a temporary file renamed into place), so a crash
 // mid-write never leaves a half-written file that would discard every binding.
 func SaveKeys(dir string, keys map[string][]string) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(keys, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".keys-*.json")
+	return writeAtomic(dir, KeysFile, data)
+}
+
+// writeAtomic writes name in dir through a temporary file renamed into place.
+func writeAtomic(dir, name string, data []byte) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".write-*.json")
 	if err != nil {
 		return err
 	}
@@ -88,5 +93,33 @@ func SaveKeys(dir string, keys map[string][]string) error {
 		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, KeysFile))
+	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+}
+
+// StateFile is what the interface remembers about the person using it, as opposed to settings
+// they chose: so far, only whether they have been welcomed.
+const StateFile = "state.json"
+
+// State is the contents of StateFile.
+type State struct {
+	// Welcomed is set once the first request is sent: the home screen stops explaining itself.
+	Welcomed bool `json:"welcomed"`
+}
+
+// LoadState reads StateFile; missing or unreadable is the zero State (a first run).
+func LoadState(dir string) State {
+	var state State
+	if data, err := os.ReadFile(filepath.Join(dir, StateFile)); err == nil {
+		_ = json.Unmarshal(data, &state)
+	}
+	return state
+}
+
+// SaveState writes StateFile atomically.
+func SaveState(dir string, state State) error {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeAtomic(dir, StateFile, data)
 }

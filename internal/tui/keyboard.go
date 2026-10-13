@@ -100,6 +100,8 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 		}
 		return m.submit()
+	case key.Matches(msg, k.Complete) && len(m.input.complete) == 0 && m.offerStarter():
+		return nil // on the home screen tab offers a request to start from
 	case key.Matches(msg, k.Complete) && m.input.accept():
 		return nil
 	case key.Matches(msg, k.Mode):

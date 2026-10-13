@@ -18,7 +18,7 @@ import (
 // dockApps are the dock's apps, in order: action id, icon, name.
 var dockApps = []struct{ id, icon, name string }{
 	{"chat", "◆", "Chat"}, {"files", "▤", "Files"}, {"search", "◈", "Search"}, {"sessions", "◷", "Sessions"},
-	{"models", "◎", "Models"}, {"themes", "◐", "Themes"}, {"keys", "▦", "Keys"}, {"help", "?", "Help"}, {"stats", "▥", "Stats"},
+	{"models", "◎", "Models"}, {"themes", "◐", "Themes"}, {"keys", "▦", "Keys"}, {"help", "?", "Help"}, {"stats", "▥", "Stats"}, {"changes", "±", "Changes"}, {"gallery", "▣", "Gallery"},
 }
 
 func (m *Model) topBar() string {
@@ -115,8 +115,10 @@ func (m *Model) dock() string {
 	type form func(icon, name, key string) string
 	// Widest first; the first that fits is drawn. Names go before icons: a word is what makes a
 	// dock readable, the icon only decorates it.
+	full := func(icon, name, key string) string { return icon + " " + name + " " + key }
 	forms := []form{
-		func(icon, name, key string) string { return icon + " " + name + " " + key },
+		full, // spaced out (below), then the same closer together
+		full,
 		func(_, name, key string) string { return key + " " + name },
 		func(icon, _, key string) string { return key + icon },
 		func(_, _, key string) string { return key },

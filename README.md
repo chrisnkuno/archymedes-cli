@@ -133,12 +133,33 @@ ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/archymedes   # log every protocol
 
 The interface is a small desktop: a top bar with a `◇` start menu (ctrl+space — finds any app,
 action, session or file) and a tab per open window, and a dock along the bottom with every app and
-its key (F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats) — click
-or press. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
+its key (F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
+F10 Changes, F12 Gallery) — click or press. Changes is the working tree against the last commit, file by file:
+each file's lines added and removed, and the selected file's diff with old and new line numbers
+(it reads again when a turn ends, so the agent's edits show as they land). Models lists every
+model of every provider, read live from the providers, OpenRouter's whole catalog and every free
+model included; tab narrows it to the free ones or the ones ready to use, and a model whose
+provider has no key yet is shown with the key it needs.
+
+The home screen turns slowly through photographs of mathematics, the Greek world, science and
+code beside the mark (from Unsplash, shipped in the binary and credited on screen; see
+[`internal/gallery/CREDITS.md`](internal/gallery/CREDITS.md)). A click on it, or F12, opens the
+Gallery: the built-in copy beside the full-resolution original loaded live from Unsplash's image
+CDN. It draws with the sharpest the terminal has, found by asking it: Kitty graphics (kitty,
+Ghostty, WezTerm), Sixel (Windows Terminal 1.22+, foot, mlterm, VS Code with images on), or
+otherwise half-block glyphs through ntcharts' picture component, which hold two pixels a cell and so
+look pixelated at any size. g switches between the ways the terminal can draw; f changes the fit.
+The home screen's photo is drawn the same way: in Sixel where the terminal draws it (asked once at
+start), in glyphs otherwise. A first run says what to do in three
+steps and offers requests to start from — tab puts one in the input, and when the project has
+uncommitted changes the first offer is to review them. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
 call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
 is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the settings
-file. `ARCHYMEDES_REDUCE_MOTION=1` turns off animated scrolling; `ARCHYMEDES_DEBUG_LOG=<file>` writes
-a structured log of what the interface does.
+file. `ARCHYMEDES_REDUCE_MOTION=1` turns off animated scrolling (and the photos stay still);
+`ARCHYMEDES_PHOTOS=off` leaves the photos out, and `ARCHYMEDES_PHOTOS=local` keeps them to the
+built-in copies (the Gallery fetches nothing); `ARCHYMEDES_MODELS_OFFLINE=1` keeps the model list to
+its cache unless refreshed; `ARCHYMEDES_DEBUG_LOG=<file>` writes a structured log of what the
+interface does.
 
 `ARCHYMEDES_AGENT` overrides the agent command (a JSON array, or a space-separated string). Commands
 the interface does not have yet say so when typed; WS-7 in [`TRACKER.md`](docs/continuation/TRACKER.md)

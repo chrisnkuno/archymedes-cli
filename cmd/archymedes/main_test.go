@@ -17,3 +17,11 @@ func TestAgentCommandAcceptsAJSONArraySoPathsMayHoldSpaces(t *testing.T) {
 		t.Fatal("a malformed array is an error, not a command")
 	}
 }
+
+func TestPhotosAreOnUnlessSaidOtherwise(t *testing.T) {
+	for value, off := range map[string]bool{"": false, "on": false, "off": true, "OFF": true, "0": true, "false": true, "no": true, " off ": true} {
+		if photosOff(value) != off {
+			t.Errorf("ARCHYMEDES_PHOTOS=%q: off=%v", value, !off)
+		}
+	}
+}

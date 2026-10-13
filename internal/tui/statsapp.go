@@ -14,6 +14,8 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/linechart/timeserieslinechart"
 	"github.com/NimbleMarkets/ntcharts/v2/sparkline"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
 )
 
 // The Stats app (F9): the session as charts (ntcharts v2), about what a person watching an agent
@@ -81,7 +83,10 @@ func (s *statsApp) view(m *Model) string {
 	width, height := m.width, max(m.windowHeight(), 1)
 	lines := []string{" " + ansi.Truncate(s.summary(m), max(width-2, 0), "…")}
 	if len(st.turns) == 0 {
-		lines = append(lines, "", " "+th.Faint.Render("No turns yet — the charts fill in as you work."))
+		lines = append(lines, m.emptyState(gallery.OfTheme("science", 0), []string{
+			th.Body.Render("No turns yet."),
+			th.Faint.Render("The charts fill in as you work: tokens, time and tools, turn by turn."),
+		}, width, height-1)...)
 		return strings.Join(fitLines(lines, width, height), "\n")
 	}
 

@@ -38,6 +38,8 @@ func (f *fakeAgent) Models(context.Context, bool) (acp.ModelList, error) {
 		{Provider: "anthropic", ProviderLabel: "Anthropic", Model: "claude-sonnet-5", IsDefault: true, Price: "USD 3.00/USD 15.00 per Mtok"},
 		{Provider: "anthropic", ProviderLabel: "Anthropic", Model: "claude-opus-5", Price: "USD 15.00/USD 75.00 per Mtok"},
 		{Provider: "openai", ProviderLabel: "OpenAI", Model: "gpt-5.6-terra", Price: "unpriced"},
+		{Provider: "free", ProviderLabel: "Free models", Model: "meta-llama/llama-4-maverick:free", Price: "free", Free: true},
+		{Provider: "google", ProviderLabel: "Google Gemini", Model: "gemini-2.5-pro", Price: "unpriced", Locked: true, Missing: []string{"GOOGLE_API_KEY"}},
 	}}, nil
 }
 func (f *fakeAgent) SetModel(_ context.Context, _ string, provider, model string) (acp.SessionInfo, error) {

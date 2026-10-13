@@ -73,6 +73,8 @@ func run(args []string) int {
 		Mouse: !inv.NoMouse, Cwd: cwd, Version: version, AgentArgv: agent,
 		Motion: os.Getenv("ARCHYMEDES_REDUCE_MOTION") == "",
 		Debug:  debugLog(), ConfigDir: config.Default(),
+		NoPhotos:      photosOff(os.Getenv("ARCHYMEDES_PHOTOS")),
+		PhotosOffline: strings.EqualFold(strings.TrimSpace(os.Getenv("ARCHYMEDES_PHOTOS")), "local"),
 	})
 	program := tea.NewProgram(ui)
 	ui.SetSender(program.Send)
@@ -81,6 +83,15 @@ func run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// photosOff is ARCHYMEDES_PHOTOS saying no: the interface is then text only.
+func photosOff(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "off", "0", "false", "no":
+		return true
+	}
+	return false
 }
 
 // debugLog opens ARCHYMEDES_DEBUG_LOG for appending, or returns nil (no logging) when unset or

@@ -187,6 +187,10 @@ type ModelChoice struct {
 	IsDefault     bool   `json:"isDefault"`
 	Live          bool   `json:"live"`
 	Price         string `json:"price"`
+	// Free costs nothing to use; Locked is a provider without a key yet, and Missing says which.
+	Free    bool     `json:"free"`
+	Locked  bool     `json:"locked"`
+	Missing []string `json:"missing"`
 }
 
 // ModelList is what the agent can switch to, and the providers it cannot use yet.

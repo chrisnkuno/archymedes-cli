@@ -26,7 +26,7 @@ func unconfigured(t *testing.T) (*Model, *fakeAgent) {
 func TestFirstRunAsksForAProviderAndAKeyThenOpensTheSession(t *testing.T) {
 	m, agent := unconfigured(t)
 	s := screen(m)
-	if !strings.Contains(s, "Set up a model") || !strings.Contains(s, "Free models (OpenRouter)") || strings.Contains(s, "OpenAI-compatible") {
+	if !strings.Contains(s, "Welcome to Archymedes") || !strings.Contains(s, "Free models (OpenRouter)") || strings.Contains(s, "OpenAI-compatible") {
 		t.Fatalf("setup screen:\n%s", s)
 	}
 	press(m, tea.KeyDown, 0)

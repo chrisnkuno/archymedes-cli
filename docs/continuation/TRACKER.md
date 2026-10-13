@@ -5,6 +5,32 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-12: First minutes, diffs, photographs and the whole model list (2026-10-14)
+
+User: "increase user experience further for first time users… add git diff view… showcase images on
+the home section on the side of the rotating pyramid fetch from unsplash math related stuff,
+code/stem/science/greek figures etc and use ntcharts to display", then "pull unsplash images from
+here then let's reuse them on all cli", then "add the complete full list of the models, especially
+the free ones, make sure the cli can pull the models from the providers".
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-12.1 | Photographs: 11 Unsplash photos (Greek, math, science, code), license checked, resized ≤360 px (214 KB), embedded and credited | done | `internal/gallery` | unit | `CREDITS.md`; `TestEveryPhotoIsShippedDecodesAndIsCredited` |
+| WS-12.2 | Drawn with ntcharts `picture` (half-block glyphs, cover crop), cached per size; home screen photo beside the mark, turning every 9 s (still under reduced motion, a click turns it); credit linked (OSC 8); `ARCHYMEDES_PHOTOS=off` | done | `internal/tui/photos.go`, `landing.go` | unit + PTY | `TestTheHomeScreenShowsACreditedPhoto…`, PTY "welcomes a first run beside a credited photo" |
+| WS-12.3 | Photos reused: first-run setup ("Welcome to Archymedes"), empty Changes, empty Stats, empty session picker | done | `setup.go`, `changes.go`, `statsapp.go`, `resume_picker.go` | unit | |
+| WS-12.4 | First run: three steps on the home screen; starters (a review of uncommitted changes first when there are some); tab or a click fills the input; first turn ends with a tip; remembered in `state.json` | done | `welcome.go`, `internal/config` | unit + PTY | `TestAFirstRunSaysWhatToDo…`, `TestOnceWelcomed…` |
+| WS-12.5 | Changes app (F10, `/changes`): git status + numstat per file with bars, selected diff with old/new line numbers, n/p hunks, enter reads it in the pager, @ mentions, reread when a turn ends; agent state under `.archymedes/` left out | done | `internal/project/git.go`, `internal/tui/changes.go` | unit + PTY | `TestChangesLists…`, `TestDiffRowsNumber…` |
+| WS-12.6 | Click targets after a hyperlink on the same row were shifted by the URL's length (BubbleZone ends an escape at its first letter); OSC sequences are swapped for zero-width placeholders while scanning | done | `internal/tui/zones.go` | unit | `TestAClickAfterALinkOnTheSameRowLandsOnItsTarget` |
+| WS-12.7 | Whole model list: every provider's models, locked ones (no key) included with what they need; OpenRouter's public listing read without a key (all of its catalog, every free model); free models marked and listed once; stale cache refreshed when the picker opens; `ARCHYMEDES_MODELS_OFFLINE`. Picker: tab All / Free / Ready, locked rows dimmed and explained | done | `app/acp-models.ts`, `core/providers/model-list.ts`, `internal/tui/modelpicker.go` | unit + live | live: 468 models, 16 free, 0 errors; `acp-models.test.ts`, `TestTheModelPickerNarrows…` |
+| WS-12.9 | Gallery app (F12, `/gallery`, a click on the home photo), on ntcharts' picture example: persistent `picture.Model` (built-in copy) beside `pictureurl.Model` (full resolution, live from Unsplash's CDN, with an identifying User-Agent); every picture message forwarded; sizes applied in Update; label, picture and captions per pane; f fit, g Kitty (probed, with a badge), r reload, ←/→ photo; `ARCHYMEDES_PHOTOS=local` fetches nothing; the terminal's cell size feeds the home photo too | done | `internal/tui/galleryapp.go`, `internal/gallery` (CDN addresses) | unit + PTY | `galleryapp_test.go` (stand-in CDN, failure, offline, every size), PTY "opens a photo full size in the Gallery" |
+| WS-12.10 | "Why is it still pixelized?" Glyphs are two pixels a cell, so a 55×40 pane is 55×80 pixels whatever the source; the user's terminal (Windows Terminal, no Kitty) draws Sixel. Sixel added beside glyphs and Kitty: DA1 attribute 4 detected, cell size from CSI 16 t or the window's pixels (CSI 14 t), the photo fitted and encoded (charm `x/ansi/sixel`), written over blank picture cells after the frame, redrawn only when what it shows changes, the screen cleared on leaving; the best mode is chosen by itself, g cycles | done | `internal/tui/sixel.go`, `galleryapp.go` | unit | `TestTheGalleryDrawsInSixel…`, `TestGCycles…`, `TestASixelPictureFills…`; output decoded with an independent decoder and looked at (charm's own `sixel.Decoder` mis-decodes it — not used) |
+| WS-12.11 | The home screen's photo in Sixel too: DA1 and the window's pixel size asked at start (not only in the Gallery); the photo's cells blank, the picture written at its click zone's position once the frame is drawn; one mechanism for both screens — a scene is where its pictures sit (a change clears the screen) and what they show (a change draws over them) | done | `internal/tui/sixel.go`, `landing.go`, `model.go` | unit | `TestTheHomePhotoIsDrawnInSixel…`, `…TurnsWithoutClearingAndLeavesNothingBehind`, `TestWithoutSixel…`; decoded and looked at |
+| WS-12.8 | Verification | done | | | release:check clean (192 files / 2,955 tests); Go tests (race ×3 clean), 192 TS test files / 2,953 tests (1 load-sensitive process-tree test failed in the full run, passes 3/3 alone; untouched), typecheck, package verify (now removes the interface package wherever npm put it), PTY 11/11, six 3.1.0 binaries rebuilt (17.3 MB, was 14.6) |
+
+Gotchas: ntcharts `picture` crops from the centre; a portrait bust anchored top loses its face, so
+crops are fixed in the source file instead. Providers other than OpenRouter need a key to list
+their models, so without one they show the models this build knows.
+
 ## WS-11: The TypeScript interface is gone (2026-10-13)
 
 User: "remove the TS interface". The interactive interface is the Go program only; the TypeScript

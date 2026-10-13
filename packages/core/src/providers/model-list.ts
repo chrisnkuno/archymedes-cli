@@ -35,10 +35,11 @@ export function modelsEndpoint(provider: ProviderId, environment: Record<string,
   switch (provider) {
     case "free": return { url: `${FREE_BASE_URL}/models`, headers: {} };
     case "openrouter": {
+      // OpenRouter's listing is public: without a key it is still read, so its models can be shown
+      // (locked) before one is added. With a key it is sent, as the provider expects.
       const key = trimmed(environment.OPENROUTER_API_KEY);
-      if (!key) return undefined;
       const base = trimmed(environment.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1";
-      return { url: modelsUrl(base), headers: { authorization: `Bearer ${key}` } };
+      return { url: modelsUrl(base), headers: key ? { authorization: `Bearer ${key}` } : {} };
     }
     case "archymedes-cloud":
       // The routed model is intentionally `auto`; the routing receipt names the concrete model.

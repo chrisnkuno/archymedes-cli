@@ -119,7 +119,7 @@ func (m *Model) thinking() bool {
 // Compositor, and Canvas.Render trims trailing blank rows, which fillHeight puts back.
 func (m *Model) composite(content string) string {
 	// The frame's click targets are registered from the frame itself, before anything covers it.
-	content = m.zones.frame.Scan(content)
+	content = scan(m.zones.frame, content)
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(content)}
 	switch {
 	case m.approval != nil:
@@ -133,7 +133,7 @@ func (m *Model) composite(content string) string {
 		box = scanAt(m.zones.dialog, mark(m.zones.dialog, "dialog", box), x, y)
 		layers = append(layers, lipgloss.NewLayer(box).X(x).Y(y).Z(2))
 	default:
-		m.zones.dialog.Scan("") // no dialog: no dialog targets
+		scan(m.zones.dialog, "") // no dialog: no dialog targets
 	}
 	// Toasts stack from the top right; their zones are registered as one block at their places.
 	var marked []string
@@ -153,7 +153,7 @@ func (m *Model) composite(content string) string {
 		}
 		y += h
 	}
-	m.zones.toasts.Scan(strings.Join(marked, "\n"))
+	scan(m.zones.toasts, strings.Join(marked, "\n"))
 	if len(layers) == 1 {
 		return content
 	}

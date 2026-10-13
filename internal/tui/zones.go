@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -40,13 +42,43 @@ func scanAt(m *zone.Manager, block string, x, y int) string {
 	for _, line := range lines {
 		padded = append(padded, pad+line)
 	}
-	stripped := strings.Split(m.Scan(strings.Join(padded, "\n")), "\n")
+	stripped := strings.Split(scan(m, strings.Join(padded, "\n")), "\n")
 	out := stripped[min(max(y, 0), len(stripped)):]
 	for i, line := range out {
 		out[i] = ansi.TruncateLeft(line, len(pad), "")
 	}
 	return strings.Join(out, "\n")
 }
+
+// oscSequence is an operating system command: a hyperlink (OSC 8), a title, a clipboard write.
+var oscSequence = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)")
+
+// scan is m.Scan, made correct for text holding hyperlinks. BubbleZone measures a line by taking
+// an escape sequence to end at its first letter, which is right for colours and wrong for OSC: a
+// link's "\x1b]8;;https://…" would "end" at the h, and the rest of its URL count as visible
+// width, moving every target after a link on its row. So each OSC sequence is swapped for a short
+// CSI placeholder (zero width to the scanner) while it scans, and put back after.
+func scan(m *zone.Manager, text string) string {
+	var held []string
+	text = oscSequence.ReplaceAllStringFunc(text, func(seq string) string {
+		held = append(held, seq)
+		return fmt.Sprintf("\x1b[65535;%dy", len(held)-1)
+	})
+	text = m.Scan(text)
+	if len(held) == 0 {
+		return text
+	}
+	return placeholder.ReplaceAllStringFunc(text, func(p string) string {
+		var i int
+		fmt.Sscanf(p, "\x1b[65535;%dy", &i)
+		if i < 0 || i >= len(held) {
+			return p
+		}
+		return held[i]
+	})
+}
+
+var placeholder = regexp.MustCompile(`\x1b\[65535;\d+y`)
 
 // mark is m.Mark when there is a manager, and the text itself when there is not (the pager draws
 // transcript blocks without click targets).

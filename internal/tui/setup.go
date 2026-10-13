@@ -2,6 +2,10 @@ package tui
 
 import (
 	"context"
+
+	"charm.land/lipgloss/v2"
+
+	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
 	"strings"
 	"time"
 
@@ -127,10 +131,19 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 
 func (s *setupOverlay) view(m *Model) string {
 	th := m.th
-	width := overlayWidth(m, 72)
+	width := overlayWidth(m, 76)
 	inner := max(width-4, 8)
+	// A photo beside the words, where the dialog is wide enough to keep both readable.
+	const photoCols, photoRows = 18, 8
+	photo := []string(nil)
+	if inner >= 62 {
+		photo = m.photoCard(gallery.OfTheme("greek", 0), photoCols, photoRows)
+	}
+	if photo != nil {
+		inner -= photoCols + 3
+	}
 	var b strings.Builder
-	b.WriteString(th.Body.Render(ansi.Wrap("Archymedes needs a model to work with. Pick a provider and paste its key; it is saved to your settings and checked before use.", inner, "")) + "\n\n")
+	b.WriteString(th.Body.Render(ansi.Wrap("First, a model to work with. Pick a provider and paste its key; it is saved to your settings and checked before use.", inner, "")) + "\n\n")
 	switch {
 	case len(s.providers) == 0:
 		b.WriteString(th.Warn.Render(ansi.Wrap(s.reason, inner, "")) + "\n\n")
@@ -170,5 +183,9 @@ func (s *setupOverlay) view(m *Model) string {
 		}
 		b.WriteString("\n\n" + th.Faint.Render("enter save · esc back"))
 	}
-	return frame(th, "Set up a model", b.String(), width)
+	body := b.String()
+	if photo != nil {
+		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(photo, "\n"), "   ", body)
+	}
+	return frame(th, "Welcome to Archymedes", body, width)
 }

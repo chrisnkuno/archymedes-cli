@@ -17,13 +17,13 @@ func fkey(n int) tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeyF1 + rune
 
 func TestTheDesktopNeedsNoSetup(t *testing.T) {
 	m := projectModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
 	rows := strings.Split(screen(m), "\n")
 	if !strings.Contains(rows[0], "◇") || !strings.Contains(rows[0], "Chat") {
 		t.Fatalf("top bar: %q", rows[0])
 	}
 	dock := rows[len(rows)-1]
-	for _, want := range []string{"Chat F1", "Files F2", "Search F3", "Sessions F4", "Models F5", "Themes F6", "Keys F7", "Help F8", "Stats F9"} {
+	for _, want := range []string{"Chat F1", "Files F2", "Search F3", "Sessions F4", "Models F5", "Themes F6", "Keys F7", "Help F8", "Stats F9", "Changes F10", "Gallery F12"} {
 		if !strings.Contains(dock, want) {
 			t.Fatalf("dock lacks %q: %q", want, dock)
 		}
@@ -67,7 +67,7 @@ func TestWindowsOpenSwitchCloseAndKeepTheirState(t *testing.T) {
 
 func TestTheBarsAnswerClicks(t *testing.T) {
 	m := projectModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
 	x, y := cellOf(t, m, "Files F2")
 	run(m, click(m, x+1, y))
 	if _, ok := m.activeWindow().(*filesView); !ok {

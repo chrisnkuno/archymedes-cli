@@ -58,7 +58,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
-  function boot(cols = 100, rows = 30, extra: string[] = []) {
+  function boot(cols = 100, rows = 30, extra: string[] = [], env: Record<string, string> = {}) {
     proc = spawnArchymedes({
       executable: binary,
       args: ["--no-mouse", "--provider", "anthropic", ...extra],
@@ -68,8 +68,10 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
         ANTHROPIC_BASE_URL: stub.url,
         ARCHYMEDES_CONFIG_DIR: configDir,
         ARCHYMEDES_FX_OFFLINE: "true",
+        ARCHYMEDES_MODELS_OFFLINE: "true", // the model list never reaches past the stub
         ARCHYMEDES_AGENT: `${bunExecutable()} run ${path.join(REPO, "packages/archymedes-cli/src/archymedes.ts")}`,
         TZ: "UTC",
+        ...env,
       },
     });
     return { proc, screen: new VirtualScreen(proc, cols, rows) };
@@ -207,7 +209,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
 
     const again = boot(120, 32);
     await again.proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
-    await screenShows(again.screen, "Files ctrl+e"); // the dock shows the saved key
+    await screenShows(again.screen, /Files ctrl\+e|ctrl\+e Files/); // the dock shows the saved key, in whichever form fits
     again.proc.write("\x05");
     await screenShows(again.screen, "files  ");
   }, 150_000);
@@ -234,6 +236,51 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     expect(await settle(screen)).toContain("turn 1 ·");
   }, 120_000);
 
+  it("welcomes a first run beside a credited photo, and shows the agent's edit as a diff in Changes", async () => {
+    // A git repository, so Changes has a commit to compare against.
+    for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"]]) {
+      execFileSync("git", args, { cwd });
+    }
+    stub.enqueue({ kind: "tool_call", toolName: "write_file", input: { path: "notes.md", content: "first line\nsecond line\n" }, text: "Writing it." });
+    stub.enqueue({ kind: "text", text: "Wrote notes.md." });
+    const { proc, screen } = boot(130, 34);
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    const home = await settle(screen);
+    expect(home).toContain("New here? Three things:");
+    expect(home).toContain("Unsplash"); // a photo's credit, beside the mark
+    expect(home).toContain("Explain what this project does");
+
+    proc.write("write notes\r");
+    await proc.waitFor("Allow this?", { timeoutMs: 30_000 });
+    proc.write("y");
+    await proc.waitFor(/── done/, { timeoutMs: 30_000 });
+    await proc.waitFor("First turn done", { timeoutMs: 10_000 });
+
+    proc.write("\x1b[21~"); // F10
+    await proc.waitFor("Changes", { timeoutMs: 10_000 });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const changes = await settle(screen);
+    expect(changes).toContain("notes.md");
+    expect(changes).toContain("+first line");
+    expect(changes).toMatch(/1 \+first line/); // its new line number in the gutter
+  }, 120_000);
+
+  it("opens a photo full size in the Gallery, turns it, and gives the screen back", async () => {
+    const { proc, screen } = boot(130, 34, [], { ARCHYMEDES_PHOTOS: "local" }); // no network in tests
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    proc.write("\x1b[24~"); // F12
+    await screenShows(screen, "built into Archymedes");
+    expect(await settle(screen)).toMatch(/1 of 11|\d+ of 11/);
+    const before = await settle(screen);
+    proc.write("\x1b[C"); // →
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await settle(screen)).not.toEqual(before);
+    proc.write("f");
+    await screenShows(screen, "fit cover");
+    proc.write("\x1b"); // esc
+    await screenShows(screen, "Ask Archymedes");
+  }, 120_000);
+
   it("sets up a provider on first run and opens the session with it", async () => {
     stub.enqueue({ kind: "text", text: "hello after setup" });
     proc = spawnArchymedes({
@@ -246,11 +293,12 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
         ANTHROPIC_BASE_URL: stub.url,
         ARCHYMEDES_CONFIG_DIR: configDir,
         ARCHYMEDES_FX_OFFLINE: "true",
+        ARCHYMEDES_MODELS_OFFLINE: "true", // the model list never reaches past the stub
         ARCHYMEDES_AGENT: `${bunExecutable()} run ${path.join(REPO, "packages/archymedes-cli/src/archymedes.ts")}`,
       },
     });
     const screen = new VirtualScreen(proc, 100, 30);
-    await proc.waitFor("Set up a model", { timeoutMs: 60_000 });
+    await proc.waitFor("Welcome to Archymedes", { timeoutMs: 60_000 });
     proc.write("\x1b[B"); // Free → Anthropic
     proc.write("\r");
     await proc.waitFor("Get a key", { timeoutMs: 10_000 });
@@ -266,13 +314,14 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
   }, 150_000);
 });
 
-async function screenShows(screen: VirtualScreen, text: string, timeoutMs = 15_000): Promise<void> {
+async function screenShows(screen: VirtualScreen, text: string | RegExp, timeoutMs = 15_000): Promise<void> {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
-    if ((await screen.text()).includes(text)) return;
+    const shown = await screen.text();
+    if (typeof text === "string" ? shown.includes(text) : text.test(shown)) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`screen never showed ${JSON.stringify(text)}:\n${await screen.text()}`);
+  throw new Error(`screen never showed ${String(text)}:\n${await screen.text()}`);
 }
 
 async function readdirText(directory: string): Promise<string> {

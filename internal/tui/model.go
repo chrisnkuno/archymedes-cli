@@ -14,6 +14,10 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/log/v2"
+	"github.com/NimbleMarkets/ntcharts/v2/picture"
+	"github.com/NimbleMarkets/ntcharts/v2/picture/pictureurl"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 	"github.com/chrisnkuno/archymedes-cli/internal/config"
@@ -64,6 +68,11 @@ type Options struct {
 	// AgentArgv runs the agent directly (without `acp`), for commands that are the agent's own
 	// programs: /settings, /update, /providers.
 	AgentArgv []string
+	// NoPhotos leaves the photographs out (ARCHYMEDES_PHOTOS=off): text only, everywhere.
+	NoPhotos bool
+	// PhotosOffline keeps the photographs to the copies built in (ARCHYMEDES_PHOTOS=local): the
+	// Gallery does not fetch the full-resolution ones from Unsplash.
+	PhotosOffline bool
 }
 
 type phase int
@@ -100,8 +109,25 @@ type Model struct {
 	spinning bool // a spinner tick chain is running
 	animated bool // the landing animation's tick chain is running
 	angle    float64
-	toasts   []toast
-	toastSeq int
+	// The home screen's photograph (photos.go): which one, since when, and the drawings by size.
+	photoIndex int
+	photoAt    time.Time
+	photoCache map[string][]string
+	// The terminal's cell size in pixels once it has said (CSI 16 t), so photos keep their shape,
+	// and its window size in pixels (CSI 14 t), for terminals that only say that.
+	cellW, cellH   int
+	pixelW, pixelH int
+	// Sixel (sixel.go): whether the terminal draws it, and what the pictures on screen were drawn
+	// for — all of it, and where they sit.
+	sixel                bool
+	sixelSig, sixelPlace string
+	// First-run guidance (welcome.go): whether the first request was ever sent, whether this
+	// session sent it (its first turn ends with a tip), and how many files the project has changed.
+	welcomed       bool
+	firstTurnTip   bool
+	projectChanged int
+	toasts         []toast
+	toastSeq       int
 	// knownFiles is the project's file list once read (by /files, or for @ completion).
 	knownFiles []string
 	scroll     scroller
@@ -148,6 +174,9 @@ func New(opts Options) *Model {
 		m.keyOverrides = overrides
 	}
 	m.keys = newKeyMap(m.keyOverrides)
+	m.photoIndex = time.Now().YearDay() // a different photo first each day
+	// Without a config directory there is nowhere to remember a welcome, so do not give one.
+	m.welcomed = opts.ConfigDir == "" || config.LoadState(opts.ConfigDir).Welcomed
 	m.input = newComposer(th)
 	m.scroll = newScroller()
 	m.stats = newSessionStats()
@@ -208,7 +237,9 @@ func (m *Model) Init() tea.Cmd {
 			status = acp.SetupStatus{Configured: true}
 		}
 		return startedMsg{agent, status}
-	}, tea.RequestBackgroundColor, m.animate(), m.sayStartupNote())
+		// What the terminal can draw: its cell size, whether it draws Sixel (DA1), its window in pixels.
+	}, tea.RequestBackgroundColor, picture.RequestCellSize(), tea.Raw(ansi.RequestPrimaryDeviceAttributes+ansi.WindowOp(14)),
+		m.animate(), m.sayStartupNote())
 }
 
 func (m *Model) sayStartupNote() tea.Cmd {
@@ -266,12 +297,55 @@ func (m *Model) forward(agent Agent) {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	// Sixel pictures are drawn over the frame, not in it: after any change, draw them again.
+	if sixel := m.sixelAfter(); sixel != nil {
+		cmd = tea.Batch(cmd, sixel)
+	}
+	return model, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.debug(msg)
+	// The Gallery's pictures own their messages: fetched photos, Kitty frames, the Kitty probe.
+	if _, cell := msg.(uv.CellSizeEvent); !cell && pictureurl.IsPictureMsg(msg) {
+		if g := m.galleryWindow(); g != nil {
+			return m, g.update(m, msg)
+		}
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.setWidth(m.width - 4)
 		m.input.fit()
+		if g := m.galleryWindow(); g != nil {
+			return m, g.relayout(m)
+		}
+		return m, nil
+	case sixelDrawMsg:
+		return m, m.sixelDraw(msg)
+	case uv.PrimaryDeviceAttributesEvent:
+		for _, attr := range msg {
+			if attr == 4 { // Sixel graphics
+				m.sixel = true
+			}
+		}
+		if g := m.galleryWindow(); g != nil {
+			g.sixel = m.sixel
+			return m, g.upgrade()
+		}
+		return m, nil
+	case uv.PixelSizeEvent:
+		m.pixelW, m.pixelH = msg.Width, msg.Height
+		return m, nil
+	case uv.CellSizeEvent:
+		if msg.Width > 0 && msg.Height > 0 && (msg.Width != m.cellW || msg.Height != m.cellH) {
+			m.cellW, m.cellH, m.photoCache = msg.Width, msg.Height, nil
+		}
+		if g := m.galleryWindow(); g != nil {
+			return m, g.update(m, msg)
+		}
 		return m, nil
 	case spinner.TickMsg:
 		m.stats.roll(time.Now())
@@ -288,6 +362,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.angle += 0.06
+		m.turnPhoto(time.Now())
 		return m, animTick()
 	case tea.BackgroundColorMsg:
 		// On a light terminal, unless a theme was asked for, use the light one: a dark ground's
@@ -311,6 +386,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.setupSaved(msg)
 	case filesLoadedMsg:
 		m.filesLoaded(msg)
+		return m, nil
+	case projectStateMsg:
+		m.projectChanged = msg.changed
+		return m, nil
+	case changesLoadedMsg:
+		return m, m.changesLoaded(msg)
+	case diffLoadedMsg:
+		m.diffLoaded(msg)
 		return m, nil
 	case modelsLoadedMsg:
 		return m, m.modelsLoaded(msg)
@@ -350,6 +433,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds := []tea.Cmd{m.animate()}
 		if first {
+			cmds = append(cmds, m.readProjectState())
 			// Once, in the background, after the session is usable: never on the way to the prompt.
 			agent := m.agent
 			cmds = append(cmds, func() tea.Msg {
@@ -451,6 +535,7 @@ func (m *Model) submit() tea.Cmd {
 func (m *Model) send(text string) tea.Cmd {
 	m.tr.add(&userItem{text: text})
 	m.stats.startTurn(text, time.Now())
+	m.welcome()
 	m.stopScroll()
 	m.tr.toBottom()
 	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying = busy, time.Now(), usageTotals{}, nil, ""
@@ -466,6 +551,10 @@ func (m *Model) send(text string) tea.Cmd {
 
 func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 	m.stats.endTurn(msg.stop, time.Now())
+	var reread tea.Cmd
+	if c := m.changesWindow(); c != nil {
+		reread = c.reload(m) // the turn's edits have landed
+	}
 	m.closeAssistant()
 	for _, t := range m.tools {
 		if !t.done {
@@ -481,15 +570,16 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 		m.tr.add(&turnItem{stopReason: msg.stop, usage: m.turnUsage, seconds: time.Since(m.turnStart).Seconds()})
 	}
 	if m.phase == failed {
-		return nil
+		return reread
 	}
 	m.phase = ready
+	tip := m.afterFirstTurn()
 	if len(m.queue) > 0 {
 		next := m.queue[0]
 		m.queue = m.queue[1:]
-		return m.send(next)
+		return tea.Batch(reread, tip, m.send(next))
 	}
-	return nil
+	return tea.Batch(reread, tip)
 }
 
 func (m *Model) cancelTurn() tea.Cmd {

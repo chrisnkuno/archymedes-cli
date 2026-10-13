@@ -14,9 +14,14 @@ import (
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 )
 
-// The model picker: every model the agent can switch to, filtered as you type, with its price,
-// and the providers that still need a key said plainly at the foot. Choosing one switches the
-// session in place; the conversation carries across, exactly as a mode change does.
+// The model picker: every model of every provider — read live from the providers, OpenRouter's
+// whole catalog and every free model included — filtered as you type, with its price. Tab narrows
+// it to the free ones or the ones ready to use; a model whose provider has no key yet is shown,
+// dimmed, with the key it needs. Choosing one switches the session in place; the conversation
+// carries across, exactly as a mode change does.
+
+// pickerViews are the picker's narrowings, in the order tab goes through them.
+var pickerViews = []string{"all", "free", "ready"}
 
 type modelsLoadedMsg struct {
 	list  acp.ModelList
@@ -37,6 +42,18 @@ type modelPicker struct {
 	cursor  int
 	start   int  // first row shown, for clicks
 	pending bool // a switch is in flight
+	narrow  int  // index into pickerViews
+}
+
+// inView is whether a model belongs to the picker's current narrowing.
+func (p *modelPicker) inView(c acp.ModelChoice) bool {
+	switch pickerViews[p.narrow] {
+	case "free":
+		return c.Free
+	case "ready":
+		return !c.Locked
+	}
+	return true
 }
 
 func newModelPicker(m *Model, query string) *modelPicker {
@@ -96,9 +113,15 @@ func (p *modelPicker) refilter() {
 	if p.list == nil {
 		return
 	}
-	entries := make([]paletteEntry, len(p.list.Choices))
+	var entries []paletteEntry
 	for i, c := range p.list.Choices {
-		entries[i] = paletteEntry{label: c.Model + " " + c.ProviderLabel, hint: fmt.Sprint(i)}
+		if p.inView(c) {
+			label := c.Model + " " + c.ProviderLabel
+			if c.Free {
+				label += " free"
+			}
+			entries = append(entries, paletteEntry{label: label, hint: fmt.Sprint(i)})
+		}
 	}
 	p.shown = p.shown[:0]
 	for _, e := range rankEntries(entries, p.filter.Value()) {
@@ -114,6 +137,9 @@ func uniqueModel(choices []acp.ModelChoice, query string) (acp.ModelChoice, bool
 	query = strings.ToLower(strings.TrimSpace(query))
 	var partial []acp.ModelChoice
 	for _, c := range choices {
+		if c.Locked {
+			continue // not switchable until its provider has a key
+		}
 		id := strings.ToLower(c.Model)
 		if id == query || strings.ToLower(c.Provider+" "+c.Model) == query || strings.ToLower(c.Provider+":"+c.Model) == query {
 			return c, true
@@ -169,8 +195,15 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return true, nil
 	case "up", "ctrl+k":
 		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
-	case "down", "ctrl+j", "tab":
+	case "down", "ctrl+j":
 		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
+	case "tab", "shift+tab":
+		step := 1
+		if msg.String() == "shift+tab" {
+			step = len(pickerViews) - 1
+		}
+		p.narrow, p.cursor = (p.narrow+step)%len(pickerViews), 0
+		p.refilter()
 	case "ctrl+r":
 		p.list, p.shown = nil, nil
 		return false, m.loadModels(true, "")
@@ -178,8 +211,12 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if len(p.shown) == 0 {
 			return false, nil
 		}
+		choice := p.shown[p.cursor]
+		if choice.Locked {
+			return false, m.toast(toastWarn, fmt.Sprintf("%s needs %s — /settings adds it, then pick %s", choice.ProviderLabel, strings.Join(choice.Missing, " and "), choice.Model))
+		}
 		p.pending = true
-		return false, m.switchModel(p.shown[p.cursor])
+		return false, m.switchModel(choice)
 	default:
 		var cmd tea.Cmd
 		p.filter, cmd = p.filter.Update(msg)
@@ -187,6 +224,32 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return false, cmd
 	}
 	return false, nil
+}
+
+// tabs is the narrowing strip: each view with how many models it holds, the current one lit.
+func (p *modelPicker) tabs(m *Model, width int) string {
+	th := m.th
+	counts := map[string]int{}
+	for _, c := range p.list.Choices {
+		counts["all"]++
+		if c.Free {
+			counts["free"]++
+		}
+		if !c.Locked {
+			counts["ready"]++
+		}
+	}
+	names := map[string]string{"all": "All", "free": "Free", "ready": "Ready to use"}
+	var parts []string
+	for i, v := range pickerViews {
+		label := fmt.Sprintf(" %s %d ", names[v], counts[v])
+		if i == p.narrow {
+			parts = append(parts, lipgloss.NewStyle().Foreground(th.Bg).Background(th.Primary).Bold(true).Render(label))
+		} else {
+			parts = append(parts, th.Faint.Render(label))
+		}
+	}
+	return ansi.Truncate(strings.Join(parts, " "), width, "")
 }
 
 func (p *modelPicker) view(m *Model) string {
@@ -202,8 +265,10 @@ func (p *modelPicker) view(m *Model) string {
 	case p.list == nil:
 		b.WriteString(th.Bad.Render(ansi.Wrap(p.err, inner, "")) + "\n")
 	default:
-		rows := min(len(p.shown), max(m.transcriptHeight()-8, 3))
+		b.WriteString(p.tabs(m, inner) + "\n")
+		rows := min(len(p.shown), max(m.transcriptHeight()-9, 3))
 		start := max(0, min(p.cursor-rows+1, len(p.shown)-rows))
+		p.start = start
 		// Price first (it is what decides a switch), then the model name takes what is left.
 		priceWidth := min(30, max(inner-2-17-13, 0))
 		modelWidth := max(inner-2-17-priceWidth-1, 4)
@@ -213,13 +278,27 @@ func (p *modelPicker) view(m *Model) string {
 			switch {
 			case c.Model == m.session.Info.Model && c.Provider == m.session.Info.Provider:
 				badge = "✓ "
+			case c.Locked:
+				badge = "· "
 			case c.IsDefault:
 				badge = "★ "
 			}
 			name := padRight(ansi.Truncate(c.Model, modelWidth, "…"), modelWidth+1)
 			provider := padRight(ansi.Truncate(c.ProviderLabel, 16, "…"), 17)
-			price := ansi.Truncate(c.Price, priceWidth, "…")
-			row := th.OK.Render(badge) + th.Body.Render(name) + th.Faint.Render(provider) + th.Highlight.Render(price)
+			priceText := c.Price
+			if c.Locked {
+				priceText = "needs " + strings.Join(c.Missing, " + ")
+			}
+			price := ansi.Truncate(priceText, priceWidth, "…")
+			var row string
+			switch {
+			case c.Locked:
+				row = th.Faint.Render(badge + name + provider + price)
+			case c.Free:
+				row = th.OK.Render(badge) + th.Body.Render(name) + th.Faint.Render(provider) + th.OK.Render(price)
+			default:
+				row = th.OK.Render(badge) + th.Body.Render(name) + th.Faint.Render(provider) + th.Highlight.Render(price)
+			}
 			if i == p.cursor {
 				line := padRight(badge+name+provider+price, inner)
 				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(ansi.Truncate(line, inner, ""))
@@ -230,18 +309,11 @@ func (p *modelPicker) view(m *Model) string {
 		if len(p.shown) == 0 {
 			b.WriteString(th.Faint.Render("nothing matches") + "\n")
 		}
-		for i, u := range p.list.Unconfigured {
-			if i == 2 {
-				b.WriteString(th.Faint.Render(fmt.Sprintf("  …and %d more providers without a key", len(p.list.Unconfigured)-2)) + "\n")
-				break
-			}
-			b.WriteString(th.Faint.Render(ansi.Truncate(fmt.Sprintf("  %s needs %s", u.Label, strings.Join(u.Missing, " and ")), inner, "…")) + "\n")
-		}
 		if p.err != "" {
 			b.WriteString(th.Warn.Render(ansi.Truncate(p.err, inner, "…")) + "\n")
 		}
 	}
-	footer := "enter switch · ctrl+r ask providers again · esc close"
+	footer := "enter switch · tab all/free/ready · ctrl+r ask providers again · esc close"
 	if p.pending {
 		footer = m.spin.View() + " switching…"
 	}

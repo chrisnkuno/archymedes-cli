@@ -72,7 +72,7 @@ func (m *Model) shellKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		id      string
 	}{
 		{k.Start, "start"}, {k.Chat, "chat"}, {k.Files, "files"}, {k.Search, "search"}, {k.Sessions, "sessions"},
-		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Help, "help"},
+		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Help, "help"},
 		{k.NextWindow, "next-window"}, {k.PrevWindow, "prev-window"}, {k.CloseWindow, "close-window"},
 	} {
 		if !key.Matches(msg, b.binding) {
@@ -115,6 +115,10 @@ func (m *Model) runAction(id string) tea.Cmd {
 		m.openOverlay(newThemePicker(m))
 	case "keys":
 		m.openWindow(newKeysApp(m))
+	case "changes":
+		return m.openChanges()
+	case "gallery":
+		return m.openGallery(m.photoIndex)
 	case "stats":
 		for _, w := range m.windows {
 			if s, ok := w.(*statsApp); ok {

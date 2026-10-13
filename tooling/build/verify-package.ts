@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -68,7 +69,11 @@ try {
   assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must reach the agent through the interface");
   // No binary for the platform: the agent still serves non-interactive modes, and asked for the
   // interface it says why there is none — the launcher's notice, not a stand-in interface.
-  await rm(path.join(consumer, "node_modules", ...platformPackage.split("/")), { recursive: true, force: true });
+  // Wherever npm put it: hoisted to the top, or nested under archymedes-cli.
+  for (const at of [path.join(consumer, "node_modules"), path.join(installed, "node_modules")]) {
+    await rm(path.join(at, ...platformPackage.split("/")), { recursive: true, force: true });
+  }
+  assert.throws(() => createRequire(path.join(installed, "bin", "archymedes.mjs")).resolve(`${platformPackage}/package.json`), "the interface package is still installed");
   assert.match(run(["node", command, "--version"], consumer, env), new RegExp(manifest.version.replace(/\./g, "\\.")));
   assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must work without the interface");
   const alone = spawnSync("node", [command], { cwd: consumer, env, encoding: "utf8", input: "" });

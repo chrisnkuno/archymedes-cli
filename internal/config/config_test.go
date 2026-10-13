@@ -53,3 +53,16 @@ func TestKeysRoundTripAndAMissingOrBrokenFileMeansDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestStateStartsUnwelcomedAndRemembers(t *testing.T) {
+	dir := t.TempDir()
+	if LoadState(dir).Welcomed {
+		t.Fatal("a first run is not welcomed yet")
+	}
+	if err := SaveState(dir, State{Welcomed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !LoadState(dir).Welcomed {
+		t.Fatal("not remembered")
+	}
+}

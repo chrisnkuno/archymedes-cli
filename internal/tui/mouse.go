@@ -68,6 +68,17 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if m.landingVisible() {
+		for i := range m.starters() {
+			if frame.Get(fmt.Sprintf("starter:%d", i)).InBounds(msg) {
+				m.useStarter(i)
+				return nil
+			}
+		}
+	}
+	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
+		return m.openGallery(m.photoIndex) // the photo, full size
+	}
 	for _, it := range m.tr.items {
 		if t, ok := it.(*toolItem); ok && t.done && frame.Get("tool:"+t.id).InBounds(msg) {
 			t.open = !t.open
