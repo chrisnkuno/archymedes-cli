@@ -30,6 +30,8 @@ export { bunExecutable };
 export const CONPTY = process.platform === "win32";
 
 export type SpawnArchymedesOptions = {
+  /** A program to run instead of `bun run archymedes.ts` (the Go front end); `args` go to it as given. */
+  executable?: string;
   args?: string[];
   cwd: string;
   env?: Record<string, string | undefined>;
@@ -91,7 +93,10 @@ function escapeRegExp(value: string): string {
 }
 
 export function spawnArchymedes(options: SpawnArchymedesOptions): ArchymedesProcess {
-  const proc = pty.spawn(bunExecutable(), ["run", ARCHYMEDES_ENTRY, ...(options.args ?? [])], {
+  const [file, argv] = options.executable
+    ? [options.executable, options.args ?? []]
+    : [bunExecutable(), ["run", ARCHYMEDES_ENTRY, ...(options.args ?? [])]];
+  const proc = pty.spawn(file, argv, {
     name: "xterm-color",
     cols: options.cols ?? 100,
     rows: options.rows ?? 30,

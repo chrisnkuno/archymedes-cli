@@ -1,0 +1,106 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+)
+
+// handleAgent turns one agent message into transcript changes.
+func (m *Model) handleAgent(msg any) {
+	switch msg := msg.(type) {
+	case acp.TextChunk:
+		m.retrying = ""
+		if m.current == nil {
+			m.current = &assistantItem{open: true}
+			m.tr.add(m.current)
+		}
+		m.current.append(msg.Text)
+	case acp.UserChunk:
+		// A loaded session's history: the person's message, then whatever followed it.
+		m.closeAssistant()
+		m.tr.add(&userItem{text: msg.Text})
+	case acp.PermissionRequest:
+		m.approval = &approval{req: msg}
+	case acp.AgentEvent:
+		m.handleEvent(msg.Event)
+	case acp.Exited:
+		m.phase = failed
+		text := "The agent stopped."
+		if msg.Err != nil {
+			text = "The agent exited: " + msg.Err.Error()
+		}
+		if tail := lastLines(msg.Stderr, 6); tail != "" {
+			text += "\n" + tail
+		}
+		m.notice(noticeError, text)
+	}
+}
+
+func (m *Model) handleEvent(ev acp.Event) {
+	switch ev.Type {
+	case "runtime":
+		if ev.Event != nil {
+			m.handleRuntime(*ev.Event)
+		}
+	case "compaction":
+		m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation: %d → %d messages.", ev.MessagesBefore, ev.MessagesAfter))
+	case "jev-review":
+		m.notice(noticeWarn, fmt.Sprintf("Jev disagreed (%s, %.0f%%); asking the agent to check its work.", ev.Outcome, ev.Probability*100))
+	}
+}
+
+func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
+	switch ev.Type {
+	case "tool_call":
+		m.closeAssistant()
+		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments}
+		m.tools[ev.ToolCallID] = t
+		m.tr.add(t)
+	case "tool_result":
+		if t := m.tools[ev.ToolCallID]; t != nil {
+			t.finish(ev.Content, ev.IsError)
+		}
+	case "model_turn":
+		// One model call's text is one block: the next call's reply (a verification pass, say) is
+		// a new paragraph, not a continuation glued onto this one.
+		m.closeAssistant()
+		if ev.Usage != nil {
+			m.turnUsage.input += ev.Usage.InputTokens
+			m.turnUsage.output += ev.Usage.OutputTokens
+			m.usage.input += ev.Usage.InputTokens
+			m.usage.output += ev.Usage.OutputTokens
+		}
+	case "provider_retry":
+		m.retrying = fmt.Sprintf("retrying in %.0fs (%d/%d): %s", float64(ev.DelayMs)/1000, ev.NextAttempt, ev.MaxAttempts, ev.Reason)
+	case "runtime_stop":
+		if ev.Status != "completed" && ev.Status != "cancelled" {
+			if summary := stopSummary(ev.Summary); summary != "" {
+				m.notice(noticeWarn, summary)
+			}
+		}
+	}
+}
+
+// closeAssistant ends the streaming reply, so the next text starts a new block below any tool call.
+func (m *Model) closeAssistant() {
+	if m.current != nil {
+		m.current.open = false
+		m.current = nil
+	}
+}
+
+// stopSummary is the runtime's verdict without the reply it quotes, which is already on screen.
+func stopSummary(summary string) string {
+	verdict, _, _ := strings.Cut(summary, "The agent reported:")
+	return strings.TrimSpace(verdict)
+}
+
+func lastLines(text string, n int) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
