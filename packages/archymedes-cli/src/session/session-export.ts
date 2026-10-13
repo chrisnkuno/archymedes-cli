@@ -9,7 +9,7 @@ export type ExportFormat = "markdown" | "json" | "support";
 function redactText(value: string): string {
   let redacted = value
     .replace(/-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----/g, "[REDACTED PRIVATE KEY]")
-    .replace(/([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^@\s/]+)@/gi, "$1[REDACTED]@");
+    .replace(/([a-z][a-z0-9+.-]{0,31}:\/\/)([^/\s:@]+):([^@\s/]+)@/gi, "$1[REDACTED]@");
   for (const pattern of SECRET_PATTERNS) redacted = redacted.replace(new RegExp(pattern.regex.source, "g"), `[REDACTED ${pattern.name}]`);
   return redacted;
 }

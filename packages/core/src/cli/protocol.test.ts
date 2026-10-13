@@ -108,3 +108,14 @@ describe("event journal", () => {
     await expect(readEventJournal(root, "session_2")).rejects.toThrow(/integrity/);
   });
 });
+
+describe("journal redaction cost", () => {
+  it("scans a long token-shaped run in linear time and still redacts around it", () => {
+    const run = "x9".repeat(100_000);
+    const started = performance.now();
+    const event = runtimeEventForJournal({ type: "tool_result", toolCallId: "c", toolName: "read_file", isError: false, effect: "none", content: `${run} api_key=abc https://u:p@h ${run}` });
+    expect(performance.now() - started).toBeLessThan(2_000);
+    const short = runtimeEventForJournal({ type: "tool_result", toolCallId: "c", toolName: "read_file", isError: false, effect: "none", content: "x-api-key: v1 git+ssh://user:pw@host" });
+    expect(short.type === "tool_result" ? short.content : "").toBe("x-api-key: [REDACTED] git+ssh://[REDACTED]@host");
+  });
+});

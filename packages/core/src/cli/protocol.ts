@@ -45,9 +45,13 @@ export function assertTurnTransition(from: TurnStatus, to: TurnStatus): void {
 type DurableRuntimeEvent = Exclude<AgentRuntimeEvent, { type: "assistant_delta" }>;
 
 const SENSITIVE_KEY = /(authorization|cookie|credential|password|private.?key|secret|token)/i;
-const SECRET_ASSIGNMENT = /((?:[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key(?:_id)?|authorization|credential|password|passwd|private[_-]?key|secret|token)[A-Za-z0-9_]*)\s*[:=]\s*)([^\s,;]+)/gi;
+// Both patterns are anchored so they are tried once per run of name characters rather than at every
+// position inside one: unanchored, a 50,000-character token-shaped run (minified code, base64) took
+// 20 s to scan. A match from inside a run always has the same match from the run's start, so the
+// anchoring changes no output. Schemes are short, so bounding one keeps the URL scan linear too.
+const SECRET_ASSIGNMENT = /(?<![A-Za-z0-9_])((?:[A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key(?:_id)?|authorization|credential|password|passwd|private[_-]?key|secret|token)[A-Za-z0-9_]*)\s*[:=]\s*)([^\s,;]+)/gi;
 const PRIVATE_KEY_BLOCK = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g;
-const AUTHENTICATED_URL = /([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^@\s/]+)@/gi;
+const AUTHENTICATED_URL = /([a-z][a-z0-9+.-]{0,31}:\/\/)([^/\s:@]+):([^@\s/]+)@/gi;
 
 function redactJournalString(value: string): string {
   return value
