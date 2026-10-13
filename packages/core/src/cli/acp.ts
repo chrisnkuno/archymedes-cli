@@ -1,6 +1,7 @@
-import type { AgentRuntimeResult } from "../agent-runtime";
+import type { AgentMessage, AgentRuntimeResult } from "../agent-runtime";
 import type { ArchymedesEvent } from "./agent";
 import type { ApprovalPattern, ArchymedesMode, PermissionDecision } from "./permissions";
+import { runtimeEventForJournal } from "./protocol";
 
 /**
  * Archymedes as an ACP agent: the same session, driven by an editor instead of a terminal.
@@ -39,6 +40,40 @@ export interface AcpSession {
   /** Async because a mode is a capability boundary: Archymedes changes it by rebuilding the session under it. */
   setMode(mode: ArchymedesMode): Promise<void>;
   dispose(): Promise<void>;
+  /** What a rich client shows in its header: provider, model and mode. Only sent under the extension. */
+  info?(): Record<string, JsonValue>;
+  /** Switches the session's model, keeping its transcript; rejects a provider or model that cannot be used. */
+  setModel?(provider: string, model?: string): Promise<void>;
+  /** `/cost`, `/diff`, `/undo`, `/todos` and the like, answered as data for the client to draw. */
+  command?(command: string, argument: string): Promise<JsonValue>;
+  /** The stored conversation of a loaded session, replayed to the client before `session/load` answers. */
+  history?(): readonly AgentMessage[];
+}
+
+/**
+ * Archymedes's own extension, for a client that renders more than an editor does.
+ *
+ * ACP's `session/update` has no shape for usage, retries, checkpoints, compactions or Jev, and a
+ * client that only sees ACP cannot show spend accruing or a retry in progress. A client opts in with
+ * `clientCapabilities._meta.archymedes.events: true` and then also receives `_archymedes/event`
+ * notifications (ACP reserves `_`-prefixed methods for extensions), each carrying one
+ * `ArchymedesEvent` with tool arguments and results passed through the journal's redaction and
+ * bounding. Assistant text is not repeated there: it already arrives as `agent_message_chunk`.
+ * Opt-in, so an editor that never asked receives exactly the frames it always did.
+ */
+export const ARCHYMEDES_EVENT_METHOD = "_archymedes/event";
+export const ARCHYMEDES_EVENTS_VERSION = 1;
+
+/** One event as the extension sends it, or `null` for what the standard channel already carries. */
+export function archymedesEventForClient(event: ArchymedesEvent): ArchymedesEvent | null {
+  if (event.type !== "runtime") return event;
+  if (event.event.type === "assistant_delta") return null;
+  return { type: "runtime", event: runtimeEventForJournal(event.event) };
+}
+
+function wantsArchymedesEvents(params: Record<string, JsonValue>): boolean {
+  const capabilities = params.clientCapabilities as { _meta?: { archymedes?: { events?: unknown } } } | undefined;
+  return capabilities?._meta?.archymedes?.events === true;
 }
 
 /** What the agent hands the connection when a tool call needs the client's human. */
@@ -158,8 +193,17 @@ export class AcpConnection {
   private readonly pending = new Map<JsonRpcId, { resolve: (value: JsonValue) => void; reject: (error: Error) => void }>();
   private nextRequestId = 1;
   private initialized = false;
+  private archymedesEvents = false;
 
-  constructor(private readonly dependencies: { send: (message: JsonRpcOutgoing) => void; createSession: AcpSessionFactory }) {}
+  constructor(private readonly dependencies: {
+    send: (message: JsonRpcOutgoing) => void;
+    createSession: AcpSessionFactory;
+    /**
+     * Archymedes's own `_archymedes/*` requests, answered after `initialize` and before any session
+     * exists — first-run setup is asked before there is anything to open a session with.
+     */
+    extensions?: Record<string, (params: Record<string, JsonValue>) => Promise<JsonValue>>;
+  }) {}
 
   /** Feeds one parsed incoming message in. Responses are written through `send`. */
   async receive(message: unknown): Promise<void> {
@@ -183,6 +227,16 @@ export class AcpConnection {
       const code = error instanceof AcpError ? error.code : JSON_RPC.internalError;
       if (id !== undefined) this.fail(id, code, error instanceof Error ? error.message : "Agent failed");
     }
+  }
+
+  /**
+   * The client closed its side: a request still waiting on it can never be answered. Each one is
+   * rejected now, which `askClient` reads as a refusal, so a turn paused on approval ends instead
+   * of waiting forever. Sessions stay up until `dispose`, so a turn already running can finish.
+   */
+  endOfInput(): void {
+    for (const waiter of this.pending.values()) waiter.reject(new Error("Client closed its input"));
+    this.pending.clear();
   }
 
   async dispose(): Promise<void> {
@@ -231,11 +285,13 @@ export class AcpConnection {
     switch (method) {
       case "initialize": {
         this.initialized = true;
+        this.archymedesEvents = wantsArchymedesEvents(params);
         return {
           protocolVersion: ACP_PROTOCOL_VERSION,
           agentCapabilities: {
             loadSession: true,
             promptCapabilities: { image: false, audio: false, embeddedContext: true },
+            ...(this.archymedesEvents ? { _meta: { archymedes: { events: ARCHYMEDES_EVENTS_VERSION } } } : {}),
           },
           // Archymedes authenticates through provider environment variables and its own settings file,
           // so there is no in-band method for a client to offer. An empty list says exactly that.
@@ -261,9 +317,13 @@ export class AcpConnection {
         });
         bound = session;
         this.sessions.set(session.id, session);
+        // ACP's load contract: the client is sent the conversation it is resuming before the reply,
+        // so it can show it. A client that cannot render a part simply drops that notification.
+        if (method === "session/load") for (const message of session.history?.() ?? []) this.replay(session.id, message);
+        const meta = this.archymedesEvents && session.info ? { _meta: { archymedes: session.info() } } : {};
         return method === "session/load"
-          ? {}
-          : { sessionId: session.id, modes: { currentModeId: "build", availableModes: ACP_MODES.map((mode) => ({ id: mode, name: mode })) } };
+          ? meta
+          : { sessionId: session.id, modes: { currentModeId: "build", availableModes: ACP_MODES.map((mode) => ({ id: mode, name: mode })) }, ...meta };
       }
       case "session/set_mode": {
         const session = this.sessionFor(params);
@@ -271,6 +331,19 @@ export class AcpConnection {
         if (!mode) throw new AcpError(JSON_RPC.invalidParams, `Unknown mode ${String(params.modeId)}`);
         await session.setMode(mode);
         return {};
+      }
+      case "_archymedes/session/command": {
+        const session = this.sessionFor(params);
+        if (!session.command) throw new AcpError(JSON_RPC.methodNotFound, "This agent has no session commands");
+        if (typeof params.command !== "string") throw new AcpError(JSON_RPC.invalidParams, "command is required");
+        return session.command(params.command, typeof params.argument === "string" ? params.argument : "");
+      }
+      case "_archymedes/session/set_model": {
+        const session = this.sessionFor(params);
+        if (!session.setModel) throw new AcpError(JSON_RPC.methodNotFound, "This agent cannot switch models");
+        if (typeof params.provider !== "string") throw new AcpError(JSON_RPC.invalidParams, "provider is required");
+        await session.setModel(params.provider, typeof params.model === "string" ? params.model : undefined);
+        return this.archymedesEvents && session.info ? { _meta: { archymedes: session.info() } } : {};
       }
       case "session/prompt": {
         const session = this.sessionFor(params);
@@ -291,8 +364,12 @@ export class AcpConnection {
         await session.dispose();
         return {};
       }
-      default:
-        throw new AcpError(JSON_RPC.methodNotFound, `Method not found: ${method}`);
+      default: {
+        const extension = method.startsWith("_archymedes/") ? this.dependencies.extensions?.[method] : undefined;
+        if (!extension) throw new AcpError(JSON_RPC.methodNotFound, `Method not found: ${method}`);
+        if (!this.initialized) throw new AcpError(JSON_RPC.invalidRequest, "initialize must come first");
+        return extension(params);
+      }
     }
   }
 
@@ -309,10 +386,31 @@ export class AcpConnection {
     return decisionFromOptionId(outcome.selectedOptionId, request.pattern !== undefined);
   }
 
+  private replay(sessionId: string, message: AgentMessage): void {
+    if (message.internal || message.role === "system") return;
+    if (message.role === "user") {
+      this.notify("session/update", { sessionId, update: { sessionUpdate: "user_message_chunk", content: { type: "text", text: message.content } } });
+      return;
+    }
+    if (message.role === "assistant") {
+      if (message.content.trim()) this.notify("session/update", { sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: message.content } } });
+      for (const call of "toolCalls" in message ? message.toolCalls : []) {
+        const args = (typeof call.arguments === "object" && call.arguments !== null ? call.arguments : {}) as Record<string, unknown>;
+        this.publish(sessionId, { type: "runtime", event: { type: "tool_call", toolCallId: call.id, toolName: call.name, effect: "none", arguments: args } });
+      }
+      return;
+    }
+    if (message.role !== "tool") return;
+    this.publish(sessionId, { type: "runtime", event: { type: "tool_result", toolCallId: message.toolCallId, toolName: message.name, isError: false, effect: "none", content: message.content } });
+  }
+
   /** One Archymedes event, as whichever `session/update` an editor can render. */
   private publish(sessionId: string, event: ArchymedesEvent): void {
     const update = acpUpdateFor(event);
     if (update) this.notify("session/update", { sessionId, update });
+    if (!this.archymedesEvents) return;
+    const extended = archymedesEventForClient(event);
+    if (extended) this.notify(ARCHYMEDES_EVENT_METHOD, { sessionId, event: extended });
   }
 }
 

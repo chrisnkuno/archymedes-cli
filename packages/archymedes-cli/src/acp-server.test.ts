@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { LocalWorkspace } from "@archymedes/core/cli/backends";
-import { acpEditDiagnostics, runAcpServer, splitFrames } from "./acp-server";
+import { acpEditDiagnostics, pumpMessages, runAcpServer, splitFrames } from "./acp-server";
 
 describe("acp stdio framing", () => {
   it("emits only complete messages and keeps the partial tail for the next chunk", () => {
@@ -78,6 +78,40 @@ describe("acp server over a pipe", () => {
 
     expect(warnings).toHaveLength(1);
     expect(written.map((line) => JSON.parse(line))).toMatchObject([{ id: 9, result: { protocolVersion: 1 } }]);
+  });
+});
+
+describe("acp message pump", () => {
+  it("keeps reading while a turn runs, so the approval it waits on can arrive", async () => {
+    const input = new PassThrough();
+    const seen: string[] = [];
+    let approve: (() => void) | undefined;
+    const approved = new Promise<void>((resolve) => { approve = resolve; });
+    const pumping = pumpMessages(input, async (message) => {
+      const value = message as { method?: string; id?: unknown };
+      seen.push(value.method ?? `response ${String(value.id)}`);
+      if (value.method === "session/prompt") await approved; // a turn paused on a permission request
+      if (value.id === "archymedes-1" && !value.method) approve?.();
+    }, () => undefined);
+    input.write('{"jsonrpc":"2.0","id":3,"method":"session/prompt"}\n');
+    input.write('{"jsonrpc":"2.0","method":"session/cancel"}\n');
+    input.write('{"jsonrpc":"2.0","id":"archymedes-1","result":{"outcome":"selected","selectedOptionId":"allow"}}\n');
+    input.end();
+    const { drain } = await pumping;
+    await drain();
+    expect(seen).toEqual(["session/prompt", "session/cancel", "response archymedes-1"]);
+  });
+
+  it("still finishes one request before reading the next, so a session exists before its prompt", async () => {
+    const order: string[] = [];
+    const { drain } = await pumpMessages(Readable.from(['{"method":"session/new"}\n{"method":"session/prompt"}\n']), async (message) => {
+      const method = (message as { method: string }).method;
+      order.push(`start ${method}`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      order.push(`end ${method}`);
+    }, () => undefined);
+    await drain();
+    expect(order).toEqual(["start session/new", "end session/new", "start session/prompt", "end session/prompt"]);
   });
 });
 

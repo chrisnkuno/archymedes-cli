@@ -6,6 +6,9 @@ import {
   acpStopReason,
   acpToolKind,
   acpUpdateFor,
+  ARCHYMEDES_EVENT_METHOD,
+  ARCHYMEDES_EVENTS_VERSION,
+  archymedesEventForClient,
   decisionFromOptionId,
   JSON_RPC,
   toolCallTitle,
@@ -266,5 +269,134 @@ describe("acp rendering hints", () => {
     const update = acpUpdateFor({ type: "runtime", event: { type: "tool_result", toolCallId: "c9", toolName: "run_command", isError: true, effect: "none", content: "exit 1: tests failed" } });
     expect(update).toMatchObject({ sessionUpdate: "tool_call_update", toolCallId: "c9", status: "failed" });
     expect(JSON.stringify(update)).toContain("tests failed");
+  });
+});
+
+describe("acp archymedes event extension", () => {
+  const rich = { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { _meta: { archymedes: { events: true } } } };
+  const modelTurn: ArchymedesEvent = {
+    type: "runtime",
+    event: { type: "model_turn", iteration: 1, responseId: "r1", model: "m", toolCallCount: 0, usage: { inputTokens: 10, outputTokens: 5 } as never },
+  };
+
+  it("sends nothing extra to a client that did not opt in", async () => {
+    const value = connect();
+    const response = await value.call("initialize", initialize);
+    expect(JSON.stringify(response)).not.toContain("archymedes");
+    await value.call("session/new", { cwd: "/tmp/project" }, 2);
+    value.emit(modelTurn);
+    expect(value.sent.some((message) => "method" in message && message.method === ARCHYMEDES_EVENT_METHOD)).toBe(false);
+  });
+
+  it("streams every event but assistant text to a client that opted in", async () => {
+    const value = connect();
+    const response = await value.call("initialize", rich);
+    expect(response).toMatchObject({ result: { agentCapabilities: { _meta: { archymedes: { events: ARCHYMEDES_EVENTS_VERSION } } } } });
+    await value.call("session/new", { cwd: "/tmp/project" }, 2);
+    value.emit({ type: "runtime", event: { type: "assistant_delta", iteration: 1, text: "hi" } });
+    value.emit(modelTurn);
+    value.emit({ type: "compaction", tokensBefore: 100, messagesBefore: 9, messagesAfter: 3 });
+    const extended = value.sent.filter((message) => "method" in message && message.method === ARCHYMEDES_EVENT_METHOD);
+    expect(extended.map((message) => ("params" in message ? (message.params?.event as { type: string }).type : ""))).toEqual(["runtime", "compaction"]);
+    expect(extended[0]).toMatchObject({ params: { sessionId: "sess_1", event: { event: { type: "model_turn", responseId: "r1" } } } });
+  });
+
+  it("bounds tool output on the extension the way the journal does", () => {
+    const huge = "x".repeat(200_000); // token-shaped on purpose: the run the redaction once scanned quadratically
+    const event = archymedesEventForClient({ type: "runtime", event: { type: "tool_result", toolCallId: "c1", toolName: "read_file", isError: false, effect: "none", content: huge } });
+    expect(event && event.type === "runtime" && event.event.type === "tool_result" ? event.event.content.length : 0).toBeLessThan(huge.length);
+    expect(archymedesEventForClient({ type: "runtime", event: { type: "assistant_delta", iteration: 1, text: "x" } })).toBeNull();
+  });
+});
+
+describe("acp end of input", () => {
+  it("reads a permission request the client can no longer answer as a refusal", async () => {
+    const value = connect();
+    await value.call("initialize", initialize);
+    await value.call("session/new", { cwd: "/tmp/project" }, 2);
+    const decision = value.ask()?.({ toolName: "run_command", summary: "run ls", toolCallId: "c1" });
+    value.connection.endOfInput();
+    await expect(decision).resolves.toBe("deny");
+  });
+});
+
+describe("acp session/load replay", () => {
+  it("sends the stored conversation before answering, and tool calls on the extension", async () => {
+    const sent: JsonRpcOutgoing[] = [];
+    const connection = new AcpConnection({
+      send: (message) => sent.push(message),
+      createSession: async () => ({
+        id: "sess_9",
+        send: async () => ({ status: "completed", summary: "" }),
+        cancel() {},
+        async setMode() {},
+        async dispose() {},
+        info: () => ({ sessionId: "sess_9" }),
+        history: () => [
+          { role: "system", content: "never shown" },
+          { role: "user", content: "fix it" },
+          { role: "assistant", content: "Looking.", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.ts" } }] },
+          { role: "tool", content: "x", toolCallId: "c1", name: "read_file" },
+          { role: "assistant", content: "internal note", internal: true },
+          { role: "assistant", content: "Done." },
+        ],
+      }),
+    });
+    await connection.receive({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: { _meta: { archymedes: { events: true } } } } });
+    await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/load", params: { cwd: "/tmp", sessionId: "latest" } });
+    const after = sent.slice(1);
+    const reply = after.findIndex((message) => "id" in message && message.id === 2);
+    expect(reply).toBe(after.length - 1); // history first, then the answer
+    expect(after[reply]).toMatchObject({ result: { _meta: { archymedes: { sessionId: "sess_9" } } } });
+    const shapes = after.slice(0, reply).map((message) => {
+      const params = (message as { params: Record<string, any> }).params;
+      return params.update?.sessionUpdate ?? params.event?.event?.type;
+    });
+    expect(shapes).toEqual(["user_message_chunk", "agent_message_chunk", "tool_call", "tool_call", "tool_call_update", "tool_result", "agent_message_chunk"]);
+    expect(JSON.stringify(after)).not.toContain("never shown");
+    expect(JSON.stringify(after)).not.toContain("internal note");
+  });
+});
+
+describe("acp extension requests", () => {
+  it("answers _archymedes requests after initialize, before any session, and nothing else", async () => {
+    const sent: JsonRpcOutgoing[] = [];
+    const connection = new AcpConnection({
+      send: (message) => sent.push(message),
+      createSession: async () => { throw new Error("no session needed"); },
+      extensions: { "_archymedes/setup/status": async () => ({ configured: false }) },
+    });
+    await connection.receive({ jsonrpc: "2.0", id: 1, method: "_archymedes/setup/status", params: {} });
+    expect(sent.at(-1)).toMatchObject({ id: 1, error: { code: JSON_RPC.invalidRequest } });
+    await connection.receive({ jsonrpc: "2.0", id: 2, method: "initialize", params: { protocolVersion: 1, clientCapabilities: {} } });
+    await connection.receive({ jsonrpc: "2.0", id: 3, method: "_archymedes/setup/status", params: {} });
+    expect(sent.at(-1)).toMatchObject({ id: 3, result: { configured: false } });
+    await connection.receive({ jsonrpc: "2.0", id: 4, method: "_archymedes/unknown", params: {} });
+    expect(sent.at(-1)).toMatchObject({ id: 4, error: { code: JSON_RPC.methodNotFound } });
+  });
+});
+
+describe("acp model switching", () => {
+  it("switches through the session and answers with its new info; a refused model is an error", async () => {
+    const sent: JsonRpcOutgoing[] = [];
+    let current = "m1";
+    const connection = new AcpConnection({
+      send: (message) => sent.push(message),
+      createSession: async () => ({
+        id: "sess_1", send: async () => ({ status: "completed", summary: "" }), cancel() {}, async setMode() {}, async dispose() {},
+        async setModel(provider, model) {
+          if (model === "nope") throw new Error(`No model ${model} at ${provider}`);
+          current = model ?? "default";
+        },
+        info: () => ({ model: current }),
+      }),
+    });
+    await connection.receive({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: { _meta: { archymedes: { events: true } } } } });
+    await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/tmp" } });
+    await connection.receive({ jsonrpc: "2.0", id: 3, method: "_archymedes/session/set_model", params: { sessionId: "sess_1", provider: "anthropic", model: "m2" } });
+    expect(sent.at(-1)).toMatchObject({ id: 3, result: { _meta: { archymedes: { model: "m2" } } } });
+    await connection.receive({ jsonrpc: "2.0", id: 4, method: "_archymedes/session/set_model", params: { sessionId: "sess_1", provider: "anthropic", model: "nope" } });
+    expect(sent.at(-1)).toMatchObject({ id: 4, error: { message: expect.stringContaining("No model nope") } });
+    expect(current).toBe("m2");
   });
 });

@@ -136,6 +136,8 @@ async function main(): Promise<number> {
       environment, provider: args.provider, model: args.model,
       defaultRoot: args.root,
       mode: args.mode,
+      // Silent: in ACP mode stdout is the protocol, so sandbox progress must not be printed there.
+      ...(args.backend !== "local" ? { createWorkspace: () => createWorkspaceFactory(args, environment)({ backend: args.backend, announce: false }) } : {}),
     });
   }
 
