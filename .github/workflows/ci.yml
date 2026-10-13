@@ -20,7 +20,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - run: bun install --frozen-lockfile
+      - run: go vet ./...
+      - run: go test -race ./...
+        if: runner.os == 'Linux'
+      - run: go test ./...
+        if: runner.os != 'Linux'
+      # Every published target compiles from one runner; the host one is also packed and installed below.
+      - run: bun run build:go
+        if: runner.os == 'Linux'
       - run: bun run typecheck
       - run: bun run test
         if: runner.os == 'Linux'

@@ -25,18 +25,23 @@ await mkdir(artifactRoot, { recursive: true });
 run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", archive], packageRoot);
 const entries = run(["tar", "-tzf", archive], root).trim().split(/\r?\n/);
 for (const entry of entries) {
-  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|dist(?:\/|$))/);
+  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|bin\/archymedes\.mjs$|dist(?:\/|$))/);
   assert(!entry.split("/").some((part) => ["..", ".private", ".env", ".archymedes", "node_modules"].includes(part)), `Unexpected packed path: ${entry}`);
   assert(!/\.(?:test\.[cm]?[jt]sx?|map)$/.test(entry), `Development artifact: ${entry}`);
 }
-for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "dist/archymedes.mjs"]) {
+for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "bin/archymedes.mjs", "dist/archymedes.mjs"]) {
   assert(entries.includes(`package/${required}`), `Missing ${required}`);
 }
 
 // Install the exact archive in a separate directory; no workspace imports or symlinked dependencies.
 const consumer = await mkdtemp(path.join(os.tmpdir(), "archymedes-consumer-"));
 try {
-  await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true, dependencies: { "archymedes-cli": `file:${archive}` } }));
+  // The Go interface for this machine, staged by `tooling/build/build-go.ts --host`, installed beside
+  // the CLI the way npm would install the matching optional dependency.
+  const platformPackage = `@archymedes/cli-${process.platform}-${process.arch}`;
+  const staged = path.join(artifactRoot, "npm", `cli-${process.platform}-${process.arch}`);
+  assert.equal(manifest.optionalDependencies?.[platformPackage], manifest.version, `${platformPackage} must be an optional dependency at ${manifest.version}`);
+  await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true, dependencies: { "archymedes-cli": `file:${archive}`, [platformPackage]: `file:${staged}` } }));
   run([process.execPath, "install", "--ignore-scripts"], consumer);
   const installed = path.join(consumer, "node_modules/archymedes-cli");
   const installedManifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
@@ -54,6 +59,17 @@ try {
   const providers = run(["node", executable, "--providers"], consumer, env);
   assert.match(providers, /anthropic/i);
   // The optional workspace renderer is external to the bundle; verify installed resolution too.
+  // The installed command: the shim, which runs the Go interface, which hands one-shot modes to the
+  // bundled agent with this same Node.
+  const command = path.join(installed, "bin/archymedes.mjs");
+  const goVersion = run(["node", command, "--version"], consumer, env).trim();
+  assert.equal(goVersion, `archymedes ${manifest.version}`, `Go interface version: ${goVersion}`);
+  const goHelp = run(["node", command, "--help"], consumer, env);
+  assert(goHelp.includes("--theme") && goHelp.includes("--resume") && goHelp.includes("--json") && !goHelp.includes("\x1b"));
+  assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must reach the agent through the interface");
+  // No binary for the platform: the bundled interface runs instead of nothing.
+  await rm(path.join(consumer, "node_modules", ...platformPackage.split("/")), { recursive: true, force: true });
+  assert.match(run(["node", command, "--version"], consumer, env), new RegExp(manifest.version.replace(/\./g, "\\.")));
   await writeFile(path.join(installed, "smoke.mjs"), 'await import("@termuijs/core"); await import("@termuijs/jsx"); await import("@termuijs/widgets");');
   run(["node", path.join(installed, "smoke.mjs")], consumer, env);
 } finally {
@@ -62,4 +78,4 @@ try {
 
 const sha256 = createHash("sha256").update(await readFile(archive)).digest("hex");
 await writeFile(`${archive}.sha256`, `${sha256}  ${path.basename(archive)}\n`);
-console.log(`Verified ${path.basename(archive)}: ${entries.length} entries; clean install, Node startup, providers and TUI dependencies passed.\nSHA256 ${sha256}`);
+console.log(`Verified ${path.basename(archive)}: ${entries.length} entries; clean install, Go interface, agent passthrough, fallback, providers and TUI dependencies passed.\nSHA256 ${sha256}`);

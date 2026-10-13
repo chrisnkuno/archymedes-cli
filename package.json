@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "archymedes": "bun run packages/archymedes-cli/src/archymedes.ts",
-    "check": "bun run test && bun run typecheck && bun run build:packages",
+    "check": "bun run test && bun run test:go && bun run typecheck && bun run build:packages",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
@@ -27,11 +27,13 @@
     "bench:render": "bun run benchmarks/render/hot-paths.bench.ts",
     "audit:nav": "ARCHYMEDES_NAV_AUDIT=1 vitest run packages/archymedes-cli/src/pty/nav-audit.test.ts",
     "bench:journeys": "ARCHYMEDES_JOURNEYS_FULL=1 vitest run packages/archymedes-cli/src/pty/journeys.test.ts",
-    "verify:package": "bun run tooling/build/verify-package.ts",
+    "verify:package": "bun run tooling/build/build-go.ts --host && bun run tooling/build/verify-package.ts",
     "release:check": "bun run check && bun run verify:package",
     "recheck": "bun run tooling/check/recheck.ts",
     "preview:tui": "bun run tooling/dev/identity-demo.ts",
-    "preview:workspace": "bun run tooling/dev/workspace-preview.ts"
+    "preview:workspace": "bun run tooling/dev/workspace-preview.ts",
+    "build:go": "bun run tooling/build/build-go.ts",
+    "test:go": "go test ./..."
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

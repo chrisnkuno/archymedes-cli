@@ -18,9 +18,9 @@
     },
     "packages/archymedes-cli": {
       "name": "archymedes-cli",
-      "version": "2.4.0",
+      "version": "3.0.0",
       "bin": {
-        "archymedes": "dist/archymedes.mjs",
+        "archymedes": "bin/archymedes.mjs",
       },
       "dependencies": {
         "@termuijs/core": "0.1.7",
@@ -28,6 +28,12 @@
         "@termuijs/widgets": "0.1.7",
       },
       "optionalDependencies": {
+        "@archymedes/cli-darwin-arm64": "2.6.0",
+        "@archymedes/cli-darwin-x64": "2.6.0",
+        "@archymedes/cli-linux-arm64": "2.6.0",
+        "@archymedes/cli-linux-x64": "2.6.0",
+        "@archymedes/cli-win32-arm64": "2.6.0",
+        "@archymedes/cli-win32-x64": "2.6.0",
         "@archymedes/state-darwin-arm64": "0.4.0",
         "@archymedes/state-darwin-x64": "0.4.0",
         "@archymedes/state-linux-arm64-gnu": "0.4.0",
@@ -40,7 +46,7 @@
     },
     "packages/core": {
       "name": "@archymedes/core",
-      "version": "0.13.0",
+      "version": "0.14.0",
       "dependencies": {
         "openai": "^6.49.0",
         "zod": "^4.4.3",
@@ -56,7 +62,7 @@
     },
     "packages/free-gateway": {
       "name": "@archymedes/free-gateway",
-      "version": "0.1.1",
+      "version": "0.2.0",
     },
   },
   "packages": {

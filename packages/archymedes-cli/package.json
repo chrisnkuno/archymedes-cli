@@ -25,9 +25,10 @@
   "homepage": "https://github.com/chrisnkuno/archymedes-cli/tree/main/packages/archymedes-cli#readme",
   "type": "module",
   "bin": {
-    "archymedes": "dist/archymedes.mjs"
+    "archymedes": "bin/archymedes.mjs"
   },
   "files": [
+    "bin",
     "dist",
     "README.md",
     "LICENSE",
@@ -50,6 +51,12 @@
     "@termuijs/widgets": "0.1.7"
   },
   "optionalDependencies": {
+    "@archymedes/cli-darwin-arm64": "2.6.0",
+    "@archymedes/cli-darwin-x64": "2.6.0",
+    "@archymedes/cli-linux-arm64": "2.6.0",
+    "@archymedes/cli-linux-x64": "2.6.0",
+    "@archymedes/cli-win32-arm64": "2.6.0",
+    "@archymedes/cli-win32-x64": "2.6.0",
     "@archymedes/state-darwin-arm64": "0.4.0",
     "@archymedes/state-darwin-x64": "0.4.0",
     "@archymedes/state-linux-arm64-gnu": "0.4.0",
