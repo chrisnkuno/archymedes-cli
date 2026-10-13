@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startAnthropicStub, type AnthropicStub } from "./anthropic-stub";
 import { bunExecutable, CONPTY, spawnArchymedes, type ArchymedesProcess } from "./harness";
-import { VirtualScreen } from "./virtual-screen";
+import { settle, VirtualScreen } from "./virtual-screen";
 
 /**
  * The Go front end (WS-6), end to end: the Bubble Tea binary in a real pty, driving this
@@ -105,7 +105,9 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     screen.resize(50, 16);
     await new Promise((resolve) => setTimeout(resolve, 500));
     const { lines } = await screen.snapshot();
-    expect(lines[0]).toContain("Archymedes");
+    expect(lines[0]).toContain("◇"); // the top bar: start button and Chat tab
+    expect(lines[0]).toContain("Chat");
+    expect(lines.at(-1)).toContain("F1"); // the dock
     expect(lines[0]).toContain("build"); // the mode pill survives the narrow header
     expect(lines.join("\n")).toContain("end.");
     // The input box is intact: both corners of its top and bottom borders on their own rows.
@@ -185,6 +187,52 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await screenShows(screen, 'Reverted "');
     await expect(readFile(path.join(cwd, "note.txt"), "utf8")).rejects.toThrow();
   }, 150_000);
+
+  it("is a desktop: F-keys open apps, and a key changed in the Keys app is saved and used after a restart", async () => {
+    const { proc, screen } = boot(120, 32);
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    proc.write("\x1bOQ"); // F2
+    await screenShows(screen, "files  ");
+    proc.write("\x1b[18~"); // F7
+    await screenShows(screen, "enter change");
+    // Move to "files", rebind it to ctrl+e.
+    for (let i = 0; i < 2; i++) proc.write("\x1b[B");
+    proc.write("\r");
+    await screenShows(screen, "press a key");
+    proc.write("\x05"); // ctrl+e
+    await screenShows(screen, "files is now ctrl+e");
+    expect(await readFile(path.join(configDir, "keys.json"), "utf8")).toContain("ctrl+e");
+    proc.kill();
+    await proc.waitForExit(10_000).catch(() => undefined);
+
+    const again = boot(120, 32);
+    await again.proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    await screenShows(again.screen, "Files ctrl+e"); // the dock shows the saved key
+    again.proc.write("\x05");
+    await screenShows(again.screen, "files  ");
+  }, 150_000);
+
+  it("draws the session's turns as charts in the Stats app", async () => {
+    stub.enqueue({ kind: "text", text: "First answer." });
+    stub.enqueue({ kind: "text", text: "Second answer, a little longer than the first one." });
+    const { proc, screen } = boot(120, 32);
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    proc.write("one\r");
+    await proc.waitFor(/── done/, { timeoutMs: 30_000 });
+    const since = proc.output().length;
+    proc.write("two\r");
+    await proc.waitFor(/── done/, { since, timeoutMs: 30_000 });
+
+    proc.write("\x1b[20~"); // F9
+    await proc.waitFor("Tokens per turn", { timeoutMs: 10_000 });
+    const text = await settle(screen);
+    expect(text).toContain("2 turns");
+    expect(text).toContain("Seconds per turn");
+    expect(text).toMatch(/[\u2801-\u28ff]/); // the braille duration line
+    expect(text).toContain("turn 2 ·");
+    proc.write("\x1b[D"); // ← (the renderer redraws only the changed cells: read the screen, not the stream)
+    expect(await settle(screen)).toContain("turn 1 ·");
+  }, 120_000);
 
   it("sets up a provider on first run and opens the session with it", async () => {
     stub.enqueue({ kind: "text", text: "hello after setup" });

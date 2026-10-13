@@ -10,10 +10,13 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/log/v2"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/archymedes-cli/internal/config"
 	"github.com/chrisnkuno/archymedes-cli/internal/render"
 	"github.com/chrisnkuno/archymedes-cli/internal/theme"
 )
@@ -52,6 +55,12 @@ type Options struct {
 	Cwd   string
 	// Version is shown on the landing screen and in the help overlay.
 	Version string
+	// Debug, when set, receives a structured log of what the interface handles (ARCHYMEDES_DEBUG_LOG).
+	Debug *log.Logger
+	// Motion animates scrolling on a spring; off, every move is immediate (reduced motion, tests).
+	Motion bool
+	// ConfigDir is where changed key bindings are kept (keys.json); empty keeps them in memory only.
+	ConfigDir string
 	// AgentArgv runs the agent directly (without `acp`), for commands that are the agent's own
 	// programs: /settings, /update, /providers.
 	AgentArgv []string
@@ -79,7 +88,10 @@ type Model struct {
 	tr       *transcript
 	input    composer
 	approval *approval
-	overlay  overlay
+	overlay  overlay // a dialog over the focused window
+	// windows are the open apps beside Chat; active is the focused one (0 = Chat, i = windows[i-1]).
+	windows  []window
+	active   int
 	expanded bool
 
 	keys     keyMap
@@ -90,7 +102,19 @@ type Model struct {
 	angle    float64
 	toasts   []toast
 	toastSeq int
-	sender   func(tea.Msg)
+	// knownFiles is the project's file list once read (by /files, or for @ completion).
+	knownFiles []string
+	scroll     scroller
+	stats      sessionStats
+	zones      zones // click targets, one manager per layer (zones.go)
+	// keyOverrides are the bindings someone changed (keys.json), saved in configDir.
+	keyOverrides map[string][]string
+	// startupNote is said once the interface is up (a toast), e.g. a keys file that could not be read.
+	startupNote string
+	// recentSessions is this project's stored sessions, newest first, once read.
+	recentSessions []acp.SessionSummary
+	filesLoading   bool
+	sender         func(tea.Msg)
 
 	agent   Agent
 	session acp.Session
@@ -104,14 +128,31 @@ type Model struct {
 	turnUsage usageTotals
 	usage     usageTotals
 	retrying  string
-	quitArmed bool
+	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
+	retryStart time.Time
+	retryDelay time.Duration
+	retryBar   progress.Model
+	quitArmed  bool
 }
 
 // New builds the model; Init connects.
 func New(opts Options) *Model {
 	th, _ := theme.Load(opts.Theme)
-	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th), keys: newKeyMap()}
+	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th)}
+	m.keyOverrides = map[string][]string{}
+	if opts.ConfigDir != "" {
+		overrides, err := config.LoadKeys(opts.ConfigDir)
+		if err != nil {
+			m.startupNote = "keys.json could not be read (" + err.Error() + "); using the default keys"
+		}
+		m.keyOverrides = overrides
+	}
+	m.keys = newKeyMap(m.keyOverrides)
 	m.input = newComposer(th)
+	m.scroll = newScroller()
+	m.stats = newSessionStats()
+	m.zones = newZones()
+	m.retryBar = newRetryBar(th)
 	m.help = newHelp(th)
 	m.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(th.Highlight))
 	if opts.Theme != "" && th.Name != strings.ToLower(strings.TrimSpace(opts.Theme)) {
@@ -126,6 +167,7 @@ func (m *Model) applyTheme(name string) {
 	m.input.applyTheme(m.th)
 	m.help = newHelp(m.th)
 	m.spin.Style = m.th.Highlight
+	m.retryBar = newRetryBar(m.th)
 	m.tr.cache = map[item]cached{} // colours are baked into cached lines
 }
 
@@ -166,7 +208,14 @@ func (m *Model) Init() tea.Cmd {
 			status = acp.SetupStatus{Configured: true}
 		}
 		return startedMsg{agent, status}
-	}, tea.RequestBackgroundColor, m.animate())
+	}, tea.RequestBackgroundColor, m.animate(), m.sayStartupNote())
+}
+
+func (m *Model) sayStartupNote() tea.Cmd {
+	if m.startupNote == "" {
+		return nil
+	}
+	return m.toast(toastWarn, m.startupNote)
 }
 
 // openSession asks the agent for the session: a new one, or the one being resumed.
@@ -217,6 +266,7 @@ func (m *Model) forward(agent Agent) {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.debug(msg)
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -224,6 +274,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.fit()
 		return m, nil
 	case spinner.TickMsg:
+		m.stats.roll(time.Now())
 		if m.phase != connecting && m.phase != busy {
 			m.spinning = false
 			return m, nil
@@ -258,6 +309,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
+	case filesLoadedMsg:
+		m.filesLoaded(msg)
+		return m, nil
 	case modelsLoadedMsg:
 		return m, m.modelsLoaded(msg)
 	case modelSetMsg:
@@ -269,8 +323,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reportReadyMsg:
 		return m, m.reportReady(msg)
 	case sessionsLoadedMsg:
-		if p, ok := m.overlay.(*resumePicker); ok {
+		if msg.err == nil {
+			m.recentSessions = msg.sessions
+		}
+		switch p := m.overlay.(type) {
+		case *resumePicker:
 			p.load(msg)
+		case *startMenu:
+			p.addSessions(m)
 		}
 		return m, nil
 	case startupNoticesMsg:
@@ -327,12 +387,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.toast(toastInfo, "Mode: "+msg.mode+" — "+modeBlurb[msg.mode])
 	case tea.PasteMsg:
 		return m, m.input.update(msg)
+	case scrollTickMsg:
+		return m, m.stepScroll()
+	case tea.MouseClickMsg:
+		return m, m.handleClick(msg)
 	case tea.MouseWheelMsg:
+		if p, ok := m.activeWindow().(*pager); ok && m.overlay == nil {
+			var cmd tea.Cmd
+			p.vp, cmd = p.vp.Update(msg)
+			return m, cmd
+		}
 		switch msg.Mouse().Button {
 		case tea.MouseWheelUp:
-			m.tr.scrollBy(3)
+			return m, m.scrollBy(3)
 		case tea.MouseWheelDown:
-			m.tr.scrollBy(-3)
+			return m, m.scrollBy(-3)
 		}
 		return m, nil
 	case tea.KeyPressMsg:
@@ -381,6 +450,8 @@ func (m *Model) submit() tea.Cmd {
 
 func (m *Model) send(text string) tea.Cmd {
 	m.tr.add(&userItem{text: text})
+	m.stats.startTurn(text, time.Now())
+	m.stopScroll()
 	m.tr.toBottom()
 	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying = busy, time.Now(), usageTotals{}, nil, ""
 	agent, id := m.agent, m.session.ID
@@ -394,6 +465,7 @@ func (m *Model) send(text string) tea.Cmd {
 }
 
 func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
+	m.stats.endTurn(msg.stop, time.Now())
 	m.closeAssistant()
 	for _, t := range m.tools {
 		if !t.done {
@@ -454,6 +526,7 @@ func (m *Model) quit() tea.Cmd {
 		}
 		go m.agent.Close()
 	}
+	m.zones.close()
 	return tea.Quit
 }
 

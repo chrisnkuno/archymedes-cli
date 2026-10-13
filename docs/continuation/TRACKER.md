@@ -5,6 +5,52 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-10: Charts and mouse zones (2026-10-13)
+
+User: "integrate well the graphs and so on, do these" (ntcharts, bubblezone). Prompt:
+[CHARTS_AND_ZONES.md](prompts/CHARTS_AND_ZONES.md). Correction recorded: ntcharts has a Bubble Tea v2
+module (`ntcharts/v2` v2.8.0); the earlier "v1 only" came from reading only its `main` branch.
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-10.1 | Session stats from events already received (per call, per turn, per tool, streaming rate) | done | `internal/tui/stats.go` | unit | `TestStatsCollectsFromTheAgentsEvents`, `TestStreamRateBucketsTextAndShowsPauses` |
+| WS-10.2 | Stats app (F9): token bars, call sparkline, duration line, tool bars (ntcharts v2) | done | `internal/tui/statsapp.go` | unit + PTY | 2x2 grid ≥90 cols, stacked (≥7 rows a panel) below; ←/→ or a click in a bar's column picks a turn; `/stats` too. `TestStatsDrawsTheSessionAndPicksATurn`, `TestStatsFitsEverySize`, PTY "draws the session's turns as charts" |
+| WS-10.3 | Live streaming sparkline in the tray during a turn | done | `bars.go` | unit | 12 cells, 250 ms each; `TestTheTrayShowsTheStreamingRate` |
+| WS-10.4 | BubbleZone for every click target, one manager per layer; charts get the frame's manager | done | `internal/tui/zones.go`, `mouse.go` | unit | hand-kept row maps removed; tests wait 20 ms for the zone worker; `go test -race -count=3` clean |
+| WS-10.5 | Verification | done | | | `go test ./...`, `go test -race -count=3 ./internal/tui`, PTY 9/9 (vitest), `bun run release:check` |
+
+Gotchas met: ntcharts' `WithBarWidth` is ignored unless `WithNoAutoBarWidth` comes before it; Lip
+Gloss v2 counts the border inside `Width`/`Height`, so a chart in a bordered panel is `w-2` wide; the
+renderer redraws only changed cells, so PTY tests read a settled screen, not the output stream.
+
+## WS-9: A desktop for the agent (2026-10-13)
+
+User: "let's work on increasing the user experience, things should be close at hand easy to reach etc, not
+heavily configured and even so let it be easy to set the keys … create a whole new interface, think OS like
+interface, intuitive". Prompt: [OS_INTERFACE.md](prompts/OS_INTERFACE.md).
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-9.1 | Action table + persistent rebindings (`keys.json` in the shared config dir); protected editing keys | done | `internal/config`, `internal/tui/keys.go` | unit | One `actions` table (27 actions, 5 groups) feeds dispatch, dock, help, start menu and the Keys app. `config.Dir` mirrors the TS `settingsDirectory` (tested per platform); `keys.json` holds only changes, written atomically; a broken file means defaults plus a toast. Typing keys (enter, newline, tab, ↑/↓, esc, ctrl+c) are locked. Defaults avoid the textarea: window switching is ctrl+pgup/pgdn and alt+[ ], not alt+←/→ (word movement); ctrl+w closes only app windows (in Chat it deletes a word) |
+| WS-9.2 | Shell: top bar (start, window tabs, tray), dock (apps with keys, clickable), window manager (Chat + Files + readers; alt+←/→, ctrl+w, tab clicks) | done | `internal/tui/{shell,bars,view,mouse}.go` | unit + PTY | Top bar: ◇ start, a tab per window (focused filled; Chat shows ● while a turn runs elsewhere, ? for a waiting approval), tray (status, tokens when idle, model, workspace, mode — giving way to tabs but never dropping the mode). Dock: 8 apps in the widest form that fits (icon name key → key name → key icon → key), dock hint where room. Files, readers and Keys are windows; opening one already open focuses it; closing focuses the one before; state kept across switches. Clicks: start, tabs, dock |
+| WS-9.3 | Start menu: apps, actions, recent sessions, files; fuzzy; replaces the palette | done | `internal/tui/start.go` | unit | ctrl+space / ctrl+p / click ◇. Rows show the key that reaches them directly. Sessions load on open; files join once something is typed (and arrive even after the menu opened — a bug the test caught); paths truncate in the middle so the file name stays |
+| WS-9.4 | Keys app: list, capture, conflicts, reset, live apply | done | `internal/tui/keysapp.go` | unit + PTY | Enter → "press a key"; refuses a key another action uses (naming it) and any key that types text (plain letters, digits, symbols, shift+letter); r/R reset; locked rows say why; changes apply at once and save. PTY: F7, rebind files to ctrl+e, saved, restart, dock shows it, ctrl+e opens Files |
+| WS-9.5 | Verification: frame fit, PTY, real screens, release:check | done | | `go test ./...`; PTY; `release:check` steps | Frame fit for every window with the start menu over it at 6 sizes. Real screens at 120x32 and 50x16 fixed: a tip with no gap, file names cut off in the start menu, tokens shown twice, Keys columns overflowing at 50. PTY 8/8 (new: F-keys, Keys-app rebind saved and honoured after restart). `release:check`: 3,784 tests pass; one failure is `cli.grep-latency` (392 ms vs 250 budget) under full-suite parallel load — warm grep measures 35–55 ms with or without this work's files, it passes 3 of 5 isolated runs and passed in the day's three earlier release checks: a load-sensitive timing test, not a regression. Remaining steps run directly: Go tests, typecheck, build, package verify (34 entries) all pass |
+
+## WS-8: Charm ecosystem integration (2026-10-13)
+
+User: "search all bubbles components, and other cool repositories … look at all the things we could
+integrate … write a long prompt … then do it". Prompt: [CHARM_INTEGRATION.md](prompts/CHARM_INTEGRATION.md).
+
+| ID | Task | Status | Scope | Recheck | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| WS-8.1 | Pager over the transcript (`/pager`, ctrl+f): Bubbles `viewport`, line-number gutter, soft wrap, search with `/` and `/find`, n/N, OSC 52 copy | done | `internal/tui/pager.go`, `transcript.allLines` | unit; real screen | Full-screen overlay (new `fullScreen` marker; toasts still float). Search on stripped lines, drawn by us — `viewport.SetHighlights` counts lines in the styled string while its ranges index the stripped one, so it marks the wrong place on coloured text. `/find <text>` opens on the newest match; jumps clamp to the scroll range (a real screen showed a short transcript scrolled past its start). `c` copies plain text via `tea.SetClipboard` (OSC 52, works over SSH). Esc clears a search, then closes |
+| WS-8.2 | Project view (`/files`) on Bubbles `tree`, git-aware listing, file viewer, `@path` into the composer, `/cat` | done | `internal/project`, `internal/tui/files.go`, composer | unit; real screen | `project.Files`: `git ls-files --cached --others --exclude-standard` (deleted-but-indexed files dropped), else a bounded walk skipping dependency/dot dirs; 20k cap. `Inside` refuses `..`/absolute paths lexically, then symlinks out of the project. Tree: dirs first, closed, cursor starts inside the root (enter on the root folded everything); preview pane renders markdown as markdown and code through Glamour's highlighter, a directory as its items. Enter → pager viewer, esc back to the tree; `@` inserts `@path`. `@` completion in the composer (prefix then substring, the TS rule) reads the file list on the first `@`. Real screen on this repo: 731 files |
+| WS-8.3 | Lip Gloss: OSC 8 hyperlinks for paths and URLs, `lipgloss/list` plan, `lipgloss/tree` for `list_files` output, curly underline where supported | done | `internal/render/links.go`, `items.go`, `session_commands.go` | unit | Glamour v2 already links markdown links (OSC 8). Added: a tool card's file is a `file://` link (`Style.Hyperlink`), URLs in tool summaries are links — both checked to survive the Lip Gloss compositor. `list_files`/`glob_files` output, when expanded, is a `lipgloss/tree` (prose is left as lines). `/todos` is a `lipgloss/list` with a ✓ ◐ ○ enumerator and width-limited items so long steps wrap under their text. A failed tool's "failed" gets `UnderlineCurly` in the error colour beside the ✗ |
+| WS-8.4 | Mouse: click a tool card to toggle it, click a toast to dismiss, click picker rows (own row map; BubbleZone rejected) | done | `internal/tui/mouse.go`, `transcript.drawn`, compositor | unit | The transcript records which item drew each row of the last window; the compositor records toast and dialog rectangles; pickers record their first shown row. Click a card → that card alone opens/folds (`toolItem.open`, independent of ctrl+o); click a toast → gone; click a palette/model/resume row → chosen; click outside a dialog → closed; clicks never answer an approval. BubbleZone v2 (Bubble Tea v2-ready) rejected: zone positions are stored asynchronously after `Scan`, and its markers would not survive the compositor |
+| WS-8.5 | Harmonica spring scrolling; reduced motion | done | `internal/tui/scroll.go` | unit | PgUp/PgDn, alt+↑/↓, wheel and esc-to-live glide on `harmonica.NewSpring(FPS(60), 20, 1)`; measured settle times per frequency (7 → 1.1 s, 20 → 0.45 s with a velocity criterion); since critical damping cannot overshoot, the glide snaps once within half a line. Retargets reuse the running tick; ctrl+home and new output still jump. `Options.Motion` off (`ARCHYMEDES_REDUCE_MOTION=1`, tests) → immediate. Test: monotonic, no overshoot, settles in ≤30 frames |
+| WS-8.6 | `log/v2` debug log; `progress` retry countdown | done | `internal/tui/debuglog.go`, `view.go`, `events.go`, `cmd` | unit | `ARCHYMEDES_DEBUG_LOG=<file>`: logfmt via `charm.land/log/v2` — keys with their routing, resizes, agent messages, session open, failures; animation ticks excluded; never the terminal; an unopenable file is skipped with one stderr line. A provider retry is drawn as "retry 2/5: rate_limited" with a Bubbles `progress` bar draining over the provider's delay (no tick of its own: the busy spinner's frames redraw it) |
+
 ## WS-7: Switch the shipped CLI to Go, then release on npm (2026-10-13)
 
 User: "I want to switch completely to go, the TS one isn't functioning well, so let's work on the gaps

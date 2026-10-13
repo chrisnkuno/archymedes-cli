@@ -214,7 +214,7 @@ func TestApprovalHoldsTheKeyboardAndEscapeDenies(t *testing.T) {
 	}
 	m.Update(agentMsg{request()})
 	// Drawn over the transcript, with the rest of the screen still there around it.
-	if s := screen(m); !strings.Contains(s, "rm -rf build") || !strings.Contains(s, "Ask Archymedes") || !strings.Contains(s, "Archymedes  project") {
+	if s := screen(m); !strings.Contains(s, "rm -rf build") || !strings.Contains(s, "Ask Archymedes") || !strings.Contains(s, "◇") || !strings.Contains(s, "F1") {
 		t.Fatalf("dialog not composed over the screen:\n%s", s)
 	}
 	typeText(m, "x") // not a decision key: ignored, and not typed into the input either

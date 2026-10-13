@@ -1,13 +1,11 @@
 package tui
 
 import (
-	"fmt"
 	"image/color"
 	"slices"
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -60,99 +58,6 @@ func (helpOverlay) view(m *Model) string {
 	body := h.FullHelpView(m.keys.fullHelp()) + "\n\n" + m.th.Strong.Render("Commands") + "\n" + strings.TrimRight(cmds.String(), "\n") +
 		"\n\n" + m.th.Faint.Render("esc to close")
 	return frame(m.th, "Keys and commands", body, width)
-}
-
-// --- command palette ---
-
-type paletteEntry struct {
-	label, hint string
-	run         func(m *Model) tea.Cmd
-}
-
-type paletteOverlay struct {
-	filter  textinput.Model
-	entries []paletteEntry
-	shown   []paletteEntry
-	cursor  int
-}
-
-func newPalette(m *Model) *paletteOverlay {
-	in := textinput.New()
-	in.Placeholder = "type to filter"
-	in.Prompt = "› "
-	s := textinput.DefaultStyles(!m.th.Light)
-	s.Focused.Prompt, s.Focused.Text, s.Focused.Placeholder = m.th.Title, m.th.Body, m.th.Faint
-	in.SetStyles(s)
-	in.Focus()
-	p := &paletteOverlay{filter: in}
-	for _, c := range commands {
-		if c.args != "" && c.name != "mode" && c.name != "model" && c.name != "diff" && c.name != "undo" {
-			continue // needs an argument the palette cannot ask for; the theme picker covers /theme
-		}
-		c := c
-		p.entries = append(p.entries, paletteEntry{"/" + c.name, c.help, func(m *Model) tea.Cmd { return c.run(m, "") }})
-	}
-	p.entries = append(p.entries,
-		paletteEntry{"Choose a theme…", "ctrl+t", func(m *Model) tea.Cmd { m.openOverlay(newThemePicker(m)); return nil }},
-		paletteEntry{"Keys and commands", "?", func(m *Model) tea.Cmd { m.openOverlay(helpOverlay{}); return nil }},
-	)
-	p.refilter()
-	return p
-}
-
-func (p *paletteOverlay) refilter() {
-	p.shown = rankEntries(p.entries, p.filter.Value())
-	p.cursor = min(p.cursor, max(len(p.shown)-1, 0))
-}
-
-func (p *paletteOverlay) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "ctrl+c", "ctrl+p":
-		return true, nil
-	case "up", "ctrl+k", "shift+tab":
-		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
-	case "down", "ctrl+j", "tab":
-		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
-	case "enter":
-		if len(p.shown) == 0 {
-			return false, nil
-		}
-		m.overlay = nil // the entry may open another overlay
-		return false, p.shown[p.cursor].run(m)
-	default:
-		var cmd tea.Cmd
-		p.filter, cmd = p.filter.Update(msg)
-		p.refilter()
-		return false, cmd
-	}
-	return false, nil
-}
-
-func (p *paletteOverlay) view(m *Model) string {
-	width := overlayWidth(m, 64)
-	p.filter.SetWidth(width - 6)
-	rows := min(len(p.shown), max(m.transcriptHeight()-6, 3))
-	start := max(0, min(p.cursor-rows+1, len(p.shown)-rows))
-	var b strings.Builder
-	b.WriteString(p.filter.View() + "\n")
-	for i := start; i < start+rows && i < len(p.shown); i++ {
-		e := p.shown[i]
-		// Two columns: the entry, then what it does in whatever width is left.
-		labelWidth := min(20, (width-4)/2)
-		label := padRight(ansi.Truncate(e.label, labelWidth, "…"), labelWidth+1)
-		hint := ansi.Truncate(e.hint, max(width-4-labelWidth-1, 0), "…")
-		if i == p.cursor {
-			b.WriteString(lipgloss.NewStyle().Foreground(m.th.Text).Background(m.th.Tint(m.th.Primary, 0.3)).Bold(true).Render(padRight(label+hint, width-4)))
-		} else {
-			b.WriteString(m.th.Body.Render(label) + m.th.Faint.Render(hint))
-		}
-		b.WriteString("\n")
-	}
-	if len(p.shown) == 0 {
-		b.WriteString(m.th.Faint.Render("nothing matches") + "\n")
-	}
-	b.WriteString(m.th.Faint.Render(fmt.Sprintf("%d of %d · enter run · esc close", len(p.shown), len(p.entries))))
-	return frame(m.th, "Commands", b.String(), width)
 }
 
 // rankEntries keeps entries whose label holds the query's letters in order, best first: a prefix,
@@ -242,11 +147,11 @@ func (t *themePicker) view(m *Model) string {
 			swatch += lipgloss.NewStyle().Foreground(c).Render("●")
 		}
 		label := padRight(name, 16)
+		row := m.th.Body.Render("  "+label) + swatch
 		if i == t.cursor {
-			b.WriteString(m.th.Title.Render("› "+label) + swatch)
-		} else {
-			b.WriteString(m.th.Body.Render("  "+label) + swatch)
+			row = m.th.Title.Render("› "+label) + swatch
 		}
+		b.WriteString(mark(m.zones.dialog, rowID(i), row))
 		b.WriteString("\n")
 	}
 	b.WriteString(m.th.Faint.Render("↑/↓ preview · enter keep · esc revert"))

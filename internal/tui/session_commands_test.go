@@ -92,3 +92,24 @@ func TestCommandsFromTheOldInterfaceSayWhereTheyWent(t *testing.T) {
 		}
 	}
 }
+
+func TestToolCardsLinkTheirFileAndDrawListingsAsTrees(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.opts.Cwd = "/home/p"
+	read := &toolItem{name: "read_file", args: map[string]any{"path": "src/app.go"}, done: true, result: "a\nb"}
+	listing := &toolItem{name: "list_files", args: map[string]any{}, done: true, result: "src/\nsrc/app.go\nsrc/util/str.go\nREADME.md", open: true}
+	m.tr.add(read)
+	m.tr.add(listing)
+	raw := m.View().Content
+	if !strings.Contains(raw, "\x1b]8;;file:///home/p/src/app.go") {
+		t.Fatal("the file a call read is not a link")
+	}
+	if s := screen(m); !strings.Contains(s, "util/") || !strings.Contains(s, "└──") {
+		t.Fatalf("listing not drawn as a tree:\n%s", s)
+	}
+	// Still a link when the frame goes through the compositor (a toast is up).
+	m.toast(toastInfo, "hello")
+	if !strings.Contains(m.View().Content, "\x1b]8;;file:///home/p/src/app.go") {
+		t.Fatal("the compositor dropped the link")
+	}
+}

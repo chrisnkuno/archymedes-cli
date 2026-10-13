@@ -100,6 +100,23 @@ func (t *transcript) holdAnchor(ctx renderCtx) {
 	t.anchorTotal, t.anchorWidth = total, ctx.width
 }
 
+// allLines is the whole transcript as drawn, blocks separated by a blank line, oldest first — for
+// the pager, which reads all of it rather than a window.
+func (t *transcript) allLines(ctx renderCtx) []string {
+	var out []string
+	for _, it := range t.items {
+		lines := t.lines(it, ctx)
+		if len(lines) == 0 {
+			continue
+		}
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, lines...)
+	}
+	return out
+}
+
 func (t *transcript) scrollBy(lines int) {
 	t.scroll = max(t.scroll+lines, 0)
 }

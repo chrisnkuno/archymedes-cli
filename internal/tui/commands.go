@@ -16,6 +16,12 @@ type command struct {
 	run              func(m *Model, arg string) tea.Cmd
 }
 
+// completion is one row of the list above the input: a command, or a project path (@path).
+type completion struct {
+	command
+	path string // set for an @path mention
+}
+
 var commands []command
 
 func init() {
@@ -29,7 +35,12 @@ func init() {
 		{"diff", "[stat]", "What changed since the last checkpoint", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("diff", arg) }},
 		{"undo", "[code|conversation]", "Revert the last turn: files, conversation, or both", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("undo", arg) }},
 		{"cost", "", "What this session has spent, and on what", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("cost", "") }},
+		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
+		{"pager", "", "Read the whole session, with line numbers, search and copy", func(m *Model, _ string) tea.Cmd { m.openWindow(m.transcriptPager()); return nil }},
+		{"find", "<text>", "Search the session and jump to the newest match", (*Model).cmdFind},
+		{"files", "", "The project as a tree, with a preview; @ mentions a file", func(m *Model, _ string) tea.Cmd { return m.openFiles() }},
+		{"cat", "<path>", "Read a project file, highlighted", (*Model).cmdCat},
 		{"sessions", "", "Earlier sessions in this project (same as /resume)", (*Model).cmdResume},
 		{"providers", "", "Which providers are configured, and what each needs", func(m *Model, _ string) tea.Cmd { return m.report("providers", "--providers") }},
 		{"settings", "", "Keys, defaults and preferences (opens the settings menu)", func(m *Model, _ string) tea.Cmd { return m.handOff("settings", "settings") }},
@@ -38,8 +49,8 @@ func init() {
 		{"build", "", "Edit with approval (the default)", func(m *Model, _ string) tea.Cmd { return m.setMode("build") }},
 		{"auto", "", "Edit and run without asking", func(m *Model, _ string) tea.Cmd { return m.setMode("auto") }},
 		{"defender", "", "Security triage: find and fix real issues, every change asks", func(m *Model, _ string) tea.Cmd { return m.setMode("defender") }},
-		{"palette", "", "Every command, filtered as you type (ctrl+p)", func(m *Model, _ string) tea.Cmd { m.openOverlay(newPalette(m)); return nil }},
-		{"keys", "", "Every key (?)", func(m *Model, _ string) tea.Cmd { m.openOverlay(helpOverlay{}); return nil }},
+		{"palette", "", "The start menu: find any app, action, session or file", func(m *Model, _ string) tea.Cmd { return m.runAction("start") }},
+		{"keys", "", "See and change every key", func(m *Model, _ string) tea.Cmd { return m.runAction("keys") }},
 		{"expand", "", "Show tool output in full, or fold it again (ctrl+o)", (*Model).cmdExpand},
 		{"theme", "[name]", "Pick a theme with a live preview, or switch to one (ctrl+t)", (*Model).cmdTheme},
 		{"clear", "", "Clear the screen (the session keeps its history)", func(m *Model, _ string) tea.Cmd { m.tr.clear(); return m.animate() }},
@@ -57,8 +68,8 @@ var notInThisInterface = map[string]string{
 }
 
 func init() {
-	for _, name := range []string{"attach", "balance", "cat", "continue", "detach", "diagnostics", "edit", "export", "fallback", "files", "find",
-		"guide", "jobs", "memory", "pager", "pull", "retry", "route", "scan", "tab", "task", "tools", "upgrade", "voice", "wander", "watch", "where", "workspace"} {
+	for _, name := range []string{"attach", "balance", "continue", "detach", "diagnostics", "edit", "export", "fallback",
+		"guide", "jobs", "memory", "pull", "retry", "route", "scan", "tab", "task", "tools", "upgrade", "voice", "wander", "watch", "where", "workspace"} {
 		notInThisInterface[name] = "is not in this version of the interface yet"
 	}
 }
@@ -117,6 +128,24 @@ func (m *Model) cmdModel(arg string) tea.Cmd {
 	}
 	m.openOverlay(newModelPicker(m, ""))
 	return m.loadModels(false, "")
+}
+
+func (m *Model) cmdFind(arg string) tea.Cmd {
+	p := m.transcriptPager()
+	m.openWindow(p)
+	if arg == "" {
+		_, cmd := p.handle(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+		return cmd
+	}
+	p.search(m, arg)
+	return nil
+}
+
+func (m *Model) cmdCat(arg string) tea.Cmd {
+	if arg == "" {
+		return m.openFiles()
+	}
+	return m.openFile(strings.TrimPrefix(arg, "@"))
 }
 
 func (m *Model) cmdResume(string) tea.Cmd {

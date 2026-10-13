@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 )
@@ -17,6 +18,7 @@ func (m *Model) handleAgent(msg any) {
 			m.tr.add(m.current)
 		}
 		m.current.append(msg.Text)
+		m.stats.text(len(msg.Text), time.Now())
 	case acp.UserChunk:
 		// A loaded session's history: the person's message, then whatever followed it.
 		m.closeAssistant()
@@ -55,6 +57,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 	switch ev.Type {
 	case "tool_call":
 		m.closeAssistant()
+		m.stats.tool(ev.ToolName)
 		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments}
 		m.tools[ev.ToolCallID] = t
 		m.tr.add(t)
@@ -67,13 +70,15 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		// a new paragraph, not a continuation glued onto this one.
 		m.closeAssistant()
 		if ev.Usage != nil {
+			m.stats.call(ev.Usage.InputTokens, ev.Usage.OutputTokens, time.Now())
 			m.turnUsage.input += ev.Usage.InputTokens
 			m.turnUsage.output += ev.Usage.OutputTokens
 			m.usage.input += ev.Usage.InputTokens
 			m.usage.output += ev.Usage.OutputTokens
 		}
 	case "provider_retry":
-		m.retrying = fmt.Sprintf("retrying in %.0fs (%d/%d): %s", float64(ev.DelayMs)/1000, ev.NextAttempt, ev.MaxAttempts, ev.Reason)
+		m.retrying = fmt.Sprintf("retry %d/%d: %s", ev.NextAttempt, ev.MaxAttempts, ev.Reason)
+		m.retryStart, m.retryDelay = time.Now(), time.Duration(ev.DelayMs)*time.Millisecond
 	case "runtime_stop":
 		if ev.Status != "completed" && ev.Status != "cancelled" {
 			if summary := stopSummary(ev.Summary); summary != "" {

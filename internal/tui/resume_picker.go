@@ -105,16 +105,16 @@ func (p *resumePicker) view(m *Model) string {
 		for i := start; i < start+rows && i < len(p.shown); i++ {
 			s := p.shown[i]
 			when := padRight(relativeTime(s.UpdatedAt, now), 11)
-			mark := "  "
+			badge := "  "
 			if s.ID == m.session.ID {
-				mark = "● "
+				badge = "● "
 			}
 			title := ansi.Truncate(strings.Join(strings.Fields(s.Title), " "), max(inner-14, 4), "…")
+			row := th.Highlight.Render(badge) + th.Faint.Render(when) + th.Body.Render(title)
 			if i == p.cursor {
-				b.WriteString(lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(padRight(mark+when+title, inner)))
-			} else {
-				b.WriteString(th.Highlight.Render(mark) + th.Faint.Render(when) + th.Body.Render(title))
+				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(padRight(badge+when+title, inner))
 			}
+			b.WriteString(mark(m.zones.dialog, rowID(i), row))
 			b.WriteString("\n")
 		}
 		if len(p.shown) == 0 {

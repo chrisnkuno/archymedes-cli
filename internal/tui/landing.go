@@ -75,15 +75,15 @@ func (m *Model) landingInfo() []string {
 	}
 	lines = append(lines, "",
 		tip(th, "enter", "ask anything"),
-		tip(th, "ctrl+p", "commands"),
-		tip(th, "shift+tab", "plan · build · auto"),
-		tip(th, "?", "every key"),
+		tip(th, keyLabel(m.keys.Start.Keys()), "find anything"),
+		tip(th, keyLabel(m.keys.Mode.Keys()), "plan · build · auto"),
+		th.Faint.Render("the dock below opens every app"),
 	)
 	return lines
 }
 
 func tip(th theme.Theme, key, desc string) string {
-	return th.Key.Render(padRight(key, 10)) + th.Faint.Render(desc)
+	return th.Key.Render(padRight(key, 11)) + th.Faint.Render(desc)
 }
 
 // centre places block in the middle of a width×height area, clipping what does not fit.

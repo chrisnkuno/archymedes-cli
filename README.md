@@ -122,6 +122,15 @@ bun run build:go                        # all six platform binaries → artifact
 ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/archymedes   # log every protocol frame
 ```
 
+The interface is a small desktop: a top bar with a `◇` start menu (ctrl+space — finds any app,
+action, session or file) and a tab per open window, and a dock along the bottom with every app and
+its key (F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats) — click
+or press. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
+call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
+is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the settings
+file. `ARCHYMEDES_REDUCE_MOTION=1` turns off animated scrolling; `ARCHYMEDES_DEBUG_LOG=<file>` writes
+a structured log of what the interface does.
+
 `ARCHYMEDES_AGENT` overrides the agent command (a JSON array, or a space-separated string). Commands
 the interface does not have yet say so when typed; WS-7 in [`TRACKER.md`](docs/continuation/TRACKER.md)
 lists them.

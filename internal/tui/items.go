@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/render"
 	"github.com/chrisnkuno/archymedes-cli/internal/theme"
@@ -16,7 +17,10 @@ type renderCtx struct {
 	th       theme.Theme
 	md       *render.Markdown
 	width    int
-	expanded bool // ctrl+o: show tool output in full
+	expanded bool   // ctrl+o: show tool output in full
+	root     string // the project directory, for links to files
+	// zones marks click targets (a tool card's header); nil where blocks are not clickable (the pager).
+	zones *zone.Manager
 }
 
 // item is one block of the transcript. version changes whenever its content does, which is what
@@ -94,6 +98,7 @@ type toolItem struct {
 	done     bool
 	isError  bool
 	result   string
+	open     bool // this card's output shown in full (a click), independent of ctrl+o
 	denied   bool
 }
 
@@ -107,36 +112,59 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	// A card: state mark, the tool as a soft pill, the one argument that matters, then what it
 	// produced. Running calls are drawn hollow; the spinner in the status bar carries the motion,
 	// so a cached card never needs repainting just to animate.
-	mark, summary, accent := th.Faint.Render("◌"), th.Faint.Render("running"), th.Secondary
+	glyph, summary, accent := th.Faint.Render("◌"), th.Faint.Render("running"), th.Secondary
 	switch {
 	case t.done && t.isError:
-		// The error itself is printed below the card; the header only says that it failed.
-		mark, accent, summary = th.Bad.Render("✗"), th.Error, th.Bad.Render("failed")
+		// The error itself is printed below the card; the header only says that it failed — with
+		// a curly underline where the terminal draws one, as a second signal beside the ✗.
+		glyph, accent = th.Bad.Render("✗"), th.Error
+		summary = th.Bad.UnderlineStyle(lipgloss.UnderlineCurly).UnderlineColor(th.Error).Render("failed")
 	case t.done:
-		mark = th.OK.Render("✓")
-		summary = th.Faint.Render(render.SummarizeToolResult(t.name, t.result, false))
+		glyph = th.OK.Render("✓")
+		summary = render.LinkURLs(th.Faint, render.SummarizeToolResult(t.name, t.result, false))
 	}
 	pill := th.SoftPill(strings.ReplaceAll(t.name, "_", " "), accent)
 	room := max(ctx.width-ansi.StringWidth(pill)-ansi.StringWidth(summary)-6, 8)
 	detail := render.TruncateMiddle(render.DescribeToolCall(t.name, t.args), room)
-	head := mark + " " + pill
+	head := glyph + " " + pill
 	if detail != "" {
-		head += " " + th.Body.Render(detail)
+		// A file the call was about is a link to that file.
+		path, _ := t.args["path"].(string)
+		if !fileTools[t.name] {
+			path = ""
+		}
+		head += " " + render.FileLink(th.Body, detail, ctx.root, path)
 	}
 	head += th.Faint.Render(" · ") + summary
-	lines := []string{ansi.Truncate(head, ctx.width, "…")}
-	if t.done && showsOutput(t, ctx.expanded) {
+	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
+	expanded := ctx.expanded || t.open
+	if t.done && showsOutput(t, expanded) {
 		limit := 6
-		if ctx.expanded {
+		if expanded {
 			limit = 0
 		}
 		rule := lipgloss.NewStyle().Foreground(th.Tint(accent, 0.55)).Render("  │ ")
-		for _, line := range render.Excerpt(th, t.result, ctx.width-4, limit) {
+		body := render.Excerpt(th, t.result, ctx.width-4, limit)
+		if listing[t.name] && !t.isError && expanded {
+			if tree := render.PathTree(th, strings.Split(t.result, "\n")); tree != nil {
+				body = nil
+				for _, line := range tree {
+					body = append(body, ansi.Truncate(line, ctx.width-4, "…"))
+				}
+			}
+		}
+		for _, line := range body {
 			lines = append(lines, rule+line)
 		}
 	}
 	return lines
 }
+
+// fileTools take a path argument that names one project file; listing tools produce paths.
+var (
+	fileTools = map[string]bool{"read_file": true, "write_file": true, "edit_file": true}
+	listing   = map[string]bool{"list_files": true, "glob_files": true}
+)
 
 // showsOutput: failures and diffs are shown by default because they are what gets read; a
 // successful read or listing is summarised, and ctrl+o shows everything.

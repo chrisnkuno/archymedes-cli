@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/list"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
@@ -107,20 +108,48 @@ type todoItem struct {
 func (t *todoItem) render(ctx renderCtx) []string {
 	th := ctx.th
 	done := 0
-	var lines []string
-	for _, i := range t.items {
-		mark, style := th.Faint.Render("○ "), th.Body
-		switch i[0] {
-		case "done":
-			mark, style = th.OK.Render("✓ "), th.Faint
+	items := list.New().
+		Enumerator(func(_ list.Items, i int) string {
+			switch t.items[i][0] {
+			case "done":
+				return "✓"
+			case "in_progress":
+				return "◐"
+			}
+			return "○"
+		}).
+		EnumeratorStyleFunc(func(_ list.Items, i int) lipgloss.Style {
+			switch t.items[i][0] {
+			case "done":
+				return th.OK.MarginRight(1)
+			case "in_progress":
+				return th.Highlight.MarginRight(1)
+			}
+			return th.Faint.MarginRight(1)
+		}).
+		ItemStyleFunc(func(_ list.Items, i int) lipgloss.Style {
+			// Width-limited, so a long step wraps under its own text rather than under the mark.
+			base := lipgloss.NewStyle().Width(max(ctx.width-6, 8))
+			switch t.items[i][0] {
+			case "done":
+				return base.Inherit(th.Faint)
+			case "in_progress":
+				return base.Inherit(th.Strong)
+			}
+			return base.Inherit(th.Body)
+		})
+	for _, item := range t.items {
+		if item[0] == "done" {
 			done++
-		case "in_progress":
-			mark, style = th.Highlight.Render("◐ "), th.Strong
 		}
-		lines = append(lines, "  "+mark+style.Render(ansi.Truncate(i[1], max(ctx.width-6, 4), "…")))
+		items.Item(item[1])
 	}
 	head := th.Title.Render("plan") + th.Faint.Render(fmt.Sprintf(" %d/%d done", done, len(t.items)))
-	return append([]string{head}, lines...)
+	lines := []string{head}
+	for _, line := range strings.Split(items.String(), "\n") {
+		lines = append(lines, "  "+line)
+	}
+	return lines
 }
 
 // --- /resume: another stored session, in place of this one ---

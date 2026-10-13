@@ -33,7 +33,7 @@ func TestEveryViewFitsTheTerminal(t *testing.T) {
 	views := map[string]func(){
 		"landing": func() {},
 		"help":    func() { m.openOverlay(helpOverlay{}) },
-		"palette": func() { m.openOverlay(newPalette(m)) },
+		"palette": func() { m.openOverlay(newStartMenu(m)) },
 		"themes":  func() { m.openOverlay(newThemePicker(m)) },
 		"toasts": func() {
 			m.toast(toastInfo, strings.Repeat("a very long toast ", 10))
@@ -54,7 +54,7 @@ func TestLandingShowsTheMarkThenGivesWayToTheConversation(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	s := screen(m)
-	for _, want := range []string{"◇", "A R C H Y M E D E S", "ctrl+p", "commands"} {
+	for _, want := range []string{"◇", "A R C H Y M E D E S", "ctrl+space", "find anything"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("landing lacks %q:\n%s", want, s)
 		}
@@ -97,7 +97,7 @@ func TestSpinnerOnlyTicksWhileSomethingIsHappening(t *testing.T) {
 func TestPaletteFiltersAndRuns(t *testing.T) {
 	m, agent := newTestModel(t)
 	press(m, 'p', tea.ModCtrl)
-	p, ok := m.overlay.(*paletteOverlay)
+	p, ok := m.overlay.(*startMenu)
 	if !ok {
 		t.Fatal("ctrl+p opens the palette")
 	}
@@ -209,13 +209,13 @@ func TestFloatingBoxesFitBeforeCompositing(t *testing.T) {
 		if w := ansi.StringWidth(strings.Split(dialog, "\n")[0]); w > width-1 {
 			t.Fatalf("approval at %d is %d wide", width, w)
 		}
-		for name, o := range map[string]overlay{"help": helpOverlay{}, "palette": newPalette(m), "themes": newThemePicker(m)} {
+		for name, o := range map[string]overlay{"help": helpOverlay{}, "palette": newStartMenu(m), "themes": newThemePicker(m)} {
 			if w := lipgloss.Width(o.view(m)); w > width {
 				t.Fatalf("%s at %d is %d wide", name, width, w)
 			}
 		}
-		if h := m.header(); !strings.Contains(ansi.Strip(h), "build") {
-			t.Fatalf("mode dropped from the header at %d: %q", width, ansi.Strip(h))
+		if h := m.topBar(); !strings.Contains(ansi.Strip(h), "build") {
+			t.Fatalf("mode dropped from the top bar at %d: %q", width, ansi.Strip(h))
 		}
 	}
 }

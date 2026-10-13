@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -22,8 +23,43 @@ type composer struct {
 	history  []string
 	histPos  int    // len(history) when not browsing
 	draft    string // what was typed before browsing started
-	complete []command
+	complete []completion
 	compPos  int
+	// files is the project's file list, once read, for @path completion.
+	files []string
+}
+
+// mentionPattern is an @path being typed at the end of the input.
+var mentionPattern = regexp.MustCompile(`(^|\s)@([^\s]*)$`)
+
+// mentionFragment is the @path at the end of value: where its @ is, and what follows it.
+func mentionFragment(value string) (at int, fragment string, ok bool) {
+	match := mentionPattern.FindStringSubmatchIndex(value)
+	if match == nil {
+		return 0, "", false
+	}
+	return match[4] - 1, value[match[4]:match[5]], true
+}
+
+// matchingMentions completes a fragment against the project's files: prefix matches first, then
+// substring matches, as the terminal CLI did, so a path the agent is given is one that exists.
+func matchingMentions(files []string, fragment string) []completion {
+	fragment = strings.ToLower(fragment)
+	var prefixed, contained []completion
+	for _, file := range files {
+		lower := strings.ToLower(file)
+		switch {
+		case strings.HasPrefix(lower, fragment):
+			prefixed = append(prefixed, completion{path: file})
+		case fragment != "" && strings.Contains(lower, fragment):
+			contained = append(contained, completion{path: file})
+		}
+	}
+	out := append(prefixed, contained...)
+	if len(out) > 50 {
+		out = out[:50]
+	}
+	return out
 }
 
 func newComposer(th theme.Theme) composer {
@@ -105,7 +141,13 @@ func (c *composer) browse(delta int) bool {
 }
 
 func (c *composer) refreshCompletions() {
-	c.complete = matchingCommands(c.area.Value())
+	c.complete = nil
+	for _, cmd := range matchingCommands(c.area.Value()) {
+		c.complete = append(c.complete, completion{command: cmd})
+	}
+	if _, fragment, ok := mentionFragment(c.area.Value()); ok && len(c.complete) == 0 && c.files != nil {
+		c.complete = matchingMentions(c.files, fragment)
+	}
 	if c.compPos >= len(c.complete) {
 		c.compPos = 0
 	}
@@ -117,6 +159,13 @@ func (c *composer) accept() bool {
 		return false
 	}
 	chosen := c.complete[c.compPos]
+	if chosen.path != "" {
+		at, _, _ := mentionFragment(c.area.Value())
+		c.area.SetValue(c.area.Value()[:at] + "@" + chosen.path + " ")
+		c.area.MoveToEnd()
+		c.complete = nil
+		return true
+	}
 	c.area.SetValue("/" + chosen.name + map[bool]string{true: " ", false: ""}[chosen.args != ""])
 	c.area.MoveToEnd()
 	c.refreshCompletions()
@@ -150,6 +199,9 @@ func (c *composer) dropup(th theme.Theme, width, rows int) []string {
 		}
 		// width-3: the "› " marker and the screen's one-column margin come on top of this.
 		text := ansi.Truncate(padRight(line, 32)+"  "+cmd.help, width-3, "…")
+		if cmd.path != "" {
+			text = ansi.Truncate("@"+cmd.path, width-3, "…")
+		}
 		if i == c.compPos {
 			out = append(out, th.Title.Render("› "+text))
 		} else {

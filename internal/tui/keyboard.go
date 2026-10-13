@@ -7,8 +7,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// handleKey routes one key press: the approval dialog first (the agent is paused on it), then an
-// open overlay, then the keymap, and whatever is left is typing.
+// handleKey routes one key press, most urgent first: the approval (the agent is paused on it), an
+// open dialog, a window capturing every key (the Keys app waiting for a binding), the desktop's own
+// keys (apps, windows), the focused window, and finally Chat, where what is left is typing.
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.approval != nil {
 		if answered, choice := m.approval.handle(msg); answered {
@@ -29,7 +30,39 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return tea.Batch(cmd, m.animate())
 	}
+	w := m.activeWindow()
+	if c, ok := w.(capturing); ok && c.capturing() {
+		_, cmd := w.handle(m, msg)
+		return cmd
+	}
+	if cmd, ok := m.shellKey(msg); ok {
+		m.quitArmed = false
+		return tea.Batch(cmd, m.animate())
+	}
+	if w != nil {
+		if closed, cmd := w.handle(m, msg); closed {
+			if i := m.windowIndex(w); i > 0 {
+				m.closeWindow(i)
+			}
+			return cmd
+		} else {
+			return cmd
+		}
+	}
+	return m.chatKey(msg)
+}
 
+func (m *Model) windowIndex(w window) int {
+	for i, open := range m.windows {
+		if open == w {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// chatKey is a key for the Chat window: session keys, reading the transcript, and typing.
+func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := m.keys
 	if !key.Matches(msg, k.Interrupt) {
 		m.quitArmed = false
@@ -54,7 +87,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		case len(m.input.complete) > 0:
 			m.input.complete = nil
 		case !m.tr.following():
-			m.tr.toBottom()
+			return m.scrollTo(0)
 		case m.phase == busy:
 			return m.cancelTurn()
 		}
@@ -74,34 +107,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.Expand):
 		m.expanded = !m.expanded
 		return nil
-	case key.Matches(msg, k.Palette):
-		m.openOverlay(newPalette(m))
-		return nil
-	case key.Matches(msg, k.Themes):
-		m.openOverlay(newThemePicker(m))
-		return nil
-	case key.Matches(msg, k.Help) && m.input.value() == "":
-		// Only on an empty input: "?" is also something people type.
-		m.openOverlay(helpOverlay{})
-		return nil
 	case key.Matches(msg, k.PageUp):
-		m.tr.scrollBy(max(m.transcriptHeight()-2, 1))
-		return nil
+		return m.scrollBy(max(m.transcriptHeight()-2, 1))
 	case key.Matches(msg, k.PageDown):
-		m.tr.scrollBy(-max(m.transcriptHeight()-2, 1))
-		return nil
+		return m.scrollBy(-max(m.transcriptHeight()-2, 1))
 	case key.Matches(msg, k.LineUp):
-		m.tr.scrollBy(1)
-		return nil
+		return m.scrollBy(1)
 	case key.Matches(msg, k.LineDown):
-		m.tr.scrollBy(-1)
-		return nil
+		return m.scrollBy(-1)
 	case key.Matches(msg, k.Top):
+		m.stopScroll()
 		m.tr.toTop()
 		return nil
 	case key.Matches(msg, k.Bottom):
-		m.tr.toBottom()
-		return nil
+		return m.scrollTo(0)
 	case key.Matches(msg, k.History):
 		delta := map[string]int{"up": -1, "down": 1}[msg.String()]
 		if len(m.input.complete) > 0 {
@@ -112,7 +131,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
-	return m.input.update(msg)
+	cmd := m.input.update(msg)
+	// The first @ typed reads the project's files, so the paths can be completed.
+	if _, _, ok := mentionFragment(m.input.value()); ok && m.knownFiles == nil && !m.filesLoading {
+		return tea.Batch(cmd, m.listFiles())
+	}
+	return cmd
 }
 
 func namesCommand(input string) bool {

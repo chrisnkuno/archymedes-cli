@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -15,14 +16,18 @@ import (
 
 const maxDropupRows = 8
 
-// The screen, top to bottom: header (1 row), transcript or landing (the rest), completions, input
-// box, status (1 row). Overlays, the approval dialog and toasts are layers composited on top.
+// The screen, top to bottom: the top bar (1 row), the focused window — Chat's transcript or landing,
+// completions and input box, or an app — and the dock (1 row). Dialogs, the approval and toasts are
+// layers composited on top.
 
 func (m *Model) composerHeight() int { return m.input.area.Height() + 2 } // plus the box's borders
 
 func (m *Model) dropupRows() int {
 	return min(len(m.input.complete), maxDropupRows, max(m.height/3, 0))
 }
+
+// windowHeight is the rows between the top bar and the dock.
+func (m *Model) windowHeight() int { return max(m.height-2, 0) }
 
 func (m *Model) transcriptHeight() int {
 	return max(m.height-2-m.composerHeight()-m.dropupRows(), 0)
@@ -39,17 +44,21 @@ func (m *Model) View() tea.View {
 	if m.width <= 0 || m.height <= 0 {
 		return v
 	}
-
 	rows := make([]string, 0, m.height)
-	rows = append(rows, m.header())
-	for _, line := range m.body(m.transcriptHeight()) {
-		rows = append(rows, " "+line)
+	rows = append(rows, m.topBar())
+	if w := m.activeWindow(); w != nil {
+		area := strings.Split(fillHeight(clipBlock(w.view(m), m.width, m.windowHeight()), m.windowHeight()), "\n")
+		rows = append(rows, area[:m.windowHeight()]...)
+	} else {
+		for _, line := range m.body(m.transcriptHeight()) {
+			rows = append(rows, " "+line)
+		}
+		for _, line := range m.input.dropup(m.th, m.width, m.dropupRows()) {
+			rows = append(rows, " "+line)
+		}
+		rows = append(rows, strings.Split(m.composerBox(), "\n")...)
 	}
-	for _, line := range m.input.dropup(m.th, m.width, m.dropupRows()) {
-		rows = append(rows, " "+line)
-	}
-	rows = append(rows, strings.Split(m.composerBox(), "\n")...)
-	rows = append(rows, m.statusBar())
+	rows = append(rows, m.dock())
 	if len(rows) > m.height {
 		rows = rows[len(rows)-m.height:]
 	}
@@ -64,17 +73,32 @@ func (m *Model) body(height int) []string {
 	if m.landingVisible() {
 		return m.landing(width, height)
 	}
-	ctx := renderCtx{th: m.th, md: m.md, width: width, expanded: m.expanded}
+	ctx := renderCtx{th: m.th, md: m.md, width: width, expanded: m.expanded, root: m.projectRoot(), zones: m.zones.frame}
 	if !m.thinking() || height < 3 || !m.tr.following() {
 		return m.tr.window(ctx, height)
 	}
-	label := "thinking"
-	if m.retrying != "" {
-		label = m.retrying
-	}
-	line := m.spin.View() + " " + theme.Gradient(label+"…", m.th.Primary, m.th.Secondary, false) +
+	line := m.spin.View() + " " + theme.Gradient("thinking…", m.th.Primary, m.th.Secondary, false) +
 		m.th.Faint.Render(" "+elapsed(time.Since(m.turnStart)))
+	if m.retrying != "" {
+		line = m.retryLine()
+	}
 	return append(m.tr.window(ctx, height-2), "", ansi.Truncate(line, width, "…"))
+}
+
+func newRetryBar(th theme.Theme) progress.Model {
+	return progress.New(progress.WithColors(th.Warning, th.Primary), progress.WithoutPercentage(), progress.WithWidth(16), progress.WithFillCharacters('━', '─'))
+}
+
+// retryLine is a provider retry while it waits: what is being retried, and a bar draining over the
+// wait the provider asked for. Redrawn by the busy spinner's frames, so it needs no tick of its own.
+func (m *Model) retryLine() string {
+	left := m.retryDelay - time.Since(m.retryStart)
+	fraction := 0.0
+	if m.retryDelay > 0 {
+		fraction = min(max(float64(left)/float64(m.retryDelay), 0), 1)
+	}
+	return m.spin.View() + " " + m.th.Warn.Render(m.retrying) + " " + m.retryBar.ViewAs(fraction) +
+		m.th.Faint.Render(fmt.Sprintf(" %.0fs", max(left.Seconds(), 0)))
 }
 
 // thinking is a turn in progress with nothing streaming and no tool running: the stretch where,
@@ -94,6 +118,8 @@ func (m *Model) thinking() bool {
 // composite layers what floats over the screen. A Layer's X and Y are only honoured by a
 // Compositor, and Canvas.Render trims trailing blank rows, which fillHeight puts back.
 func (m *Model) composite(content string) string {
+	// The frame's click targets are registered from the frame itself, before anything covers it.
+	content = m.zones.frame.Scan(content)
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(content)}
 	switch {
 	case m.approval != nil:
@@ -102,15 +128,32 @@ func (m *Model) composite(content string) string {
 	case m.overlay != nil:
 		box := clipBlock(m.overlay.view(m), m.width, m.height-2)
 		x := max((m.width-lipgloss.Width(box))/2, 0)
-		y := max(1+(m.transcriptHeight()-lipgloss.Height(box))/2, 1)
+		y := max(1+(m.windowHeight()-lipgloss.Height(box))/2, 1)
+		// The dialog's zones (the box, its rows) are registered where it will be drawn.
+		box = scanAt(m.zones.dialog, mark(m.zones.dialog, "dialog", box), x, y)
 		layers = append(layers, lipgloss.NewLayer(box).X(x).Y(y).Z(2))
+	default:
+		m.zones.dialog.Scan("") // no dialog: no dialog targets
 	}
+	// Toasts stack from the top right; their zones are registered as one block at their places.
+	var marked []string
 	y := 1
 	for i := len(m.toasts) - 1; i >= 0 && y < m.height-2; i-- {
 		t := m.toastView(m.toasts[i])
-		layers = append(layers, lipgloss.NewLayer(t).X(max(m.width-lipgloss.Width(t)-1, 0)).Y(y).Z(3))
-		y += lipgloss.Height(t)
+		x, h := max(m.width-lipgloss.Width(t)-1, 0), lipgloss.Height(t)
+		layers = append(layers, lipgloss.NewLayer(t).X(x).Y(y).Z(3))
+		for len(marked) < y {
+			marked = append(marked, "")
+		}
+		for j, line := range strings.Split(mark(m.zones.toasts, fmt.Sprintf("toast:%d", m.toasts[i].id), t), "\n") {
+			if y+j >= len(marked) {
+				marked = append(marked, "")
+			}
+			marked[y+j] = strings.Repeat(" ", x) + line
+		}
+		y += h
 	}
+	m.zones.toasts.Scan(strings.Join(marked, "\n"))
 	if len(layers) == 1 {
 		return content
 	}
@@ -129,31 +172,6 @@ func clipBlock(block string, width, height int) string {
 		lines[i] = ansi.Truncate(line, width, "")
 	}
 	return strings.Join(lines, "\n")
-}
-
-func (m *Model) header() string {
-	th := m.th
-	left := " " + theme.Gradient("◇ Archymedes", th.Primary, th.Secondary, true)
-	if where := m.project(); where != "" {
-		left += th.Faint.Render("  " + where)
-	}
-	// The mode always shows; the model chip goes first when the row is short. Work that runs
-	// somewhere other than this machine says so in the mode's pill row, since it changes what an
-	// edit touches.
-	mode := th.Pill(m.mode, th.ModeColor(m.mode)) + " "
-	if where := m.session.Info.Workspace; where != "" && where != "local" {
-		mode = th.SoftPill(where, th.Warning) + " " + mode
-	}
-	if info := m.session.Info; info.Model != "" {
-		full := th.SoftPill(info.Model, th.Secondary) + " " + mode
-		if ansi.StringWidth(left)+ansi.StringWidth(full)+1 <= m.width {
-			return spread(left, full, m.width)
-		}
-	}
-	if ansi.StringWidth(left)+ansi.StringWidth(mode)+1 > m.width {
-		left = ansi.Truncate(left, max(m.width-ansi.StringWidth(mode)-1, 0), "…")
-	}
-	return spread(left, mode, m.width)
 }
 
 func (m *Model) project() string {
@@ -185,33 +203,6 @@ func (m *Model) composerBox() string {
 		Border(m.th.Border).BorderForeground(borderColor).
 		Width(m.width).
 		Render(strings.Join(lines, "\n"))
-}
-
-func (m *Model) statusBar() string {
-	th := m.th
-	var left string
-	switch {
-	case m.phase == connecting:
-		left = m.spin.View() + th.Faint.Render(" starting the agent")
-	case m.phase == failed:
-		left = th.Bad.Render("✗ agent stopped")
-	case m.quitArmed:
-		left = th.Warn.Render("ctrl+c again to quit")
-	case m.phase == busy:
-		left = m.spin.View() + th.Highlight.Render(" working "+elapsed(time.Since(m.turnStart)))
-		if len(m.queue) > 0 {
-			left += th.Faint.Render(fmt.Sprintf(" · %d queued", len(m.queue)))
-		}
-	}
-	right := th.Faint.Render(fmt.Sprintf("↑%s ↓%s ", compact(m.usage.input), compact(m.usage.output)))
-	if left != "" {
-		left += th.Faint.Render("  ")
-	}
-	left = " " + left
-	// The key hints get whatever the state and the usage leave; help drops what does not fit.
-	hints := m.help
-	hints.SetWidth(max(m.width-ansi.StringWidth(left)-ansi.StringWidth(right)-2, 0))
-	return spread(left+hints.ShortHelpView(m.keys.shortFor(m)), right, m.width)
 }
 
 // windowTitle names the project and, while it matters, what the agent is doing.

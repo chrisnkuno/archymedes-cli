@@ -35,6 +35,7 @@ type modelPicker struct {
 	filter  textinput.Model
 	shown   []acp.ModelChoice
 	cursor  int
+	start   int  // first row shown, for clicks
 	pending bool // a switch is in flight
 }
 
@@ -208,22 +209,22 @@ func (p *modelPicker) view(m *Model) string {
 		modelWidth := max(inner-2-17-priceWidth-1, 4)
 		for i := start; i < start+rows && i < len(p.shown); i++ {
 			c := p.shown[i]
-			mark := "  "
+			badge := "  "
 			switch {
 			case c.Model == m.session.Info.Model && c.Provider == m.session.Info.Provider:
-				mark = "✓ "
+				badge = "✓ "
 			case c.IsDefault:
-				mark = "★ "
+				badge = "★ "
 			}
 			name := padRight(ansi.Truncate(c.Model, modelWidth, "…"), modelWidth+1)
 			provider := padRight(ansi.Truncate(c.ProviderLabel, 16, "…"), 17)
 			price := ansi.Truncate(c.Price, priceWidth, "…")
+			row := th.OK.Render(badge) + th.Body.Render(name) + th.Faint.Render(provider) + th.Highlight.Render(price)
 			if i == p.cursor {
-				line := padRight(mark+name+provider+price, inner)
-				b.WriteString(lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(ansi.Truncate(line, inner, "")))
-			} else {
-				b.WriteString(th.OK.Render(mark) + th.Body.Render(name) + th.Faint.Render(provider) + th.Highlight.Render(price))
+				line := padRight(badge+name+provider+price, inner)
+				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(ansi.Truncate(line, inner, ""))
 			}
+			b.WriteString(mark(m.zones.dialog, rowID(i), row))
 			b.WriteString("\n")
 		}
 		if len(p.shown) == 0 {

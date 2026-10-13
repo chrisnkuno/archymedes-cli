@@ -17,10 +17,12 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/log/v2"
 	"github.com/charmbracelet/x/term"
 
 	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 	"github.com/chrisnkuno/archymedes-cli/internal/cli"
+	"github.com/chrisnkuno/archymedes-cli/internal/config"
 	"github.com/chrisnkuno/archymedes-cli/internal/tui"
 )
 
@@ -69,6 +71,8 @@ func run(args []string) int {
 	ui := tui.New(tui.Options{
 		Theme: firstNonEmpty(inv.Theme, os.Getenv("ARCHYMEDES_THEME")), Start: start, Resume: inv.Resume, Prompt: inv.Prompt,
 		Mouse: !inv.NoMouse, Cwd: cwd, Version: version, AgentArgv: agent,
+		Motion: os.Getenv("ARCHYMEDES_REDUCE_MOTION") == "",
+		Debug:  debugLog(), ConfigDir: config.Default(),
 	})
 	program := tea.NewProgram(ui)
 	ui.SetSender(program.Send)
@@ -77,6 +81,21 @@ func run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// debugLog opens ARCHYMEDES_DEBUG_LOG for appending, or returns nil (no logging) when unset or
+// unopenable: a debug log must never be the reason the interface does not start.
+func debugLog() *log.Logger {
+	path := strings.TrimSpace(os.Getenv("ARCHYMEDES_DEBUG_LOG"))
+	if path == "" {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "archymedes: debug log not opened:", err)
+		return nil
+	}
+	return tui.NewDebugLog(f)
 }
 
 // agentCommand finds the TypeScript agent: an explicit command (the npm launcher sets
