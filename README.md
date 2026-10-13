@@ -105,6 +105,27 @@ bun run build:packages        # emit packages/*/dist
 bun run build:state           # cargo build the Rust state binary (optional)
 ```
 
+### The interface is Go
+
+The terminal interface is a Go program on [Bubble Tea v2](https://github.com/charmbracelet/bubbletea)
+(`cmd/archymedes`, `internal/`). The agent behind it is still the TypeScript package, run as
+`archymedes acp` and driven over the Agent Client Protocol with Archymedes's `_archymedes/*`
+extensions; non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
+`settings`) go to the agent unchanged. The npm package ships one static binary per platform as an
+optional dependency (`@archymedes/cli-<platform>-<arch>`) and falls back to the bundled TypeScript
+interface where none matches.
+
+```bash
+go run ./cmd/archymedes                 # from a checkout (the agent runs with bun)
+go test ./...                           # Go tests; `bun run check` runs these too
+bun run build:go                        # all six platform binaries → artifacts/npm
+ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/archymedes   # log every protocol frame
+```
+
+`ARCHYMEDES_AGENT` overrides the agent command (a JSON array, or a space-separated string). Commands
+the interface does not have yet say so when typed; WS-7 in [`TRACKER.md`](docs/continuation/TRACKER.md)
+lists them.
+
 See [`docs/PLATFORM_STATUS.md`](docs/PLATFORM_STATUS.md) for repository ownership and integration
 status. The authenticated hosted boundary is documented
 in [`docs/EXCHANGE_API.md`](docs/EXCHANGE_API.md).
