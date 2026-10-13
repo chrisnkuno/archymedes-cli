@@ -34,7 +34,7 @@ func TestEveryPhotoIsShippedDecodesAndIsCredited(t *testing.T) {
 			t.Fatalf("%s is not credited: %+v", p.ID, p)
 		}
 		switch p.Theme {
-		case "greek", "math", "science", "code":
+		case "greek", "math":
 		default:
 			t.Fatalf("%s has theme %q", p.ID, p.Theme)
 		}
@@ -45,7 +45,7 @@ func TestPickAndThemeWrapBothWays(t *testing.T) {
 	if Pick(len(Photos)) != Photos[0] || Pick(-1) != Photos[len(Photos)-1] {
 		t.Fatal("Pick does not wrap")
 	}
-	if OfTheme("greek", 0).Theme != "greek" || OfTheme("code", 5).Theme != "code" {
+	if OfTheme("greek", 0).Theme != "greek" || OfTheme("math", 5).Theme != "math" {
 		t.Fatal("OfTheme picked outside its theme")
 	}
 	if OfTheme("nothing", 2) != Pick(2) {

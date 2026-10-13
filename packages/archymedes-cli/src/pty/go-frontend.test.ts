@@ -270,7 +270,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
     proc.write("\x1b[24~"); // F12
     await screenShows(screen, "built into Archymedes");
-    expect(await settle(screen)).toMatch(/1 of 11|\d+ of 11/);
+    expect(await settle(screen)).toMatch(/\d+ of 9/);
     const before = await settle(screen);
     proc.write("\x1b[C"); // →
     await new Promise((resolve) => setTimeout(resolve, 300));

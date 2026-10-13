@@ -67,7 +67,7 @@ func TestTheGalleryShowsTheBuiltInPhotoBesideTheLiveOneWithCaptions(t *testing.T
 		t.Fatalf("fetched without saying who asks: %q", agents)
 	}
 	s := screen(m)
-	for _, want := range []string{"Gallery", "1 of 11", "built into Archymedes", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ photo", "Kitty:", "Sixel:"} {
+	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Archymedes", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ photo", "Kitty:", "Sixel:"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("Gallery lacks %q:\n%s", want, s)
 		}

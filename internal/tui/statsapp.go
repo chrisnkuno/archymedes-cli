@@ -83,7 +83,7 @@ func (s *statsApp) view(m *Model) string {
 	width, height := m.width, max(m.windowHeight(), 1)
 	lines := []string{" " + ansi.Truncate(s.summary(m), max(width-2, 0), "…")}
 	if len(st.turns) == 0 {
-		lines = append(lines, m.emptyState(gallery.OfTheme("science", 0), []string{
+		lines = append(lines, m.emptyState(gallery.OfTheme("math", 0), []string{
 			th.Body.Render("No turns yet."),
 			th.Faint.Render("The charts fill in as you work: tokens, time and tools, turn by turn."),
 		}, width, height-1)...)

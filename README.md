@@ -141,8 +141,8 @@ model of every provider, read live from the providers, OpenRouter's whole catalo
 model included; tab narrows it to the free ones or the ones ready to use, and a model whose
 provider has no key yet is shown with the key it needs.
 
-The home screen turns slowly through photographs of mathematics, the Greek world, science and
-code beside the mark (from Unsplash, shipped in the binary and credited on screen; see
+The home screen turns slowly through photographs of Archimedes, the Greek world and mathematics
+beside the mark (from Unsplash, shipped in the binary and credited on screen; see
 [`internal/gallery/CREDITS.md`](internal/gallery/CREDITS.md)). A click on it, or F12, opens the
 Gallery: the built-in copy beside the full-resolution original loaded live from Unsplash's image
 CDN. It draws with the sharpest the terminal has, found by asking it: Kitty graphics (kitty,

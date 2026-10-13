@@ -1,4 +1,4 @@
-// Package gallery is the interface's photographs: mathematics, the Greek world, science and code,
+// Package gallery is the interface's photographs: Archimedes, the Greek world and mathematics,
 // chosen from Unsplash and shipped inside the binary, so they show with no network, no account and
 // no key. Each is under the Unsplash License (free to use, no permission needed) and is credited to
 // its photographer wherever it is drawn anyway.
@@ -21,7 +21,7 @@ type Photo struct {
 	ID    string // Unsplash photo id; the file is photos/<ID>.jpg
 	Title string // what it shows, short enough for a caption
 	By    string // the photographer, as Unsplash credits them
-	Theme string // "greek", "math", "science" or "code"
+	Theme string // "greek" or "math"
 	// CDN is the photo's address on Unsplash's image CDN, without parameters: where the Gallery
 	// loads the full-resolution photo from (hotlinked, as Unsplash asks), sized by Full.
 	CDN string
@@ -29,17 +29,15 @@ type Photo struct {
 
 // Photos is every photograph, in the order the home screen shows them.
 var Photos = []Photo{
+	{"ORaUWw7Na5c", "Archimedes, marble · Rome", "Blaz Erzetic", "greek", "https://images.unsplash.com/photo-1575379972039-e4dcfa0539ca"},
 	{"GlkROV0KsmE", "Alexander the Great, marble · Athens", "Alex Sanzio", "greek", "https://images.unsplash.com/photo-1705700585343-551cfa3a0c65"},
 	{"gYrYa37fAKI", "E = mc² and friends, on a chalkboard", "Artturi Jalli", "math", "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa"},
 	{"TXWbwRlIdnY", "The Parthenon, Athens", "Amir Hanna", "greek", "https://images.unsplash.com/photo-1567748533376-a0598c1a6991"},
-	{"MgtHZ4zlC1U", "Code on a monitor", "Markus Spiske", "code", "https://images.unsplash.com/photo-1576836165612-8bc9b07e7778"},
 	{"y9H2d4m36pI", "Homer, bronze", "Birmingham Museums Trust", "greek", "https://images.unsplash.com/photo-1719257726973-60ce7f126f55"},
 	{"8z2Q6XWLYa4", "A drawing compass", "Jeff Sheldon", "math", "https://images.unsplash.com/photo-1416339158484-9637228cc908"},
-	{"embsBhLrjPU", "At the microscope", "CDC", "science", "https://images.unsplash.com/photo-1631816290943-3d07fbb117a6"},
 	{"KTQgb5lcAHw", "Equations, read slowly", "Vitaly Gariev", "math", "https://images.unsplash.com/photo-1758685734268-003e12ca57bc"},
 	{"tVXHmtHhsIg", "The Parthenon in grey", "David Watkis", "greek", "https://images.unsplash.com/photo-1567870518898-40273c6d58a3"},
 	{"4dXO2xAzRQk", "A proof in progress", "Vitaly Gariev", "math", "https://images.unsplash.com/photo-1758685734303-e85757067f28"},
-	{"VkITYPupzSg", "A stereo microscope", "Pawel Czerwinski", "science", "https://images.unsplash.com/photo-1526930700683-86db0d6bab09"},
 }
 
 // URL is the photo's page on Unsplash, with the referral Unsplash asks apps to send.
