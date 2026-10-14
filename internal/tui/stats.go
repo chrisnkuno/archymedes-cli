@@ -70,6 +70,15 @@ func (s *sessionStats) tool(name string) {
 	}
 }
 
+// toolCount is every tool call this session.
+func (s *sessionStats) toolCount() int {
+	total := 0
+	for _, n := range s.tools {
+		total += n
+	}
+	return total
+}
+
 // text records streamed reply text, for the rate sparkline.
 func (s *sessionStats) text(n int, now time.Time) {
 	if s.current() == nil {

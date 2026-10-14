@@ -387,6 +387,20 @@ func (c *Client) SaveSetup(ctx context.Context, provider, key string) (SetupResu
 	return result, err
 }
 
+// Settings reads the settings menu: every field, its section, choices and current value.
+func (c *Client) Settings(ctx context.Context) (SettingsList, error) {
+	var list SettingsList
+	err := c.call(ctx, "_archymedes/settings/list", map[string]any{}, &list)
+	return list, err
+}
+
+// SetSetting validates and saves one setting; an empty value clears it.
+func (c *Client) SetSetting(ctx context.Context, key, value string) (SettingsSetResult, error) {
+	var result SettingsSetResult
+	err := c.call(ctx, "_archymedes/settings/set", map[string]any{"key": key, "value": value}, &result)
+	return result, err
+}
+
 // Models lists what the session can switch to; refresh asks the providers rather than the cache.
 func (c *Client) Models(ctx context.Context, refresh bool) (ModelList, error) {
 	var list ModelList

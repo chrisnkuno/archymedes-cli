@@ -5,7 +5,7 @@ import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
-import { FreeAgentTurnProvider } from "./free-agent";
+import { FreeAgentTurnProvider, freeReasoningFromEnvironment } from "./free-agent";
 import { OpenRouterAgentTurnProvider } from "./openrouter-agent";
 import { freeAccess, isFreeModelId } from "./free-catalog";
 import { tokenSaverEnabled } from "../cli/token-saver";
@@ -86,7 +86,7 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   free: {
     ...PROVIDER_INFO.free,
     // Token saver is on for free mode unless ARCHYMEDES_TOKEN_SAVER=off (see cli/token-saver.ts).
-    create: (environment, model) => new FreeAgentTurnProvider({ ...freeAccess(environment), model, tokenSaver: tokenSaverEnabled(environment) }),
+    create: (environment, model) => new FreeAgentTurnProvider({ ...freeAccess(environment), model, tokenSaver: tokenSaverEnabled(environment), ...(freeReasoningFromEnvironment(environment) ? { reasoningEffort: freeReasoningFromEnvironment(environment) } : {}) }),
   },
   anthropic: {
     ...PROVIDER_INFO.anthropic,

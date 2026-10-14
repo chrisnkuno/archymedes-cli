@@ -1,5 +1,5 @@
 import { PROVIDER_IDS, PROVIDERS, catalogPrices, missingRequirements, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { isFreeModelId } from "@archymedes/core/providers/free-catalog";
+import { isFreeModelId, isSmallModel } from "@archymedes/core/providers/free-catalog";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache, type FetchLike } from "@archymedes/core/providers/model-fetch";
 import { describePrice, modelsForProvider } from "../session/models";
 
@@ -46,7 +46,7 @@ export async function modelList(
 
   type Choice = {
     provider: ProviderId; providerLabel: string; model: string; isDefault: boolean; live: boolean;
-    price: string; free: boolean; locked: boolean; missing: string[];
+    price: string; free: boolean; locked: boolean; missing: string[]; small: boolean;
   };
   const ready: Choice[] = [];
   const locked: Choice[] = [];
@@ -71,7 +71,7 @@ export async function modelList(
         provider, providerLabel: spec.label, model, isDefault: model === preferred, live: !knownSet.has(model),
         // Unconverted: the provider's own currency is the one its rate card is quoted in.
         price: free ? "free" : prices ? describePrice(prices, prices.currency, (value) => value) : "unpriced",
-        free, locked: missing.length > 0, missing,
+        free, locked: missing.length > 0, missing, small: isSmallModel(model),
       };
       (choice.locked ? locked : ready).push(choice);
     }

@@ -49,8 +49,8 @@ Save a prompt you reuse as Markdown: `.archymedes/commands/review.md` becomes `/
 project, and `commands/review.md` in the Archymedes config directory is yours alone (the project
 file wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
 `description:` line in `---` front matter describes it. Built-in commands cannot be replaced.
-The Go interface does not run custom commands yet; WS-7 in
-[`TRACKER.md`](docs/continuation/TRACKER.md) tracks it.
+They complete as you type `/`, appear in `/help` and the start menu, and run as a prompt (queued if
+a turn is running). A body without `$ARGUMENTS` gets what you typed appended.
 
 ```markdown
 ---

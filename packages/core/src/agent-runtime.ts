@@ -333,6 +333,20 @@ export type AgentRuntimeResult = {
   routingReceipts?: RoutingReceipt[];
 };
 
+/**
+ * What to tell a model that keeps failing the same way. The error already says what went wrong; what
+ * a small model lacks is the instruction to stop guessing and look.
+ */
+export function repeatedFailureHint(toolName: string, failures: number, missingPathStreak: number): string | null {
+  if (failures >= 2) {
+    return `This exact ${toolName} call has now failed ${failures} times. Do not send it again unchanged: change the arguments, or run list_files with path "." to see what is really in the project.`;
+  }
+  if (missingPathStreak >= 3) {
+    return "Several paths in a row did not exist. Stop guessing paths: run list_files with path \".\" (or glob_files with \"**/*\") and use only names it returns.";
+  }
+  return null;
+}
+
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 1;
@@ -401,7 +415,9 @@ export class ProviderRequestError extends Error {
     const detail = options.retrySuppressed === "output_started"
       ? "The model connection failed after output began, so Archymedes did not retry to avoid duplicated output, charges, or tool actions."
       : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}${kind}${waited}.`;
-    super(`${detail} Provider message: ${original}`, { cause });
+    // A rate limit is a property of that model's endpoint, so the useful next step is another one.
+    const advice = options.kind === "rate_limit" && !options.retrySuppressed ? " This model is rate limited right now: wait a minute, or switch with /model (on free mode, openrouter/free picks among the free models for you)." : "";
+    super(`${detail}${advice} Provider message: ${original}`, { cause });
     this.name = "ProviderRequestError";
     this.attempts = options.attempts;
     if (options.kind) this.kind = options.kind;
@@ -837,6 +853,10 @@ export class BoundedAgentRuntime {
     let totalToolResultChars = 0;
     /** Digest → the call that first carried it, so an identical result is referenced rather than repeated. */
     const sentResults = new Map<string, { toolName: string; path?: string }>();
+    // Failures by identical call, and the run of consecutive "does not exist" results: a weak model
+    // retries the same wrong call, or guesses one wrong path after another, and neither ends on its own.
+    const failedCalls = new Map<string, number>();
+    let missingPathStreak = 0;
     /** Every tool result this run added, by transcript position, so older ones can be compacted in-turn. */
     const runToolResults: RunToolResult[] = [];
     let inTurnCompactions = 0;
@@ -1264,6 +1284,16 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         totalToolResultChars += content.length + imageChars;
         iterationChars += content.length + imageChars;
         runToolResults.push({ index: messages.length, iteration, toolCallId: call.id, name: call.name, chars: content.length + imageChars, compacted: false, images: images?.length ?? 0, ...(artifact ? { artifactPath: artifact.path } : {}), ...(digest ? { digest } : {}) });
+        if (result.isError) {
+          const signature = `${call.name}:${JSON.stringify(call.arguments ?? {})}`;
+          const failures = (failedCalls.get(signature) ?? 0) + 1;
+          failedCalls.set(signature, failures);
+          missingPathStreak = /does not exist|No such file|not found/i.test(raw) ? missingPathStreak + 1 : 0;
+          const hint = repeatedFailureHint(call.name, failures, missingPathStreak);
+          if (hint) content = `${content}\n\n${hint}`;
+        } else {
+          missingPathStreak = 0;
+        }
         messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         const effect = tool.effect === "external" ? "external" : result.effect ?? tool.effect;
         if (!result.isError && effect === "workspace") workspaceNeedsVerification = true;

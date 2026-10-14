@@ -74,7 +74,7 @@ func TestReportsAreShownUnframedAndAgentProgramsNeedTheAgentsCommandLine(t *test
 		t.Fatalf("report:\n%s", s)
 	}
 	// This test model has no agent command line: the command says so instead of failing silently.
-	submitCommand(m, "/settings")
+	submitCommand(m, "/update")
 	if !strings.Contains(screen(m), "needs the agent's command line") {
 		t.Fatal(screen(m))
 	}

@@ -68,3 +68,56 @@ describe("request pacer", () => {
     await expect(pacer.wait(controller.signal)).rejects.toThrow("already gone");
   });
 });
+
+describe("the window budget keeps the agent fast", () => {
+  const clock = () => {
+    let t = 1_000_000;
+    const sleeps: number[] = [];
+    return { now: () => t, sleeps, sleep: async (ms: number) => { sleeps.push(ms); t += ms; } };
+  };
+
+  it("never waits while the minute holds fewer requests than the cap", async () => {
+    const c = clock();
+    const pacer = new RequestPacer({ windowCap: 5, now: c.now, sleep: c.sleep });
+    for (let i = 0; i < 5; i += 1) await pacer.wait();
+    expect(c.sleeps).toEqual([]);
+    expect(pacer.inWindow).toBe(5);
+  });
+
+  it("waits only until the oldest request leaves the window, not for the whole minute", async () => {
+    const c = clock();
+    const pacer = new RequestPacer({ windowCap: 3, now: c.now, sleep: c.sleep });
+    await pacer.wait();
+    c.sleep(20_000); // 20 s pass
+    c.sleeps.length = 0;
+    await pacer.wait();
+    await pacer.wait(); // the window now holds three
+    await pacer.wait(); // the fourth must wait for the first (started 20 s ago) to expire: 40 s
+    expect(c.sleeps).toHaveLength(1);
+    expect(c.sleeps[0]).toBeGreaterThan(39_000);
+    expect(c.sleeps[0]).toBeLessThan(40_100);
+  });
+
+  it("learns the cap from a 429 and never exceeds it again, with no gap penalty beyond the window", async () => {
+    const c = clock();
+    const pacer = new RequestPacer({ now: c.now, sleep: c.sleep });
+    for (let i = 0; i < 7; i += 1) await pacer.wait(); // the 7th is the one refused
+    pacer.reportRateLimited();
+    expect(pacer.windowBudget).toBe(6);
+  });
+
+  it("does not shrink below two requests on a stray early 429", async () => {
+    const c = clock();
+    const pacer = new RequestPacer({ now: c.now, sleep: c.sleep });
+    await pacer.wait();
+    pacer.reportRateLimited();
+    expect(pacer.windowBudget).toBeUndefined();
+  });
+
+  it("adds no measurable cost per request while under the cap", async () => {
+    const pacer = new RequestPacer({ windowCap: 1_000_000 });
+    const started = performance.now();
+    for (let i = 0; i < 400; i += 1) await pacer.wait();
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+});

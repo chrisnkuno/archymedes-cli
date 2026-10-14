@@ -71,3 +71,13 @@ describe("free model health ranking", () => {
     await expect(tracker.records()).resolves.toEqual({});
   });
 });
+
+describe("size tier in the ordering", () => {
+  it("keeps a chat-sized model behind capable ones however well it has been answering", async () => {
+    const { orderByFreeHealth } = await import("./free-health");
+    const now = 1_000_000;
+    const records = { "liquid/lfm-2.5-2.6b:free": { successes: 50, failures: 0, updatedAt: now }, "google/gemma-4-31b-it:free": { successes: 1, failures: 3, updatedAt: now } };
+    const order = orderByFreeHealth([{ id: "liquid/lfm-2.5-2.6b:free" }, { id: "google/gemma-4-31b-it:free" }], records, now);
+    expect(order.map((m) => m.id)).toEqual(["google/gemma-4-31b-it:free", "liquid/lfm-2.5-2.6b:free"]);
+  });
+});

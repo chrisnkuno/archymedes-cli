@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-14T16:07:09.315Z",
+  "machine": "13th Gen Intel(R) Core(TM) i5-1335U x4",
+  "bun": "1.3.14",
+  "results": [
+    {
+      "id": "startup.version",
+      "what": "bun launches the agent and prints its version",
+      "unit": "ms",
+      "value": 276.61
+    },
+    {
+      "id": "startup.acp-initialize",
+      "what": "the agent answers the interface's first request (process start included)",
+      "unit": "ms",
+      "value": 272.62
+    },
+    {
+      "id": "tool.read_file",
+      "what": "read a 20 KB file",
+      "unit": "ms",
+      "value": 0.76
+    },
+    {
+      "id": "tool.list_files",
+      "what": "list the project, two levels",
+      "unit": "ms",
+      "value": 7.77
+    },
+    {
+      "id": "tool.glob_files",
+      "what": "glob every TypeScript file",
+      "unit": "ms",
+      "value": 8.31
+    },
+    {
+      "id": "tool.grep_files",
+      "what": "search the whole project for a word",
+      "unit": "ms",
+      "value": 36.01
+    },
+    {
+      "id": "tool.run_command",
+      "what": "run a command that exits at once",
+      "unit": "ms",
+      "value": 5.23
+    },
+    {
+      "id": "turn.first-cold",
+      "what": "the first turn of a session, with nothing warmed up",
+      "unit": "ms",
+      "value": 292.36
+    },
+    {
+      "id": "turn.first-warmed",
+      "what": "the first turn after warmUp() had a moment to finish",
+      "unit": "ms",
+      "value": 87.84
+    },
+    {
+      "id": "turn.fixed",
+      "what": "any later one-reply turn: setup, checkpoint, journal, session save",
+      "unit": "ms",
+      "value": 47.73
+    },
+    {
+      "id": "turn.per-iteration",
+      "what": "each further model call + tool call + persistence, 30 in a row",
+      "unit": "ms",
+      "value": 0.24
+    },
+    {
+      "id": "pacer.per-request",
+      "what": "the rate-limit window's cost per request while under the cap",
+      "unit": "µs",
+      "value": 1.64
+    }
+  ]
+}

@@ -222,6 +222,24 @@ func (m *Model) sixelPicture(img image.Image, cols, rows int, fit picture.FitMod
 	return ansi.SixelGraphics(0, 1, 0, payload.Bytes())
 }
 
+// sixelImage is an image already sized to its cells (and composited over the background) as a
+// Sixel sequence: drawn fully opaque, since its alpha only says how much of it is the subject.
+func sixelImage(img image.Image) string {
+	b := img.Bounds()
+	opaque := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := range b.Dy() {
+		for x := range b.Dx() {
+			r, g, bl, _ := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA).RGBA()
+			opaque.Set(x, y, color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(bl >> 8), 255})
+		}
+	}
+	var payload bytes.Buffer
+	if err := (&sixel.Encoder{}).Encode(&payload, opaque); err != nil {
+		return ""
+	}
+	return ansi.SixelGraphics(0, 1, 0, payload.Bytes())
+}
+
 // fitRect is where a sw×sh image goes in a w×h box: whole and centred (contain), filling it
 // and cropped (cover), or stretched (fill).
 func fitRect(sw, sh, w, h int, fit picture.FitMode) image.Rectangle {

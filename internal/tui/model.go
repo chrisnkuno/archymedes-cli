@@ -5,6 +5,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ type Agent interface {
 	NewSession(ctx context.Context, cwd, resumeID string) (acp.Session, error)
 	SetupStatus(ctx context.Context) (acp.SetupStatus, error)
 	SaveSetup(ctx context.Context, provider, key string) (acp.SetupResult, error)
+	Settings(ctx context.Context) (acp.SettingsList, error)
+	SetSetting(ctx context.Context, key, value string) (acp.SettingsSetResult, error)
 	Models(ctx context.Context, refresh bool) (acp.ModelList, error)
 	SetModel(ctx context.Context, sessionID, provider, model string) (acp.SessionInfo, error)
 	Command(ctx context.Context, sessionID, command, argument string) (acp.CommandResult, error)
@@ -121,6 +124,10 @@ type Model struct {
 	// for — all of it, and where they sit.
 	sixel                bool
 	sixelSig, sixelPlace string
+	// The home screen's 3D mark (prism.go), and the terminal's background as it said, which the
+	// mark is drawn over so its soft edges blend into it.
+	prism  prismState
+	termBg color.Color
 	// First-run guidance (welcome.go): whether the first request was ever sent, whether this
 	// session sent it (its first turn ends with a tip), and how many files the project has changed.
 	welcomed       bool
@@ -155,10 +162,22 @@ type Model struct {
 	usage     usageTotals
 	retrying  string
 	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
-	retryStart time.Time
-	retryDelay time.Duration
-	retryBar   progress.Model
-	quitArmed  bool
+	retryStart  time.Time
+	retryDelay  time.Duration
+	retryBar    progress.Model
+	quitArmed   bool
+	limited     map[string]time.Time // models that answered 429 lately, for the picker
+	sel         selection
+	bodyLines   []string // what the transcript last drew, for selection
+	limits      limitTracker
+	limitBar    progress.Model
+	forecast    forecast
+	lastLevel   limitLevel
+	limitWarned time.Time
+	notes       []note // every toast, for the notification center
+	unread      int
+	custom      []command
+	selecting   bool // the terminal owns the mouse (/select)
 }
 
 // New builds the model; Init connects.
@@ -182,6 +201,8 @@ func New(opts Options) *Model {
 	m.stats = newSessionStats()
 	m.zones = newZones()
 	m.retryBar = newRetryBar(th)
+	m.reloadCustomCommands()
+	m.limitBar = newLimitBar(m)
 	m.help = newHelp(th)
 	m.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(th.Highlight))
 	if opts.Theme != "" && th.Name != strings.ToLower(strings.TrimSpace(opts.Theme)) {
@@ -197,6 +218,7 @@ func (m *Model) applyTheme(name string) {
 	m.help = newHelp(m.th)
 	m.spin.Style = m.th.Highlight
 	m.retryBar = newRetryBar(m.th)
+	m.limitBar = newLimitBar(m)
 	m.tr.cache = map[item]cached{} // colours are baked into cached lines
 }
 
@@ -239,7 +261,7 @@ func (m *Model) Init() tea.Cmd {
 		return startedMsg{agent, status}
 		// What the terminal can draw: its cell size, whether it draws Sixel (DA1), its window in pixels.
 	}, tea.RequestBackgroundColor, picture.RequestCellSize(), tea.Raw(ansi.RequestPrimaryDeviceAttributes+ansi.WindowOp(14)),
-		m.animate(), m.sayStartupNote())
+		m.animate(), m.sayStartupNote(), limitTick())
 }
 
 func (m *Model) sayStartupNote() tea.Cmd {
@@ -317,6 +339,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.sel.clear()
 		m.input.setWidth(m.width - 4)
 		m.input.fit()
 		if g := m.galleryWindow(); g != nil {
@@ -361,10 +384,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.animated = false
 			return m, nil
 		}
-		m.angle += 0.06
+		m.angle += 0.06 // the classic mark
 		m.turnPhoto(time.Now())
-		return m, animTick()
+		m.prism.step(animInterval.Seconds(), m.opts.Motion)
+		if m.prismClassic() {
+			return m, animTick()
+		}
+		return m, tea.Batch(animTick(), m.renderPrism())
+	case prismFrameMsg:
+		return m, m.prismFrame(msg)
 	case tea.BackgroundColorMsg:
+		m.termBg = msg.Color
 		// On a light terminal, unless a theme was asked for, use the light one: a dark ground's
 		// palette on white is unreadable, and the person never chose it.
 		if !msg.IsDark() && m.opts.Theme == "" && !m.th.Light {
@@ -382,6 +412,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.openOverlay(newSetup(m, msg.status))
 		return m, nil
+	case settingsLoadedMsg:
+		m.settingsLoaded(msg)
+		return m, nil
+	case settingSavedMsg:
+		return m, m.settingSaved(msg)
+	case limitTickMsg:
+		return m, m.limitTicked()
+	case progress.FrameMsg:
+		var cmd tea.Cmd
+		m.limitBar, cmd = m.limitBar.Update(msg)
+		return m, cmd
+	case editedMsg:
+		return m, m.edited(msg)
+	case keyDialogMsg:
+		return m, m.openKeyDialog(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
 	case filesLoadedMsg:
@@ -425,6 +470,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case connectedMsg:
 		first := m.session.ID == ""
 		m.session, m.phase = msg.session, ready
+		m.reloadCustomCommands()
 		if msg.session.Info.Mode != "" {
 			m.mode = msg.session.Info.Mode
 		}
@@ -470,12 +516,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mode = msg.mode
 		return m, m.toast(toastInfo, "Mode: "+msg.mode+" — "+modeBlurb[msg.mode])
 	case tea.PasteMsg:
-		return m, m.input.update(msg)
+		return m, m.routePaste(msg, msg.Content)
+	case tea.ClipboardMsg:
+		return m, m.routePaste(tea.PasteMsg{Content: msg.Content}, msg.Content)
 	case scrollTickMsg:
 		return m, m.stepScroll()
 	case tea.MouseClickMsg:
+		m.selectPress(msg)
 		return m, m.handleClick(msg)
+	case tea.MouseMotionMsg:
+		m.selectDrag(msg)
+		return m, m.prismDrag(msg.Mouse().X)
+	case tea.MouseReleaseMsg:
+		m.prismRelease()
+		return m, m.selectRelease()
 	case tea.MouseWheelMsg:
+		m.sel.clear() // the text moves under it
 		if p, ok := m.activeWindow().(*pager); ok && m.overlay == nil {
 			var cmd tea.Cmd
 			p.vp, cmd = p.vp.Update(msg)
@@ -533,6 +589,7 @@ func (m *Model) submit() tea.Cmd {
 }
 
 func (m *Model) send(text string) tea.Cmd {
+	m.sel.clear()
 	m.tr.add(&userItem{text: text})
 	m.stats.startTurn(text, time.Now())
 	m.welcome()

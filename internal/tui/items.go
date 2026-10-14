@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -93,17 +94,18 @@ func (a *assistantItem) render(ctx renderCtx) []string {
 
 type toolItem struct {
 	versioned
-	id, name string
-	args     map[string]any
-	done     bool
-	isError  bool
-	result   string
-	open     bool // this card's output shown in full (a click), independent of ctrl+o
-	denied   bool
+	id, name       string
+	args           map[string]any
+	done           bool
+	isError        bool
+	result         string
+	open           bool // this card's output shown in full (a click), independent of ctrl+o
+	denied         bool
+	started, ended time.Time // for the task manager
 }
 
 func (t *toolItem) finish(result string, isError bool) {
-	t.done, t.result, t.isError = true, result, isError
+	t.done, t.result, t.isError, t.ended = true, result, isError, time.Now()
 	t.touch()
 }
 

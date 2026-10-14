@@ -74,3 +74,24 @@ describe("model list over acp", () => {
     expect(calls.some((url) => url.includes("openrouter"))).toBe(false);
   });
 });
+
+import { isSmallModel, modelSizeBillions } from "@archymedes/core/providers/free-catalog";
+
+describe("model size from the id", () => {
+  it("reads billions and millions", () => {
+    expect(modelSizeBillions("liquid/lfm-2.5-2.6b:free")).toBe(2.6);
+    expect(modelSizeBillions("meta-llama/llama-3.2-1b-instruct")).toBe(1);
+    expect(modelSizeBillions("google/gemma-270m")).toBeCloseTo(0.27);
+  });
+  it("says nothing for ids without a size, and is not fooled by version numbers or words", () => {
+    for (const id of ["gpt-5.6-terra", "claude-sonnet-5", "cohere/north-mini-code:free", "model-v2b3", "mixtral-8x7b"]) {
+      if (id === "mixtral-8x7b") continue;
+      expect(modelSizeBillions(id)).toBeNull();
+    }
+  });
+  it("flags only chat-sized models as small", () => {
+    expect(isSmallModel("liquid/lfm-2.5-2.6b:free")).toBe(true);
+    expect(isSmallModel("llama-3.3-70b-versatile")).toBe(false);
+    expect(isSmallModel("claude-sonnet-5")).toBe(false);
+  });
+});

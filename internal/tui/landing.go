@@ -36,17 +36,23 @@ func (m *Model) landingVisible() bool {
 
 func (m *Model) landing(width, height int) []string {
 	th := m.th
-	solid := render.Geometry(m.angle, false)
-	// Each row of the mark is a step along the theme's primary→secondary ramp, and the ramp turns
-	// with the solid, so the colour moves with the geometry rather than sitting on it.
-	ramp := lipgloss.Blend1D(len(solid)*2, th.Primary, th.Secondary, th.Primary)
-	shift := int(m.angle*4) % len(solid)
-	for i, row := range solid {
-		solid[i] = lipgloss.NewStyle().Foreground(ramp[(i+shift)%len(ramp)]).Render(row)
+	var solid []string
+	if m.prismClassic() {
+		solid = render.Geometry(m.angle, false)
+		// Each row of the mark is a step along the theme's primary→secondary ramp, and the ramp
+		// turns with the solid, so the colour moves with the geometry rather than sitting on it.
+		ramp := lipgloss.Blend1D(len(solid)*2, th.Primary, th.Secondary, th.Primary)
+		shift := int(m.angle*4) % len(solid)
+		for i, row := range solid {
+			solid[i] = lipgloss.NewStyle().Foreground(ramp[(i+shift)%len(ramp)]).Render(row)
+		}
+	} else {
+		solid = append([]string(nil), m.prismLines()...) // the lit 3D mark (prism.go)
 	}
+	solidWidth := ansi.StringWidth(solid[0])
 
 	info := m.landingInfo()
-	markBlock := strings.Join(solid, "\n")
+	markBlock := mark(m.zones.frame, "prism", strings.Join(solid, "\n")) // drag it to turn it
 	// The photo beside the mark, when there is room for both and the info: three columns on a wide
 	// screen, mark and photo over the info on a tall one, and without the photo otherwise.
 	photoCols, photoRows := homePhotoCols, homePhotoRows
@@ -65,9 +71,9 @@ func (m *Model) landing(width, height int) []string {
 	}
 	var block []string
 	switch {
-	case card != nil && width >= 23+3+photoCols+4+infoWidth+2 && height >= len(card):
+	case card != nil && width >= solidWidth+3+photoCols+4+infoWidth+2 && height >= max(len(card), len(solid)):
 		block = strings.Split(lipgloss.JoinHorizontal(lipgloss.Center, markBlock, "   ", photo, "    ", strings.Join(info, "\n")), "\n")
-	case card != nil && width >= 23+3+photoCols+2 && height >= len(card)+1+len(info):
+	case card != nil && width >= solidWidth+3+photoCols+2 && height >= max(len(card), len(solid))+1+len(info):
 		top := strings.Split(lipgloss.JoinHorizontal(lipgloss.Center, markBlock, "   ", photo), "\n")
 		block = append(append(top, ""), centreLines(info, lipgloss.Width(strings.Join(top, "\n")))...)
 	case width >= 72 && height >= len(solid):

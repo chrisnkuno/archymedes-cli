@@ -177,7 +177,10 @@ export class LocalApplicationSupervisor {
 
   async stop(id: string): Promise<ApplicationStatus> {
     const application = this.applications.get(id);
-    if (!application) throw new Error(`Unknown application: ${id}`);
+    if (!application) {
+      const known = [...this.applications.keys()];
+      throw new Error(`Unknown application: ${id}. ${known.length > 0 ? `Running or known: ${known.join(", ")}.` : "No applications are managed right now; start one with start_application."}`);
+    }
     if (application.state !== "exited") {
       terminateProcessTree(application.process);
       await Promise.race([

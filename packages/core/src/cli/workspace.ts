@@ -69,7 +69,7 @@ export function resolveInWorkspace(root: string, candidate: string): string {
   const absoluteRoot = path.resolve(root);
   const resolved = path.resolve(absoluteRoot, candidate);
   if (resolved !== absoluteRoot && !resolved.startsWith(absoluteRoot + path.sep)) {
-    throw new WorkspaceViolation(`path escapes the workspace root: ${candidate}`);
+    throw new WorkspaceViolation(`path escapes the workspace root: ${candidate}. Use a path inside the project; a relative path (like "notes/tmp.txt") is resolved from the project root.`);
   }
   return resolved;
 }
@@ -245,7 +245,7 @@ function similarity(left: string, right: string): number {
 }
 
 /** A hint naming the line most like oldText's first line, so a near miss is fixable in one turn. */
-function nearestLineHint(content: string, oldText: string): string {
+export function nearestLineHint(content: string, oldText: string): string {
   const needle = toLf(oldText).split("\n").map((line) => line.trim()).find(Boolean);
   if (!needle) return "";
   const lines = toLf(content).split("\n");

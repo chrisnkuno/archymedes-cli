@@ -60,8 +60,10 @@ func TestLandingShowsTheMarkThenGivesWayToTheConversation(t *testing.T) {
 		}
 	}
 	m.angle = 0
+	m.opts.Motion = true // with reduced motion the mark holds still, by design
 	before := screen(m)
-	m.Update(animTickMsg{})
+	_, cmd := m.Update(animTickMsg{})
+	deliver(m, cmd) // the next frame is rendered off the event loop
 	if screen(m) == before {
 		t.Fatal("the mark does not turn")
 	}

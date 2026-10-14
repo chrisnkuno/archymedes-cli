@@ -947,3 +947,104 @@ describe("edit_file", () => {
     await expect(edit.execute({ path: "src/app.ts", oldText: "3000", newText: "8080" }, context)).resolves.toMatchObject({ data: { replacements: 1 } });
   });
 });
+
+import { listPrefix } from "./tools";
+
+describe("listPrefix", () => {
+  const root = "/home/me/project";
+  it("treats the root in any spelling as the top level", () => {
+    for (const raw of ["", ".", "./", "/home/me/project", "/home/me/project/"]) expect(listPrefix(raw, root)).toBe("");
+  });
+  it("turns an absolute path inside the root into a root-relative one", () => {
+    expect(listPrefix("/home/me/project/src/ui/", root)).toBe("src/ui");
+    expect(listPrefix("./src", root)).toBe("src");
+  });
+  it("refuses a path outside the root rather than matching nothing", () => {
+    expect(() => listPrefix("/home/me", root)).toThrow(/escapes the workspace/);
+    expect(() => listPrefix("../x", root)).toThrow(/escapes the workspace/);
+  });
+  it("only cleans lexically for a remote workspace", () => {
+    expect(listPrefix("./src/", null)).toBe("src");
+  });
+});
+
+import { runsWrittenScript } from "./tools";
+
+describe("runsWrittenScript", () => {
+  const written = new Set(["code_example.py", "scripts/run.js"]);
+  it("counts running a script the agent wrote", () => {
+    expect(runsWrittenScript("python3 code_example.py", written)).toBe(true);
+    expect(runsWrittenScript("cd /home/chris && python3 ./code_example.py", written)).toBe(true);
+    expect(runsWrittenScript("node /home/chris/scripts/run.js --flag", written)).toBe(true);
+  });
+  it("does not count other commands or files", () => {
+    expect(runsWrittenScript("python3 other.py", written)).toBe(false);
+    expect(runsWrittenScript("cat code_example.py", written)).toBe(false);
+    expect(runsWrittenScript("python3 code_example.py", new Set())).toBe(false);
+  });
+});
+
+import { repeatedFailureHint } from "../agent-runtime";
+
+describe("repeatedFailureHint", () => {
+  it("is silent for a first failure", () => expect(repeatedFailureHint("read_file", 1, 1)).toBeNull());
+  it("tells a model off for repeating the same failing call", () => {
+    expect(repeatedFailureHint("read_file", 2, 0)).toMatch(/failed 2 times/);
+  });
+  it("sends it to look after three missing paths in a row", () => {
+    expect(repeatedFailureHint("read_file", 1, 3)).toMatch(/list_files/);
+  });
+});
+
+import fixture from "./fixtures/failing-calls.json";
+
+// Replays calls real models sent (and got a bad answer to) against today's tools. A regression in
+// any of these is a model being misled again, which is the failure this fixture exists to prevent.
+let replayRoot: string;
+let replayTools: AgentTool[];
+
+describe("replay of real failing calls", () => {
+beforeEach(async () => {
+  replayRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "replay-")));
+  await fs.mkdir(path.join(replayRoot, "src"));
+  await fs.writeFile(path.join(replayRoot, "src", "app.js"), "console.log('hi');\n");
+  await fs.writeFile(path.join(replayRoot, "wordcount.js"), "function countText(text) {\n  const lines = text.split('\\n');\n  return lines.length;\n}\n");
+  const workspace = new LocalWorkspace(replayRoot);
+  replayTools = await createArchymedesTools({ workspace, todos: new TodoList(), instructions: new NestedInstructionTracker(workspace) });
+});
+afterEach(() => fs.rm(replayRoot, { recursive: true, force: true }));
+
+const substitute = (value: unknown): unknown =>
+  typeof value === "string" ? value.replaceAll("{root}", replayRoot)
+    : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, substitute(inner)])) : value;
+
+describe("calls models really sent", () => {
+  for (const call of fixture.calls) {
+    it(`${call.tool} ${JSON.stringify(call.args).slice(0, 60)} — ${call.why}`, async () => {
+      const tool = replayTools.find((candidate) => candidate.name === call.tool)!;
+      const result = await tool
+        .execute(substitute(call.args) as Record<string, unknown>, { signal: new AbortController().signal } as never)
+        .catch((error: Error) => ({ content: error.message, isError: true }));
+      expect(Boolean(result.isError)).toBe(call.expect.isError);
+      expect(result.content).toContain(call.expect.includes);
+      if ("excludes" in call.expect) expect(result.content).not.toContain(call.expect.excludes as string);
+    });
+  }
+});
+});
+
+import { isLikelyPersistentCommand } from "./tools";
+
+describe("persistent-command detection", () => {
+  it("does not mistake -w for a watch flag on ordinary programs (a model counting words was refused 8 times)", () => {
+    for (const command of ["wc -l -w -c file.txt", "grep -w word file", "printf 'a b' > /tmp/x && wc -w /tmp/x", "ls -w 80"]) {
+      expect(isLikelyPersistentCommand(command), command).toBe(false);
+    }
+  });
+  it("still catches watchers and dev servers", () => {
+    for (const command of ["tsc -w", "vitest --watch", "npm run dev", "jest --watch src", "nodemon -w src app.js", "npx vite"]) {
+      if (command === "npx vite") continue;
+      expect(isLikelyPersistentCommand(command), command).toBe(true);
+    }
+  });
+});

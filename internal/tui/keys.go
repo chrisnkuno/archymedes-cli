@@ -25,7 +25,7 @@ type keyMap struct {
 	// Typing (locked).
 	Send, Newline, Complete, Cancel, Interrupt, History key.Binding
 	// Apps.
-	Start, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery key.Binding
+	Start, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings key.Binding
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
@@ -47,6 +47,11 @@ var actions = []action{
 	{"stats", "stats", "Apps", []string{"f9"}, false, func(k *keyMap) *key.Binding { return &k.Stats }},
 	{"changes", "changes", "Apps", []string{"f10"}, false, func(k *keyMap) *key.Binding { return &k.Changes }},
 	{"gallery", "gallery", "Apps", []string{"f12"}, false, func(k *keyMap) *key.Binding { return &k.Gallery }},
+
+	{"tasks", "tasks", "Apps", []string{"alt+t"}, false, func(k *keyMap) *key.Binding { return &k.Tasks }},
+	{"notifications", "notifications", "Apps", []string{"alt+n"}, false, func(k *keyMap) *key.Binding { return &k.Notifications }},
+
+	{"settings", "settings", "Apps", []string{"alt+s"}, false, func(k *keyMap) *key.Binding { return &k.Settings }},
 
 	{"next-window", "next window", "Windows", []string{"ctrl+pgdown", "alt+]"}, false, func(k *keyMap) *key.Binding { return &k.NextWindow }},
 	{"prev-window", "previous window", "Windows", []string{"ctrl+pgup", "alt+["}, false, func(k *keyMap) *key.Binding { return &k.PrevWindow }},

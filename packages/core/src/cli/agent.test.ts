@@ -229,7 +229,10 @@ describe("ArchymedesAgent", () => {
   });
 
   it("emits a jev verdict after the turn when a key is configured", async () => {
-    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Here is the plan." }
+    ]);
     const events: ArchymedesEvent[] = [];
     const agent = new ArchymedesAgent({
       root, model, prices, mode: "plan", approve: async () => "deny",
@@ -258,8 +261,20 @@ describe("ArchymedesAgent", () => {
     expect(verdicts[0]).toMatchObject({ verdict: { status: "verdict", outcome: "complete", sensitiveAction: 0.01 } });
   });
 
+  it("does not ask Jev about a turn that used no tools (nothing to judge, and ~0.8 s saved)", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "It is a CLI." }]);
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "deny", jev: { apiKey: "ts-test", fetchImpl } });
+    const result = await agent.send("what does this project do?");
+    expect(result.status).toBe("completed");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("completes the turn and reports unavailable when jev is down", async () => {
-    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Here is the plan." }
+    ]);
     const events: ArchymedesEvent[] = [];
     const agent = new ArchymedesAgent({
       root, model, prices, mode: "plan", approve: async () => "deny",
@@ -280,7 +295,10 @@ describe("ArchymedesAgent", () => {
     // The benchmark that motivated this: the CLI's own gate said completed (a badge-wearing
     // 'ls'), the judge said blocked, and nothing happened. The auto-review converts that
     // disagreement into one corrective turn, evidence attached.
-    const model = scriptedModel([{ finishReason: "stop", content: "All green." }]);
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "All green." }
+    ]);
     const events: ArchymedesEvent[] = [];
     const agent = new ArchymedesAgent({
       root, model, prices, mode: "plan", approve: async () => "deny",
@@ -310,7 +328,10 @@ describe("ArchymedesAgent", () => {
   });
 
   it("does not auto-review on a complete verdict or when review is disabled", async () => {
-    const complete = scriptedModel([{ finishReason: "stop", content: "Fine." }]);
+    const complete = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Fine." }
+    ]);
     const events: ArchymedesEvent[] = [];
     const agent = new ArchymedesAgent({
       root, model: complete, prices, mode: "plan", approve: async () => "deny", onEvent: (event) => events.push(event),
@@ -330,9 +351,12 @@ describe("ArchymedesAgent", () => {
       },
     });
     await agent.send("hi");
-    expect(complete.requests).toHaveLength(1);
+    expect(complete.requests).toHaveLength(2); // the tool call and the answer; a third would be a corrective review
 
-    const blockedModel = scriptedModel([{ finishReason: "stop", content: "Fine." }]);
+    const blockedModel = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Fine." }
+    ]);
     const disabled = new ArchymedesAgent({
       root, model: blockedModel, prices, mode: "plan", approve: async () => "deny",
       jev: {
@@ -351,11 +375,14 @@ describe("ArchymedesAgent", () => {
       },
     });
     await disabled.send("hi");
-    expect(blockedModel.requests).toHaveLength(1);
+    expect(blockedModel.requests).toHaveLength(2);
   });
 
   it("emits no verdict without a key", async () => {
-    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Here is the plan." }
+    ]);
     const events: ArchymedesEvent[] = [];
     const agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "deny", onEvent: (event) => events.push(event) });
 
@@ -431,7 +458,10 @@ describe("ArchymedesAgent", () => {
   });
 
   it("does not offer write or command tools in plan mode", async () => {
-    const model = scriptedModel([{ finishReason: "stop", content: "Here is the plan." }]);
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Here is the plan." }
+    ]);
     const agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "deny" });
     await agent.send("plan the change");
 
@@ -673,10 +703,12 @@ describe("ArchymedesAgent", () => {
 
   it("lists every checkpoint taken so far, and disposes the workspace on request", async () => {
     const model = scriptedModel([{ finishReason: "stop", content: "Done." }, { finishReason: "stop", content: "Done again." }]);
+    // Counted per write-tree, not read off the model: the snapshot now runs alongside the first model call.
+    let trees = 0;
     const agent = new ArchymedesAgent({
       root, model, prices, mode: "build",
       approve: async () => "allow",
-      git: async (args) => ({ exitCode: 0, stdout: args[0] === "write-tree" ? `tree_${model.requests.length}\n` : "", stderr: "" }),
+      git: async (args) => ({ exitCode: 0, stdout: args[0] === "write-tree" ? `tree_${trees++}\n` : "", stderr: "" }),
     });
 
     await agent.send("first change");

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,7 +47,7 @@ func newStartMenu(m *Model) *startMenu {
 		a, _ := findAction(app.id)
 		p.entries = append(p.entries, paletteEntry{app.icon + " " + app.name, keyLabel(m.keys.keysFor(a)), "app", func(m *Model) tea.Cmd { return m.runAction(app.id) }})
 	}
-	for _, c := range commands {
+	for _, c := range append(slices.Clone(commands), m.custom...) {
 		if c.args != "" && c.name != "mode" && c.name != "model" && c.name != "diff" && c.name != "undo" {
 			continue // needs an argument the menu cannot ask for
 		}

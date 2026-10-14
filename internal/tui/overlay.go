@@ -47,7 +47,7 @@ func (helpOverlay) view(m *Model) string {
 	h.SetWidth(width - 4)
 	h.ShowAll = true
 	var cmds strings.Builder
-	for _, c := range commands {
+	for _, c := range append(slices.Clone(commands), m.custom...) {
 		usage := "/" + c.name
 		if c.args != "" {
 			usage += " " + c.args
@@ -178,6 +178,7 @@ type toastExpiredMsg struct{ id int }
 const toastLife = 3 * time.Second
 
 func (m *Model) toast(kind toastKind, text string) tea.Cmd {
+	m.remember(kind, text)
 	m.toastSeq++
 	id := m.toastSeq
 	m.toasts = append(m.toasts, toast{id: id, kind: kind, text: text})

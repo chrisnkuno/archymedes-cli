@@ -9,6 +9,7 @@ import {
   globWorkspace,
   grepWorkspace,
   looksBinary,
+  nearestLineHint,
   readBinaryFile,
   readTextFile,
   walkWorkspace,
@@ -302,7 +303,7 @@ abstract class SandboxWorkspace implements ArchymedesWorkspace {
 
     const existing = await this.readFile(path);
     const occurrences = existing.content.split(oldText).length - 1;
-    if (occurrences === 0) throw new WorkspaceViolation(`oldText was not found in ${existing.path}`);
+    if (occurrences === 0) throw new WorkspaceViolation(`oldText was not found in ${existing.path}.${nearestLineHint(existing.content, oldText)}`);
     if (occurrences > 1 && !options.replaceAll) {
       throw new WorkspaceViolation(`oldText appears ${occurrences} times in ${existing.path}; include more surrounding context or set replaceAll`);
     }

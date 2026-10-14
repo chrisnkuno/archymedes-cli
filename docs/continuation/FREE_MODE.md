@@ -120,3 +120,12 @@ server-side and is deployed separately, like the Defensive Brain feed.
 Desktop (2026-09-15): Archymedes-desktop has a native port in `src/main/agent/free-adapter.ts`
 (it does not import `@archymedes/core`). Same access order, policy, preference list and gateway
 error header. When `FREE_GATEWAY_URL` is set here, set the desktop constant of the same name too.
+
+## Reasoning effort
+
+Set `ARCHYMEDES_FREE_REASONING` to `minimal`, `low`, `medium` or `high` (or choose it in Settings, alt+s) to
+send OpenRouter's `reasoning.effort` with every free request. Unset, each model uses its own default.
+
+Measured on a small coding task (2026-10-14): `nvidia/nemotron-3.5-lightning:free` finished 3 of 4 runs at
+`minimal` (47, 79 and 157 s) against 2 of 4 at the default (136 and 122 s, two timeouts); `cohere/north-mini-code:free`
+showed no benefit. The sample is small and the effect depends on the model, which is why it is not the default.

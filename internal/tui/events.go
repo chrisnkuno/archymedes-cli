@@ -58,10 +58,13 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 	case "tool_call":
 		m.closeAssistant()
 		m.stats.tool(ev.ToolName)
-		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments}
+		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments, started: time.Now()}
 		m.tools[ev.ToolCallID] = t
 		m.tr.add(t)
 	case "tool_result":
+		if ev.IsError {
+			m.limits.toolError(time.Now())
+		}
 		if t := m.tools[ev.ToolCallID]; t != nil {
 			t.finish(ev.Content, ev.IsError)
 		}
@@ -69,6 +72,10 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		// One model call's text is one block: the next call's reply (a verification pass, say) is
 		// a new paragraph, not a continuation glued onto this one.
 		m.closeAssistant()
+		m.limits.call(time.Now())
+		if a := ev.Allowance; a != nil && a.RemainingRequests != nil && a.RequestLimit != nil {
+			m.limits.allowance(*a.RemainingRequests, *a.RequestLimit)
+		}
 		if ev.Usage != nil {
 			m.stats.call(ev.Usage.InputTokens, ev.Usage.OutputTokens, time.Now())
 			m.turnUsage.input += ev.Usage.InputTokens
@@ -77,6 +84,15 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			m.usage.output += ev.Usage.OutputTokens
 		}
 	case "provider_retry":
+		if ev.Reason == "rate_limit" {
+			m.limits.rateLimited(time.Now())
+		}
+		if ev.Reason == "rate_limit" && m.session.Info.Model != "" {
+			if m.limited == nil {
+				m.limited = map[string]time.Time{}
+			}
+			m.limited[m.session.Info.Model] = time.Now()
+		}
 		m.retrying = fmt.Sprintf("retry %d/%d: %s", ev.NextAttempt, ev.MaxAttempts, ev.Reason)
 		m.retryStart, m.retryDelay = time.Now(), time.Duration(ev.DelayMs)*time.Millisecond
 	case "runtime_stop":

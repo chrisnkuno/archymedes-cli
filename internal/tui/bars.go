@@ -21,6 +21,34 @@ var dockApps = []struct{ id, icon, name string }{
 	{"models", "◎", "Models"}, {"themes", "◐", "Themes"}, {"keys", "▦", "Keys"}, {"help", "?", "Help"}, {"stats", "▥", "Stats"}, {"changes", "±", "Changes"}, {"gallery", "▣", "Gallery"},
 }
 
+// systemApps are the desktop's own: always a key away and in the start menu, and shown in the dock
+// as compact chips when the main apps leave room for them.
+var systemApps = []struct{ id, icon, name string }{
+	{"tasks", "☰", "Tasks"}, {"notifications", "●", "Alerts"}, {"settings", "⚙", "Settings"},
+}
+
+// systemChips draws the system apps as "key icon" chips, widest first as many as fit in room columns.
+func (m *Model) systemChips(room int) string {
+	th := m.th
+	var chips []string
+	used := 0
+	for _, app := range systemApps {
+		a, _ := findAction(app.id)
+		label := " " + keyLabel(m.keys.keysFor(a)) + app.icon + " "
+		w := ansi.StringWidth(label)
+		if used+w > room {
+			break
+		}
+		style := th.Faint
+		if win := m.activeWindow(); win != nil && strings.EqualFold(win.title(), app.name) {
+			style = th.Strong
+		}
+		chips = append(chips, mark(m.zones.frame, "app:"+app.id, style.Render(label)))
+		used += w
+	}
+	return strings.Join(chips, "")
+}
+
 func (m *Model) topBar() string {
 	th := m.th
 	start := " " + lipgloss.NewStyle().Foreground(th.Bg).Background(th.Primary).Bold(true).Render(" ◇ ") + " "
@@ -88,7 +116,11 @@ func (m *Model) tray() string {
 	if where := m.session.Info.Workspace; where != "" && where != "local" {
 		tray += th.SoftPill(where, th.Warning) + " "
 	}
-	return tray + th.Pill(m.mode, th.ModeColor(m.mode)) + " "
+	tray += m.gauge()
+	if m.unread > 0 {
+		tray += mark(m.zones.frame, "notes", th.SoftPill(fmt.Sprintf("● %d", m.unread), th.Warning)) + " "
+	}
+	return tray + th.Pill(m.mode, th.ModeColor(m.mode)) + " " + th.Faint.Render(time.Now().Format("15:04")) + " "
 }
 
 // streamRate is a one-row sparkline of how fast the reply is streaming, a quarter second per
@@ -143,7 +175,8 @@ func (m *Model) dock() string {
 		}
 		fits := x <= m.width
 		if fits || i == len(forms)-1 {
-			left := b.String()
+			// The system apps take whatever the main ones leave, keeping two columns for the hint's gap.
+			left := b.String() + m.systemChips(m.width-x-2)
 			if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > m.width {
 				right = ""
 			}

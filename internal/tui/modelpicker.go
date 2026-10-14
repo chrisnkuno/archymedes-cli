@@ -213,9 +213,16 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		choice := p.shown[p.cursor]
 		if choice.Locked {
+			// A model with no key is one paste away: open that provider's key field.
+			if len(choice.Missing) == 1 && m.agent != nil {
+				return false, tea.Batch(m.cmdKey(choice.Provider), m.toast(toastInfo, fmt.Sprintf("%s needs %s — paste it, then pick %s again", choice.ProviderLabel, choice.Missing[0], choice.Model)))
+			}
 			return false, m.toast(toastWarn, fmt.Sprintf("%s needs %s — /settings adds it, then pick %s", choice.ProviderLabel, strings.Join(choice.Missing, " and "), choice.Model))
 		}
 		p.pending = true
+		if choice.Small {
+			return false, tea.Batch(m.switchModel(choice), m.toast(toastWarn, choice.Model+" is a small model: fine for chat, but it often misuses tools. Use a larger one for edits."))
+		}
 		return false, m.switchModel(choice)
 	default:
 		var cmd tea.Cmd
@@ -288,6 +295,12 @@ func (p *modelPicker) view(m *Model) string {
 			priceText := c.Price
 			if c.Locked {
 				priceText = "needs " + strings.Join(c.Missing, " + ")
+			}
+			if at, ok := m.limited[c.Model]; ok && time.Since(at) < 2*time.Minute && !c.Locked {
+				priceText += " · rate limited"
+			}
+			if c.Small && !c.Locked {
+				priceText += " · small"
 			}
 			price := ansi.Truncate(priceText, priceWidth, "…")
 			var row string

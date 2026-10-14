@@ -569,3 +569,29 @@ describe("free mode reliability and own-key figures", () => {
     expect((await provider.complete(request)).allowance).toMatchObject({ remainingRequests: 287 });
   });
 });
+
+describe("free reasoning effort", () => {
+  it("reads only the four valid efforts from the environment", async () => {
+    const { freeReasoningFromEnvironment } = await import("./free-agent");
+    expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: " LOW " })).toBe("low");
+    expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: "minimal" })).toBe("minimal");
+    for (const bad of [undefined, "", "max", "off", "2"]) expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: bad })).toBeUndefined();
+  });
+});
+
+describe("free reasoning effort in the request", () => {
+  const bodyFor = async (reasoningEffort?: "minimal" | "low" | "medium" | "high") => {
+    const call = vi.fn(async () => response);
+    const provider = new FreeAgentTurnProvider({ apiKey: "k", model: entry.id, ...(reasoningEffort ? { reasoningEffort } : {}) }, { call, catalog });
+    await provider.complete(request as never);
+    return (call.mock.calls as unknown as [Record<string, unknown>][])[0][0];
+  };
+  it("sends reasoning.effort when asked, and nothing otherwise", async () => {
+    expect((await bodyFor("low")).reasoning).toEqual({ effort: "low" });
+    expect("reasoning" in (await bodyFor())).toBe(false);
+  });
+  it("keeps the free-only guarantees whatever the effort", async () => {
+    const body = await bodyFor("minimal");
+    expect(body.provider).toMatchObject({ require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false });
+  });
+});

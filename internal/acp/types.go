@@ -60,6 +60,13 @@ type Usage struct {
 	ReasoningTokens   int `json:"reasoningTokens"`
 }
 
+// Allowance is what is left of a daily request budget.
+type Allowance struct {
+	RemainingRequests *int   `json:"remainingRequests"`
+	RequestLimit      *int   `json:"requestLimit"`
+	ResetsAt          string `json:"resetsAt"`
+}
+
 // RuntimeEvent is one AgentRuntimeEvent; only the fields its Type uses are set.
 type RuntimeEvent struct {
 	Type string `json:"type"`
@@ -75,6 +82,8 @@ type RuntimeEvent struct {
 	Iteration     int    `json:"iteration"`
 	ToolCallCount int    `json:"toolCallCount"`
 	Usage         *Usage `json:"usage"`
+	// Allowance is the free tier's daily budget as the provider last reported it.
+	Allowance *Allowance `json:"allowance"`
 	// provider_retry
 	NextAttempt int    `json:"nextAttempt"`
 	MaxAttempts int    `json:"maxAttempts"`
@@ -171,6 +180,39 @@ type SetupStatus struct {
 	Providers  []SetupProvider `json:"providers"`
 }
 
+// SettingRow is one line of the settings menu; secrets arrive masked.
+type SettingRow struct {
+	Key                     string          `json:"key"`
+	Label                   string          `json:"label"`
+	Section                 string          `json:"section"`
+	Kind                    string          `json:"kind"` // choice, text or secret
+	Choices                 []SettingChoice `json:"choices"`
+	Value                   string          `json:"value"`
+	IsSet                   bool            `json:"isSet"`
+	OverriddenByEnvironment bool            `json:"overriddenByEnvironment"`
+}
+
+// SettingChoice is one value a picked setting may take.
+type SettingChoice struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// SettingsList is the whole menu and the file it is saved in.
+type SettingsList struct {
+	File string       `json:"file"`
+	Rows []SettingRow `json:"rows"`
+}
+
+// SettingsSetResult is the outcome of saving one setting.
+type SettingsSetResult struct {
+	OK    bool   `json:"ok"`
+	File  string `json:"file"`
+	Value string `json:"value"`
+	IsSet bool   `json:"isSet"`
+	Error string `json:"error"`
+}
+
 // SetupResult is the outcome of saving a key.
 type SetupResult struct {
 	OK    bool   `json:"ok"`
@@ -188,6 +230,8 @@ type ModelChoice struct {
 	Live          bool   `json:"live"`
 	Price         string `json:"price"`
 	// Free costs nothing to use; Locked is a provider without a key yet, and Missing says which.
+	// Small is a chat-sized model (a few billion parameters): fine to talk to, poor at tool calls.
+	Small   bool     `json:"small"`
 	Free    bool     `json:"free"`
 	Locked  bool     `json:"locked"`
 	Missing []string `json:"missing"`

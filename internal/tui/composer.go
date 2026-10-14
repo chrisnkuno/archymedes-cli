@@ -20,6 +20,7 @@ const maxComposerLines = 8
 // ever sees the keys that insert a newline.
 type composer struct {
 	area     textarea.Model
+	custom   []command // the project's and the user's own /commands
 	history  []string
 	histPos  int    // len(history) when not browsing
 	draft    string // what was typed before browsing started
@@ -142,7 +143,7 @@ func (c *composer) browse(delta int) bool {
 
 func (c *composer) refreshCompletions() {
 	c.complete = nil
-	for _, cmd := range matchingCommands(c.area.Value()) {
+	for _, cmd := range matchingCommands(c.area.Value(), c.custom...) {
 		c.complete = append(c.complete, completion{command: cmd})
 	}
 	if _, fragment, ok := mentionFragment(c.area.Value()); ok && len(c.complete) == 0 && c.files != nil {

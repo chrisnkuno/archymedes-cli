@@ -15,6 +15,9 @@ import (
 )
 
 type fakeAgent struct {
+	settings  acp.SettingsList
+	set       []string
+	setError  string
 	mu        sync.Mutex
 	prompts   []string
 	cancelled int
@@ -83,6 +86,19 @@ func (f *fakeAgent) SetupStatus(context.Context) (acp.SetupStatus, error) {
 func (f *fakeAgent) SaveSetup(_ context.Context, provider, key string) (acp.SetupResult, error) {
 	f.saved = append(f.saved, provider+"="+key)
 	return f.saveResult, nil
+}
+
+func (f *fakeAgent) Settings(context.Context) (acp.SettingsList, error) {
+	return f.settings, nil
+}
+func (f *fakeAgent) SetSetting(_ context.Context, key, value string) (acp.SettingsSetResult, error) {
+	f.mu.Lock()
+	f.set = append(f.set, key+"="+value)
+	f.mu.Unlock()
+	if f.setError != "" {
+		return acp.SettingsSetResult{Error: f.setError}, nil
+	}
+	return acp.SettingsSetResult{OK: true, File: "/cfg/settings.json", Value: value, IsSet: value != ""}, nil
 }
 
 func (f *fakeAgent) Prompt(_ context.Context, _ string, text string) (string, error) {

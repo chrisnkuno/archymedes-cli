@@ -151,7 +151,7 @@ describe("every real Archymedes tool", () => {
 const GOLDEN_CONTRACT = [
   { name: "read_file", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["path"], properties: ["path", "offset", "limit"] },
   { name: "list_files", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["path", "depth"] },
-  { name: "glob_files", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["pattern"], properties: ["pattern"] },
+  { name: "glob_files", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["pattern"], properties: ["pattern", "path"] },
   { name: "grep_files", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: ["query"], properties: ["query", "include", "regex"] },
   { name: "scan_secrets", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["include"] },
   { name: "write_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path", "content"], properties: ["path", "content"] },

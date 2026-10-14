@@ -38,7 +38,7 @@ func (m *Model) View() tea.View {
 	v.AltScreen = true
 	v.WindowTitle = m.windowTitle()
 	v.ProgramStatus, v.ProgressBar = m.terminalStatus()
-	if m.opts.Mouse {
+	if m.opts.Mouse && !m.selecting {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	if m.width <= 0 || m.height <= 0 {
@@ -50,8 +50,10 @@ func (m *Model) View() tea.View {
 		area := strings.Split(fillHeight(clipBlock(w.view(m), m.width, m.windowHeight()), m.windowHeight()), "\n")
 		rows = append(rows, area[:m.windowHeight()]...)
 	} else {
-		for _, line := range m.body(m.transcriptHeight()) {
-			rows = append(rows, " "+line)
+		body := m.body(m.transcriptHeight())
+		m.bodyLines = body
+		for i, line := range body {
+			rows = append(rows, " "+m.highlight(i, line))
 		}
 		for _, line := range m.input.dropup(m.th, m.width, m.dropupRows()) {
 			rows = append(rows, " "+line)
@@ -199,10 +201,10 @@ func (m *Model) composerBox() string {
 			lines[i] = "  " + lines[i]
 		}
 	}
-	return lipgloss.NewStyle().
+	return mark(m.zones.frame, "composer", lipgloss.NewStyle().
 		Border(m.th.Border).BorderForeground(borderColor).
 		Width(m.width).
-		Render(strings.Join(lines, "\n"))
+		Render(strings.Join(lines, "\n")))
 }
 
 // windowTitle names the project and, while it matters, what the agent is doing.

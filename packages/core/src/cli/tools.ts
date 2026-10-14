@@ -17,7 +17,7 @@ import { collectExternalTools } from "./tool-providers";
 import { credentialRequest, deployOffer, deployPlan, detectWebApp, DEPLOY_PROVIDERS, type DeployTarget } from "./deploy";
 import { addMemory, type MemoryKind, type MemoryScope } from "./memory";
 import { compute, ComputeError } from "./compute";
-import { applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
+import { displayPath, resolveInWorkspace, applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
 import { createExtraTools } from "./tools-extra";
 
 /**
@@ -171,6 +171,27 @@ const REFUSED_COMMAND_PATTERNS = [
   />\s*\/dev\/sd[a-z]/,
   /:\(\)\s*\{.*\|.*&\s*\}\s*;/,
 ];
+const LIST_ENTRY_CAP = 400;
+const GLOB_SHOWN = 150;
+
+/**
+ * The root-relative, slash-separated prefix a `list_files` path means.
+ *
+ * Models routinely send an absolute path (`/home/me/project`), `./src/` or `.`; the listing compares
+ * against root-relative entries, so an unnormalised absolute path matched nothing and came back as
+ * "No entries." Local workspaces resolve it properly (and refuse a path outside the root); remote
+ * ones only get the lexical clean-up, since their filesystem is not this machine's.
+ */
+export function listPrefix(raw: string, localRoot: string | null): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === ".") return "";
+  if (localRoot !== null) {
+    const relative = displayPath(localRoot, resolveInWorkspace(localRoot, trimmed));
+    return relative === "." ? "" : relative;
+  }
+  return trimmed.replace(/^(\.\/)+/, "").replace(/\/+$/, "");
+}
+
 export function isRefusedCommand(command: string): boolean {
   return REFUSED_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
     || isRecursiveForceRemoval(command)
@@ -195,6 +216,8 @@ export async function scanWorkspaceForSecrets(workspace: Pick<ArchymedesWorkspac
 export async function createArchymedesTools(options: ArchymedesToolOptions): Promise<AgentTool[]> {
   const { workspace, todos } = options;
   const commandTimeoutMs = options.commandTimeoutMs ?? 120_000;
+  // Files this run wrote, so running one of them can count as exercising what was just made.
+  const writtenFiles = new Set<string>();
 
   const tools: AgentTool[] = [
     {
@@ -245,22 +268,38 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       requiresApproval: false,
       parallelSafe: true,
       async execute(args) {
-        const prefix = typeof args.path === "string" && args.path.trim() && args.path !== "." ? args.path.replace(/^\.\//, "").replace(/\/$/, "") : "";
+        const prefix = listPrefix(typeof args.path === "string" ? args.path : "", workspace.kind === "local" ? workspace.label : null);
         const entries = await workspace.list(prefix, optionalInteger(args.depth, "depth") ?? 2);
-        return { content: entries.length > 0 ? entries.join("\n") : "No entries.", data: { entries } };
+        // Name the path in the empty case: "No entries." for a directory that was never there reads
+        // as an empty project, and a model that believes that stops looking.
+        if (entries.length === 0) {
+          return { content: prefix ? `${prefix} is empty, ignored, or does not exist. Paths are relative to the project root; list "." to see the top level.` : "No entries. The project root is empty (or everything in it is ignored).", data: { entries } };
+        }
+        const capped = entries.length >= LIST_ENTRY_CAP;
+        return { content: capped ? `${entries.join("\n")}\n[Listing capped at ${LIST_ENTRY_CAP} entries; list a subdirectory or lower depth to see the rest.]` : entries.join("\n"), data: { entries, truncated: capped } };
       },
     },
     {
       name: "glob_files",
-      description: "Find files whose path matches a glob, e.g. 'src/**/*.ts' or '**/*.{js,ts}'.",
-      inputSchema: { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"], additionalProperties: false },
+      description: "Find files whose path matches a glob, e.g. 'src/**/*.ts' or '**/*.{js,ts}'. Optional path limits it to one directory (the pattern is then relative to it).",
+      inputSchema: { type: "object", properties: { pattern: { type: "string" }, path: { type: "string", description: "Directory to search in. Default: project root." } }, required: ["pattern"], additionalProperties: false },
       capabilityId: ARCHYMEDES_CAPABILITIES.read,
       effect: "none",
       requiresApproval: false,
       parallelSafe: true,
       async execute(args) {
-        const matches = await workspace.glob(requiredString(args.pattern, "pattern"));
-        return { content: matches.length > 0 ? matches.join("\n") : "No files matched.", data: { matches } };
+        const directory = listPrefix(typeof args.path === "string" ? args.path : "", workspace.kind === "local" ? workspace.label : null);
+        const pattern = requiredString(args.pattern, "pattern").replace(/^(\.\/)+/, "");
+        const matches = await workspace.glob(directory ? `${directory}/${pattern}` : pattern);
+        if (matches.length === 0) {
+          return { content: directory ? `No files matched ${pattern} under ${directory}. Try "**/*" there, or list_files on it.` : "No files matched.", data: { matches } };
+        }
+        // A long list costs more context than it is worth and a model cannot act on 500 names;
+        // show a screenful and say how to narrow.
+        const shown = matches.slice(0, GLOB_SHOWN);
+        const more = matches.length - shown.length;
+        const note = more > 0 ? `\n[${more} more matched. Narrow it: pass path for one directory, or a more specific pattern.]` : "";
+        return { content: shown.join("\n") + note, data: { matches, truncated: more > 0 } };
       },
     },
     {
@@ -333,6 +372,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       async execute(args) {
         const result = await workspace.writeFile(requiredString(args.path, "path"), args.content as string);
         fileReadTrackerFor(workspace).record(result.path, args.content as string);
+        writtenFiles.add(result.path);
         return { content: `Wrote ${result.path} (${result.bytesWritten} bytes).`, data: { path: result.path, bytesWritten: result.bytesWritten } };
       },
     },
@@ -415,7 +455,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
             data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, missingProgram: missing },
           };
         }
-        const kind = classifyVerification(command);
+        const kind = classifyVerification(command) ?? (runsWrittenScript(command, writtenFiles) ? "smoke" : null);
         const rejectedVerification = kind && result.exitCode === 0 ? rejectedVerificationReason(command, result) : null;
         const verificationNote = rejectedVerification ? `\n\nArchymedes did not accept this as verification: ${rejectedVerification}` : "";
         return {
@@ -1260,7 +1300,7 @@ const BEHAVIOR_COMMAND = /\b(e2e|end-to-end|playwright|cypress|puppeteer|seleniu
 const SMOKE_COMMAND = /\b(smoke|healthcheck|health[-_ ]?check|curl|wget|httpie|\bhttp\s+(?:get|post)\b|playwright\s+screenshot)\b/i;
 
 /** Commands that normally stay alive until somebody stops them. */
-const PERSISTENT_COMMAND = /(?:^|(?:&&|;|\|)\s*)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve)(?:\s|$)|(?:vite|next\s+dev|webpack\s+serve)(?:\s|$)|bun\s+run\s+--hot\b)|(?:^|\s)(?:--watch|-w)(?:\s|$)/i;
+const PERSISTENT_COMMAND = /(?:^|(?:&&|;|\|)\s*)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve)(?:\s|$)|(?:vite|next\s+dev|webpack\s+serve)(?:\s|$)|bun\s+run\s+--hot\b)|(?:^|\s)--watch(?:\s|$)|\b(?:tsc|jest|vitest|mocha|sass|tailwindcss|esbuild|webpack|rollup|nodemon|parcel|tsup|swc)\b[^|;&\n]*\s-w(?:\s|$)/i;
 
 /**
  * Directory-changing prefixes, matched before classification.
@@ -1307,6 +1347,30 @@ export function rejectedVerificationReason(
     return "the command reported that no real build or test ran";
   }
   return null;
+}
+
+const SCRIPT_INTERPRETER = /^(?:python[\d.]*|py|node|bun|deno|tsx|ts-node|ruby|php|perl|bash|sh|zsh|lua|Rscript)$/;
+
+/**
+ * True when the command is just "run this script", and the script is a file the agent wrote.
+ *
+ * A scratch script has no test command to point at, so the gate that wants evidence refused a run
+ * that had in fact executed the program and shown its output. Running the thing just made is the
+ * smallest honest smoke test; `rejectedVerificationReason` still discards one that only prints.
+ */
+export function runsWrittenScript(command: string, written: ReadonlySet<string>): boolean {
+  if (written.size === 0) return false;
+  let tokens: string[];
+  try {
+    tokens = tokenizeCommand(verificationTarget(command));
+  } catch {
+    return false;
+  }
+  if (tokens.length < 2 || !SCRIPT_INTERPRETER.test(tokens[0].split("/").pop() ?? "")) return false;
+  const file = tokens.slice(1).find((token) => !token.startsWith("-"));
+  if (!file) return false;
+  const clean = file.replace(/^(\.\/)+/, "");
+  return [...written].some((path) => clean === path || clean.endsWith(`/${path}`));
 }
 
 /** The strongest kind of evidence a command provides, or null when it verifies nothing. */

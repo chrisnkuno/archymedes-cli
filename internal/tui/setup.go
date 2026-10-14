@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 
 	"charm.land/lipgloss/v2"
 
@@ -26,8 +27,11 @@ type setupOverlay struct {
 	cursor    int
 	entering  bool // the key step, rather than the provider list
 	saving    bool
-	input     textinput.Model
-	err       string
+	// optional is /key from inside a session: esc closes the dialog instead of quitting, and a
+	// saved key does not open another session.
+	optional bool
+	input    textinput.Model
+	err      string
 }
 
 type setupSavedMsg struct {
@@ -58,11 +62,11 @@ func (s *setupOverlay) chosen() acp.SetupProvider { return s.providers[s.cursor]
 func (s *setupOverlay) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	key := msg.String()
 	if key == "ctrl+c" {
-		return true, m.quit()
+		return true, s.leave(m)
 	}
 	if s.saving || len(s.providers) == 0 {
 		if key == "esc" {
-			return true, m.quit()
+			return true, s.leave(m)
 		}
 		return false, nil
 	}
@@ -78,7 +82,7 @@ func (s *setupOverlay) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			s.input.Reset()
 			return false, s.input.Focus()
 		case "esc":
-			return true, m.quit()
+			return true, s.leave(m)
 		}
 		return false, nil
 	}
@@ -88,22 +92,55 @@ func (s *setupOverlay) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		s.input.Blur()
 		return false, nil
 	case "enter":
-		value := strings.TrimSpace(s.input.Value())
-		if value == "" {
-			return false, nil
-		}
+		return false, s.save(m, s.input.Value())
+	}
+	var cmd tea.Cmd
+	s.input, cmd = s.input.Update(msg)
+	return false, cmd
+}
+
+// leave is esc at the top: first run has nothing to talk to without a key, so it quits; /key just closes.
+func (s *setupOverlay) leave(m *Model) tea.Cmd {
+	if s.optional {
+		return nil
+	}
+	return m.quit()
+}
+
+// paste takes a key from the clipboard: into the field on the key step, and — so that pasting
+// before choosing a provider is not a dead end — straight into the highlighted provider's field.
+func (s *setupOverlay) paste(m *Model, text string) tea.Cmd {
+	if s.saving || len(s.providers) == 0 {
+		return nil
+	}
+	var focus tea.Cmd
+	if !s.entering {
+		s.entering, s.err = true, ""
+		s.input.Placeholder = s.chosen().KeyVariable
+		s.input.Reset()
+		focus = s.input.Focus()
+	}
+	s.input.SetValue(cleanKey(text))
+	s.err = ""
+	return focus
+}
+
+// save checks and stores the key the person entered.
+func (s *setupOverlay) save(m *Model, raw string) tea.Cmd {
+	value := cleanKey(raw)
+	if value == "" {
+		return nil
+	}
+	{
 		s.saving, s.err = true, ""
 		agent, provider := m.agent, s.chosen().ID
-		return false, tea.Batch(func() tea.Msg {
+		return tea.Batch(func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			result, err := agent.SaveSetup(ctx, provider, value)
 			return setupSavedMsg{result, err}
 		})
 	}
-	var cmd tea.Cmd
-	s.input, cmd = s.input.Update(msg)
-	return false, cmd
 }
 
 // setupSaved finishes setup: on success the session opens; otherwise the key step says why.
@@ -122,7 +159,12 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 		return nil
 	}
 	m.overlay = nil
-	cmds := []tea.Cmd{m.toast(toastInfo, "Key saved to "+msg.result.File), m.openSession()}
+	cmds := []tea.Cmd{m.toast(toastInfo, "Key saved to "+msg.result.File)}
+	if s.optional {
+		cmds = append(cmds, m.toast(toastInfo, "Use /model to switch to a model from it"))
+	} else {
+		cmds = append(cmds, m.openSession())
+	}
 	if msg.result.Note != "" {
 		cmds = append(cmds, m.toast(toastWarn, msg.result.Note))
 	}
@@ -166,7 +208,11 @@ func (s *setupOverlay) view(m *Model) string {
 			}
 			b.WriteString("\n")
 		}
-		b.WriteString("\n" + th.Faint.Render("enter choose · esc quit"))
+		leave := "esc quit"
+		if s.optional {
+			leave = "esc close"
+		}
+		b.WriteString("\n" + th.Faint.Render("enter choose · or just paste a key · "+leave))
 	default:
 		p := s.chosen()
 		b.WriteString(th.Strong.Render(p.Label) + "\n")
@@ -181,11 +227,61 @@ func (s *setupOverlay) view(m *Model) string {
 		case s.err != "":
 			b.WriteString(th.Bad.Render(ansi.Wrap(s.err, inner, "")))
 		}
-		b.WriteString("\n\n" + th.Faint.Render("enter save · esc back"))
+		b.WriteString("\n\n" + th.Faint.Render("paste the key (ctrl+v, or your terminal's paste) · enter save · esc back"))
 	}
 	body := b.String()
 	if photo != nil {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(photo, "\n"), "   ", body)
 	}
 	return frame(th, "Welcome to Archymedes", body, width)
+}
+
+// cmdKey opens the key dialog from inside a session. With a provider named it goes straight to that
+// provider's key field, so "/key openrouter" then paste is the whole job.
+func (m *Model) cmdKey(arg string) tea.Cmd {
+	if m.agent == nil {
+		return m.toast(toastWarn, "The agent is not ready yet")
+	}
+	agent := m.agent
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		status, err := agent.SetupStatus(ctx)
+		return keyDialogMsg{status: status, want: arg, err: err}
+	}
+}
+
+type keyDialogMsg struct {
+	status acp.SetupStatus
+	want   string
+	err    error
+}
+
+func (m *Model) openKeyDialog(msg keyDialogMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.toast(toastWarn, "Could not read providers: "+msg.err.Error())
+	}
+	s := newSetup(m, msg.status)
+	s.optional = true
+	if len(s.providers) == 0 {
+		return m.toast(toastWarn, "No provider here takes a plain key — run archymedes settings")
+	}
+	if want := strings.ToLower(strings.TrimSpace(msg.want)); want != "" {
+		found := false
+		for i, p := range s.providers {
+			if strings.EqualFold(p.ID, want) || strings.Contains(strings.ToLower(p.Label), want) {
+				s.cursor, found = i, true
+				break
+			}
+		}
+		if !found {
+			return m.toast(toastWarn, fmt.Sprintf("No provider %q — /key lists them", msg.want))
+		}
+		s.entering = true
+		s.input.Placeholder = s.chosen().KeyVariable
+		m.openOverlay(s)
+		return s.input.Focus()
+	}
+	m.openOverlay(s)
+	return nil
 }

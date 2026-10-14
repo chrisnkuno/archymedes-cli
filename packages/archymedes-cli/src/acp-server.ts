@@ -8,6 +8,7 @@ import { resolveSessionProvider } from "./app/session-provider";
 import { saveSetup, setupStatus } from "./app/acp-setup";
 import { modelList } from "./app/acp-models";
 import { runSessionCommand } from "./app/acp-commands";
+import { listSettings, setSetting } from "./app/acp-settings";
 import { installInChildProcess, startupMaintenance } from "./app/startup-update";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { jevOptionsFromEnvironment } from "./app/jev";
@@ -71,6 +72,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
     extensions: {
       "_archymedes/setup/status": async () => setupStatus(options.environment, { provider: options.provider, model: options.model }),
       "_archymedes/setup/save": async (params) => saveSetup(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
+      "_archymedes/settings/list": async () => listSettings(process.env as Record<string, string | undefined>),
+      "_archymedes/settings/set": async (params) => setSetting(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/models": async (params) => modelList(options.environment, params),
       // Asked by the Go interface once its session is open: the daily update check and install the
       // terminal CLI runs at startup. Once per process; an editor that never asks never updates.
@@ -99,7 +102,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
       let agent = build(mode);
 
       function build(currentMode: ArchymedesMode): ArchymedesAgent {
-        return new ArchymedesAgent({
+        const built = new ArchymedesAgent({
           root,
           model: resolved.provider,
           prices: priceCatalogFor(resolved.prices),
@@ -113,6 +116,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
           approve: async (request) =>
             approve({ toolName: request.tool.name, summary: request.summary, toolCallId: request.call.id, ...(request.pattern ? { pattern: request.pattern } : {}) }),
         });
+        // The interface opens the session well before the first prompt is finished: probe the
+        // environment now, so the first turn does not wait ~240 ms on it before its first model call.
+        built.warmUp();
+        return built;
       }
 
       async function rebuild(change: () => void): Promise<void> {

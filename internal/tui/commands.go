@@ -39,13 +39,25 @@ func init() {
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
 		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
+		{"key", "[provider]", "Set or replace an API key: pick a provider, paste the key", (*Model).cmdKey},
+		{"copy", "[code]", "Copy the last reply, or its last code block, to the clipboard", (*Model).cmdCopy},
+		{"select", "", "Let the terminal select text with the mouse (toggle)", (*Model).cmdSelect},
+		{"tasks", "", "What is running: the turn, queued prompts and every tool call; x stops it", func(m *Model, _ string) tea.Cmd { return m.runAction("tasks") }},
+		{"notifications", "", "Everything the toasts said, newest first", func(m *Model, _ string) tea.Cmd { return m.runAction("notifications") }},
+		{"memory", "[add <text> | forget <n> | clear]", "What the agent remembers about you and this project", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("memory", arg) }},
+		{"tools", "", "Every tool the agent has, and which ask first", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("tools", "") }},
+		{"retry", "", "Send your last message again", (*Model).cmdRetry},
+		{"continue", "", "Tell the agent to carry on from where it stopped", (*Model).cmdContinue},
+		{"export", "[file]", "Write this session to a Markdown file in the project", (*Model).cmdExport},
+		{"where", "", "Which folder, model, mode and session this is", (*Model).cmdWhere},
+		{"edit", "", "Write the prompt in $EDITOR, then bring it back here", (*Model).cmdEdit},
 		{"pager", "", "Read the whole session, with line numbers, search and copy", func(m *Model, _ string) tea.Cmd { m.openWindow(m.transcriptPager()); return nil }},
 		{"find", "<text>", "Search the session and jump to the newest match", (*Model).cmdFind},
 		{"files", "", "The project as a tree, with a preview; @ mentions a file", func(m *Model, _ string) tea.Cmd { return m.openFiles() }},
 		{"cat", "<path>", "Read a project file, highlighted", (*Model).cmdCat},
 		{"sessions", "", "Earlier sessions in this project (same as /resume)", (*Model).cmdResume},
 		{"providers", "", "Which providers are configured, and what each needs", func(m *Model, _ string) tea.Cmd { return m.report("providers", "--providers") }},
-		{"settings", "", "Keys, defaults and preferences (opens the settings menu)", func(m *Model, _ string) tea.Cmd { return m.handOff("settings", "settings") }},
+		{"settings", "", "Every setting, in sections, edited in place (alt+s)", func(m *Model, _ string) tea.Cmd { return m.runAction("settings") }},
 		{"update", "", "Check for a newer Archymedes and install it", func(m *Model, _ string) tea.Cmd { return m.handOff("update", "update") }},
 		{"plan", "", "Read-only: investigate and propose", func(m *Model, _ string) tea.Cmd { return m.setMode("plan") }},
 		{"build", "", "Edit with approval (the default)", func(m *Model, _ string) tea.Cmd { return m.setMode("build") }},
@@ -70,20 +82,20 @@ var notInThisInterface = map[string]string{
 }
 
 func init() {
-	for _, name := range []string{"attach", "balance", "continue", "detach", "diagnostics", "edit", "export", "fallback",
-		"guide", "jobs", "memory", "pull", "retry", "route", "scan", "tab", "task", "tools", "upgrade", "voice", "wander", "watch", "where", "workspace"} {
+	for _, name := range []string{"attach", "balance", "detach", "diagnostics", "fallback",
+		"guide", "jobs", "pull", "route", "scan", "tab", "task", "upgrade", "voice", "wander", "watch", "workspace"} {
 		notInThisInterface[name] = "is not in this version of the interface yet"
 	}
 }
 
 // matchingCommands are the completions for what has been typed so far: "/" alone lists them all.
-func matchingCommands(input string) []command {
+func matchingCommands(input string, extra ...command) []command {
 	if !strings.HasPrefix(input, "/") || strings.ContainsAny(input, " \n") {
 		return nil
 	}
 	prefix := strings.ToLower(input[1:])
 	var out []command
-	for _, c := range commands {
+	for _, c := range append(slices.Clone(commands), extra...) {
 		if strings.HasPrefix(c.name, prefix) {
 			out = append(out, c)
 		}
@@ -99,6 +111,11 @@ func (m *Model) runCommand(input string) (tea.Cmd, bool) {
 	name, arg, _ := strings.Cut(strings.TrimPrefix(input, "/"), " ")
 	name = strings.ToLower(name)
 	for _, c := range commands {
+		if c.name == name {
+			return c.run(m, strings.TrimSpace(arg)), true
+		}
+	}
+	for _, c := range m.custom {
 		if c.name == name {
 			return c.run(m, strings.TrimSpace(arg)), true
 		}

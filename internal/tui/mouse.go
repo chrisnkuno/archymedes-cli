@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -48,6 +49,14 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	frame := m.zones.frame
+	if m.activeWindow() == nil && frame.Get("composer").InBounds(msg) {
+		x, y := frame.Get("composer").Pos(msg)
+		m.input.placeCursor(x, y)
+		return nil
+	}
+	if frame.Get("notes").InBounds(msg) {
+		return m.runAction("notifications")
+	}
 	if frame.Get("start").InBounds(msg) {
 		return m.runAction("start")
 	}
@@ -57,7 +66,7 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 			return nil
 		}
 	}
-	for _, app := range dockApps {
+	for _, app := range append(slices.Clone(dockApps), systemApps...) {
 		if frame.Get("app:" + app.id).InBounds(msg) {
 			return m.runAction(app.id)
 		}
@@ -75,6 +84,10 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 				return nil
 			}
 		}
+	}
+	if m.landingVisible() && !m.prismClassic() && frame.Get("prism").InBounds(msg) {
+		m.prismGrab(msg.Mouse().X) // a drag turns it; letting go throws it
+		return nil
 	}
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(m.photoIndex) // the photo, full size

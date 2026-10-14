@@ -101,6 +101,13 @@ const AUTOSAVE_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — save a second after you stop typing" },
 ];
 
+const FREE_REASONING_CHOICES: readonly SettingChoice[] = [
+  { value: "minimal", label: "Minimal — fastest; measured to help some models finish sooner and more reliably" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High — slowest" },
+];
+
 const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label }));
 
 /**
@@ -130,6 +137,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
   { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)", section: "Free mode" },
+  { key: "ARCHYMEDES_FREE_REASONING", label: "Free mode reasoning effort — clear it to leave each model at its own default", choices: FREE_REASONING_CHOICES },
   { key: "ARCHYMEDES_TOKEN_SAVER", label: "Free mode token saver", choices: TOKEN_SAVER_CHOICES },
   { key: "ARCHYMEDES_TOKEN_METER", label: "Token meter in the status line", choices: TOKEN_METER_CHOICES },
   { key: "ARCHYMEDES_COUNTRY", label: "Location — sets the currency costs are shown in", choices: COUNTRY_CHOICES, section: "Money" },
@@ -281,6 +289,7 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_EDITOR_AUTOSAVE: ["on", "off"],
   ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
+  ARCHYMEDES_FREE_REASONING: ["minimal", "low", "medium", "high"],
 };
 
 /** Returned by `SettingsPrompts.ask` when the person pressed Esc: leave this field as it was. */

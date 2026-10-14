@@ -29,6 +29,7 @@ export const FREE_CATALOG_MAX_RECORDS = 10_000;
  */
 export const FREE_ROUTER_PREFERENCE: readonly string[] = [
   "cohere/north-mini-code:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
   "google/gemma-4-31b-it:free",
   "dots-studio/dots-3-note-preview:free",
   "nex-agi/nex-n2.5-pro:free",
@@ -169,4 +170,25 @@ export function mergeFreeCatalog(live: FreeModel[], discovery: FreeModel[], fetc
     } else byId.set(model.id, model);
   }
   return { fetchedAt, models: [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)), warnings };
+}
+
+/** Models at or under this many billion parameters are chat-sized: they mishandle tool calls. */
+export const SMALL_MODEL_BILLIONS = 4;
+
+/**
+ * The parameter count a model id names (`lfm-2.5-2.6b`, `llama-3.2-1b-instruct`, `qwen-0.5b`), in
+ * billions, or null when the id says nothing. Millions (`270m`) count too. Ids are the only size
+ * signal every provider's listing carries, and a wrong "unknown" costs nothing.
+ */
+export function modelSizeBillions(model: string): number | null {
+  const id = model.toLowerCase();
+  const billions = [...id.matchAll(/(?:^|[^a-z0-9.])(\d+(?:\.\d+)?)b(?![a-z])/g)];
+  if (billions.length > 0) return Math.min(...billions.map((match) => Number(match[1])));
+  const millions = id.match(/(?:^|[^a-z0-9.])(\d+(?:\.\d+)?)m(?![a-z])/);
+  return millions ? Number(millions[1]) / 1000 : null;
+}
+
+export function isSmallModel(model: string): boolean {
+  const size = modelSizeBillions(model);
+  return size !== null && size <= SMALL_MODEL_BILLIONS;
 }

@@ -27,6 +27,8 @@
     "bench:state": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-state-bench -- --sessions 500 --messages 40 --queries 200",
     "bench:defender": "cargo run --release --features benchmark --manifest-path packages/archymedes-state/Cargo.toml --bin archymedes-defender-brain-bench -- --records 10000 --queries 2000",
     "bench:render": "bun run benchmarks/render/hot-paths.bench.ts",
+    "bench:speed": "bun run benchmarks/speed/speed.bench.ts",
+    "bench:speed:go": "go test -run xxx -bench . -benchtime 200x ./internal/tui",
     "verify:package": "bun run tooling/build/build-go.ts --host && bun run tooling/build/verify-package.ts",
     "release:check": "bun run check && bun run verify:package",
     "recheck": "bun run tooling/check/recheck.ts",

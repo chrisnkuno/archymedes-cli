@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -11,6 +12,13 @@ import (
 // open dialog, a window capturing every key (the Keys app waiting for a binding), the desktop's own
 // keys (apps, windows), the focused window, and finally Chat, where what is left is typing.
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.sel.shown {
+		escape := msg.String() == "esc"
+		m.sel.clear() // any key moves on from a highlight; esc only dismisses it
+		if escape {
+			return nil
+		}
+	}
 	if m.approval != nil {
 		if answered, choice := m.approval.handle(msg); answered {
 			m.approval.req.Answer(choice)
@@ -94,8 +102,8 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, k.Send):
 		// A command typed out in full runs, even when a longer one also matches (/model, /models).
-		if len(m.input.complete) > 0 && !namesCommand(m.input.value()) && m.input.accept() {
-			if c := matchingCommands(strings.TrimSpace(m.input.value())); len(c) != 1 || c[0].args != "" {
+		if len(m.input.complete) > 0 && !m.namesCommand(m.input.value()) && m.input.accept() {
+			if c := matchingCommands(strings.TrimSpace(m.input.value()), m.custom...); len(c) != 1 || c[0].args != "" {
 				return nil // a command that takes an argument waits for it
 			}
 		}
@@ -141,9 +149,9 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	return cmd
 }
 
-func namesCommand(input string) bool {
+func (m *Model) namesCommand(input string) bool {
 	name := strings.TrimPrefix(strings.TrimSpace(input), "/")
-	for _, c := range commands {
+	for _, c := range append(slices.Clone(commands), m.custom...) {
 		if strings.HasPrefix(input, "/") && c.name == name {
 			return true
 		}

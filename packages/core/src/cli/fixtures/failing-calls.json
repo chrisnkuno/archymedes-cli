@@ -1,0 +1,16 @@
+{
+  "_source": "Calls a model really sent in sessions under ~/.archymedes/events (2026-10-06..13) that failed or misled. {root} is the test workspace.",
+  "calls": [
+    { "tool": "list_files", "args": { "path": "{root}" }, "expect": { "isError": false, "includes": "wordcount.js", "excludes": "No entries" }, "why": "an absolute path to the project root listed as empty" },
+    { "tool": "list_files", "args": { "path": "{root}/src" }, "expect": { "isError": false, "includes": "src/app.js" }, "why": "an absolute path inside the project" },
+    { "tool": "list_files", "args": { "path": "./src/" }, "expect": { "isError": false, "includes": "src/app.js" }, "why": "./ and a trailing slash" },
+    { "tool": "list_files", "args": { "path": "nowhere" }, "expect": { "isError": false, "includes": "does not exist" }, "why": "a missing directory read as an empty project" },
+    { "tool": "list_files", "args": { "path": "/home" }, "expect": { "isError": true, "includes": "escapes the workspace" }, "why": "outside the root must be refused, not matched against nothing" },
+    { "tool": "glob_files", "args": { "pattern": "**/*.js", "path": "src" }, "expect": { "isError": false, "includes": "src/app.js", "excludes": "wordcount.js" }, "why": "glob_files was sent a path and refused it" },
+    { "tool": "glob_files", "args": { "pattern": "**/*.nothing" }, "expect": { "isError": false, "includes": "No files matched" }, "why": "an empty result is said plainly" },
+    { "tool": "edit_file", "args": { "path": "wordcount.js", "oldText": "const   lines = text.split('\\n')", "newText": "x" }, "expect": { "isError": true, "includes": "Closest line" }, "why": "an indentation near miss must point at the real line" },
+    { "tool": "read_file", "args": { "path": "src" }, "expect": { "isError": true, "includes": "is a directory" }, "why": "read_file on a directory" },
+    { "tool": "read_file", "args": { "path": "ecommerce-website/server/index.js" }, "expect": { "isError": true, "includes": "does not exist" }, "why": "a guessed path" },
+    { "tool": "stop_application", "args": { "id": "app-1" }, "expect": { "isError": true, "includes": "start_application" }, "why": "an unknown id said nothing about what exists" }
+  ]
+}

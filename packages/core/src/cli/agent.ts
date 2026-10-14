@@ -313,6 +313,17 @@ export class ArchymedesAgent {
   }
 
   /** The environment report for this session, probed on first use and cached. Never throws: a session that cannot describe its environment still runs, just without the section. */
+  /**
+   * Starts the environment probe now instead of on the first turn.
+   *
+   * The probe runs `<program> --version` for about ten tools (~240 ms), and until now the first
+   * turn waited for it before its first model call. A front end that opens the session well before
+   * the person has finished typing can call this, and the first turn finds the answer ready.
+   */
+  warmUp(): void {
+    void this.loadEnvironment();
+  }
+
   private loadEnvironment(): Promise<EnvironmentReport | undefined> {
     this.environment ??= probeEnvironment(this.workspace);
     return this.environment.catch(() => undefined);
@@ -934,13 +945,22 @@ export class ArchymedesAgent {
       // actually thinks in, and forty checkpoints for one request is a list nobody can navigate.
       // Checkpoints snapshot the local git tree, so they mean nothing for a remote sandbox: the
       // machine's files were never touched, and the sandbox is disposable by construction.
+      //
+      // Started now but not awaited: it only has to be done before the first tool that can change
+      // something, and the first model call (seconds) runs alongside it. Every tool that is not
+      // read-only waits for it below, so "before the agent can touch anything" still holds exactly.
       let checkpoint: Checkpoint | undefined;
+      let checkpointReady: Promise<void> = Promise.resolve();
       if (this.options.mode !== "plan" && this.workspace.kind === "local") {
         // `this.messages.length` here, before this turn's own exchange is appended below, is
         // exactly the cut point a conversation-only or combined restore needs: "back to what the
         // user saw when they typed this turn's objective."
-        checkpoint = await this.checkpoints.capture(titleFromObjective(objective), turnId, this.messages.length);
-        if (checkpoint) this.options.onEvent?.({ type: "checkpoint", checkpoint });
+        checkpointReady = this.checkpoints.capture(titleFromObjective(objective), turnId, this.messages.length)
+          .then((taken) => {
+            checkpoint = taken;
+            if (taken) this.options.onEvent?.({ type: "checkpoint", checkpoint: taken });
+          })
+          .catch(() => undefined); // losing undo is a reduction in comfort, never a failed turn
       }
 
       const compaction = await this.compactIfNeeded(turnId, objective, turnAbort.signal, tokenSaver);
@@ -949,7 +969,7 @@ export class ArchymedesAgent {
       this.permissions.setTaskHint(objective);
       const runtime = new BoundedAgentRuntime({
         model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "main"),
-        tools: scoped,
+        tools: scoped.map((tool) => tool.effect === "none" ? tool : { ...tool, execute: async (args, context) => { await checkpointReady; return tool.execute(args, context); } }),
         prices: this.options.prices,
         artifacts: this.artifacts,
         control: {
@@ -1035,6 +1055,7 @@ export class ArchymedesAgent {
         hostedRecoveryBatchId: this.recovery.settledBatchId() ?? this.session.hostedRecoveryBatchId,
         updatedAt: Date.now(),
       };
+      await checkpointReady; // normally long done; makes the result's checkpoint certain
       const terminalStatus = runtimeStatusToTurnStatus(result.status);
       await transition(terminalStatus, true);
       await this.recordHostedUsage();
@@ -1087,6 +1108,11 @@ export class ArchymedesAgent {
       if (message.content.trim()) assistantText = message.content;
       if ("toolCalls" in message) for (const call of message.toolCalls) toolNames.push(call.name);
     }
+    // Nothing to judge: Jev rules on whether actions landed (edits, commands, evidence). A turn that
+    // used no tools did none, and a "follow-up needed" verdict would only trigger a corrective prompt
+    // about missing verification evidence. Skipping it takes a network round trip (~0.8 s, a fifth of
+    // a short reply) off the end of every plain answer.
+    if (toolNames.length === 0) return undefined;
     try {
       const response = await requestJevVerdict({
         apiKey: this.jev.apiKey,

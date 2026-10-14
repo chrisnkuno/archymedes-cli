@@ -9,7 +9,7 @@ import type { AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvi
 import { providerRetryAfterMs } from "../agent-runtime";
 import { RequestPacer } from "./request-pacer";
 import { approximateInputTokens } from "../model-cost";
-import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, type FreeCatalog, type FreeModel } from "./free-catalog";
+import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, isSmallModel, type FreeCatalog, type FreeModel } from "./free-catalog";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
 import { fileFreeInstallStore, FREE_INSTALL_HEADER, FREE_INSTALL_STATUS_HEADER, freeInstallFile, FreeInstallToken } from "./free-install";
 import { describeFreeFailure, isOpenRouterDailyLimit, parseFreeLimitBody } from "./free-errors";
@@ -55,6 +55,18 @@ function isTransportFailure(error: unknown): boolean {
   return error instanceof APIConnectionError || name === "APIConnectionError" || name === "APIConnectionTimeoutError" || error instanceof TypeError
     || Boolean((error as { cause?: unknown })?.cause);
 }
+
+/** How hard a free model is asked to think: OpenRouter's unified `reasoning.effort`. */
+export type FreeReasoningEffort = "minimal" | "low" | "medium" | "high";
+
+/** `ARCHYMEDES_FREE_REASONING`: a valid effort, or undefined for each model's own default. */
+export function freeReasoningFromEnvironment(environment: Record<string, string | undefined>): FreeReasoningEffort | undefined {
+  const value = environment.ARCHYMEDES_FREE_REASONING?.trim().toLowerCase();
+  return value === "minimal" || value === "low" || value === "medium" || value === "high" ? value : undefined;
+}
+
+/** The per-minute request ceiling free endpoints commonly enforce; the pacer waits only once a minute holds this many. */
+const FREE_REQUESTS_PER_MINUTE = 20;
 
 /** Bounded so a router turn never fans out across the whole free list. */
 const MAX_ROUTER_ATTEMPTS = 4;
@@ -134,7 +146,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
    * `timeoutMs` is the stream's idle timeout (see `streamTimeoutsFor`); `firstByteTimeoutMs` is the
    * per-candidate first-byte deadline used while the router still has another candidate to try.
    */
-  constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number; firstByteTimeoutMs?: number; tokenSaver?: boolean }, private readonly dependencies: {
+  constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number; firstByteTimeoutMs?: number; tokenSaver?: boolean; reasoningEffort?: FreeReasoningEffort }, private readonly dependencies: {
     call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number;
     /**
      * Install-token source for gateway requests. Defaults to one stored in the config directory,
@@ -154,7 +166,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     pacer?: RequestPacer;
   } = {}) {
     this.selection = { provider: "free", model: options.model };
-    this.pacer = dependencies.pacer ?? new RequestPacer();
+    this.pacer = dependencies.pacer ?? new RequestPacer({ windowCap: FREE_REQUESTS_PER_MINUTE });
     this.tokenSaver = options.tokenSaver ?? true;
     // Only a fully real provider writes the user's config directory: one with an injected call or
     // catalog is a test, and must not add to anyone's daily count.
@@ -234,7 +246,11 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       const eligible = this.catalog.models.filter((model) => model.eligible && isFreeModelId(model.id));
       const selected = eligible.find((model) => model.id === this.options.model);
       // The virtual router may omit tool metadata; its concrete candidates must still qualify.
-      const candidates = this.options.model === FREE_ROUTER ? eligible.filter((model) => model.id !== FREE_ROUTER) : selected ? [selected] : [];
+      const routable = eligible.filter((model) => model.id !== FREE_ROUTER);
+      // Chat-sized models are left out of routing while any capable one is listed: they take the
+      // first turn happily and then misuse the tools. Pinned explicitly, they are still honoured.
+      const capable = routable.filter((model) => !isSmallModel(model.id));
+      const candidates = this.options.model === FREE_ROUTER ? (capable.length > 0 ? capable : routable) : selected ? [selected] : [];
       if (!candidates.length) throw new FreeAccessError("No eligible free tool model is available. Run /models refresh or try again later.");
       const messages = toWireMessages(request.messages);
       const input = approximateInputTokens([JSON.stringify(messages), JSON.stringify(request.tools)]).maximumInputTokens;
@@ -355,6 +371,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       response = await deadline.race(this.call({
         model, messages: withOpenRouterCacheControl(messages, model), max_tokens: output,
         ...(request.tools.length ? { tools: request.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })) } : {}),
+        // Every tool-capable free model lists `reasoning` among its parameters, so this cannot make
+        // `require_parameters` exclude one. Unset leaves each model at its own default.
+        ...(this.options.reasoningEffort ? { reasoning: { effort: this.options.reasoningEffort } } : {}),
         provider: { require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false },
         stream: true, stream_options: { include_usage: true },
       }, deadline.signal, token ? { [FREE_INSTALL_HEADER]: token } : {}, observe));

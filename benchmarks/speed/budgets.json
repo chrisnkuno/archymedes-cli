@@ -1,0 +1,14 @@
+{
+  "startup.version": 700,
+  "startup.acp-initialize": 800,
+  "tool.read_file": 15,
+  "tool.list_files": 60,
+  "tool.glob_files": 60,
+  "tool.grep_files": 150,
+  "tool.run_command": 40,
+  "turn.first-cold": 900,
+  "turn.first-warmed": 300,
+  "turn.fixed": 250,
+  "turn.per-iteration": 8,
+  "pacer.per-request": 30
+}

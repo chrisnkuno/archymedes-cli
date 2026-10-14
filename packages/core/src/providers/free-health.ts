@@ -11,6 +11,7 @@
  * a model with no recent history keeps its place from the static preference. Like the usage meter,
  * nothing here may fail a model call: an unreadable or unwritable file means no ranking, not an error.
  */
+import { isSmallModel } from "./free-catalog";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { archymedesConfigDirectory } from "../cli/memory";
@@ -83,8 +84,11 @@ export function recordFreeOutcome(records: FreeHealthRecords, id: string, outcom
  */
 export function orderByFreeHealth<T extends { id: string }>(models: readonly T[], records: FreeHealthRecords, now: number): T[] {
   return models
-    .map((model, index) => ({ model, index, score: healthScore(records[model.id], now) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    // Size is a tier above health: a chat-sized model answers "hello" without error all day, which
+    // is a high success rate that says nothing about tool calls, and it must not outrank a capable
+    // model that was refused once. Within a tier, recent success decides.
+    .map((model, index) => ({ model, index, small: isSmallModel(model.id), score: healthScore(records[model.id], now) }))
+    .sort((a, b) => Number(a.small) - Number(b.small) || b.score - a.score || a.index - b.index)
     .map(({ model }) => model);
 }
 
