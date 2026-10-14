@@ -96,6 +96,16 @@ func TestClearingAndFiltering(t *testing.T) {
 	}
 	press(m, tea.KeyEnter, 0)
 	run(m, press(m, 'd', 0))
+	if len(agent.set) != 0 || !strings.Contains(screen(m), "press d again to clear OPENAI_BASE_URL") {
+		t.Fatalf("one d must only ask: %v", agent.set)
+	}
+	press(m, tea.KeyDown, 0) // any other key keeps it
+	press(m, tea.KeyUp, 0)
+	run(m, press(m, 'd', 0))
+	if len(agent.set) != 0 {
+		t.Fatal("a d after another key asks again rather than clearing")
+	}
+	run(m, press(m, 'd', 0))
 	if got := agent.set[len(agent.set)-1]; got != "OPENAI_BASE_URL=" {
 		t.Fatalf("d clears: %v", agent.set)
 	}

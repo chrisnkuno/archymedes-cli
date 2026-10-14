@@ -105,6 +105,16 @@ func TestRetryContinueExportAndWhere(t *testing.T) {
 			t.Errorf("export lacks %q:\n%s", want, raw)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(m.opts.Cwd, "README.md"), []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.cmdExport("README.md")
+	if kept, _ := os.ReadFile(filepath.Join(m.opts.Cwd, "README.md")); string(kept) != "keep me" {
+		t.Fatalf("/export overwrote an existing file: %q", kept)
+	}
+	if !strings.Contains(m.toasts[len(m.toasts)-1].text, "already exists") {
+		t.Fatalf("toasts %+v", m.toasts)
+	}
 	m.cmdWhere("")
 	if !strings.Contains(m.toasts[len(m.toasts)-1].text, "session s1") {
 		t.Fatalf("where: %+v", m.toasts)

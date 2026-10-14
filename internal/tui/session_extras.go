@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -81,7 +82,19 @@ func (m *Model) cmdExport(arg string) tea.Cmd {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(m.projectRoot(), name)
 	}
-	if err := os.WriteFile(path, []byte(m.transcriptMarkdown()), 0o644); err != nil {
+	// Never over an existing file: "/export README.md" must not replace the project's README.
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, os.ErrExist) {
+		return m.toast(toastWarn, path+" already exists; /export <another name>")
+	}
+	if err != nil {
+		return m.toast(toastWarn, "Could not write "+path+": "+err.Error())
+	}
+	_, err = file.WriteString(m.transcriptMarkdown())
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return m.toast(toastWarn, "Could not write "+path+": "+err.Error())
 	}
 	return m.toast(toastInfo, "Exported to "+path)

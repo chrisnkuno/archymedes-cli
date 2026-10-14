@@ -24,12 +24,14 @@ type settingsApp struct {
 	filter    string
 	filtering bool
 	// Editing one row: a choice list, or a text field (masked for a secret).
-	editing    bool
-	choice     int
-	input      textinput.Model
-	saving     bool
-	note       string
-	rowTop     int // first drawn row, for click mapping
+	editing bool
+	choice  int
+	input   textinput.Model
+	saving  bool
+	note    string
+	rowTop  int // first drawn row, for click mapping
+	// armed is the key a first "d" asked to clear; a second "d" on it clears, any other key disarms.
+	armed      string
 	rowIndexes []int
 }
 
@@ -151,6 +153,8 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		s.cursor = 0
 		return false, nil
 	}
+	armedKey := s.armed
+	s.armed = ""
 	switch key {
 	case "esc", "q":
 		if s.filter != "" {
@@ -175,8 +179,12 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "r":
 		return false, m.loadSettings()
 	case "d", "delete":
+		// Two presses: one stray key must not throw away a saved API key.
 		if r := s.current(); r != nil && r.IsSet {
-			return false, s.save(m, r.Key, "")
+			if armedKey == r.Key {
+				return false, s.save(m, r.Key, "")
+			}
+			s.armed = r.Key
 		}
 	case "enter", "e":
 		return false, s.begin(m)
@@ -337,6 +345,8 @@ func (s *settingsApp) view(m *Model) string {
 	}
 	hint := "↑/↓ move · enter edit · d clear · / filter · r reload · esc close"
 	switch {
+	case s.armed != "":
+		hint = "press d again to clear " + s.armed + " · any other key keeps it"
 	case s.editing:
 		hint = "enter save · esc cancel"
 	case s.filtering:
