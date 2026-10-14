@@ -195,7 +195,7 @@ export class HeadlessEmitter {
       return;
     }
     if (safe.type === "model_turn") {
-      this.emit("model_turn", { iteration: safe.iteration, model: safe.model, toolCalls: safe.toolCallCount, usage: safe.usage });
+      this.emit("model_turn", { iteration: safe.iteration, model: safe.model, toolCalls: safe.toolCallCount, usage: safe.usage, ...(safe.effort ? { effort: safe.effort, effortReason: safe.effortReason } : {}) });
       return;
     }
     if (safe.type === "provider_retry") {

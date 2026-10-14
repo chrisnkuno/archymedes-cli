@@ -73,6 +73,13 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		// a new paragraph, not a continuation glued onto this one.
 		m.closeAssistant()
 		m.limits.call(time.Now())
+		if ev.Effort != "" || ev.EffortReason != "" {
+			effort := ev.Effort
+			if effort == "" {
+				effort = "default" // the agent chose to leave it to the model
+			}
+			m.effort = [2]string{effort, ev.EffortReason}
+		}
 		if a := ev.Allowance; a != nil && a.RemainingRequests != nil && a.RequestLimit != nil {
 			m.limits.allowance(*a.RemainingRequests, *a.RequestLimit)
 		}

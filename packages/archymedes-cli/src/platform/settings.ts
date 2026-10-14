@@ -101,8 +101,9 @@ const AUTOSAVE_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — save a second after you stop typing" },
 ];
 
-const FREE_REASONING_CHOICES: readonly SettingChoice[] = [
-  { value: "minimal", label: "Minimal — fastest; measured to help some models finish sooner and more reliably" },
+const REASONING_CHOICES: readonly SettingChoice[] = [
+  { value: "auto", label: "Auto (experimental) — lower the effort on routine steps, leave hard ones to the model" },
+  { value: "minimal", label: "Minimal — never think more than needed" },
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High — slowest" },
@@ -124,6 +125,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_CODE_LINE_NUMBERS", label: "Line numbers in code blocks", choices: SHOW_HIDE_CHOICES },
   { key: "ARCHYMEDES_SIMPLE", label: "Simple mode — quiet start, short help", choices: SIMPLE_CHOICES },
   { key: "ARCHYMEDES_LANGUAGE", label: "Control language", choices: LANGUAGE_CHOICES },
+  { key: "ARCHYMEDES_REASONING", label: "Reasoning effort — clear it to leave each model at its own default", choices: REASONING_CHOICES },
   { key: "ARCHYMEDES_RESUME", label: "Continue your last chat at startup", choices: RESUME_CHOICES, section: "Behaviour" },
   { key: "ARCHYMEDES_EDITOR_AUTOSAVE", label: "Auto-save in /edit", choices: AUTOSAVE_CHOICES },
   // Off by default, and the label says what it costs: the deterministic suggestions are free and
@@ -137,7 +139,6 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
   { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)", section: "Free mode" },
-  { key: "ARCHYMEDES_FREE_REASONING", label: "Free mode reasoning effort — clear it to leave each model at its own default", choices: FREE_REASONING_CHOICES },
   { key: "ARCHYMEDES_TOKEN_SAVER", label: "Free mode token saver", choices: TOKEN_SAVER_CHOICES },
   { key: "ARCHYMEDES_TOKEN_METER", label: "Token meter in the status line", choices: TOKEN_METER_CHOICES },
   { key: "ARCHYMEDES_COUNTRY", label: "Location — sets the currency costs are shown in", choices: COUNTRY_CHOICES, section: "Money" },
@@ -289,7 +290,7 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_EDITOR_AUTOSAVE: ["on", "off"],
   ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
-  ARCHYMEDES_FREE_REASONING: ["minimal", "low", "medium", "high"],
+  ARCHYMEDES_REASONING: ["auto", "minimal", "low", "medium", "high"],
 };
 
 /** Returned by `SettingsPrompts.ask` when the person pressed Esc: leave this field as it was. */

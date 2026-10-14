@@ -270,6 +270,59 @@ describe("ArchymedesAgent", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  describe("reasoning effort", () => {
+    const listThenAnswer = () => scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "r1", name: "list_files", arguments: { path: "." } }] },
+      { finishReason: "stop", content: "Done." },
+    ]);
+
+    it("auto: decides per call from the task and from how the run is going", async () => {
+      const chat = scriptedModel([{ finishReason: "stop", content: "Hi!" }]);
+      await new ArchymedesAgent({ root, model: chat, prices, mode: "plan", approve: async () => "deny", reasoning: "auto" }).send("hello");
+      expect(chat.requests.map((request) => request.effort)).toEqual(["minimal"]);
+
+      const task = listThenAnswer();
+      await new ArchymedesAgent({ root, model: task, prices, mode: "plan", approve: async () => "deny", reasoning: "auto" }).send("add a port option to app.ts");
+      // Plan briefly; then take in what was listed.
+      expect(task.requests.map((request) => request.effort)).toEqual(["low", "low"]);
+
+      const hard = listThenAnswer();
+      await new ArchymedesAgent({ root, model: hard, prices, mode: "plan", approve: async () => "deny", reasoning: "auto" }).send("debug why app.ts exits immediately");
+      // A hard task is left to the model's own default (no effort sent) on every call.
+      expect(hard.requests.every((request) => !("effort" in request))).toBe(true);
+    });
+
+    it("judges the person's words, not the recalled-memory block that is prepended to the turn", async () => {
+      const model = scriptedModel([{ finishReason: "stop", content: "Hi!" }]);
+      const agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "deny", reasoning: "auto" });
+      await agent.send("hello");
+      expect(model.requests[0].effort).toBe("minimal"); // ARCHYMEDES.md in the project does not make "hello" a long task
+    });
+
+    it("a fixed level applies to every call, and unset sends none", async () => {
+      const fixed = listThenAnswer();
+      await new ArchymedesAgent({ root, model: fixed, prices, mode: "plan", approve: async () => "deny", reasoning: "minimal" }).send("add a port option to app.ts");
+      expect(fixed.requests.map((request) => request.effort)).toEqual(["minimal", "minimal"]);
+      const unset = listThenAnswer();
+      await new ArchymedesAgent({ root, model: unset, prices, mode: "plan", approve: async () => "deny" }).send("add a port option to app.ts");
+      expect(unset.requests.every((request) => !("effort" in request))).toBe(true);
+    });
+
+    it("asks Jev how hard the task is only in auto, in the background, and survives it failing", async () => {
+      const asked: string[] = [];
+      const jev = (fetchImpl: NonNullable<ConstructorParameters<typeof ArchymedesAgent>[0]["jev"]>["fetchImpl"]) => ({ apiKey: "ts-test", fetchImpl });
+      const record = async (_url: string, init: { body: string }) => { asked.push(Object.keys(JSON.parse(init.body).questions).join(",")); return { ok: false, status: 503, json: async () => ({}) }; };
+      const auto = listThenAnswer();
+      const agent = new ArchymedesAgent({ root, model: auto, prices, mode: "plan", approve: async () => "deny", reasoning: "auto", jev: jev(record) });
+      const result = await agent.send("add a port option to app.ts");
+      expect(result.status).toBe("completed");
+      expect(asked).toContain("difficulty");
+      asked.length = 0;
+      await new ArchymedesAgent({ root, model: listThenAnswer(), prices, mode: "plan", approve: async () => "deny", reasoning: "low", jev: jev(record) }).send("add a port option to app.ts");
+      expect(asked).not.toContain("difficulty");
+    });
+  });
+
   it("completes the turn and reports unavailable when jev is down", async () => {
     const model = scriptedModel([
       { finishReason: "tool_calls", content: "", toolCalls: [{ id: "j1", name: "list_files", arguments: { path: "." } }] },

@@ -123,9 +123,36 @@ error header. When `FREE_GATEWAY_URL` is set here, set the desktop constant of t
 
 ## Reasoning effort
 
-Set `ARCHYMEDES_FREE_REASONING` to `minimal`, `low`, `medium` or `high` (or choose it in Settings, alt+s) to
-send OpenRouter's `reasoning.effort` with every free request. Unset, each model uses its own default.
+`ARCHYMEDES_REASONING` (Settings, alt+s) chooses how hard the model is asked to think. Unset, each provider uses
+its own default, which is the right choice for most work. It is sent per call as `reasoning.effort` on OpenRouter,
+and as the provider's own effort control elsewhere (providers that do not accept one ignore it).
 
-Measured on a small coding task (2026-10-14): `nvidia/nemotron-3.5-lightning:free` finished 3 of 4 runs at
-`minimal` (47, 79 and 157 s) against 2 of 4 at the default (136 and 122 s, two timeouts); `cohere/north-mini-code:free`
-showed no benefit. The sample is small and the effect depends on the model, which is why it is not the default.
+* `minimal`, `low`, `medium`, `high`: a fixed level for every call.
+* `auto` (experimental): the agent decides per call (`packages/core/src/effort-policy.ts`). It lowers the effort
+  only on routine steps, where thinking is wasted (a short message, edits that went through, a summary after a
+  green test run), and sends no effort at all, so the model's default applies, whenever something has failed, while
+  it reads code with a failure open, and for tasks that read as debugging, design or refactoring. With a TypeSafe
+  key it also asks Jev once per turn how hard the task is, in the background, to nudge the floor or ceiling. The
+  Tasks window (alt+t) shows the effort chosen for the last call and why.
+
+What was measured (free models, 2026-10-14; small samples, runs vary by 2-4x, so read the direction, not the digits):
+
+| Task | Setting | Passed | Calls | Wall time |
+| --- | --- | --- | --- | --- |
+| Word-count CLI (routine) | default | 4 of 7 | 22-60 | median 140 s (passing runs) |
+| | `minimal` | 4 of 5 | | median 116 s |
+| | `auto` (first version) | 5 of 7 (the others: a provider failure, a model that loops in every setting) | 13-59 | median 79 s |
+| Seeded bugs, 12 tests (debugging) | default | 3 of 3 | 9, 20, 10 | 54, 92, 64 s |
+| | `minimal` | 3 of 3 | 14, 42, 49 | 72, 202, 192 s |
+| | `auto` first version | 3 of 3 | 29, 22, 17 | 153, 255, 94 s |
+| | `auto` second version | 3 of 3 (+1 provider failure) | 19, 15, 15 | 107, 89, 87 s |
+
+So lowering the effort helps on routine work and **hurts on debugging** (a model that thinks less takes two to
+five times as many calls). The current `auto` was rewritten from that: it never picks a level for the hard parts.
+That version is covered by unit tests but was **not** measured live: the free tier's daily quota (1000 requests per
+key) ran out during the benchmarking. To measure it, with the harness in `benchmarks/speed/live/`:
+
+    for i in 1 2 3; do for e in default auto; do
+      benchmarks/speed/live/run-task.sh debug cohere/north-mini-code:free $e; done; done
+
+Until that shows it matching the default on debugging and beating it on routine work, `auto` stays opt-in.

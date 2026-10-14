@@ -570,28 +570,23 @@ describe("free mode reliability and own-key figures", () => {
   });
 });
 
-describe("free reasoning effort", () => {
-  it("reads only the four valid efforts from the environment", async () => {
-    const { freeReasoningFromEnvironment } = await import("./free-agent");
-    expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: " LOW " })).toBe("low");
-    expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: "minimal" })).toBe("minimal");
-    for (const bad of [undefined, "", "max", "off", "2"]) expect(freeReasoningFromEnvironment({ ARCHYMEDES_FREE_REASONING: bad })).toBeUndefined();
-  });
-});
-
 describe("free reasoning effort in the request", () => {
-  const bodyFor = async (reasoningEffort?: "minimal" | "low" | "medium" | "high") => {
+  const bodyFor = async (effort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => {
     const call = vi.fn(async () => response);
-    const provider = new FreeAgentTurnProvider({ apiKey: "k", model: entry.id, ...(reasoningEffort ? { reasoningEffort } : {}) }, { call, catalog });
-    await provider.complete(request as never);
+    const provider = new FreeAgentTurnProvider({ apiKey: "k", model: entry.id }, { call, catalog });
+    await provider.complete({ ...request, ...(effort ? { effort } : {}) } as never);
     return (call.mock.calls as unknown as [Record<string, unknown>][])[0][0];
   };
-  it("sends reasoning.effort when asked, and nothing otherwise", async () => {
-    expect((await bodyFor("low")).reasoning).toEqual({ effort: "low" });
+  it("sends reasoning.effort when the runtime asks for one, and nothing otherwise", async () => {
+    expect((await bodyFor("minimal")).reasoning).toEqual({ effort: "minimal" });
+    expect((await bodyFor("medium")).reasoning).toEqual({ effort: "medium" });
     expect("reasoning" in (await bodyFor())).toBe(false);
   });
+  it("maps the two highest efforts to OpenRouter's highest", async () => {
+    expect((await bodyFor("xhigh")).reasoning).toEqual({ effort: "high" });
+    expect((await bodyFor("max")).reasoning).toEqual({ effort: "high" });
+  });
   it("keeps the free-only guarantees whatever the effort", async () => {
-    const body = await bodyFor("minimal");
-    expect(body.provider).toMatchObject({ require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false });
+    expect((await bodyFor("minimal")).provider).toMatchObject({ require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false });
   });
 });

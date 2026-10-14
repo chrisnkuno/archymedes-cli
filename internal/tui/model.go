@@ -174,7 +174,8 @@ type Model struct {
 	forecast    forecast
 	lastLevel   limitLevel
 	limitWarned time.Time
-	notes       []note // every toast, for the notification center
+	effort      [2]string // the last model call's reasoning effort and the reason for it
+	notes       []note    // every toast, for the notification center
 	unread      int
 	custom      []command
 	selecting   bool // the terminal owns the mouse (/select)

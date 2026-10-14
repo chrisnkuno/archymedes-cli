@@ -5,7 +5,7 @@ import type { RoutingPlan } from "../providers/routing-plan";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { access } from "node:fs/promises";
-import { agentMessagePromptParts, BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider } from "../agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
 import { affordableOutputTokens, approximateInputTokens, priceActualModelUsage, type ModelPriceCatalog } from "../model-cost";
 import type { ModelUsage } from "../providers/model";
 import type { ExaSearchClient } from "../providers/exa";
@@ -45,7 +45,8 @@ import { DEFAULT_OUTPUT_CEILING } from "../providers/model-capabilities";
 import { DefenderBrain } from "./defender-brain";
 import { toolProfileForObjective, toolsForProfile } from "./tool-profile";
 import { leanToolset, restoreFullHistory, stubEarlierToolResults, tokenSaverBudgets } from "./token-saver";
-import { createJevJudge, requestJevVerdict, turnVerdictState, verdictFromResponse, type JevFetch, type JevTurnVerdict, type TurnEvidence } from "./jev";
+import { predictEffort, type Difficulty } from "../effort-policy";
+import { createJevJudge, DIFFICULTY_QUESTIONS, difficultyFromResponse, requestJevVerdict, turnVerdictState, verdictFromResponse, type JevFetch, type JevTurnVerdict, type TurnEvidence } from "./jev";
 
 /**
  * Archymedes CLI's agent: the hosted `BoundedAgentRuntime`, hosted locally instead.
@@ -84,6 +85,12 @@ export type ArchymedesAgentOptions = {
    * to a failure on every turn.
    */
   jev?: { apiKey: string; model?: string; timeoutMs?: number; fetchImpl?: JevFetch; /** Auto-correct on a bad verdict (default true; `ARCHYMEDES_JEV_REVIEW=off` disables). */ review?: boolean };
+  /**
+   * How hard the model is asked to think. `auto` decides per call from how the run is going (see
+   * `effort-policy.ts`, with Jev's read of the task when a key is configured); a fixed level applies
+   * to every call; unset leaves each provider at its own default.
+   */
+  reasoning?: "auto" | ThinkingEffort;
   /**
    * Called after a successful `edit_file`/`write_file` with the edited path; whatever it returns
    * is appended to that tool result as "Diagnostics after edit:", so the model sees an error it
@@ -967,8 +974,13 @@ export class ArchymedesAgent {
       compactionActualRwf = compaction.actualRwf;
       // Fresh per turn: a judge reading the previous turn's task would misjudge this one's tools.
       this.permissions.setTaskHint(objective);
+      this.startDifficultyReading(objective, turnAbort.signal);
       const runtime = new BoundedAgentRuntime({
         model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "main"),
+        ...(this.options.reasoning === "auto"
+          // The person's own words, not the runtime's objective, which carries the recalled-memory block.
+          ? { effortPolicy: (signals) => predictEffort({ ...signals, objective, ...(this.jevDifficulty ? { difficultyHint: this.jevDifficulty } : {}) }) }
+          : {}),
         tools: scoped.map((tool) => tool.effect === "none" ? tool : { ...tool, execute: async (args, context) => { await checkpointReady; return tool.execute(args, context); } }),
         prices: this.options.prices,
         artifacts: this.artifacts,
@@ -1020,6 +1032,7 @@ export class ArchymedesAgent {
         stepId: `turn_${this.messages.length}`,
         // Carries this turn's recalled memory with it, so the cached system prefix stays byte-stable.
         objective: turnObjective,
+        ...(this.options.reasoning && this.options.reasoning !== "auto" ? { effort: this.options.reasoning } : {}),
         images: attached.images,
         history: sentHistory,
         systemPrompt,
@@ -1153,6 +1166,33 @@ export class ArchymedesAgent {
   }
 
   private jevCorrectionDepth = 0;
+
+  /** Jev's last confident reading of the current task's difficulty, when `reasoning` is `auto`. */
+  private jevDifficulty: Difficulty | undefined;
+  private difficultyStamp = 0;
+
+  /**
+   * Asks Jev, in the background, how hard this turn's task is. The first model call does not wait
+   * for it (the answer would cost more than the reasoning it could save); it tunes the calls after.
+   * Fail-open and silent: no key, a slow judge or an unsure answer all just mean no hint.
+   */
+  private startDifficultyReading(objective: string, signal: AbortSignal): void {
+    this.jevDifficulty = undefined;
+    const stamp = ++this.difficultyStamp;
+    if (this.options.reasoning !== "auto" || !this.jev) return;
+    void requestJevVerdict({
+      apiKey: this.jev.apiKey,
+      ...(this.jev.model ? { model: this.jev.model } : {}),
+      ...(this.jev.fetchImpl ? { fetchImpl: this.jev.fetchImpl } : {}),
+      state: objective,
+      questions: DIFFICULTY_QUESTIONS,
+      timeoutMs: 5_000,
+      signal,
+    }).then((response) => {
+      if (stamp !== this.difficultyStamp) return; // a later turn has started: this reading is stale
+      this.jevDifficulty = difficultyFromResponse(response)?.difficulty;
+    }).catch(() => undefined);
+  }
 
   private async correctivePrompt(objective: string, verdict: JevTurnVerdict & { status: "verdict" }, evidence: readonly TurnEvidence[]): Promise<string> {
     const failures = evidence.filter((entry) => entry.exitCode !== undefined && entry.exitCode !== 0).slice(-6);

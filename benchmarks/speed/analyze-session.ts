@@ -35,6 +35,8 @@ export type Breakdown = {
   reasoningTokens: number;
   /** Output tokens per second over the part of each call after the first token. */
   tokensPerSecond: number;
+  /** Model calls by the effort they were asked to think at ("default" when none was set). */
+  effortCalls: Record<string, number>;
 };
 
 const ms = (event: SessionEvent): number => Date.parse(event.at);
@@ -55,7 +57,7 @@ export function analyzeSession(events: readonly SessionEvent[]): Breakdown {
   const out: Breakdown = {
     wallMs: 0, modelMs: 0, firstTokenMs: 0, modelCalls: 0, toolMs: 0, toolCalls: 0, toolsByName: {},
     checkpointMs: 0, afterAnswerMs: 0, retryWaitMs: 0, retries: 0, otherMs: 0,
-    inputTokens: 0, outputTokens: 0, reasoningTokens: 0, tokensPerSecond: 0,
+    inputTokens: 0, outputTokens: 0, reasoningTokens: 0, tokensPerSecond: 0, effortCalls: {},
   };
   let generationMs = 0;
   const start = events.find((event) => event.type === "turn_start");
@@ -87,6 +89,10 @@ export function analyzeSession(events: readonly SessionEvent[]): Breakdown {
         break;
       case "model_turn":
         out.modelCalls += 1;
+        {
+          const effort = typeof event.effort === "string" ? event.effort : "default";
+          out.effortCalls[effort] = (out.effortCalls[effort] ?? 0) + 1;
+        }
         out.modelMs += at - boundary;
         if (firstText !== undefined) {
           out.firstTokenMs += firstText - boundary;
@@ -146,6 +152,7 @@ export function formatBreakdown(label: string, b: Breakdown): string {
   const lines = [`${label}  wall ${sec(b.wallMs).trim()}  (retries: ${b.retries}, asked to wait ${sec(b.retryWaitMs).trim()})`];
   for (const [name, value, note] of rows) lines.push(`  ${name.padEnd(26)} ${sec(value)} ${pct(value, b.wallMs)}  ${note}`);
   lines.push(`  tokens: ${b.inputTokens} in (${b.modelCalls ? Math.round(b.inputTokens / b.modelCalls) : 0}/call), ${b.outputTokens} out (${b.reasoningTokens} reasoning), ${b.tokensPerSecond.toFixed(0)} tok/s while streaming`);
+  if (Object.keys(b.effortCalls).length > 0) lines.push(`  effort: ${Object.entries(b.effortCalls).map(([name, count]) => `${name} x${count}`).join(", ")}`);
   const slow = Object.entries(b.toolsByName).sort((a, c) => c[1].ms - a[1].ms).slice(0, 4);
   if (slow.length > 0) lines.push(`  slowest tools: ${slow.map(([name, row]) => `${name} ${row.ms}ms/${row.calls}`).join(", ")}`);
   return lines.join("\n");

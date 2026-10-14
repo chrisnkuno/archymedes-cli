@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/x/ansi"
+	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 	"strings"
 	"testing"
 	"time"
@@ -73,5 +74,25 @@ func TestTheDockCarriesTheSystemAppsWhereThereIsRoomAndTheyAreClickable(t *testi
 		if _, ok := findAction(app.id); !ok {
 			t.Errorf("%s has no action", app.id)
 		}
+	}
+}
+
+func TestTheTaskManagerSaysHowHardTheModelWasAskedToThink(t *testing.T) {
+	m, _ := unconfigured(t)
+	m.overlay = nil
+	m.handleRuntime(acp.RuntimeEvent{Type: "model_turn", Effort: "medium", EffortReason: "run_command failed: understand why"})
+	m.runAction("tasks")
+	if s := screen(m); !strings.Contains(s, "thinking: medium (run_command failed: understand why)") {
+		t.Fatalf("tasks:\n%s", s)
+	}
+	m.handleRuntime(acp.RuntimeEvent{Type: "model_turn", EffortReason: "a task that reads as debugging"})
+	if d := m.effortDetail(); !strings.Contains(d, "thinking: default (a task that reads as debugging)") {
+		t.Fatalf("no effort sent should read as the model's default: %q", d)
+	}
+	quiet, _ := unconfigured(t)
+	quiet.overlay = nil
+	quiet.runAction("tasks")
+	if strings.Contains(screen(quiet), "thinking:") {
+		t.Fatal("nothing to say when the agent does not choose")
 	}
 }

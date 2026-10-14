@@ -293,6 +293,37 @@ export async function requestJevVerdict(options: {
   }
 }
 
+/**
+ * How much thinking a task needs, asked once when a turn starts.
+ *
+ * Not on the critical path: the first model call does not wait for it (a network round trip would
+ * cost more than the reasoning it saves). The answer arrives while that call runs and tunes the
+ * effort of the calls after it; see `effort-policy.ts`, which never lets it override what the run's
+ * own results show.
+ */
+export const DIFFICULTY_QUESTIONS: Record<string, JevQuestion> = {
+  difficulty: {
+    type: "choice",
+    instructions: "How much careful reasoning does this coding task need from the person or agent doing it?",
+    criteria: {
+      routine: "A direct, well-specified change or question with an obvious approach: add a file, rename, run a command, explain something simple",
+      involved: "Several steps or files, but each one is clear once the previous is done",
+      hard: "Diagnosing a failure, an unclear cause, a design or architecture decision, a subtle bug, security or concurrency reasoning, or a large refactor",
+    },
+  },
+};
+
+export type JevDifficulty = { difficulty: "routine" | "involved" | "hard"; probability: number };
+
+/** The difficulty Jev settled on, only when it is confident enough to act on (>= 0.55). */
+export function difficultyFromResponse(response: JevResponse): JevDifficulty | undefined {
+  const answer = response.answers.difficulty;
+  if (!answer || answer.type !== "choice") return undefined;
+  if (answer.choice !== "routine" && answer.choice !== "involved" && answer.choice !== "hard") return undefined;
+  const probability = answer.probabilities[answer.choice] ?? answer.confidence;
+  return probability >= 0.55 ? { difficulty: answer.choice, probability } : undefined;
+}
+
 /** One observed tool execution, for the judge's "what actually ran" picture. */
 export type TurnEvidence = {
   tool: string;

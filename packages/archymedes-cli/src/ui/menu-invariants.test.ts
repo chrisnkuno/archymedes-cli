@@ -231,7 +231,7 @@ describe("settings validation invariants", () => {
     ARCHYMEDES_CLOUD_QUALITY_FLOOR: ["0", "0.5", "1"],
     MODEL_PRICE_CURRENCY: ["EUR"],
     ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
-    ARCHYMEDES_FREE_REASONING: ["minimal", "LOW", "medium", "high"],
+    ARCHYMEDES_REASONING: ["auto", "minimal", "LOW", "medium", "high"],
     ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
     ARCHYMEDES_CODE_COLORS: ["vscode", "theme"],
     ARCHYMEDES_CODE_LINE_NUMBERS: ["on", "OFF"],

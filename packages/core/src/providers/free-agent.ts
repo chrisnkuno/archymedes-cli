@@ -56,13 +56,10 @@ function isTransportFailure(error: unknown): boolean {
     || Boolean((error as { cause?: unknown })?.cause);
 }
 
-/** How hard a free model is asked to think: OpenRouter's unified `reasoning.effort`. */
-export type FreeReasoningEffort = "minimal" | "low" | "medium" | "high";
-
-/** `ARCHYMEDES_FREE_REASONING`: a valid effort, or undefined for each model's own default. */
-export function freeReasoningFromEnvironment(environment: Record<string, string | undefined>): FreeReasoningEffort | undefined {
-  const value = environment.ARCHYMEDES_FREE_REASONING?.trim().toLowerCase();
-  return value === "minimal" || value === "low" || value === "medium" || value === "high" ? value : undefined;
+/** OpenRouter's unified `reasoning.effort` accepts four levels; the two highest map to its highest. */
+function openRouterEffort(effort: AgentModelRequest["effort"]): "minimal" | "low" | "medium" | "high" | undefined {
+  if (!effort) return undefined;
+  return effort === "xhigh" || effort === "max" ? "high" : effort;
 }
 
 /** The per-minute request ceiling free endpoints commonly enforce; the pacer waits only once a minute holds this many. */
@@ -146,7 +143,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
    * `timeoutMs` is the stream's idle timeout (see `streamTimeoutsFor`); `firstByteTimeoutMs` is the
    * per-candidate first-byte deadline used while the router still has another candidate to try.
    */
-  constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number; firstByteTimeoutMs?: number; tokenSaver?: boolean; reasoningEffort?: FreeReasoningEffort }, private readonly dependencies: {
+  constructor(private readonly options: { apiKey?: string; gatewayUrl?: string; model: string; timeoutMs?: number; firstByteTimeoutMs?: number; tokenSaver?: boolean }, private readonly dependencies: {
     call?: ChatCall; catalog?: (signal: AbortSignal) => Promise<FreeCatalog>; now?: () => number;
     /**
      * Install-token source for gateway requests. Defaults to one stored in the config directory,
@@ -371,9 +368,10 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       response = await deadline.race(this.call({
         model, messages: withOpenRouterCacheControl(messages, model), max_tokens: output,
         ...(request.tools.length ? { tools: request.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })) } : {}),
-        // Every tool-capable free model lists `reasoning` among its parameters, so this cannot make
-        // `require_parameters` exclude one. Unset leaves each model at its own default.
-        ...(this.options.reasoningEffort ? { reasoning: { effort: this.options.reasoningEffort } } : {}),
+        // The effort is chosen per call by the runtime (see effort-policy.ts). Every tool-capable free
+        // model lists `reasoning` among its parameters, so sending it cannot make `require_parameters`
+        // exclude one; unset leaves each model at its own default.
+        ...(openRouterEffort(request.effort) ? { reasoning: { effort: openRouterEffort(request.effort) } } : {}),
         provider: { require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false },
         stream: true, stream_options: { include_usage: true },
       }, deadline.signal, token ? { [FREE_INSTALL_HEADER]: token } : {}, observe));

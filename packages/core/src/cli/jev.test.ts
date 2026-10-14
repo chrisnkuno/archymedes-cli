@@ -185,3 +185,29 @@ describe("the standing question set", () => {
     await expect(judge.checkTool({ taskHint: "t", toolName: "run_command", toolDescription: "d", toolArguments: {} })).resolves.toBeUndefined();
   });
 });
+
+import { DIFFICULTY_QUESTIONS, difficultyFromResponse } from "./jev";
+
+describe("asking Jev how hard a task is", () => {
+  const answer = (choice: string, probs: Record<string, number>, confidence = probs[choice]) => parseJevResponse({
+    model: "jev-1.13.0",
+    answers: { difficulty: { type: "choice", choice, confidence, probabilities: probs } },
+    usage: { input_tokens: 40, output_tokens: 5 },
+  });
+
+  it("asks one choice question whose options match what the effort policy understands", () => {
+    expect(Object.keys(DIFFICULTY_QUESTIONS)).toEqual(["difficulty"]);
+    const question = DIFFICULTY_QUESTIONS.difficulty;
+    expect(question.type === "choice" && Object.keys(question.criteria)).toEqual(["routine", "involved", "hard"]);
+  });
+
+  it("reads a confident answer", () => {
+    expect(difficultyFromResponse(answer("hard", { routine: 0.05, involved: 0.15, hard: 0.8 }))).toEqual({ difficulty: "hard", probability: 0.8 });
+  });
+
+  it("ignores an unsure one, an unknown option, and a missing answer", () => {
+    expect(difficultyFromResponse(answer("hard", { routine: 0.3, involved: 0.3, hard: 0.4 }))).toBeUndefined();
+    expect(difficultyFromResponse(answer("impossible", { impossible: 0.99 }))).toBeUndefined();
+    expect(difficultyFromResponse(parseJevResponse({ model: "m", answers: { outcome: { type: "noul", noul: 0.1 } }, usage: { input_tokens: 1, output_tokens: 1 } }))).toBeUndefined();
+  });
+});

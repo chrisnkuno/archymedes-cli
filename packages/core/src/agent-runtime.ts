@@ -104,7 +104,14 @@ export type ModelAllowance = {
 export type AgentOutputKind = "text" | "reasoning" | "tool_call";
 
 /** How hard the model should think, where the provider's model supports being told. */
-export type ThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
+import { isShallowToolError, type EffortSignals, type ToolOutcome } from "./effort-policy";
+
+export type ThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/** The effort an API that has no "minimal" can be sent: the lowest it knows. */
+export function providerEffort(effort: ThinkingEffort): Exclude<ThinkingEffort, "minimal"> {
+  return effort === "minimal" ? "low" : effort;
+}
 
 export type AgentModelRequest = {
   /** One logical model call: reused across transport retries, replaced for the next iteration. */
@@ -266,7 +273,7 @@ export type AgentRuntimeEvent =
   | { type: "provider_retry"; iteration: number; nextAttempt: number; maxAttempts: number; delayMs: number; reason: ProviderFailureKind }
   // Usage rides along so a front end can show spend accruing during the turn. Waiting for the
   // final result means the number only appears once the money is already gone.
-  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage; allowance?: ModelAllowance }
+  | { type: "model_turn"; requestId?: string; iteration: number; responseId: string; model: string; toolCallCount: number; usage: ModelUsage; allowance?: ModelAllowance; effort?: ThinkingEffort; effortReason?: string }
   // Emitted immediately before a tool runs, so a front end can say what is happening while it
   // happens rather than only what happened. The result alone cannot carry this: by the time it
   // arrives the interesting part — which file, which command — is already over.
@@ -826,6 +833,11 @@ export class BoundedAgentRuntime {
        * drives backoff jitter. Both default to the real thing.
        */
       retry?: { sleep?: (delayMs: number, signal?: AbortSignal) => Promise<boolean>; random?: () => number };
+      /**
+       * Chooses the effort for each model call from the state of the run (see `effort-policy.ts`).
+       * Returning undefined leaves the run's own `effort`, or the provider's default.
+       */
+      effortPolicy?: (signals: EffortSignals) => { effort: ThinkingEffort | undefined; reason: string } | undefined;
     },
   ) {
     this.toolsByName = new Map();
@@ -857,6 +869,12 @@ export class BoundedAgentRuntime {
     // retries the same wrong call, or guesses one wrong path after another, and neither ends on its own.
     const failedCalls = new Map<string, number>();
     let missingPathStreak = 0;
+    // What the effort policy sees: the outcomes since the previous model call, how many calls in a
+    // row went wrong in substance, and whether a strong verification has passed since the last edit.
+    let lastOutcomes: ToolOutcome[] = [];
+    let consecutiveFailures = 0;
+    let greenSinceEdit = false;
+    let unresolvedFailure = false;
     /** Every tool result this run added, by transcript position, so older ones can be compacted in-turn. */
     const runToolResults: RunToolResult[] = [];
     let inTurnCompactions = 0;
@@ -968,9 +986,14 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       );
       if (maximumOutputTokens < 1) return stop("iteration_limit", "Run reached its approved model budget before another provider call.", iteration - 1);
 
+      const chosen = this.dependencies.effortPolicy?.({
+        iteration, objective: request.objective, lastResults: lastOutcomes, consecutiveFailures, greenSinceEdit, unresolvedFailure,
+      });
+      // A policy that answers "no opinion" (effort undefined) means the provider's default, not the run's.
+      const effort = chosen ? chosen.effort : request.effort;
       const modelRequest: AgentModelRequest = {
         requestId: `cli_${randomUUID()}`,
-        ...(request.effort ? { effort: request.effort } : {}),
+        ...(effort ? { effort } : {}),
         messages: [...messages],
         tools: definitions,
         maxOutputTokens: maximumOutputTokens,
@@ -1037,7 +1060,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");
-      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage, ...(turn.allowance ? { allowance: turn.allowance } : {}) });
+      await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage, ...(turn.allowance ? { allowance: turn.allowance } : {}), ...(effort ? { effort } : {}), ...(chosen ? { effortReason: chosen.reason } : {}) });
 
       if (turn.finishReason === "refusal") return stop("blocked", turn.refusal?.trim() || "Model refused the task.", iteration);
       if (turn.finishReason === "length") {
@@ -1217,6 +1240,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       const incoming = Math.min(iterationCharBudget, results.reduce((sum, { result }) => sum + Math.min((result.content || " ").length, request.maxToolResultChars) + (result.images?.length ?? 0) * IMAGE_CHAR_ESTIMATE, 0));
       if (totalToolResultChars + incoming > request.maxTotalToolResultChars) await compactOlderToolResults(iteration, incoming);
 
+      lastOutcomes = [];
       for (const { call, tool, result } of results) {
         toolCallsExecuted += 1;
         const remaining = request.maxTotalToolResultChars - totalToolResultChars;
@@ -1296,7 +1320,14 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         }
         messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         const effect = tool.effect === "external" ? "external" : result.effect ?? tool.effect;
-        if (!result.isError && effect === "workspace") workspaceNeedsVerification = true;
+        if (!result.isError && effect === "workspace") { workspaceNeedsVerification = true; greenSinceEdit = false; }
+        lastOutcomes.push({
+          tool: call.name,
+          isError: result.isError ?? false,
+          ...(result.isError ? { shallow: isShallowToolError(raw) } : {}),
+          ...(!result.isError && result.verification?.passed && result.verification.kind ? { verified: result.verification.kind } : {}),
+        });
+        if (!result.isError && result.verification?.passed && result.verification.kind !== "check") greenSinceEdit = true;
         if (!result.isError && result.verification?.passed) {
           workspaceNeedsVerification = false;
           // Unclassified evidence reads as `check`: the weaker claim is the safe one to infer.
@@ -1306,6 +1337,11 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         }
         await this.dependencies.control.persistEvent({ type: "tool_result", toolCallId: call.id, toolName: call.name, isError: result.isError ?? false, effect, content, ...(result.data ? { data: result.data } : {}), ...(artifact ? { artifact } : {}) });
       }
+      const failedInSubstance = lastOutcomes.some((outcome) => outcome.isError && !outcome.shallow);
+      consecutiveFailures = failedInSubstance ? consecutiveFailures + 1 : 0;
+      // Open from a failure until a test, behaviour or smoke run passes; a lint or build passing does not close it.
+      if (failedInSubstance) unresolvedFailure = true;
+      else if (lastOutcomes.some((outcome) => outcome.verified && outcome.verified !== "check")) unresolvedFailure = false;
       // Out of tool-result budget: shorten older results and carry on rather than ending the turn.
       if (totalToolResultChars >= request.maxTotalToolResultChars) await compactOlderToolResults(iteration);
       await this.dependencies.control.checkpointMessages?.(messages);

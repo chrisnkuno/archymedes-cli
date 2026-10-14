@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
+import { providerEffort } from "../agent-runtime";
 import { collectChatStream, isOpenRouterBaseUrl, toWireMessages, turnFromChatResponse, withOpenRouterCacheControl, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
@@ -74,7 +75,7 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       // Effort is only sent when the caller asked for one and the model accepts the field.
       // Reasoning tokens bill as output and share the output budget, so this is a direct spend
       // control, not a quality preference.
-      ...(request.effort && this.capabilities.supportsEffort ? { reasoning_effort: request.effort } : {}),
+      ...(request.effort && this.capabilities.supportsEffort ? { reasoning_effort: providerEffort(request.effort) } : {}),
       // Streaming is unconditional. `max_completion_tokens` is now sized from what the model can
       // really write, and an unstreamed reply that large risks the SDK's HTTP timeout — the call is
       // billed and the answer lost. `include_usage` travels with it because on Chat Completions a

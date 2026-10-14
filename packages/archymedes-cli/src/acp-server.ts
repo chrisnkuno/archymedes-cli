@@ -1,5 +1,6 @@
 import { AcpConnection, type AcpSession, type JsonRpcOutgoing } from "@archymedes/core/cli/acp";
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
+import { reasoningFromEnvironment } from "@archymedes/core/effort-policy";
 import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics";
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
@@ -111,6 +112,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
           search: createExaClient(options.environment),
           onEvent,
           jev: jevOptionsFromEnvironment(options.environment),
+          ...(reasoningFromEnvironment(options.environment) ? { reasoning: reasoningFromEnvironment(options.environment) } : {}),
           // Language-server diagnostics appended to each edit result, as in the terminal session.
           afterEdit: acpEditDiagnostics(root, workspace, options.environment),
           approve: async (request) =>

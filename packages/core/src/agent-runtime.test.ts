@@ -5,7 +5,7 @@ import type { RoutingReceipt } from "./providers/routing-receipt";
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 const prices = { inputRatePerMillion: 1_610, outputRatePerMillion: 9_660 };
 
-function harness(turns: AgentModelTurn[], tools: AgentTool[], approved = true, artifacts?: ToolResultArtifactStore) {
+function harness(turns: AgentModelTurn[], tools: AgentTool[], approved = true, artifacts?: ToolResultArtifactStore, effortPolicy?: ConstructorParameters<typeof BoundedAgentRuntime>[0]["effortPolicy"]) {
   const events: AgentRuntimeEvent[] = [];
   const requests: AgentModelRequest[] = [];
   let modelCalls = 0;
@@ -14,6 +14,7 @@ function harness(turns: AgentModelTurn[], tools: AgentTool[], approved = true, a
     tools,
     prices,
     ...(artifacts ? { artifacts } : {}),
+    ...(effortPolicy ? { effortPolicy } : {}),
     control: {
       async heartbeat() {},
       async isCancellationRequested() { return false; },
@@ -363,6 +364,78 @@ describe("bounded agent runtime", () => {
       "model_turn", "tool_call", "tool_result",
       "model_turn", "runtime_stop",
     ]);
+  });
+
+  describe("effort policy", () => {
+    const tools = (): AgentTool[] => {
+      let runs = 0;
+      return [
+        { name: "write_file", description: "Write", inputSchema: {}, capabilityId: "workspace.files", effect: "workspace", requiresApproval: false, parallelSafe: false, async execute() { return { content: "written" }; } },
+        { name: "run_tests", description: "Tests", inputSchema: {}, capabilityId: "workspace.terminal", effect: "none", requiresApproval: false, parallelSafe: false,
+          async execute() { runs += 1; return runs === 1 ? { content: "exit 1\nnot ok 1", isError: true } : { content: "ok", verification: { passed: true, kind: "tests", scope: "targeted", summary: "t" } }; } },
+      ];
+    };
+    const script = () => [
+      turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "a", name: "write_file", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "b", name: "run_tests", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "c", name: "run_tests", arguments: {} }] }),
+      turn({ content: "Done." }),
+    ];
+
+    it("asks the policy before every model call, with what happened since the last one, and sends its answer", async () => {
+      const seen: Array<{ iteration: number; tools: string[]; failures: number; green: boolean }> = [];
+      const policy = (signals: import("./effort-policy").EffortSignals) => {
+        seen.push({ iteration: signals.iteration, tools: signals.lastResults.map((r) => `${r.tool}:${r.isError ? "err" : "ok"}`), failures: signals.consecutiveFailures, green: signals.greenSinceEdit });
+        return { effort: "medium" as const, reason: "test" };
+      };
+      const h = harness(script(), tools(), true, undefined, policy);
+      await h.runtime.execute(baseRequest);
+      expect(seen).toEqual([
+        { iteration: 1, tools: [], failures: 0, green: false },
+        { iteration: 2, tools: ["write_file:ok"], failures: 0, green: false },
+        { iteration: 3, tools: ["run_tests:err"], failures: 1, green: false },
+        { iteration: 4, tools: ["run_tests:ok"], failures: 0, green: true },
+      ]);
+      expect(h.requests.map((request) => request.effort)).toEqual(["medium", "medium", "medium", "medium"]);
+    });
+
+    it("keeps a failure open until a test run passes, not a build", async () => {
+      const seen: boolean[] = [];
+      let runs = 0;
+      const mixed: AgentTool[] = [
+        { name: "run_tests", description: "Tests", inputSchema: {}, capabilityId: "workspace.terminal", effect: "none", requiresApproval: false, parallelSafe: false,
+          async execute() { runs += 1; return runs === 1 ? { content: "exit 1", isError: true } : { content: "ok", verification: { passed: true, kind: "tests", scope: "targeted", summary: "t" } }; } },
+        { name: "typecheck", description: "Check", inputSchema: {}, capabilityId: "workspace.terminal", effect: "none", requiresApproval: false, parallelSafe: false,
+          async execute() { return { content: "0 errors", verification: { passed: true, kind: "check", scope: "targeted", summary: "tsc" } }; } },
+      ];
+      const h = harness([
+        turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "a", name: "run_tests", arguments: {} }] }),
+        turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "b", name: "typecheck", arguments: {} }] }),
+        turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "c", name: "run_tests", arguments: {} }] }),
+        turn({ content: "Done." }),
+      ], mixed, true, undefined, (signals) => { seen.push(signals.unresolvedFailure === true); return undefined; });
+      await h.runtime.execute(baseRequest);
+      expect(seen).toEqual([false, true, true, false]);
+    });
+
+    it("records the chosen effort and why on each model_turn event", async () => {
+      const h = harness(script(), tools(), true, undefined, () => ({ effort: "minimal", reason: "because" }));
+      await h.runtime.execute(baseRequest);
+      const turns = h.events.filter((event) => event.type === "model_turn");
+      expect(turns.every((event) => event.type === "model_turn" && event.effort === "minimal" && event.effortReason === "because")).toBe(true);
+    });
+
+    it("a policy that is absent leaves the run's own effort; one that answers 'no opinion' means the provider's default", async () => {
+      const absent = harness([turn({ content: "ok" })], [], true, undefined, () => undefined);
+      await absent.runtime.execute({ ...baseRequest, effort: "low" });
+      expect(absent.requests[0].effort).toBe("low");
+      const noOpinion = harness([turn({ content: "ok" })], [], true, undefined, () => ({ effort: undefined, reason: "hard: default" }));
+      await noOpinion.runtime.execute({ ...baseRequest, effort: "low" });
+      expect("effort" in noOpinion.requests[0]).toBe(false);
+      const none = harness([turn({ content: "ok" })], []);
+      await none.runtime.execute(baseRequest);
+      expect("effort" in none.requests[0]).toBe(false);
+    });
   });
 
   it("nudges the model back to verify instead of ending the turn immediately", async () => {

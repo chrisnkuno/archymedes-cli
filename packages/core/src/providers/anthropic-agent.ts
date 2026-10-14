@@ -1,4 +1,5 @@
 import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider } from "../agent-runtime";
+import { providerEffort } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
@@ -322,7 +323,7 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
       // Sent only when the caller asked for a specific effort *and* this model accepts the field.
       // `output_config` is not a header or an extra body property — it is a first-class request
       // parameter, and effort lives inside it rather than at the top level.
-      ...(request.effort && this.capabilities.supportsEffort ? { output_config: { effort: request.effort } } : {}),
+      ...(request.effort && this.capabilities.supportsEffort ? { output_config: { effort: providerEffort(request.effort) } } : {}),
       metadata: { user_id: request.safetyIdentifier },
       // Streaming is unconditional, not a rendering choice. `max_tokens` is now sized from what the
       // model can actually write (64K on a current Opus or Sonnet), and an unstreamed reply that

@@ -5,6 +5,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../agent-runtime";
+import { providerEffort } from "../agent-runtime";
 import { toWireMessages, turnFromChatResponse, type ChatResponse } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
 import { buildTaskProfile, TASK_KINDS, type TaskKind } from "./routing-receipt";
@@ -227,7 +228,7 @@ export class ArchymedesCloudTurnProvider implements AgentTurnProvider {
         max_completion_tokens: request.maxOutputTokens,
         safety_identifier: request.safetyIdentifier,
         prompt_cache_key: request.safetyIdentifier,
-        ...(request.effort ? { reasoning_effort: request.effort } : {}),
+        ...(request.effort ? { reasoning_effort: providerEffort(request.effort) } : {}),
         stream: false,
         archymedes: {
           task_id: taskId,

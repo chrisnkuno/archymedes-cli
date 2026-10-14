@@ -29,7 +29,9 @@ they catch a real regression (a 10x), not noise.
 * A "verification passed, finish if done" hint on the first green test run: calls after the first green run averaged
   6.8 before and 7.3 after. The models keep going regardless.
 
-## Reasoning effort (opt-in)
+## Reasoning effort
 
-See `docs/continuation/FREE_MODE.md`. The A/B harness is a fresh directory per run, the same task, files checked
-and `node --test` run afterwards for pass/fail, then `analyze-session.ts` on the event log.
+See `docs/continuation/FREE_MODE.md` (the "Reasoning effort" section) for the measurements and the setting. The live
+harness is `live/run-task.sh <wordcount|debug> <model> <effort>`: a fresh directory per run, the same task, files
+checked and `node --test` run afterwards for an objective pass/fail, then `analyze-session.ts` on the event log
+(which also shows the effort chosen on each call). Interleave settings and repeat; single runs vary by 2-4x.

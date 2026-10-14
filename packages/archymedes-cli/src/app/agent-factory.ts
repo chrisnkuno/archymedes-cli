@@ -8,6 +8,7 @@
  * daemon knows nothing about.
  */
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
+import { reasoningFromEnvironment } from "@archymedes/core/effort-policy";
 import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics";
 import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import type { ArchymedesDaemonClient, ArchymedesSessionDaemon, DaemonNotification } from "@archymedes/core/cli/daemon";
@@ -72,6 +73,7 @@ export function createClientFactory(options: {
       onExpense: (expense) => state.ledger.recordExpense(expense),
       onEvent,
       jev: jevOptionsFromEnvironment(environment),
+      ...(reasoningFromEnvironment(environment) ? { reasoning: reasoningFromEnvironment(environment) } : {}),
       afterEdit: editDiagnostics,
     }), record);
     if (editDiagnostics) closeWithClient(client, editDiagnostics);

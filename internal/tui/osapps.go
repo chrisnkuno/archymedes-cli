@@ -170,7 +170,7 @@ func (t *tasksApp) view(m *Model) string {
 		}
 	}
 	head := fmt.Sprintf("%d running · %d tools this session · %s in / %s out", running, m.stats.toolCount(), compact(m.usage.input), compact(m.usage.output))
-	lines := []string{" " + th.Faint.Render(m.limitDetail()), " " + th.Strong.Render(head) + th.Faint.Render("   ↑/↓ move · x stop the turn · enter chat · esc close"),
+	lines := []string{" " + th.Faint.Render(m.limitDetail()) + th.Faint.Render(m.effortDetail()), " " + th.Strong.Render(head) + th.Faint.Render("   ↑/↓ move · x stop the turn · enter chat · esc close"),
 		" " + th.Faint.Render(padRight("TASK", 8)+padRight("STATE", 10)+padRight("TIME", 8)+"WHAT")}
 	visible := max(height-3, 1)
 	start := max(0, min(t.cursor-visible/2, len(rows)-visible))
@@ -198,4 +198,16 @@ func (t *tasksApp) view(m *Model) string {
 		lines = append(lines, ansi.Truncate(line, width, "…"))
 	}
 	return strings.Join(fitLines(lines, width, height), "\n")
+}
+
+// effortDetail says how hard the model was last asked to think and why, when the agent decides that
+// per call (reasoning "auto"); empty otherwise.
+func (m *Model) effortDetail() string {
+	if m.effort[0] == "" {
+		return ""
+	}
+	if m.effort[1] == "" {
+		return " · thinking: " + m.effort[0]
+	}
+	return " · thinking: " + m.effort[0] + " (" + m.effort[1] + ")"
 }

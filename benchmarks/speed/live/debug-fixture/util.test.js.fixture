@@ -1,0 +1,16 @@
+const test = require("node:test");
+const assert = require("node:assert");
+const { slugify, paginate, parseDuration, percent } = require("./util");
+
+test("slugify joins words with single dashes", () => assert.strictEqual(slugify("Hello,  World!"), "hello-world"));
+test("slugify trims dashes at both ends", () => assert.strictEqual(slugify("  --Already Slugged--  "), "already-slugged"));
+test("paginate returns the first page", () => assert.deepStrictEqual(paginate([1, 2, 3, 4, 5], 1, 2), [1, 2]));
+test("paginate returns a short last page", () => assert.deepStrictEqual(paginate([1, 2, 3, 4, 5], 3, 2), [5]));
+test("paginate past the end is empty", () => assert.deepStrictEqual(paginate([1, 2, 3], 5, 2), []));
+test("parseDuration hours and minutes", () => assert.strictEqual(parseDuration("1h30m"), 5400));
+test("parseDuration minutes only", () => assert.strictEqual(parseDuration("45m"), 2700));
+test("parseDuration hours only", () => assert.strictEqual(parseDuration("2h"), 7200));
+test("parseDuration seconds", () => assert.strictEqual(parseDuration("90s"), 90));
+test("parseDuration all three", () => assert.strictEqual(parseDuration("1h30m15s"), 5415));
+test("percent rounds to one decimal", () => assert.strictEqual(percent(1, 3), 33.3));
+test("percent of zero is zero", () => assert.strictEqual(percent(0, 0), 0));
