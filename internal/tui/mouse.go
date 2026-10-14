@@ -85,10 +85,6 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 			}
 		}
 	}
-	if m.landingVisible() && !m.prismClassic() && frame.Get("prism").InBounds(msg) {
-		m.prismGrab(msg.Mouse().X) // a drag turns it; letting go throws it
-		return nil
-	}
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(m.photoIndex) // the photo, full size
 	}

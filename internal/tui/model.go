@@ -5,7 +5,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -124,10 +123,6 @@ type Model struct {
 	// for — all of it, and where they sit.
 	sixel                bool
 	sixelSig, sixelPlace string
-	// The home screen's 3D mark (prism.go), and the terminal's background as it said, which the
-	// mark is drawn over so its soft edges blend into it.
-	prism  prismState
-	termBg color.Color
 	// First-run guidance (welcome.go): whether the first request was ever sent, whether this
 	// session sent it (its first turn ends with a tip), and how many files the project has changed.
 	welcomed       bool
@@ -385,17 +380,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.animated = false
 			return m, nil
 		}
-		m.angle += 0.06 // the classic mark
+		m.angle += 0.06
 		m.turnPhoto(time.Now())
-		m.prism.step(animInterval.Seconds(), m.opts.Motion)
-		if m.prismClassic() {
-			return m, animTick()
-		}
-		return m, tea.Batch(animTick(), m.renderPrism())
-	case prismFrameMsg:
-		return m, m.prismFrame(msg)
+		return m, animTick()
 	case tea.BackgroundColorMsg:
-		m.termBg = msg.Color
 		// On a light terminal, unless a theme was asked for, use the light one: a dark ground's
 		// palette on white is unreadable, and the person never chose it.
 		if !msg.IsDark() && m.opts.Theme == "" && !m.th.Light {
@@ -527,9 +515,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleClick(msg)
 	case tea.MouseMotionMsg:
 		m.selectDrag(msg)
-		return m, m.prismDrag(msg.Mouse().X)
+		return m, nil
 	case tea.MouseReleaseMsg:
-		m.prismRelease()
 		return m, m.selectRelease()
 	case tea.MouseWheelMsg:
 		m.sel.clear() // the text moves under it

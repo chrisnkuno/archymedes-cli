@@ -5,6 +5,12 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-16: The mark (2026-10-14)
+| ID | Task | Status | Where | Evidence |
+| --- | --- | --- | --- | --- |
+| WS-16.1 | The shaded 3D prism (drag-to-spin physics, an off-loop renderer, a Sixel path for the mark) is removed; the clean line-art mark is back | done | removed `internal/prism`, `internal/tui/prism.go`; `landing.go`, `mouse.go`, `model.go`, `sixel.go` restored | `go test ./...` |
+| WS-16.2 | The mark, enhanced in the same line-art style: a glass prism turning slowly, a white beam entering on its left, a stem leaving the glass that splits into five dashed spectrum rays. The beam and the fan attach to the drawn silhouette (so they meet the glass at every angle), the fan opens and closes as the prism turns, a spark runs along an edge, hidden edges are dotted on alternate cells. Edges follow the theme's ramp, the fan is a spectrum blended from the theme's own colours. Used only where a layout it implies fits (47 columns wide); otherwise the compact turning solid, whose golden test is unchanged | done | `internal/render/mark.go`, `internal/tui/landing.go` | `mark_test.go` (beam always enters and meets the glass, fan always reaches the edge, same size at every angle, ASCII variant), `landing_art_test.go` (no clipping, fits 308 size/angle combinations) |
+
 ## WS-14: Speed benchmark and the first optimizations (2026-10-14)
 | ID | Task | Status | Where | Evidence |
 | --- | --- | --- | --- | --- |
