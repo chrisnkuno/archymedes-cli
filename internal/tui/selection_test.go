@@ -129,3 +129,34 @@ func TestClickingTheComposerPlacesTheCursorOnThatRowAndCell(t *testing.T) {
 }
 
 func ansiStrip(s string) string { return ansi.Strip(s) }
+
+func TestTextStreamingInClearsASelectionInsteadOfCopyingTheWrongWords(t *testing.T) {
+	m := chatWith(t, "alpha beta gamma")
+	y, x := row(t, m, "alpha")
+	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseMotionMsg{X: x + 8, Y: y, Button: tea.MouseLeft})
+	if !m.sel.shown {
+		t.Fatal("nothing selected")
+	}
+	a := &assistantItem{}
+	a.append("a new reply pushes the text up\nby several lines\nand more")
+	m.tr.items = append(m.tr.items, a)
+	screen(m)
+	if m.sel.shown || m.sel.pressed {
+		t.Fatal("the selection should be dropped when the text moves under it")
+	}
+	if _, cmd := m.Update(tea.MouseReleaseMsg{X: x + 8, Y: y, Button: tea.MouseLeft}); cmd != nil {
+		t.Fatal("releasing after the text moved must not copy anything")
+	}
+}
+
+func TestAnUnchangedTranscriptKeepsTheSelection(t *testing.T) {
+	m := chatWith(t, "alpha beta gamma")
+	y, x := row(t, m, "alpha")
+	drag(m, x, y, x+8, y)
+	screen(m)
+	screen(m)
+	if !m.sel.shown {
+		t.Fatal("redrawing the same text must not drop the selection")
+	}
+}

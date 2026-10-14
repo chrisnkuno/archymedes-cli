@@ -51,6 +51,11 @@ func (m *Model) View() tea.View {
 		rows = append(rows, area[:m.windowHeight()]...)
 	} else {
 		body := m.body(m.transcriptHeight())
+		// A selection is kept in screen rows, so text moving under it (a reply streaming in) makes it
+		// point at other words: drop it rather than highlight, or copy, the wrong text.
+		if (m.sel.pressed || m.sel.shown) && !sameText(steadyLines(body, m.thinking()), steadyLines(m.bodyLines, m.thinking())) {
+			m.sel.clear()
+		}
 		m.bodyLines = body
 		for i, line := range body {
 			rows = append(rows, " "+m.highlight(i, line))
@@ -262,4 +267,25 @@ func fillHeight(content string, height int) string {
 		content += strings.Repeat("\n", missing)
 	}
 	return content
+}
+
+// steadyLines is the transcript without the animated "thinking" line and the gap above it, which
+// change every frame without moving any text.
+func steadyLines(lines []string, thinking bool) []string {
+	if thinking && len(lines) >= 2 {
+		return lines[:len(lines)-2]
+	}
+	return lines
+}
+
+func sameText(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

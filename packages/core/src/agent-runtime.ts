@@ -1159,6 +1159,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         if (toolTurnRecoveries >= MAX_TOOL_TURN_RECOVERIES) return false;
         toolTurnRecoveries += 1;
         messages.push({ role: "user", content: `${reason} ${instruction}`, internal: true });
+        lastOutcomes = [{ tool: "(malformed call)", isError: true, shallow: true }]; // a mistake to correct, not a failure to think about
         return true;
       };
       if (turn.finishReason !== "tool_calls" || turn.toolCalls.length === 0) {
@@ -1200,6 +1201,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         }
         unavailableToolRecoveries += 1;
         lastUnavailable = unavailable.name;
+        lastOutcomes = [{ tool: unavailable.name, isError: true, shallow: true }]; // the next call only has to pick a real tool
         messages.push({ role: "assistant", content: turn.content, toolCalls: turn.toolCalls });
         for (const call of turn.toolCalls) {
           messages.push({

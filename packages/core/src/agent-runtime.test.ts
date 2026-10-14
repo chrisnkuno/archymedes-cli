@@ -418,6 +418,18 @@ describe("bounded agent runtime", () => {
       expect(seen).toEqual([false, true, true, false]);
     });
 
+    it("tells the policy a wrong tool name was a mistake to correct, not the previous round's results", async () => {
+      const seen: string[] = [];
+      const read: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "exit 1", isError: true }; } };
+      const h = harness([
+        turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "a", name: "read_file", arguments: {} }] }),
+        turn({ finishReason: "tool_calls", content: "", toolCalls: [{ id: "b", name: "search", arguments: {} }] }),
+        turn({ content: "Done." }),
+      ], [read], true, undefined, (signals) => { seen.push(signals.lastResults.map((r) => `${r.tool}:${r.shallow ? "shallow" : r.isError ? "failed" : "ok"}`).join(",")); return undefined; });
+      await h.runtime.execute(baseRequest);
+      expect(seen).toEqual(["", "read_file:failed", "search:shallow"]);
+    });
+
     it("records the chosen effort and why on each model_turn event", async () => {
       const h = harness(script(), tools(), true, undefined, () => ({ effort: "minimal", reason: "because" }));
       await h.runtime.execute(baseRequest);

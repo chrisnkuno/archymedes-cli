@@ -13,6 +13,8 @@ has 5,100 lines and `tui.ts` has 1,364.
 | WS-17.3 | The concurrent checkpoint let read-only tools skip the wait, but `delegate_task` is declared read-only and its sub-agent writes: a delegated write could precede the snapshot. Every tool now waits (free in practice); undo and diff wait for a snapshot still being stored | done | `cli/agent.ts` | `agent.test.ts`; the snapshot test fails with the old gating (checked) |
 | WS-17.4 | "This exact call has failed N times, do not repeat it" was said about re-running the tests after a fix; failures now stop counting once the workspace changes. "oldText was not found" no longer counts as a missing path | done | `agent-runtime.ts` | `agent-runtime.test.ts` |
 | WS-17.5 | Smaller: `jest -w 4` (workers) was refused as a watcher; a base64 key like `dGVzdA==` was mangled by the `NAME=` clean-up; pastes into the start menu, model and session pickers were dropped; Settings filter backspace cut a byte; "Saved" now says it applies from the next session | done | `tools.ts`, `paste.go`, `settingsapp.go` | unit tests |
+| WS-17.6 | A drag-selection is kept in screen rows; a reply streaming in moved the text under it, so release copied other words. The selection is dropped when the drawn transcript changes under it (the animated "thinking" line excepted) | done | `internal/tui/view.go` | `selection_test.go` |
+| WS-17.7 | After a wrong tool name or a malformed call, the effort policy decided the next call from the previous round's results; it now sees an argument-level mistake | done | `agent-runtime.ts` | `agent-runtime.test.ts` |
 
 ## WS-16: The mark (2026-10-14)
 | ID | Task | Status | Where | Evidence |
