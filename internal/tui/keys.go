@@ -25,11 +25,11 @@ type keyMap struct {
 	// Typing (locked).
 	Send, Newline, Complete, Cancel, Interrupt, History key.Binding
 	// Apps.
-	Start, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings key.Binding
+	Start, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers key.Binding
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
-	Mode, Expand, Quit key.Binding
+	Mode, Expand, Quit, Undo, Retry, Copy key.Binding
 	// Reading.
 	PageUp, PageDown, LineUp, LineDown, Top, Bottom key.Binding
 }
@@ -51,6 +51,7 @@ var actions = []action{
 	{"tasks", "tasks", "Apps", []string{"alt+t"}, false, func(k *keyMap) *key.Binding { return &k.Tasks }},
 	{"notifications", "notifications", "Apps", []string{"alt+n"}, false, func(k *keyMap) *key.Binding { return &k.Notifications }},
 
+	{"providers", "providers", "Apps", []string{"alt+p"}, false, func(k *keyMap) *key.Binding { return &k.Providers }},
 	{"settings", "settings", "Apps", []string{"alt+s"}, false, func(k *keyMap) *key.Binding { return &k.Settings }},
 
 	{"next-window", "next window", "Windows", []string{"ctrl+pgdown", "alt+]"}, false, func(k *keyMap) *key.Binding { return &k.NextWindow }},
@@ -59,6 +60,9 @@ var actions = []action{
 
 	{"mode", "mode", "Session", []string{"shift+tab"}, false, func(k *keyMap) *key.Binding { return &k.Mode }},
 	{"expand", "expand output", "Session", []string{"ctrl+o"}, false, func(k *keyMap) *key.Binding { return &k.Expand }},
+	{"undo", "undo last turn", "Session", []string{"alt+z"}, false, func(k *keyMap) *key.Binding { return &k.Undo }},
+	{"retry", "send again", "Session", []string{"alt+r"}, false, func(k *keyMap) *key.Binding { return &k.Retry }},
+	{"copy", "copy last reply", "Session", []string{"alt+y"}, false, func(k *keyMap) *key.Binding { return &k.Copy }},
 	{"quit", "quit", "Session", []string{"ctrl+d"}, false, func(k *keyMap) *key.Binding { return &k.Quit }},
 
 	{"page-up", "page up", "Reading", []string{"pgup"}, false, func(k *keyMap) *key.Binding { return &k.PageUp }},

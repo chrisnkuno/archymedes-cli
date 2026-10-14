@@ -31,6 +31,7 @@ type Agent interface {
 	SetupStatus(ctx context.Context) (acp.SetupStatus, error)
 	SaveSetup(ctx context.Context, provider, key string) (acp.SetupResult, error)
 	Settings(ctx context.Context) (acp.SettingsList, error)
+	Providers(ctx context.Context) ([]acp.ProviderOverview, error)
 	SetSetting(ctx context.Context, key, value string) (acp.SettingsSetResult, error)
 	Models(ctx context.Context, refresh bool) (acp.ModelList, error)
 	SetModel(ctx context.Context, sessionID, provider, model string) (acp.SessionInfo, error)
@@ -169,8 +170,9 @@ type Model struct {
 	forecast    forecast
 	lastLevel   limitLevel
 	limitWarned time.Time
-	effort      [2]string // the last model call's reasoning effort and the reason for it
-	notes       []note    // every toast, for the notification center
+	shellCancel context.CancelFunc // the !command running, if any
+	effort      [2]string          // the last model call's reasoning effort and the reason for it
+	notes       []note             // every toast, for the notification center
 	unread      int
 	custom      []command
 	selecting   bool // the terminal owns the mouse (/select)
@@ -401,6 +403,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.openOverlay(newSetup(m, msg.status))
 		return m, nil
+	case shellDoneMsg:
+		return m, m.shellDone(msg)
+	case openedMsg:
+		if msg.err != nil {
+			return m, m.toast(toastWarn, "The editor failed: "+msg.err.Error())
+		}
+		return m, nil
+	case providersLoadedMsg:
+		m.providersLoaded(msg)
+		return m, nil
+	case defaultProviderMsg:
+		return m, m.defaultProviderSaved(msg)
 	case settingsLoadedMsg:
 		m.settingsLoaded(msg)
 		return m, nil
@@ -437,8 +451,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.commandDone(msg)
 	case handoffDoneMsg:
 		return m, m.handoffDone(msg)
-	case reportReadyMsg:
-		return m, m.reportReady(msg)
 	case sessionsLoadedMsg:
 		if msg.err == nil {
 			m.recentSessions = msg.sessions
@@ -555,6 +567,10 @@ func (m *Model) submit() tea.Cmd {
 	text := m.input.take()
 	if text == "" {
 		return nil
+	}
+	// "!command" is the person's own shell, run here and shown here, not sent to the agent.
+	if strings.HasPrefix(text, "!") {
+		return m.runShell(text[1:])
 	}
 	if cmd, ok := m.runCommand(text); ok {
 		return cmd

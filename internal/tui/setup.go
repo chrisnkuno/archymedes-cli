@@ -161,7 +161,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	m.overlay = nil
 	cmds := []tea.Cmd{m.toast(toastInfo, "Key saved to "+msg.result.File)}
 	if s.optional {
-		cmds = append(cmds, m.toast(toastInfo, "Use /model to switch to a model from it"))
+		cmds = append(cmds, m.toast(toastInfo, "Use /model to switch to a model from it"), m.reloadProviders())
 	} else {
 		cmds = append(cmds, m.openSession())
 	}

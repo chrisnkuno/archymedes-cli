@@ -24,7 +24,7 @@ var dockApps = []struct{ id, icon, name string }{
 // systemApps are the desktop's own: always a key away and in the start menu, and shown in the dock
 // as compact chips when the main apps leave room for them.
 var systemApps = []struct{ id, icon, name string }{
-	{"tasks", "☰", "Tasks"}, {"notifications", "●", "Alerts"}, {"settings", "⚙", "Settings"},
+	{"providers", "⇄", "Providers"}, {"tasks", "☰", "Tasks"}, {"notifications", "●", "Alerts"}, {"settings", "⚙", "Settings"},
 }
 
 // systemChips draws the system apps as "key icon" chips, widest first as many as fit in room columns.

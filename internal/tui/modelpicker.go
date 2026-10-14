@@ -183,7 +183,10 @@ func (m *Model) modelSet(msg modelSetMsg) tea.Cmd {
 		msg.info.Root, msg.info.SessionID = m.session.Info.Root, m.session.Info.SessionID
 		m.session.Info = msg.info
 	}
-	return m.toast(toastInfo, "Model: "+m.session.Info.Model+" — the conversation carries on")
+	if p := m.providersWindow(); p != nil {
+		p.pending = ""
+	}
+	return tea.Batch(m.toast(toastInfo, "Model: "+m.session.Info.Model+" — the conversation carries on"), m.reloadProviders())
 }
 
 func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {

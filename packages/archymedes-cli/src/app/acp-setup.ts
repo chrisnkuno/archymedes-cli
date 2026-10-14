@@ -1,5 +1,5 @@
 import { PROVIDER_INFO, PROVIDER_IDS, isProviderId, missingRequirements, type ProviderId } from "@archymedes/core/providers/provider-specs";
-import { resolveProvider } from "@archymedes/core/providers/agent-matrix";
+import { providerEnvPrefix, resolveProvider } from "@archymedes/core/providers/agent-matrix";
 import { checkOpenRouterKey, describeKeyCheckFailure, type KeyCheck } from "@archymedes/core/providers/openrouter-key-info";
 import { OPENROUTER_KEYS_URL } from "./free-setup";
 import { loadSettings, mergedEnvironment, saveSettings, SETTING_FIELDS, validateSetting, type ArchymedesSettings, type SettingKey } from "../platform/settings";
@@ -97,4 +97,34 @@ export async function saveSetup(params: Record<string, unknown>, deps: SetupSave
   const file = await (deps.save ?? ((value: ArchymedesSettings) => saveSettings(value, deps.processEnvironment)))(settings);
   Object.assign(deps.environment, mergedEnvironment(settings, deps.processEnvironment));
   return { ok: true, file, ...(note ? { note } : {}) };
+}
+
+/** One row of the Providers app: whether it is usable, what it still needs, and the model it would use. */
+export type ProviderOverview = {
+  id: ProviderId;
+  label: string;
+  configured: boolean;
+  /** The variables still missing; empty when configured. */
+  missing: string[];
+  /** The one variable a key fills; absent when the provider needs more than a key. */
+  keyVariable?: string;
+  keyUrl?: string;
+  /** What a session on this provider would use: its <PREFIX>_MODEL, else the default. */
+  model: string;
+  /** ARCHYMEDES_PROVIDER names it: new sessions start here. */
+  isDefault: boolean;
+};
+
+/** Every provider, free first, for a client that lets the person act on them (`_archymedes/providers`). */
+export function providerOverview(environment: Record<string, string | undefined>): ProviderOverview[] {
+  const preferred = environment.ARCHYMEDES_PROVIDER?.trim().toLowerCase();
+  return setupStatus(environment).providers.map((provider) => {
+    const info = PROVIDER_INFO[provider.id];
+    return {
+      ...provider,
+      missing: missingRequirements(provider.id, environment),
+      model: environment[`${providerEnvPrefix(provider.id)}_MODEL`]?.trim() || info.defaultModel,
+      isDefault: preferred === provider.id,
+    };
+  });
 }

@@ -387,6 +387,15 @@ func (c *Client) SaveSetup(ctx context.Context, provider, key string) (SetupResu
 	return result, err
 }
 
+// Providers lists every provider: usable or not, what it still needs, and the model it would use.
+func (c *Client) Providers(ctx context.Context) ([]ProviderOverview, error) {
+	var out struct {
+		Providers []ProviderOverview `json:"providers"`
+	}
+	err := c.call(ctx, "_archymedes/providers", map[string]any{}, &out)
+	return out.Providers, err
+}
+
 // Settings reads the settings menu: every field, its section, choices and current value.
 func (c *Client) Settings(ctx context.Context) (SettingsList, error) {
 	var list SettingsList

@@ -6,7 +6,7 @@ import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics"
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { listSessions, loadSession, type SessionRecord } from "@archymedes/core/cli/session";
 import { resolveSessionProvider } from "./app/session-provider";
-import { saveSetup, setupStatus } from "./app/acp-setup";
+import { saveSetup, setupStatus, providerOverview } from "./app/acp-setup";
 import { modelList } from "./app/acp-models";
 import { runSessionCommand } from "./app/acp-commands";
 import { listSettings, setSetting } from "./app/acp-settings";
@@ -71,6 +71,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
   const connection = new AcpConnection({
     send,
     extensions: {
+      "_archymedes/providers": async () => ({ providers: providerOverview(options.environment) }),
       "_archymedes/setup/status": async () => setupStatus(options.environment, { provider: options.provider, model: options.model }),
       "_archymedes/setup/save": async (params) => saveSetup(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/settings/list": async () => listSettings(process.env as Record<string, string | undefined>),

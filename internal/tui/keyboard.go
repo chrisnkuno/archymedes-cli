@@ -91,6 +91,9 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.Quit) && m.input.value() == "":
 		return m.quit()
 	case key.Matches(msg, k.Cancel):
+		if m.stopShell() {
+			return nil
+		}
 		switch {
 		case len(m.input.complete) > 0:
 			m.input.complete = nil

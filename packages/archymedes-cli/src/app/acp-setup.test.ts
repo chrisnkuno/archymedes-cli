@@ -43,3 +43,20 @@ describe("first-run setup over acp", () => {
     expect(await saveSetup({ provider: "anthropic", key: "   " }, deps)).toMatchObject({ ok: false });
   });
 });
+
+import { providerOverview } from "./acp-setup";
+
+describe("providerOverview", () => {
+  it("lists every provider free first, with what is missing, the model it would use and the default", () => {
+    const rows = providerOverview({ OPENAI_API_KEY: "sk-x", OPENAI_MODEL: "gpt-custom", ARCHYMEDES_PROVIDER: "openai" });
+    expect(rows[0].id).toBe("free");
+    const openai = rows.find((row) => row.id === "openai")!;
+    expect(openai).toMatchObject({ configured: true, missing: [], model: "gpt-custom", isDefault: true, keyVariable: "OPENAI_API_KEY" });
+    const anthropic = rows.find((row) => row.id === "anthropic")!;
+    expect(anthropic).toMatchObject({ configured: false, missing: ["ANTHROPIC_API_KEY"], model: "claude-sonnet-5", isDefault: false });
+    expect(anthropic.keyUrl).toContain("anthropic.com");
+    const compatible = rows.find((row) => row.id === "openai-compatible")!;
+    expect(compatible.keyVariable).toBeUndefined();
+    expect(compatible.missing.length).toBeGreaterThan(1);
+  });
+});

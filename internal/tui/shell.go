@@ -72,7 +72,7 @@ func (m *Model) shellKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		id      string
 	}{
 		{k.Start, "start"}, {k.Chat, "chat"}, {k.Files, "files"}, {k.Search, "search"}, {k.Sessions, "sessions"},
-		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Tasks, "tasks"}, {k.Settings, "settings"}, {k.Notifications, "notifications"}, {k.Help, "help"},
+		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Tasks, "tasks"}, {k.Settings, "settings"}, {k.Providers, "providers"}, {k.Undo, "undo"}, {k.Retry, "retry"}, {k.Copy, "copy"}, {k.Notifications, "notifications"}, {k.Help, "help"},
 		{k.NextWindow, "next-window"}, {k.PrevWindow, "prev-window"}, {k.CloseWindow, "close-window"},
 	} {
 		if !key.Matches(msg, b.binding) {
@@ -129,6 +129,14 @@ func (m *Model) runAction(id string) tea.Cmd {
 		m.openWindow(newStatsApp())
 	case "settings":
 		return m.openSettings()
+	case "providers":
+		return m.openProviders()
+	case "undo":
+		return m.sessionCommand("undo", "")
+	case "retry":
+		return m.cmdRetry("")
+	case "copy":
+		return m.cmdCopy("")
 	case "tasks":
 		m.openWindow(&tasksApp{})
 	case "notifications":

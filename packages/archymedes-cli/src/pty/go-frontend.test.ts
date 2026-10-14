@@ -214,6 +214,22 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await screenShows(again.screen, "files  ");
   }, 150_000);
 
+  it("opens Providers at once, shows which are ready, and runs a shell command without the agent", async () => {
+    const { proc, screen } = boot(120, 32);
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    proc.write("\x1bp"); // alt+p
+    await screenShows(screen, "Providers");
+    await screenShows(screen, /\d+ of \d+ ready/);
+    const text = await settle(screen);
+    expect(text).toContain("Anthropic");
+    expect(text).toContain("in use");
+    proc.write("\x1b"); // esc closes it
+    await screenShows(screen, "Ask Archymedes");
+    proc.write("!echo from-the-shell\r");
+    await screenShows(screen, "from-the-shell");
+    expect(await settle(screen)).toContain("$ echo from-the-shell");
+  }, 120_000);
+
   it("draws the session's turns as charts in the Stats app", async () => {
     stub.enqueue({ kind: "text", text: "First answer." });
     stub.enqueue({ kind: "text", text: "Second answer, a little longer than the first one." });

@@ -66,13 +66,8 @@ func TestNewBlocksAndPickerFitEverySize(t *testing.T) {
 	}
 }
 
-func TestReportsAreShownUnframedAndAgentProgramsNeedTheAgentsCommandLine(t *testing.T) {
+func TestAgentProgramsNeedTheAgentsCommandLine(t *testing.T) {
 	m, _ := newTestModel(t)
-	m.Update(reportReadyMsg{title: "providers", text: "╭──╮\n│ ✓ │ Anthropic\n╰──╯\n"})
-	s := screen(m)
-	if !strings.Contains(s, "providers") || !strings.Contains(s, "│ ✓ │ Anthropic") {
-		t.Fatalf("report:\n%s", s)
-	}
 	// This test model has no agent command line: the command says so instead of failing silently.
 	submitCommand(m, "/update")
 	if !strings.Contains(screen(m), "needs the agent's command line") {

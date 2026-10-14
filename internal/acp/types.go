@@ -183,6 +183,18 @@ type SetupStatus struct {
 	Providers  []SetupProvider `json:"providers"`
 }
 
+// ProviderOverview is one provider as the Providers app shows it.
+type ProviderOverview struct {
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Configured  bool     `json:"configured"`
+	Missing     []string `json:"missing"`
+	KeyVariable string   `json:"keyVariable"` // empty: needs more than a key
+	KeyURL      string   `json:"keyUrl"`
+	Model       string   `json:"model"`
+	IsDefault   bool     `json:"isDefault"`
+}
+
 // SettingRow is one line of the settings menu; secrets arrive masked.
 type SettingRow struct {
 	Key                     string          `json:"key"`

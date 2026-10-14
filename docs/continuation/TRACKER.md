@@ -5,6 +5,14 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-18: An interactive Providers app, and what a developer reaches for (2026-10-15)
+| ID | Task | Status | Where | Evidence |
+| --- | --- | --- | --- | --- |
+| WS-18.1 | `/providers` looked stuck: it started a second agent process to print a static table, showed nothing while that ran, and could not be acted on. Replaced by the Providers app (alt+p, `/providers`, a dock chip): every provider with ready / in use / default / what it still needs and the model it would use; enter uses it (switches the session, or asks for its key, or opens Settings on it when it needs more than a key), K sets its key, m picks among its models, d makes it the default, r refreshes; the key link shown. Data from a new `_archymedes/providers`; refreshes itself after a key is saved, a model switched or the default changed. The old report path is removed | done | `internal/tui/providersapp.go`, `app/acp-setup.ts` `providerOverview` | Go tests, `acp-setup.test.ts`, PTY "opens Providers at once…" against the real agent |
+| WS-18.2 | `!command` runs a shell command in the project and shows its output and exit code in the session, not sent to the agent; one at a time, esc stops it, 2-minute limit, last 256 KB kept, folded to 40 lines (ctrl+o shows all) | done | `internal/tui/devtools.go` | Go tests, PTY |
+| WS-18.3 | `/open <path>[:line]` opens a project file in $VISUAL/$EDITOR at the line (vim-style `+N`, VS Code-style `--goto`); `/new` starts a fresh session (the old one stays in /resume); `/commit [guidance]` has the agent review and commit the changes, never pushing | done | `devtools.go` | Go tests |
+| WS-18.4 | One key for the frequent actions: alt+z undo the last turn, alt+r send again, alt+y copy the last reply; all rebindable in Keys | done | `keys.go`, `shell.go` | Go tests |
+
 ## WS-17: Review of this session's changes, and the tool call that ended a real run (2026-10-14)
 | ID | Task | Status | Where | Evidence |
 | --- | --- | --- | --- | --- |

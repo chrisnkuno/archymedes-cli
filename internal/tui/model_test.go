@@ -15,14 +15,16 @@ import (
 )
 
 type fakeAgent struct {
-	settings  acp.SettingsList
-	set       []string
-	setError  string
-	mu        sync.Mutex
-	prompts   []string
-	cancelled int
-	modes     []string
-	messages  chan any
+	setupProviders []acp.SetupProvider
+	providers      []acp.ProviderOverview
+	settings       acp.SettingsList
+	set            []string
+	setError       string
+	mu             sync.Mutex
+	prompts        []string
+	cancelled      int
+	modes          []string
+	messages       chan any
 	// setup: what SaveSetup answers, and what it was given.
 	saveResult acp.SetupResult
 	saved      []string
@@ -81,13 +83,16 @@ func (f *fakeAgent) Startup(context.Context) ([]string, error) {
 	return []string{"Archymedes 3.0.1 is available — /update installs it."}, nil
 }
 func (f *fakeAgent) SetupStatus(context.Context) (acp.SetupStatus, error) {
-	return acp.SetupStatus{Configured: true}, nil
+	return acp.SetupStatus{Configured: true, Providers: f.setupProviders}, nil
 }
 func (f *fakeAgent) SaveSetup(_ context.Context, provider, key string) (acp.SetupResult, error) {
 	f.saved = append(f.saved, provider+"="+key)
 	return f.saveResult, nil
 }
 
+func (f *fakeAgent) Providers(context.Context) ([]acp.ProviderOverview, error) {
+	return f.providers, nil
+}
 func (f *fakeAgent) Settings(context.Context) (acp.SettingsList, error) {
 	return f.settings, nil
 }
