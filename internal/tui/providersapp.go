@@ -115,54 +115,18 @@ func (p *providersApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return false, nil
 	}
 	switch msg.String() {
-	case "enter":
-		return false, p.use(m, *row)
-	case "K", "ctrl+k":
-		return false, p.giveKey(m, *row)
-	case "m":
+	case "enter", "m":
+		// Set it up if it is not, then its models, fetched from the provider, to pick from.
 		if !row.Configured {
-			return false, p.giveKey(m, *row)
+			return false, m.openConnect(row.ID, "form")
 		}
-		return false, m.modelsOf(*row)
+		return false, m.openConnect(row.ID, "models")
+	case "K", "e", "ctrl+k":
+		return false, m.openConnect(row.ID, "form") // change its key or base URL
 	case "d":
 		return false, p.makeDefault(m, *row)
 	}
 	return false, nil
-}
-
-// use is the obvious thing for the row: switch to it when it is ready, else set it up.
-func (p *providersApp) use(m *Model, row acp.ProviderOverview) tea.Cmd {
-	if !row.Configured {
-		return p.giveKey(m, row)
-	}
-	if row.ID == m.session.Info.Provider {
-		return m.modelsOf(row) // already on it: the useful next step is choosing among its models
-	}
-	if m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
-	}
-	p.pending = "switching to " + row.Label
-	return m.switchModel(acp.ModelChoice{Provider: row.ID, ProviderLabel: row.Label, Model: row.Model})
-}
-
-// giveKey asks for the provider's key, or opens Settings on it when it needs more than one value.
-func (p *providersApp) giveKey(m *Model, row acp.ProviderOverview) tea.Cmd {
-	if row.KeyVariable != "" {
-		return m.cmdKey(row.ID)
-	}
-	cmd := m.openSettings()
-	if s := m.settingsWindow(); s != nil {
-		s.filter = row.Label
-	}
-	return tea.Batch(cmd, m.toast(toastInfo, row.Label+" needs "+strings.Join(row.Missing, ", ")+": set them here"))
-}
-
-func (m *Model) modelsOf(row acp.ProviderOverview) tea.Cmd {
-	if m.agent == nil || m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
-	}
-	m.openOverlay(newModelPicker(m, row.Label))
-	return m.loadModels(false, "")
 }
 
 func (p *providersApp) makeDefault(m *Model, row acp.ProviderOverview) tea.Cmd {
@@ -223,7 +187,7 @@ func (p *providersApp) view(m *Model) string {
 	if p.loaded {
 		head += th.Faint.Render(fmt.Sprintf("  %d of %d ready", ready, len(p.rows)))
 	}
-	lines := []string{" " + head, " " + th.Faint.Render("↑/↓ move · enter use · K key · m models · d make default · r refresh · esc close")}
+	lines := []string{" " + head, " " + th.Faint.Render("↑/↓ move · enter connect or pick a model · e key & URL · d make default · r refresh · esc close")}
 	switch {
 	case !p.loaded:
 		lines = append(lines, "", " "+m.spin.View()+th.Faint.Render(" asking the agent…"))
@@ -261,13 +225,11 @@ func (p *providersApp) view(m *Model) string {
 		lines = append(lines, "", " "+th.Strong.Render(row.Label))
 		switch {
 		case row.ID == m.session.Info.Provider:
-			lines = append(lines, " "+th.Body.Render("This session runs on it ("+m.session.Info.Model+"). m picks another of its models."))
+			lines = append(lines, " "+th.Body.Render("This session runs on it ("+m.session.Info.Model+"). enter lists its models, fetched from it."))
 		case row.Configured:
-			lines = append(lines, " "+th.Body.Render("Ready. enter switches this session to "+row.Model+"; d makes it the default for new ones."))
-		case row.KeyVariable != "":
-			lines = append(lines, " "+th.Body.Render("Needs "+row.KeyVariable+". enter asks for it; paste the key."))
+			lines = append(lines, " "+th.Body.Render("Ready. enter lists its models (fetched from it) to switch to; d makes it the default for new sessions."))
 		default:
-			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, ", ")+". enter opens Settings on it."))
+			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter asks for it: paste, and its models are fetched."))
 		}
 		if row.KeyURL != "" {
 			lines = append(lines, " "+th.Faint.Render("Get a key: ")+th.Highlight.Render(ansi.Truncate(row.KeyURL, width-14, "…")))

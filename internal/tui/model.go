@@ -32,6 +32,9 @@ type Agent interface {
 	SaveSetup(ctx context.Context, provider, key string) (acp.SetupResult, error)
 	Settings(ctx context.Context) (acp.SettingsList, error)
 	Providers(ctx context.Context) ([]acp.ProviderOverview, error)
+	ConnectProvider(ctx context.Context, provider string, values map[string]string) (acp.ConnectResult, error)
+	ProviderModels(ctx context.Context, provider string) ([]string, string, error)
+	RememberModel(ctx context.Context, provider, model string) error
 	SetSetting(ctx context.Context, key, value string) (acp.SettingsSetResult, error)
 	Models(ctx context.Context, refresh bool) (acp.ModelList, error)
 	SetModel(ctx context.Context, sessionID, provider, model string) (acp.SessionInfo, error)
@@ -401,8 +404,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.status.Configured {
 			return m, m.openSession()
 		}
-		m.openOverlay(newSetup(m, msg.status))
-		return m, nil
+		return m, m.openFirstRun(msg.status)
 	case shellDoneMsg:
 		return m, m.shellDone(msg)
 	case openedMsg:
@@ -428,10 +430,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case editedMsg:
 		return m, m.edited(msg)
-	case keyDialogMsg:
-		return m, m.openKeyDialog(msg)
-	case setupSavedMsg:
-		return m, m.setupSaved(msg)
+	case connectProvidersMsg:
+		return m, m.connectProvidersLoaded(msg)
+	case connectResultMsg:
+		return m, m.connectResult(msg)
+	case connectModelsMsg:
+		return m, m.connectModels(msg)
+	case firstRunReadyMsg:
+		return m, m.firstRunReady(msg)
 	case filesLoadedMsg:
 		m.filesLoaded(msg)
 		return m, nil

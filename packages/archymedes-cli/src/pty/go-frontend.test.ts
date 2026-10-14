@@ -320,8 +320,13 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("Get a key", { timeoutMs: 10_000 });
     proc.write("sk-ant-first-run");
     proc.write("\r");
-    await proc.waitFor("claude-sonnet", { timeoutMs: 30_000 });
+    // Connecting checks the key by asking the provider for its models, and lists them to pick from.
+    await screenShows(screen, "type to filter", 30_000);
     expect(await screen.text()).not.toContain("sk-ant-first-run");
+    proc.write("\r"); // the provider's current model is preselected
+    const end = Date.now() + 30_000;
+    while (Date.now() < end && (await screen.text()).includes("type to filter")) await new Promise((resolve) => setTimeout(resolve, 100));
+    await proc.waitFor("claude-sonnet", { timeoutMs: 30_000 });
     proc.write("hi\r");
     await proc.waitFor("hello after setup", { timeoutMs: 30_000 });
     // Saved where `archymedes settings` keeps it, so the next start needs no setup.

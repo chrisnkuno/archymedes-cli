@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 )
 
 func TestCleanKey(t *testing.T) {
@@ -30,19 +28,18 @@ func TestCleanKey(t *testing.T) {
 
 func TestPastedKeyReachesTheSetupDialogCleaned(t *testing.T) {
 	m, agent := unconfigured(t)
-	// Pasting before choosing a provider goes straight to the highlighted provider's key field.
+	// Pasting on the provider list opens the highlighted provider's form with the key in it.
 	m.Update(tea.PasteMsg{Content: "export OPENROUTER_API_KEY=\"sk-or-pasted\"\n"})
-	s, ok := m.overlay.(*setupOverlay)
-	if !ok || !s.entering || s.input.Value() != "sk-or-pasted" {
-		t.Fatalf("overlay=%#v", m.overlay)
+	d := m.connectDialog()
+	if d == nil || d.step != stepForm || d.inputs[0].Value() != "sk-or-pasted" {
+		t.Fatalf("dialog %+v", d)
 	}
 	if m.input.value() != "" {
 		t.Fatalf("the paste leaked into the composer: %q", m.input.value())
 	}
-	agent.saveResult = acp.SetupResult{OK: true, File: "/cfg/settings.json"}
 	run(m, press(m, tea.KeyEnter, 0))
-	if len(agent.saved) == 0 || agent.saved[0] != "free=sk-or-pasted" {
-		t.Fatalf("saved %q", agent.saved)
+	if len(agent.connected) == 0 || agent.connected[0] != "free:OPENROUTER_API_KEY=sk-or-pasted" {
+		t.Fatalf("connected %q", agent.connected)
 	}
 }
 

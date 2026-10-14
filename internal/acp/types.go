@@ -193,6 +193,29 @@ type ProviderOverview struct {
 	KeyURL      string   `json:"keyUrl"`
 	Model       string   `json:"model"`
 	IsDefault   bool     `json:"isDefault"`
+	// Fields is what it is set up with: key, base URL and anything else it requires.
+	Fields []ProviderField `json:"fields"`
+}
+
+// ProviderField is one value a provider is set up with; a secret's value arrives masked.
+type ProviderField struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Kind        string `json:"kind"` // secret, url or text
+	Required    bool   `json:"required"`
+	IsSet       bool   `json:"isSet"`
+	Value       string `json:"value"`
+	Placeholder string `json:"placeholder"`
+}
+
+// ConnectResult is a provider checked, saved and listed in one step.
+type ConnectResult struct {
+	OK     bool     `json:"ok"`
+	File   string   `json:"file"`
+	Models []string `json:"models"`
+	Note   string   `json:"note"`
+	Error  string   `json:"error"`
+	Field  string   `json:"field"` // the field the error is about, when there is one
 }
 
 // SettingRow is one line of the settings menu; secrets arrive masked.

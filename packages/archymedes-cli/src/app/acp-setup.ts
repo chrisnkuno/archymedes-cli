@@ -2,6 +2,7 @@ import { PROVIDER_INFO, PROVIDER_IDS, isProviderId, missingRequirements, type Pr
 import { providerEnvPrefix, resolveProvider } from "@archymedes/core/providers/agent-matrix";
 import { checkOpenRouterKey, describeKeyCheckFailure, type KeyCheck } from "@archymedes/core/providers/openrouter-key-info";
 import { OPENROUTER_KEYS_URL } from "./free-setup";
+import { providerFields, type ProviderField } from "./acp-connect";
 import { loadSettings, mergedEnvironment, saveSettings, SETTING_FIELDS, validateSetting, type ArchymedesSettings, type SettingKey } from "../platform/settings";
 
 /**
@@ -113,6 +114,8 @@ export type ProviderOverview = {
   model: string;
   /** ARCHYMEDES_PROVIDER names it: new sessions start here. */
   isDefault: boolean;
+  /** What it is set up with: its key, base URL and anything else it requires, secrets masked. */
+  fields: ProviderField[];
 };
 
 /** Every provider, free first, for a client that lets the person act on them (`_archymedes/providers`). */
@@ -125,6 +128,7 @@ export function providerOverview(environment: Record<string, string | undefined>
       missing: missingRequirements(provider.id, environment),
       model: environment[`${providerEnvPrefix(provider.id)}_MODEL`]?.trim() || info.defaultModel,
       isDefault: preferred === provider.id,
+      fields: providerFields(provider.id, environment),
     };
   });
 }

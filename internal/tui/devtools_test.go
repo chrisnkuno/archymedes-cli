@@ -176,12 +176,13 @@ func TestOneKeyUndoRetryAndCopy(t *testing.T) {
 func TestTheProvidersAppActsOnTheSelectedProvider(t *testing.T) {
 	m, agent := readyModel(t)
 	agent.providers = []acp.ProviderOverview{
-		{ID: "free", Label: "Free models (OpenRouter)", Configured: false, Missing: []string{"OPENROUTER_API_KEY"}, KeyVariable: "OPENROUTER_API_KEY", KeyURL: "https://openrouter.ai/keys", Model: "openrouter/free"},
+		{ID: "free", Label: "Free models (OpenRouter)", Configured: false, Missing: []string{"OPENROUTER_API_KEY"}, KeyVariable: "OPENROUTER_API_KEY", KeyURL: "https://openrouter.ai/keys", Model: "openrouter/free",
+			Fields: []acp.ProviderField{{Key: "OPENROUTER_API_KEY", Label: "OpenRouter API key", Kind: "secret", Required: true}}},
 		{ID: "openai", Label: "OpenAI", Configured: true, Model: "gpt-5.6-terra", KeyVariable: "OPENAI_API_KEY"},
-		{ID: "groq", Label: "Groq", Configured: true, Model: "openai/gpt-oss-120b", KeyVariable: "GROQ_API_KEY"},
+		{ID: "groq", Label: "Groq", Configured: true, Model: "openai/gpt-oss-120b", KeyVariable: "GROQ_API_KEY",
+			Fields: []acp.ProviderField{{Key: "GROQ_API_KEY", Label: "Groq API key", Kind: "secret", Required: true, IsSet: true, Value: "gsk…abc"}}},
 		{ID: "openai-compatible", Label: "OpenAI-compatible", Missing: []string{"OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"}, Model: "x"},
 	}
-	agent.setupProviders = []acp.SetupProvider{{ID: "free", Label: "Free models (OpenRouter)", KeyVariable: "OPENROUTER_API_KEY"}}
 	run(m, m.runAction("providers"))
 	s := screen(m)
 	for _, want := range []string{"Providers", "2 of 4 ready", "in use", "needs OPENROUTER_API_KEY", "Get a key: https://openrouter.ai/keys"} {
@@ -189,29 +190,37 @@ func TestTheProvidersAppActsOnTheSelectedProvider(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, s)
 		}
 	}
-	// enter on a provider with no key asks for its key
+	// enter on a provider with no key opens its form in the Connect dialog
 	run(m, press(m, tea.KeyEnter, 0))
-	if setup, ok := m.overlay.(*setupOverlay); !ok || !setup.entering || setup.chosen().ID != "free" {
-		t.Fatalf("expected the key field for free, got %T", m.overlay)
+	if d := m.connectDialog(); d == nil || d.step != stepForm || d.provider.ID != "free" {
+		t.Fatalf("expected the form for free, got %+v", m.overlay)
 	}
 	m.overlay = nil
-	// enter on a ready provider switches the session to it
+	// enter on a ready provider lists its models, fetched from it; enter switches and remembers
 	press(m, tea.KeyDown, 0)
 	press(m, tea.KeyDown, 0)
+	agent.providerModels = []string{"llama-4", "openai/gpt-oss-120b"}
 	run(m, press(m, tea.KeyEnter, 0))
+	if d := m.connectDialog(); d == nil || d.step != stepModels || !strings.Contains(screen(m), "llama-4") {
+		t.Fatalf("expected groq's models:\n%s", screen(m))
+	}
+	run(m, press(m, tea.KeyEnter, 0)) // the current model is preselected
 	if len(agent.models) == 0 || agent.models[len(agent.models)-1] != "groq/openai/gpt-oss-120b" || m.session.Info.Provider != "groq" {
 		t.Fatalf("switched %v, provider %q", agent.models, m.session.Info.Provider)
 	}
+	if !contains(agent.remembered, "groq/openai/gpt-oss-120b") {
+		t.Fatalf("remembered %v", agent.remembered)
+	}
 	// d makes it the default
+	m.overlay = nil
 	run(m, press(m, 'd', 0))
 	if len(agent.set) == 0 || agent.set[len(agent.set)-1] != "ARCHYMEDES_PROVIDER=groq" {
 		t.Fatalf("set %v", agent.set)
 	}
-	// a provider that needs more than a key opens Settings on it
-	press(m, tea.KeyDown, 0)
-	run(m, press(m, tea.KeyEnter, 0))
-	if st := m.settingsWindow(); st == nil || st.filter != "OpenAI-compatible" {
-		t.Fatalf("settings window %+v", st)
+	// e edits a ready provider's key and URL
+	run(m, press(m, 'e', 0))
+	if d := m.connectDialog(); d == nil || d.step != stepForm || d.provider.ID != "groq" {
+		t.Fatalf("expected groq's form, got %+v", m.overlay)
 	}
 }
 

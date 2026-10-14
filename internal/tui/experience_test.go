@@ -334,9 +334,15 @@ func TestTheModelPickerNarrowsToFreeOrReadyAndExplainsALockedModel(t *testing.T)
 	for p.shown[p.cursor].Provider != "google" {
 		press(m, tea.KeyDown, 0)
 	}
+	agent := m.agent.(*fakeAgent)
+	modelsBefore := len(agent.models)
 	press(m, tea.KeyEnter, 0)
-	if p.pending || m.overlay != p {
+	if p.pending || len(agent.models) != modelsBefore {
 		t.Fatal("a locked model was switched to")
+	}
+	// Instead its provider's Connect dialog opens, to give it the key it lacks.
+	if _, ok := m.overlay.(*connectDialog); !ok {
+		t.Fatalf("expected the Connect dialog, got %T", m.overlay)
 	}
 	if len(m.toasts) == 0 || !strings.Contains(m.toasts[len(m.toasts)-1].text, "needs GOOGLE_API_KEY") {
 		t.Fatalf("no explanation: %+v", m.toasts)

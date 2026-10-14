@@ -396,6 +396,39 @@ func (c *Client) Providers(ctx context.Context) ([]ProviderOverview, error) {
 	return out.Providers, err
 }
 
+// ConnectProvider checks the values against the provider (by listing its models), saves them, and
+// returns the models. An empty secret keeps the saved one; an empty URL goes back to the default.
+func (c *Client) ConnectProvider(ctx context.Context, provider string, values map[string]string) (ConnectResult, error) {
+	var result ConnectResult
+	err := c.call(ctx, "_archymedes/providers/connect", map[string]any{"provider": provider, "values": values}, &result)
+	return result, err
+}
+
+// ProviderModels asks the provider itself for its models now; listErr is its reason when it cannot.
+func (c *Client) ProviderModels(ctx context.Context, provider string) (models []string, listErr string, err error) {
+	var out struct {
+		Models []string `json:"models"`
+		Error  string   `json:"error"`
+	}
+	err = c.call(ctx, "_archymedes/providers/models", map[string]any{"provider": provider}, &out)
+	return out.Models, out.Error, err
+}
+
+// RememberModel saves the model picked for a provider, so the next session on it starts there.
+func (c *Client) RememberModel(ctx context.Context, provider, model string) error {
+	var out struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := c.call(ctx, "_archymedes/providers/remember-model", map[string]any{"provider": provider, "model": model}, &out); err != nil {
+		return err
+	}
+	if !out.OK && out.Error != "" {
+		return errors.New(out.Error)
+	}
+	return nil
+}
+
 // Settings reads the settings menu: every field, its section, choices and current value.
 func (c *Client) Settings(ctx context.Context) (SettingsList, error) {
 	var list SettingsList

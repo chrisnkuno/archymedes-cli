@@ -5,6 +5,13 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-19: Connecting a provider in one flow (2026-10-15)
+| ID | Task | Status | Where | Evidence |
+| --- | --- | --- | --- | --- |
+| WS-19.1 | One Connect dialog for first run, the Providers app and `/key`: choose a provider, fill in what it needs in one form (its key, masked and paste-cleaned; its base URL with the default as the hint; both for OpenAI-compatible endpoints, only a URL for Ollama), enter connects as soon as everything required is there. Connecting is checking: the agent asks the provider for its models with what was filled in, so a refused key (401/403, or OpenRouter's own key check) is caught before anything is saved; an unreachable endpoint saves with a note | done | `internal/tui/connect.go`, `app/acp-connect.ts` (`providerFields`, `connectProvider`) | `acp-connect.test.ts`, `setup_test.go` |
+| WS-19.2 | Models come from the provider, not a manual list: they are fetched as part of connecting (or when a ready provider is opened) and shown to pick from, the current one preselected so enter keeps it; typing filters or names a model the provider did not list. The pick switches the session and is remembered for the provider (<PREFIX>_MODEL); on first run it also makes the provider the default and opens the session. The fetched list also refreshes the model pickers' cache | done | `connect.go`, `acp-connect.ts` (`providerModels`, `rememberModel`) | Go tests, PTY "sets up a provider on first run…" (real agent, live list from the stub) |
+| WS-19.3 | Providers needing more than a key (OpenAI-compatible, Ollama) are offered on first run and connect the same way; the key-only setup overlay is removed | done | `setup.go` removed | Go tests |
+
 ## WS-18: An interactive Providers app, and what a developer reaches for (2026-10-15)
 | ID | Task | Status | Where | Evidence |
 | --- | --- | --- | --- | --- |

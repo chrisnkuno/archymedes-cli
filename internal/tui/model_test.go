@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,11 @@ import (
 )
 
 type fakeAgent struct {
+	// connect: what ConnectProvider answers (OK with providerModels when unset), and what it was given.
+	connectResult  *acp.ConnectResult
+	connected      []string
+	providerModels []string
+	remembered     []string
 	setupProviders []acp.SetupProvider
 	providers      []acp.ProviderOverview
 	settings       acp.SettingsList
@@ -90,6 +96,29 @@ func (f *fakeAgent) SaveSetup(_ context.Context, provider, key string) (acp.Setu
 	return f.saveResult, nil
 }
 
+func (f *fakeAgent) ConnectProvider(_ context.Context, provider string, values map[string]string) (acp.ConnectResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := make([]string, 0, len(values))
+	for k, v := range values {
+		keys = append(keys, k+"="+v)
+	}
+	sort.Strings(keys)
+	f.connected = append(f.connected, provider+":"+strings.Join(keys, ","))
+	if f.connectResult != nil {
+		return *f.connectResult, nil
+	}
+	return acp.ConnectResult{OK: true, File: "/cfg/settings.json", Models: f.providerModels}, nil
+}
+func (f *fakeAgent) ProviderModels(context.Context, string) ([]string, string, error) {
+	return f.providerModels, "", nil
+}
+func (f *fakeAgent) RememberModel(_ context.Context, provider, model string) error {
+	f.mu.Lock()
+	f.remembered = append(f.remembered, provider+"/"+model)
+	f.mu.Unlock()
+	return nil
+}
 func (f *fakeAgent) Providers(context.Context) ([]acp.ProviderOverview, error) {
 	return f.providers, nil
 }

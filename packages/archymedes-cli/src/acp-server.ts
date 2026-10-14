@@ -10,6 +10,7 @@ import { saveSetup, setupStatus, providerOverview } from "./app/acp-setup";
 import { modelList } from "./app/acp-models";
 import { runSessionCommand } from "./app/acp-commands";
 import { listSettings, setSetting } from "./app/acp-settings";
+import { connectProvider, providerModels, rememberModel } from "./app/acp-connect";
 import { installInChildProcess, startupMaintenance } from "./app/startup-update";
 import { CostLedger } from "@archymedes/core/cli/cost";
 import { jevOptionsFromEnvironment } from "./app/jev";
@@ -72,6 +73,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
     send,
     extensions: {
       "_archymedes/providers": async () => ({ providers: providerOverview(options.environment) }),
+      "_archymedes/providers/connect": async (params) => connectProvider(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
+      "_archymedes/providers/models": async (params) => providerModels(params, { environment: options.environment }),
+      "_archymedes/providers/remember-model": async (params) => rememberModel(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/setup/status": async () => setupStatus(options.environment, { provider: options.provider, model: options.model }),
       "_archymedes/setup/save": async (params) => saveSetup(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/settings/list": async () => listSettings(process.env as Record<string, string | undefined>),
