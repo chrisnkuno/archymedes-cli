@@ -5,11 +5,20 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `archymedes.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## WS-17: Review of this session's changes, and the tool call that ended a real run (2026-10-14)
+| ID | Task | Status | Where | Evidence |
+| --- | --- | --- | --- | --- |
+| WS-17.1 | A model asking for a tool that does not exist ("search") was told it was "unavailable in the current mode" and the run failed outright on the next miss, after real work. Now: whether the tool does not exist or is not allowed, the closest real tools ("web_search or grep_files"), the list of tools it can call; insisting on the same tool still fails closed, three different invented names in a row stop the run, and a valid round resets the count | done | `agent-runtime.ts` `suggestTools`, `unavailableToolMessage` | `agent-runtime.test.ts` (the original fail-closed test unchanged) |
+| WS-17.2 | The pacer learned a per-minute cap from any 429, as low as 2, and never raised it: one busy free model could slow every later request for the session. A 429 after fewer than 8 requests is no longer read as the key's limit, and a learned cap is forgotten after five quiet windows | done | `request-pacer.ts` | `request-pacer.test.ts` |
+| WS-17.3 | The concurrent checkpoint let read-only tools skip the wait, but `delegate_task` is declared read-only and its sub-agent writes: a delegated write could precede the snapshot. Every tool now waits (free in practice); undo and diff wait for a snapshot still being stored | done | `cli/agent.ts` | `agent.test.ts`; the snapshot test fails with the old gating (checked) |
+| WS-17.4 | "This exact call has failed N times, do not repeat it" was said about re-running the tests after a fix; failures now stop counting once the workspace changes. "oldText was not found" no longer counts as a missing path | done | `agent-runtime.ts` | `agent-runtime.test.ts` |
+| WS-17.5 | Smaller: `jest -w 4` (workers) was refused as a watcher; a base64 key like `dGVzdA==` was mangled by the `NAME=` clean-up; pastes into the start menu, model and session pickers were dropped; Settings filter backspace cut a byte; "Saved" now says it applies from the next session | done | `tools.ts`, `paste.go`, `settingsapp.go` | unit tests |
+
 ## WS-16: The mark (2026-10-14)
 | ID | Task | Status | Where | Evidence |
 | --- | --- | --- | --- | --- |
 | WS-16.1 | The shaded 3D prism (drag-to-spin physics, an off-loop renderer, a Sixel path for the mark) is removed; the clean line-art mark is back | done | removed `internal/prism`, `internal/tui/prism.go`; `landing.go`, `mouse.go`, `model.go`, `sixel.go` restored | `go test ./...` |
-| WS-16.2 | The mark, enhanced in the same line-art style: a glass prism turning slowly, a white beam entering on its left, a stem leaving the glass that splits into five dashed spectrum rays. The beam and the fan attach to the drawn silhouette (so they meet the glass at every angle), the fan opens and closes as the prism turns, a spark runs along an edge, hidden edges are dotted on alternate cells. Edges follow the theme's ramp, the fan is a spectrum blended from the theme's own colours. Used only where a layout it implies fits (47 columns wide); otherwise the compact turning solid, whose golden test is unchanged | done | `internal/render/mark.go`, `internal/tui/landing.go` | `mark_test.go` (beam always enters and meets the glass, fan always reaches the edge, same size at every angle, ASCII variant), `landing_art_test.go` (no clipping, fits 308 size/angle combinations) |
+| WS-16.2 | Tried and reverted: a wide "prism with a beam and a spectrum" mark. On a real terminal it read as noise (stray dots, crossing rays, a broken silhouette). The plain turning mark is what ships: the same animation, nothing added | reverted | `internal/render/identity.go` (unchanged, golden test intact), `internal/tui/landing.go` | `landing_art_test.go` keeps the no-clipping and fits-every-size checks |
 
 ## WS-14: Speed benchmark and the first optimizations (2026-10-14)
 | ID | Task | Status | Where | Evidence |

@@ -35,7 +35,18 @@ func (m *Model) landingVisible() bool {
 }
 
 func (m *Model) landing(width, height int) []string {
+	th := m.th
+	solid := render.Geometry(m.angle, false)
+	// Each row of the mark is a step along the theme's primary→secondary ramp, and the ramp turns
+	// with the solid, so the colour moves with the geometry rather than sitting on it.
+	ramp := lipgloss.Blend1D(len(solid)*2, th.Primary, th.Secondary, th.Primary)
+	shift := int(m.angle*4) % len(solid)
+	for i, row := range solid {
+		solid[i] = lipgloss.NewStyle().Foreground(ramp[(i+shift)%len(ramp)]).Render(row)
+	}
+
 	info := m.landingInfo()
+	markBlock := strings.Join(solid, "\n")
 	// The photo beside the mark, when there is room for both and the info: three columns on a wide
 	// screen, mark and photo over the info on a tall one, and without the photo otherwise.
 	photoCols, photoRows := homePhotoCols, homePhotoRows
@@ -52,27 +63,16 @@ func (m *Model) landing(width, height int) []string {
 	for _, line := range info {
 		infoWidth = max(infoWidth, ansi.StringWidth(line))
 	}
-	// The prism with its beam is 47 columns wide: used only when some layout it implies really fits,
-	// else the compact turning solid, which the same rules were written around.
-	fits := func(w, h int) bool {
-		return (card != nil && width >= w+3+photoCols+4+infoWidth+2 && height >= max(len(card), h)) ||
-			(card != nil && width >= w+3+photoCols+2 && height >= max(len(card), h)+1+len(info)) ||
-			(width >= w+4+infoWidth && height >= h) ||
-			(height >= h+len(info)+1 && width >= max(w, 30))
-	}
-	solid := m.markLines(fits(render.MarkWidth, render.MarkHeight))
-	solidWidth := ansi.StringWidth(solid[0])
-	markBlock := strings.Join(solid, "\n")
 	var block []string
 	switch {
-	case card != nil && width >= solidWidth+3+photoCols+4+infoWidth+2 && height >= max(len(card), len(solid)):
+	case card != nil && width >= 23+3+photoCols+4+infoWidth+2 && height >= len(card):
 		block = strings.Split(lipgloss.JoinHorizontal(lipgloss.Center, markBlock, "   ", photo, "    ", strings.Join(info, "\n")), "\n")
-	case card != nil && width >= solidWidth+3+photoCols+2 && height >= max(len(card), len(solid))+1+len(info):
+	case card != nil && width >= 23+3+photoCols+2 && height >= len(card)+1+len(info):
 		top := strings.Split(lipgloss.JoinHorizontal(lipgloss.Center, markBlock, "   ", photo), "\n")
 		block = append(append(top, ""), centreLines(info, lipgloss.Width(strings.Join(top, "\n")))...)
-	case width >= solidWidth+4+infoWidth && height >= len(solid):
+	case width >= 72 && height >= len(solid):
 		block = strings.Split(lipgloss.JoinHorizontal(lipgloss.Center, markBlock, "    ", strings.Join(info, "\n")), "\n")
-	case height >= len(solid)+len(info)+1 && width >= max(solidWidth, 30):
+	case height >= len(solid)+len(info)+1 && width >= 30:
 		block = append(append(solid, ""), info...)
 	default:
 		block = info
@@ -181,60 +181,4 @@ func (m *Model) versionLabel() string {
 		return ""
 	}
 	return m.th.Faint.Render(" · v" + m.opts.Version)
-}
-
-// markLines is the Archymedes mark: the prism with its beam and spectrum when wide, else the compact
-// turning solid. Both turn with m.angle.
-func (m *Model) markLines(wide bool) []string {
-	if wide {
-		return m.styledMark(render.Mark(m.angle, false))
-	}
-	th := m.th
-	solid := render.Geometry(m.angle, false)
-	// Each row of the mark is a step along the theme's primary→secondary ramp, and the ramp turns
-	// with the solid, so the colour moves with the geometry rather than sitting on it.
-	ramp := lipgloss.Blend1D(len(solid)*2, th.Primary, th.Secondary, th.Primary)
-	shift := int(m.angle*4) % len(solid)
-	for i, row := range solid {
-		solid[i] = lipgloss.NewStyle().Foreground(ramp[(i+shift)%len(ramp)]).Render(row)
-	}
-	return solid
-}
-
-// styledMark colours the prism: its edges along the theme's primary→secondary ramp (which turns with
-// it), the beam in the text colour, and the fan across a spectrum built from the theme's own colours,
-// so a dark, light or parchment theme each gets a prism that belongs to it.
-func (m *Model) styledMark(cells [][]render.Cell) []string {
-	th := m.th
-	ramp := lipgloss.Blend1D(render.MarkHeight*2, th.Primary, th.Secondary, th.Primary)
-	shift := int(m.angle * 4)
-	spectrum := lipgloss.Blend1D(5, th.Error, th.Warning, th.Success, th.Primary, th.Secondary)
-	beam := lipgloss.NewStyle().Foreground(th.Text).Bold(true)
-	vertex := lipgloss.NewStyle().Foreground(th.Secondary).Bold(true)
-	rows := make([]string, len(cells))
-	for y, row := range cells {
-		var b strings.Builder
-		for _, c := range row {
-			if c.Kind == render.KindEmpty {
-				b.WriteByte(' ')
-				continue
-			}
-			var style lipgloss.Style
-			switch c.Kind {
-			case render.KindEdge:
-				style = lipgloss.NewStyle().Foreground(ramp[(int(c.Tone*float64(render.MarkHeight))+shift)%len(ramp)])
-			case render.KindVertex:
-				style = vertex
-			case render.KindFar, render.KindInner:
-				style = th.Faint
-			case render.KindGlint, render.KindBeam:
-				style = beam
-			case render.KindSpectrum:
-				style = lipgloss.NewStyle().Foreground(spectrum[min(int(c.Tone*4+0.5), 4)]).Bold(c.Bright)
-			}
-			b.WriteString(style.Render(string(c.Rune)))
-		}
-		rows[y] = b.String()
-	}
-	return rows
 }

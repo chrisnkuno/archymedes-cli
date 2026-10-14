@@ -1300,7 +1300,7 @@ const BEHAVIOR_COMMAND = /\b(e2e|end-to-end|playwright|cypress|puppeteer|seleniu
 const SMOKE_COMMAND = /\b(smoke|healthcheck|health[-_ ]?check|curl|wget|httpie|\bhttp\s+(?:get|post)\b|playwright\s+screenshot)\b/i;
 
 /** Commands that normally stay alive until somebody stops them. */
-const PERSISTENT_COMMAND = /(?:^|(?:&&|;|\|)\s*)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve)(?:\s|$)|(?:vite|next\s+dev|webpack\s+serve)(?:\s|$)|bun\s+run\s+--hot\b)|(?:^|\s)--watch(?:\s|$)|\b(?:tsc|jest|vitest|mocha|sass|tailwindcss|esbuild|webpack|rollup|nodemon|parcel|tsup|swc)\b[^|;&\n]*\s-w(?:\s|$)/i;
+const PERSISTENT_COMMAND = /(?:^|(?:&&|;|\|)\s*)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve)(?:\s|$)|(?:vite|next\s+dev|webpack\s+serve)(?:\s|$)|bun\s+run\s+--hot\b)|(?:^|\s)--watch(?:\s|$)|\b(?:tsc|vitest|mocha|tailwindcss|webpack|rollup|nodemon|tsup|swc)\b[^|;&\n]*\s-w(?:\s|$)/i;
 
 /**
  * Directory-changing prefixes, matched before classification.

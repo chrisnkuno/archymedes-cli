@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"charm.land/bubbles/v2/textinput"
 	"fmt"
 	"regexp"
 	"strings"
@@ -38,7 +39,9 @@ func (m *Model) routePaste(msg tea.Msg, text string) tea.Cmd {
 	return m.input.update(msg)
 }
 
-var keyAssignment = regexp.MustCompile(`^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=\s*`)
+// keyAssignment is a .env line's `NAME=` prefix. Only an upper-case name with an underscore
+// (OPENROUTER_API_KEY) counts: a base64 key like "dGVzdA==" is itself letters followed by "=".
+var keyAssignment = regexp.MustCompile(`^(?:export\s+)?[A-Z][A-Z0-9]*_[A-Z0-9_]*\s*=\s*`)
 
 // cleanKey reduces what was pasted to the key itself: the first non-empty line, without the
 // `export NAME=` a .env line or docs page carries, surrounding quotes, or stray whitespace.
@@ -101,4 +104,29 @@ func (m *Model) cmdSelect(string) tea.Cmd {
 		return m.toast(toastInfo, "Select with the mouse, copy as usual · /select again returns the app's mouse")
 	}
 	return m.toast(toastInfo, "Mouse back in the app")
+}
+
+// Search boxes take a paste as typed text, on one line.
+func pasteInto(in *textinput.Model, text string) tea.Cmd {
+	var cmd tea.Cmd
+	*in, cmd = in.Update(tea.PasteMsg{Content: strings.Join(strings.Fields(text), " ")})
+	return cmd
+}
+
+func (p *modelPicker) paste(_ *Model, text string) tea.Cmd {
+	cmd := pasteInto(&p.filter, text)
+	p.refilter()
+	return cmd
+}
+
+func (p *startMenu) paste(_ *Model, text string) tea.Cmd {
+	cmd := pasteInto(&p.filter, text)
+	p.refilter()
+	return cmd
+}
+
+func (p *resumePicker) paste(_ *Model, text string) tea.Cmd {
+	cmd := pasteInto(&p.filter, text)
+	p.refilter()
+	return cmd
 }

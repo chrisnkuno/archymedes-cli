@@ -530,11 +530,13 @@ export class ArchymedesAgent {
   }
 
   /** What changed since the last checkpoint, for `/diff`. */
-  diffPatch(): Promise<string> {
+  async diffPatch(): Promise<string> {
+    await this.pendingCheckpoint;
     return this.checkpoints.diffPatch();
   }
 
-  diffStat(): Promise<string> {
+  async diffStat(): Promise<string> {
+    await this.pendingCheckpoint;
     return this.checkpoints.diffStat();
   }
 
@@ -723,6 +725,7 @@ export class ArchymedesAgent {
   async undo(scope: RestoreScope = "both"): Promise<Checkpoint | undefined> {
     if (this.turnAbort) throw new Error("Cannot undo while a turn is running");
     await this.acquireOwnership();
+    await this.pendingCheckpoint; // a turn stopped in its first moments may still be storing its snapshot
     const checkpoint = this.checkpoints.latest();
     if (!checkpoint) return undefined;
     if (scope === "code" || scope === "both") {
@@ -968,6 +971,7 @@ export class ArchymedesAgent {
             if (taken) this.options.onEvent?.({ type: "checkpoint", checkpoint: taken });
           })
           .catch(() => undefined); // losing undo is a reduction in comfort, never a failed turn
+        this.pendingCheckpoint = checkpointReady;
       }
 
       const compaction = await this.compactIfNeeded(turnId, objective, turnAbort.signal, tokenSaver);
@@ -981,7 +985,10 @@ export class ArchymedesAgent {
           // The person's own words, not the runtime's objective, which carries the recalled-memory block.
           ? { effortPolicy: (signals) => predictEffort({ ...signals, objective, ...(this.jevDifficulty ? { difficultyHint: this.jevDifficulty } : {}) }) }
           : {}),
-        tools: scoped.map((tool) => tool.effect === "none" ? tool : { ...tool, execute: async (args, context) => { await checkpointReady; return tool.execute(args, context); } }),
+        // Every tool waits for the snapshot, read-only ones included: a delegated sub-agent is declared
+        // effect "none" yet can write through its own tools. It costs nothing in practice, since the
+        // snapshot runs alongside the first model call, which takes far longer.
+        tools: scoped.map((tool) => ({ ...tool, execute: async (args, context) => { await checkpointReady; return tool.execute(args, context); } })),
         prices: this.options.prices,
         artifacts: this.artifacts,
         control: {
@@ -1166,6 +1173,9 @@ export class ArchymedesAgent {
   }
 
   private jevCorrectionDepth = 0;
+
+  /** The current turn's snapshot while it is being taken; undo and diff wait for it. */
+  private pendingCheckpoint: Promise<void> = Promise.resolve();
 
   /** Jev's last confident reading of the current task's difficulty, when `reasoning` is `auto`. */
   private jevDifficulty: Difficulty | undefined;

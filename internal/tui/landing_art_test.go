@@ -15,19 +15,7 @@ func landingAt(t *testing.T, w, h int, angle float64) (*Model, string) {
 	return m, screen(m)
 }
 
-// The prism's beam is a long run of dashes entering from the left, and only the wide art has one.
-func hasBeam(s string) bool { return strings.Contains(s, "-------------") }
-
-func TestTheWidePrismIsUsedWhereItFitsAndTheCompactSolidWhereItDoesNot(t *testing.T) {
-	if _, s := landingAt(t, 120, 32, 0.3); !hasBeam(s) {
-		t.Fatalf("a roomy screen should show the prism with its beam:\n%s", s)
-	}
-	if _, s := landingAt(t, 80, 24, 0.3); hasBeam(s) {
-		t.Fatalf("80x24 has no room for the prism beside the info; it should be the compact solid:\n%s", s)
-	}
-}
-
-func TestNothingOnTheLandingScreenIsClippedWhateverMarkIsShown(t *testing.T) {
+func TestNothingOnTheLandingScreenIsClipped(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {96, 28}, {100, 30}, {120, 32}, {150, 34}} {
 		_, s := landingAt(t, size[0], size[1], 0.7)
 		for _, want := range []string{"a coding agent that shows its work", "ask anything", "find anything", "what changed"} {

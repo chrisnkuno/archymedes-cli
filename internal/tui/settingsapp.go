@@ -140,8 +140,8 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		case "enter", "esc":
 			s.filtering = false
 		case "backspace":
-			if s.filter != "" {
-				s.filter = s.filter[:len(s.filter)-1]
+			if r := []rune(s.filter); len(r) > 0 {
+				s.filter = string(r[:len(r)-1]) // a character, not a byte
 			}
 		default:
 			if msg.Text != "" {
@@ -308,7 +308,12 @@ func (m *Model) settingSaved(msg settingSavedMsg) tea.Cmd {
 	if !msg.result.IsSet {
 		what = "Cleared"
 	}
-	return m.toast(toastInfo, what+" "+msg.key)
+	// Only the theme changes what is on screen now; the agent reads the rest when a session starts.
+	when := " · applies from the next session"
+	if msg.key == "ARCHYMEDES_THEME" {
+		when = ""
+	}
+	return m.toast(toastInfo, what+" "+msg.key+when)
 }
 
 func (s *settingsApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {

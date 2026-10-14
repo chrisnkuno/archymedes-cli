@@ -18,6 +18,9 @@ func TestCleanKey(t *testing.T) {
 		"'sk-1'":                                "sk-1",
 		"":                                      "",
 		"  \n ":                                 "",
+		"dGVzdA==":                              "dGVzdA==",
+		"abc123=def":                            "abc123=def",
+		"OPENAI_API_KEY = sk-proj-1\r\n":        "sk-proj-1",
 	} {
 		if got := cleanKey(in); got != want {
 			t.Errorf("cleanKey(%q) = %q, want %q", in, got, want)
@@ -58,5 +61,21 @@ func TestCopyTakesTheLastReplyAndCodeBlock(t *testing.T) {
 	m.cmdSelect("")
 	if !m.selecting {
 		t.Fatal("/select should hand the mouse to the terminal")
+	}
+}
+
+func TestAPasteLandsInTheOpenDialogsSearchBoxOnOneLine(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.runAction("start")
+	m.Update(tea.PasteMsg{Content: "  key\nbindings "})
+	menu, ok := m.overlay.(*startMenu)
+	if !ok {
+		t.Fatalf("overlay %T", m.overlay)
+	}
+	if got := menu.filter.Value(); got != "key bindings" {
+		t.Fatalf("filter %q", got)
+	}
+	if m.input.value() != "" {
+		t.Fatal("the paste leaked into the composer")
 	}
 }

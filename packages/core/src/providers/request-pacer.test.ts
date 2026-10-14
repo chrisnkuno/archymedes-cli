@@ -98,20 +98,35 @@ describe("the window budget keeps the agent fast", () => {
     expect(c.sleeps[0]).toBeLessThan(40_100);
   });
 
-  it("learns the cap from a 429 and never exceeds it again, with no gap penalty beyond the window", async () => {
+  it("learns the cap from a 429 that came after many requests", async () => {
     const c = clock();
     const pacer = new RequestPacer({ now: c.now, sleep: c.sleep });
-    for (let i = 0; i < 7; i += 1) await pacer.wait(); // the 7th is the one refused
+    for (let i = 0; i < 12; i += 1) await pacer.wait(); // the 12th is the one refused
     pacer.reportRateLimited();
-    expect(pacer.windowBudget).toBe(6);
+    expect(pacer.windowBudget).toBe(11);
   });
 
-  it("does not shrink below two requests on a stray early 429", async () => {
+  it("does not take a 429 after a few requests for the per-minute limit (one busy upstream model)", async () => {
     const c = clock();
-    const pacer = new RequestPacer({ now: c.now, sleep: c.sleep });
-    await pacer.wait();
+    const pacer = new RequestPacer({ windowCap: 20, now: c.now, sleep: c.sleep });
+    for (let i = 0; i < 3; i += 1) await pacer.wait();
     pacer.reportRateLimited();
-    expect(pacer.windowBudget).toBeUndefined();
+    expect(pacer.windowBudget).toBe(20);
+    const early = new RequestPacer({ now: c.now, sleep: c.sleep });
+    await early.wait();
+    early.reportRateLimited();
+    expect(early.windowBudget).toBeUndefined();
+  });
+
+  it("forgets a learned cap after a few quiet windows", async () => {
+    const c = clock();
+    const pacer = new RequestPacer({ windowCap: 20, now: c.now, sleep: c.sleep });
+    for (let i = 0; i < 12; i += 1) await pacer.wait();
+    pacer.reportRateLimited();
+    expect(pacer.windowBudget).toBe(11);
+    await c.sleep(6 * 60_000);
+    await pacer.wait();
+    expect(pacer.windowBudget).toBe(20);
   });
 
   it("adds no measurable cost per request while under the cap", async () => {

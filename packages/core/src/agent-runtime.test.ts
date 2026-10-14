@@ -671,6 +671,90 @@ describe("bounded agent runtime", () => {
     await expect(value.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "failed", toolCallsExecuted: 0 });
   });
 
+  it("tells the model which tool it meant, and lists the real ones (the 'search' that ended a real run)", async () => {
+    const grep: AgentTool = { name: "grep_files", description: "Search file contents for text.", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: true, async execute() { return { content: "a.ts:1: hit" }; } };
+    const web: AgentTool = { name: "web_search", description: "Search the web.", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: true, async execute() { return { content: "results" }; } };
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "bad", name: "search", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "ok", name: "grep_files", arguments: {} }] }),
+      turn({ content: "Found it." }),
+    ], [grep, web]);
+    await expect(value.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "completed" });
+    const told = value.requests[1].messages.find((message) => message.role === "tool" && message.toolCallId === "bad")!.content;
+    expect(told).toContain('There is no tool named "search"');
+    expect(told).toContain("The closest: web_search or grep_files");
+    expect(told).toContain("Tools you can call: grep_files, web_search");
+  });
+
+  it("keeps going after an occasional wrong name in a long run, but stops a model that keeps inventing tools", async () => {
+    const read: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "x" }; } };
+    const occasional = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "1", name: "search", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "2", name: "read_file", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "3", name: "open_file", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "4", name: "read_file", arguments: {} }] }),
+      turn({ content: "Done." }),
+    ], [read]);
+    await expect(occasional.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "completed", toolCallsExecuted: 2 });
+
+    const inventing = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "1", name: "search", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "2", name: "find", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "3", name: "open", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "4", name: "lookup", arguments: {} }] }),
+    ], [read]);
+    await expect(inventing.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "failed" });
+  });
+
+  it("says a tool exists but is not allowed, rather than that it does not exist", async () => {
+    const write: AgentTool = { name: "write_file", description: "Write", inputSchema: {}, capabilityId: "workspace.write", effect: "workspace", requiresApproval: false, parallelSafe: false, async execute() { return { content: "w" }; } };
+    const read: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "x" }; } };
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "w", name: "write_file", arguments: {} }] }),
+      turn({ content: "I will describe the change instead." }),
+    ], [write, read]);
+    await value.runtime.execute(baseRequest); // baseRequest does not include workspace.write
+    const told = value.requests[1].messages.find((message) => message.role === "tool" && message.toolCallId === "w")!.content;
+    expect(told).toContain("write_file is not allowed in this run");
+    expect(told).toContain("Tools you can call: read_file");
+    expect(told).not.toContain("write_file,");
+  });
+
+  it("does not tell the model to stop re-running a command after it has changed the code", async () => {
+    let runs = 0;
+    const tools: AgentTool[] = [
+      { name: "run_tests", description: "Tests", inputSchema: {}, capabilityId: "workspace.terminal", effect: "none", requiresApproval: false, parallelSafe: false, async execute() { runs += 1; return runs < 3 ? { content: "exit 1", isError: true } : { content: "ok" }; } },
+      { name: "edit_file", description: "Edit", inputSchema: {}, capabilityId: "workspace.files", effect: "workspace", requiresApproval: false, parallelSafe: false, async execute() { return { content: "edited" }; } },
+    ];
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "t1", name: "run_tests", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "e1", name: "edit_file", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "t2", name: "run_tests", arguments: {} }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "t3", name: "run_tests", arguments: {} }] }),
+      turn({ content: "Done." }),
+      turn({ content: "Done; the tests pass." }), // the runtime asks once for verification evidence
+    ], tools);
+    await value.runtime.execute(baseRequest);
+    const results = value.requests.at(-1)!.messages.filter((message) => message.role === "tool");
+    const t2 = results.find((message) => message.toolCallId === "t2")!.content;
+    expect(t2).not.toContain("has now failed");
+  });
+
+  it("does not count an edit that missed its text as a missing path", async () => {
+    const tools: AgentTool[] = [
+      { name: "edit_file", description: "Edit", inputSchema: {}, capabilityId: "workspace.files", effect: "workspace", requiresApproval: false, parallelSafe: false, async execute() { return { content: "oldText was not found in a.js", isError: true }; } },
+    ];
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "1", name: "edit_file", arguments: { a: 1 } }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "2", name: "edit_file", arguments: { a: 2 } }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "3", name: "edit_file", arguments: { a: 3 } }] }),
+      turn({ content: "Giving up." }),
+    ], tools);
+    await value.runtime.execute(baseRequest);
+    const third = value.requests.at(-1)!.messages.find((message) => message.role === "tool" && message.toolCallId === "3")!.content;
+    expect(third).not.toContain("Stop guessing paths");
+  });
+
   it("announces a tool call with its arguments before running it", async () => {
     const tool: AgentTool = {
       name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files",

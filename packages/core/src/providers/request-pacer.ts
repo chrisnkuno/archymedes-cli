@@ -19,8 +19,10 @@
  * requests start at full speed while the last minute holds fewer than N, and the (N+1)th waits
  * only until the oldest of those leaves the window. That wait is shorter than the alternative, a
  * 429 followed by a backoff measured in seconds. N is configured where the provider is known and
- * learned from the first 429 otherwise (the requests in flight when it hit, less one), so the
- * limit that refused us once is not walked into again.
+ * learned from a 429 otherwise (the requests in the window when it hit, less one), so the limit that
+ * refused us once is not walked into again. Two guards keep that from slowing a healthy run: a 429
+ * after only a few requests is not taken for the per-minute limit (on the free tier it is usually one
+ * busy upstream model), and a learned cap is forgotten after a few quiet windows.
  *
  * One pacer per provider instance, so the learned pace survives across turns: a session that hit
  * the limiter five minutes ago still paces itself, and a fresh session starts unthrottled. It is
@@ -43,6 +45,11 @@ export type PacerOptions = {
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 };
 
+/** A 429 with fewer requests than this in the window is not a per-minute limit worth learning. */
+const MIN_LEARNABLE_CAP = 8;
+/** Windows without a new 429 after which a learned cap is dropped. */
+const LEARNED_CAP_LIFETIME_WINDOWS = 5;
+
 const DEFAULTS = { baseGapMs: 2_000, maxGapMs: 120_000, releaseMs: 500 } as const;
 
 export class RequestPacer {
@@ -53,6 +60,9 @@ export class RequestPacer {
   private readonly releaseMs: number;
   private readonly windowMs: number;
   private cap: number | undefined;
+  private readonly configuredCap: number | undefined;
+  /** When the cap was last lowered by a 429; 0 when it is the configured one. */
+  private learnedAt = 0;
   /** Start times inside the window, oldest first. */
   private starts: number[] = [];
   private readonly now: () => number;
@@ -64,6 +74,7 @@ export class RequestPacer {
     this.releaseMs = options.releaseMs ?? DEFAULTS.releaseMs;
     this.windowMs = options.windowMs ?? 60_000;
     this.cap = options.windowCap !== undefined && options.windowCap >= 1 ? Math.floor(options.windowCap) : undefined;
+    this.configuredCap = this.cap;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? ((delayMs, signal) => new Promise<void>((resolve, reject) => {
       if (signal?.aborted) { reject(signal.reason); return; }
@@ -104,6 +115,10 @@ export class RequestPacer {
   async wait(signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted();
     // The window first: it is the one wait that replaces a refusal, and it costs nothing until full.
+    if (this.learnedAt > 0 && this.now() - this.learnedAt > LEARNED_CAP_LIFETIME_WINDOWS * this.windowMs) {
+      this.cap = this.configuredCap; // quiet for long enough: whatever refused us has passed
+      this.learnedAt = 0;
+    }
     if (this.cap !== undefined) {
       for (;;) {
         const now = this.now();
@@ -138,7 +153,10 @@ export class RequestPacer {
     // The refused request is among the starts: the ones before it are what the provider let through.
     this.prune(this.now());
     const admitted = this.starts.length - 1;
-    if (admitted >= 2) this.cap = Math.min(this.cap ?? Number.POSITIVE_INFINITY, admitted);
+    if (admitted >= MIN_LEARNABLE_CAP && admitted < (this.cap ?? Number.POSITIVE_INFINITY)) {
+      this.cap = admitted;
+      this.learnedAt = this.now();
+    }
     const doubled = this.gapMs <= 0 ? this.baseGapMs : Math.min(this.maxGapMs, this.gapMs * 2);
     const asked = typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : 0;
     this.gapMs = Math.min(this.maxGapMs, Math.max(doubled, Math.min(this.maxGapMs, asked)));

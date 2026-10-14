@@ -356,7 +356,55 @@ export function repeatedFailureHint(toolName: string, failures: number, missingP
 
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
-const MAX_UNAVAILABLE_TOOL_RECOVERIES = 1;
+/** Different unavailable tools in a row the model may ask for before the run stops. Asking for the same one twice running still stops it at once. */
+const MAX_UNAVAILABLE_TOOL_RECOVERIES = 3;
+
+/**
+ * The tools most like a name the model invented: shared words in the name ("search" → web_search),
+ * the word in a tool's description ("search" → grep_files, "Search file contents…"), then near-misses
+ * in spelling ("read_files" → read_file). At most two, best first.
+ */
+export function suggestTools(name: string, tools: ReadonlyArray<{ name: string; description: string }>): string[] {
+  const words = name.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2);
+  const scored = tools.map((tool) => {
+    const own = tool.name.toLowerCase();
+    const ownWords = own.split(/[^a-z0-9]+/);
+    const description = tool.description.toLowerCase();
+    let score = 0;
+    for (const word of words) {
+      if (ownWords.includes(word)) score += 3;
+      else if (own.includes(word)) score += 2;
+      else if (new RegExp(`\\b${word}`).test(description)) score += 1;
+    }
+    if (score === 0 && editDistance(name.toLowerCase(), own) <= 2) score = 2;
+    return { name: tool.name, score };
+  });
+  return scored.filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 2).map((entry) => entry.name);
+}
+
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+/** What the model is told when it asks for a tool it cannot use: which case it is, and what to use. */
+export function unavailableToolMessage(name: string, exists: boolean, available: ReadonlyArray<{ name: string; description: string }>): string {
+  const names = available.map((tool) => tool.name);
+  const closest = suggestTools(name, available);
+  const head = exists
+    ? `${name} is not allowed in this run (the current mode does not include it).`
+    : `There is no tool named "${name}".`;
+  const hint = closest.length > 0 ? ` The closest: ${closest.join(" or ")}.` : "";
+  return `${head}${hint} Tools you can call: ${names.join(", ")}. Use one of them, or answer without a tool.`;
+}
 /** Exponential backoff when no failure-specific policy applies: 1s, 2s, 4s, ... capped here. */
 const PROVIDER_BACKOFF_BASE_MS = 1_000;
 const PROVIDER_BACKOFF_CAP_MS = 30_000;
@@ -881,6 +929,7 @@ export class BoundedAgentRuntime {
     let workspaceNeedsVerification = false;
     let verificationNudges = 0;
     let unavailableToolRecoveries = 0;
+    let lastUnavailable = "";
     let toolTurnRecoveries = 0;
     // Truncated turns resumed so far in this run, capped by `MAX_LENGTH_CONTINUATIONS`.
     let lengthContinuations = 0;
@@ -1144,10 +1193,13 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         return !tool || !capabilities.has(tool.capabilityId);
       });
       if (unavailable) {
-        if (unavailableToolRecoveries >= MAX_UNAVAILABLE_TOOL_RECOVERIES) {
+        // Fails closed when the model insists (the same tool twice running) or keeps inventing tools
+        // (three in a row); an occasional wrong name in a long run is corrected and the run goes on.
+        if (unavailable.name === lastUnavailable || unavailableToolRecoveries >= MAX_UNAVAILABLE_TOOL_RECOVERIES) {
           return stop("failed", `Tool ${unavailable.name} is outside the run capability scope.`, iteration);
         }
         unavailableToolRecoveries += 1;
+        lastUnavailable = unavailable.name;
         messages.push({ role: "assistant", content: turn.content, toolCalls: turn.toolCalls });
         for (const call of turn.toolCalls) {
           messages.push({
@@ -1156,13 +1208,15 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
             name: call.name,
             internal: true,
             content: call.id === unavailable.id
-              ? `Tool ${call.name} is unavailable in the current mode. Continue with the listed tools, or answer without it.`
+              ? unavailableToolMessage(call.name, this.toolsByName.has(call.name), tools)
               : "This batch was not executed because another call was unavailable. Retry any still-needed available call separately.",
           });
         }
         continue;
       }
 
+      unavailableToolRecoveries = 0; // a valid round: the next wrong name starts a fresh count
+      lastUnavailable = "";
       const prepared: Array<{ call: AgentToolCall; tool: AgentTool; argumentsValue: Record<string, unknown> }> = [];
       for (const call of turn.toolCalls) {
         const tool = this.toolsByName.get(call.name)!;
@@ -1312,7 +1366,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           const signature = `${call.name}:${JSON.stringify(call.arguments ?? {})}`;
           const failures = (failedCalls.get(signature) ?? 0) + 1;
           failedCalls.set(signature, failures);
-          missingPathStreak = /does not exist|No such file|not found/i.test(raw) ? missingPathStreak + 1 : 0;
+          missingPathStreak = /does not exist|No such file or directory|ENOENT/i.test(raw) ? missingPathStreak + 1 : 0;
           const hint = repeatedFailureHint(call.name, failures, missingPathStreak);
           if (hint) content = `${content}\n\n${hint}`;
         } else {
@@ -1320,7 +1374,13 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         }
         messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         const effect = tool.effect === "external" ? "external" : result.effect ?? tool.effect;
-        if (!result.isError && effect === "workspace") { workspaceNeedsVerification = true; greenSinceEdit = false; }
+        if (!result.isError && effect === "workspace") {
+          workspaceNeedsVerification = true;
+          greenSinceEdit = false;
+          // The workspace changed: running the same failing command again (the tests, after a fix) is
+          // now the right move, not a repeat, so earlier failures stop counting against it.
+          failedCalls.clear();
+        }
         lastOutcomes.push({
           tool: call.name,
           isError: result.isError ?? false,

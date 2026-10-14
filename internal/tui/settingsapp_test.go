@@ -88,6 +88,13 @@ func TestClearingAndFiltering(t *testing.T) {
 	if v := s.visible(); len(v) != 1 || s.list.Rows[v[0]].Key != "OPENAI_BASE_URL" {
 		t.Fatalf("filter shows %v", v)
 	}
+	press(m, '/', 0)
+	typeText(m, "é")
+	press(m, tea.KeyBackspace, 0)
+	if s.filter != "base" {
+		t.Fatalf("backspace should remove one character: %q", s.filter)
+	}
+	press(m, tea.KeyEnter, 0)
 	run(m, press(m, 'd', 0))
 	if got := agent.set[len(agent.set)-1]; got != "OPENAI_BASE_URL=" {
 		t.Fatalf("d clears: %v", agent.set)

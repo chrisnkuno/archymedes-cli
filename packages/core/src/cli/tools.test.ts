@@ -1037,13 +1037,12 @@ import { isLikelyPersistentCommand } from "./tools";
 
 describe("persistent-command detection", () => {
   it("does not mistake -w for a watch flag on ordinary programs (a model counting words was refused 8 times)", () => {
-    for (const command of ["wc -l -w -c file.txt", "grep -w word file", "printf 'a b' > /tmp/x && wc -w /tmp/x", "ls -w 80"]) {
+    for (const command of ["wc -l -w -c file.txt", "grep -w word file", "printf 'a b' > /tmp/x && wc -w /tmp/x", "ls -w 80", "npx jest -w 4", "jest --ci -w 2"]) {
       expect(isLikelyPersistentCommand(command), command).toBe(false);
     }
   });
   it("still catches watchers and dev servers", () => {
-    for (const command of ["tsc -w", "vitest --watch", "npm run dev", "jest --watch src", "nodemon -w src app.js", "npx vite"]) {
-      if (command === "npx vite") continue;
+    for (const command of ["tsc -w", "vitest --watch", "npm run dev", "jest --watch src", "nodemon -w src app.js", "npx webpack -w"]) {
       expect(isLikelyPersistentCommand(command), command).toBe(true);
     }
   });

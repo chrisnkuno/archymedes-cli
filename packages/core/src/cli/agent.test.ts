@@ -771,6 +771,54 @@ describe("ArchymedesAgent", () => {
     await expect(agent.dispose()).resolves.toBeUndefined(); // LocalWorkspace.dispose() is a no-op.
   });
 
+  it("takes the snapshot before any tool runs, a delegated sub-agent's writes included", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const slowGit = new Promise<void>((resolve) => { release = resolve; });
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "delegate_task", arguments: { task: "write a file" } }] },
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c2", name: "write_file", arguments: { path: "from-subagent.ts", content: "x" } }] },
+      { finishReason: "stop", content: "Sub-agent done." },
+      { finishReason: "stop", content: "Done." },
+    ]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async (args) => {
+        if (args[0] === "write-tree") {
+          await slowGit;
+          const present = await fs.access(path.join(root, "from-subagent.ts")).then(() => true, () => false);
+          order.push(present ? "snapshot-after-the-write" : "snapshot-before-the-write");
+          return { exitCode: 0, stdout: "tree_1\n", stderr: "" };
+        }
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const sending = agent.send("delegate a write");
+    // Held long enough that, without the gate, the sub-agent (environment probe included) writes first.
+    setTimeout(() => release(), 1_500);
+    await sending;
+    expect(order).toEqual(["snapshot-before-the-write"]);
+    expect(await fs.readFile(path.join(root, "from-subagent.ts"), "utf8")).toBe("x");
+  });
+
+  it("undo waits for a snapshot still being stored", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "Done." }]);
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async (args) => {
+        if (args[0] === "write-tree") { await slow; return { exitCode: 0, stdout: "tree_new\n", stderr: "" }; }
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const sending = agent.send("hello there");
+    setTimeout(() => release(), 30);
+    await sending;
+    const undone = await agent.undo("conversation");
+    expect(undone?.tree).toBe("tree_new");
+  });
+
   it("relinquishes a replaced front end without destroying its shared workspace", async () => {
     const workspace = new LocalWorkspace(root);
     const dispose = vi.spyOn(workspace, "dispose");
