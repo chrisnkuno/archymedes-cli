@@ -47,3 +47,16 @@ func TestARetryShowsItsWaitDraining(t *testing.T) {
 		t.Fatalf("bar did not drain:\n%s", s)
 	}
 }
+
+func TestAShortenedConversationIsSaidOutLoud(t *testing.T) {
+	// The agent shortened the transcript to fit the model: the person should know what was set aside.
+	m, _ := newTestModel(t)
+	typeText(m, "go")
+	press(m, tea.KeyEnter, 0)
+	for step, want := range map[int]string{1: "old tool output shortened", 2: "the earlier conversation set aside"} {
+		m.Update(agentMsg{acp.AgentEvent{Event: acp.Event{Type: "runtime", Event: &acp.RuntimeEvent{Type: "context_shrunk", Step: step}}}})
+		if s := screen(m); !strings.Contains(s, want) {
+			t.Fatalf("step %d: no %q:\n%s", step, want, s)
+		}
+	}
+}

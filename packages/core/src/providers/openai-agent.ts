@@ -3,6 +3,7 @@ import type { AgentModelRequest, AgentModelTurn, AgentTurnProvider } from "../ag
 import { providerEffort } from "../agent-runtime";
 import { collectChatStream, isOpenRouterBaseUrl, toWireMessages, turnFromChatResponse, withOpenRouterCacheControl, type ChatResponse, type ChatStreamChunk } from "./openai-compatible";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
+import { dialectForBaseUrl, type ChatDialect } from "./chat-dialects";
 import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
 
 /**
@@ -18,7 +19,15 @@ import { createStreamDeadline, streamTimeoutsFor } from "./stream-deadline";
  * limit on the whole reply; see `streamTimeoutsFor` for how it maps onto the first-byte and overall
  * deadlines.
  */
-export type OpenAIAgentOptions = { apiKey: string; model: string; baseURL?: string; timeoutMs?: number; defaultHeaders?: Record<string, string> };
+export type OpenAIAgentOptions = {
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+  timeoutMs?: number;
+  defaultHeaders?: Record<string, string>;
+  /** Which optional fields this vendor accepts; inferred from `baseURL` when not given. See `chat-dialects`. */
+  dialect?: ChatDialect;
+};
 
 export type OpenAIChatCall = (body: Record<string, unknown>, signal: AbortSignal) => Promise<ChatResponse | AsyncIterable<ChatStreamChunk>>;
 
@@ -49,6 +58,7 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
   async complete(request: AgentModelRequest): Promise<AgentModelTurn> {
     if (!request.safetyIdentifier.trim()) throw new Error("safetyIdentifier is required");
     const inkling = usesInklingToolContract(this.options.model);
+    const dialect = this.options.dialect ?? dialectForBaseUrl(this.options.baseURL);
     const body = {
       model: this.options.model,
       // OpenAI caches a stable prefix on its own; through OpenRouter, the Anthropic and Gemini
@@ -62,16 +72,18 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       // Inkling's OpenRouter endpoint advertises tools, but not tool_choice or parallel tool
       // calls, and it accepts max_tokens rather than max_completion_tokens. Sending the broader
       // OpenAI contract makes the request fail before Inkling can call a single tool.
-      ...(inkling || request.tools.length === 0 ? {} : { tool_choice: "auto", parallel_tool_calls: true }),
-      ...(inkling
-        ? { max_tokens: request.maxOutputTokens }
-        : { max_completion_tokens: request.maxOutputTokens }),
-      safety_identifier: request.safetyIdentifier,
+      ...(inkling || request.tools.length === 0 ? {} : {
+        ...(dialect.toolChoice ? { tool_choice: "auto" } : {}),
+        ...(dialect.parallelToolCalls ? { parallel_tool_calls: true } : {}),
+      }),
+      [inkling ? "max_tokens" : dialect.maxTokensField]: request.maxOutputTokens,
+      ...(dialect.safetyIdentifier ? { safety_identifier: request.safetyIdentifier } : {}),
       // The documented routing hint for prompt caching, and the replacement for the deprecated
       // `user` field. Stable for the whole session, which is what makes it useful: cached prefixes
       // are routed by this key, and a per-request value would scatter them across shards and hit
       // nothing. The sibling CircuitNotion adapter has always sent one; this path had not.
-      prompt_cache_key: request.safetyIdentifier,
+      // Sent only where the vendor documents it; see `chat-dialects`.
+      ...(dialect.promptCacheKey ? { prompt_cache_key: request.safetyIdentifier } : {}),
       // Effort is only sent when the caller asked for one and the model accepts the field.
       // Reasoning tokens bill as output and share the output budget, so this is a direct spend
       // control, not a quality preference.
@@ -81,7 +93,7 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       // billed and the answer lost. `include_usage` travels with it because on Chat Completions a
       // streamed response reports no usage without it, and the accounting is not optional.
       stream: true,
-      stream_options: { include_usage: true },
+      ...(dialect.streamOptions ? { stream_options: { include_usage: true } } : {}),
     };
     // Deadlines that follow the stream rather than the clock: a long, healthy generation is never
     // cut off mid-answer, while a stalled connection still fails promptly.

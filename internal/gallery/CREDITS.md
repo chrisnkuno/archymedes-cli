@@ -24,3 +24,17 @@ The Archimedes bust (`ORaUWw7Na5c`) is cropped to the head and its inscription, 
 (`8z2Q6XWLYa4`) to the compass. To add one: put the resized
 JPEG in `photos/`, add it to `Photos` in `gallery.go` and here; `go test ./internal/gallery` checks
 that every file is listed, decodes, and is credited.
+| [8TttTCQLUKw](https://unsplash.com/photos/8TttTCQLUKw) | Data blocks in violet light · 3D | Brecht Corbeel | scifi |
+| [tGGuWW28-5M](https://unsplash.com/photos/tGGuWW28-5M) | A circuit city, lit from within · 3D | A Chosen Soul | scifi |
+| [6XfBmLfaS-k](https://unsplash.com/photos/6XfBmLfaS-k) | A coder's room at night · isometric | ANTIPOLYGON YOUTUBE | scifi |
+| [KZzPoMs5eIQ](https://unsplash.com/photos/KZzPoMs5eIQ) | Lift-off from the chip · isometric | Omar:. Lopez-Rincon | scifi |
+| [m5HRQlDWDx4](https://unsplash.com/photos/m5HRQlDWDx4) | The violet core · 3D | LekoArts | scifi |
+| [SZcLtU9NcBI](https://unsplash.com/photos/SZcLtU9NcBI) | The machine that mints · isometric | Tran Mau Tri Tam ✪ | scifi |
+| [M3T9qfa_kDQ](https://unsplash.com/photos/M3T9qfa_kDQ) | Neon city, made in Blender | Bojun Liu | scifi |
+
+The `greek` photos and the `scifi` renders take turns as the wallpaper (behind the whole screen,
+`internal/tui/wallpaper.go`).
+Each was checked to be under the free Unsplash License, not Unsplash+, on 2026-10-15, and shipped
+at at most 400 px: the wallpaper is drawn two pixels to a cell, so even a 250-column window needs
+no more. Artwork from ArtStation or Behance is not included: it is all rights reserved unless its
+artist says otherwise, and a credit line is not a licence.

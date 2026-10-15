@@ -20,12 +20,13 @@ import (
 
 // --- the home screen's photographs ---
 
-func TestTheHomeScreenShowsACreditedPhotoBesideTheMarkAndOpensItOnAClick(t *testing.T) {
+func TestTheHomeScreenCreditsItsWallpaperAndOpensItOnAClick(t *testing.T) {
 	m := projectModel(t)
+	m.opts.NoWallpaper = false
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 32})
 	first := m.homePhoto()
 	s := screen(m)
-	if !strings.Contains(s, "by "+first.By) || !strings.Contains(s, "Unsplash") || !strings.Contains(s, "▄") {
+	if !strings.Contains(s, "by "+first.By) || !strings.Contains(s, "Unsplash") || !strings.Contains(s, "▀") {
 		t.Fatalf("no credited photo on the home screen:\n%s", s)
 	}
 	// The credit links to the photo's page, where the terminal supports links.
@@ -38,6 +39,50 @@ func TestTheHomeScreenShowsACreditedPhotoBesideTheMarkAndOpensItOnAClick(t *test
 	if !ok || gallery.Pick(g.index) != first {
 		t.Fatalf("a click on the photo did not open it in the Gallery: %T", m.activeWindow())
 	}
+}
+
+func TestTheHomeCardSaysWhatIsInFrontOfYou(t *testing.T) {
+	m := projectModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
+	s := screen(m)
+	for _, want := range []string{"model", m.session.Info.Model, "mode", modeBlurb["build"], "can", abilities("build"), "Unsplash"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the home card lacks %q:\n%s", want, s)
+		}
+	}
+	// The card is filled with the theme's ground: no styled run ends in a bare reset that would
+	// let the wallpaper, or the terminal's own background, through between the words.
+	card := strings.Join(m.homeCard(130, 30), "\n")
+	if strings.Contains(card, "\x1b[m ") {
+		t.Fatal("a run inside the card ends without the ground behind it")
+	}
+}
+
+func TestTheHomeLineTurnsWithThePhoto(t *testing.T) {
+	m := projectModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
+	before := spark(m.photoIndex)
+	m.photoIndex++
+	// Its first words: a long line wraps inside the card.
+	after := spark(m.photoIndex)
+	if after == before || !strings.Contains(screen(m), strings.Join(strings.Fields(after)[:3], " ")) {
+		t.Fatalf("the line did not turn with the photo: %q then %q", before, after)
+	}
+	if spark(-1) == "" {
+		t.Fatal("a negative index has no line")
+	}
+}
+
+func TestAShortHomeScreenKeepsTheEssentials(t *testing.T) {
+	m := projectModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	s := screen(m)
+	for _, want := range []string{"A R C H Y M E D E S", "mode", "Good"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("a short home screen lost %q:\n%s", want, s)
+		}
+	}
+	assertFits(t, m, "short home")
 }
 
 func TestPhotosTurnByThemselvesOnlyWithMotion(t *testing.T) {
@@ -74,7 +119,9 @@ func TestAPhotoIsDrawnOnceForEachSize(t *testing.T) {
 	if len(a) != 8 || ansi.StringWidth(a[0]) != 20 {
 		t.Fatalf("%d rows, %d wide", len(a), ansi.StringWidth(a[0]))
 	}
-	m.photoCache[p.ID+"|20|8"] = []string{"cached"}
+	for key := range m.photoCache {
+		m.photoCache[key] = []string{"cached"}
+	}
 	if got := m.photoLines(p, 20, 8); len(got) != 1 {
 		t.Fatal("drawn again instead of kept")
 	}
@@ -86,7 +133,7 @@ func firstRunModel(t *testing.T) (*Model, string) {
 	t.Helper()
 	dir := t.TempDir()
 	agent := &fakeAgent{messages: make(chan any, 16)}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
+	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	m.Update(connectedMsg{session: acp.Session{ID: "s1"}})
@@ -139,7 +186,7 @@ func TestOnceWelcomedTheHomeScreenListsKeysAndTabTypesAsBefore(t *testing.T) {
 	dir := t.TempDir()
 	config.SaveState(dir, config.State{Welcomed: true})
 	agent := &fakeAgent{messages: make(chan any, 16)}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
+	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	m.Update(connectedMsg{session: acp.Session{ID: "s1"}})

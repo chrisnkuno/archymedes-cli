@@ -208,6 +208,14 @@ export class HeadlessEmitter {
       });
       return;
     }
+    if (safe.type === "context_shrunk") {
+      this.emit("context_shrunk", { iteration: safe.iteration, step: safe.step });
+      return;
+    }
+    if (safe.type === "tool_name") {
+      this.emit("tool_name", { iteration: safe.iteration, requested: safe.requested, ...(safe.resolved ? { resolved: safe.resolved } : {}) });
+      return;
+    }
     this.emit("runtime_stop", { status: safe.status, summary: safe.summary });
   }
 

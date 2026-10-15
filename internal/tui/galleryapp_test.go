@@ -267,57 +267,27 @@ func drawn(t *testing.T, m *Model, cmd tea.Cmd) (string, bool) {
 	return sixelOutput(t, m, cmd)
 }
 
-func TestTheHomePhotoIsDrawnInSixelWhereTheTerminalCan(t *testing.T) {
+func TestTheHomeWallpaperStaysInCellsEvenWhereSixelIsDrawn(t *testing.T) {
+	// Sixel pixels are erased by text written over them, and the whole screen is drawn over the
+	// wallpaper; so the wallpaper is half blocks on every terminal, and no Sixel is written.
 	m, cmd := sixelHome(t)
+	m.opts.NoWallpaper = false
 	s := screen(m)
-	p := m.homePhoto()
-	if strings.Count(s, "▄")+strings.Count(s, "▀") > 0 || !strings.Contains(s, "by "+p.By) {
-		t.Fatalf("the photo's cells are not left blank for Sixel, or its caption is gone:\n%s", s)
+	if !strings.Contains(s, "▀") || !strings.Contains(s, "by "+m.homePhoto().By) || !strings.Contains(s, "a coding agent that shows its work") {
+		t.Fatalf("no wallpaper, credit or card on a Sixel terminal:\n%s", s)
 	}
-	raw, _ := drawn(t, m, cmd)
-	z := m.zones.frame.Get("photo")
-	if strings.Count(raw, "\x1bP0;1q") != 1 || !strings.Contains(raw, ansi.CursorPosition(z.StartX+1, z.StartY+1)) {
-		t.Fatalf("not drawn once at the photo's cells (%d,%d): %d bytes", z.StartX, z.StartY, len(raw))
-	}
-	// 28 cells of 9 pixels across; 11 cells of 20 down, rounded to whole six-pixel bands.
-	if !strings.Contains(raw, `"1;1;252;216`) {
-		t.Fatalf("raster attributes: %q", raw[strings.Index(raw, "q")+1:][:20])
+	if raw, _ := drawn(t, m, cmd); strings.Contains(raw, "\x1bP0;1q") {
+		t.Fatal("the home screen drew Sixel over its card")
 	}
 }
 
-func TestTheHomePhotoInSixelTurnsWithoutClearingAndLeavesNothingBehind(t *testing.T) {
-	m, cmd := sixelHome(t)
-	drawn(t, m, cmd)
-	// The next photo: the same cells, drawn over, no clear.
-	m.photoIndex++
-	_, cmd = m.Update(animTickMsg{})
-	raw, cleared := drawn(t, m, cmd)
-	if cleared || !strings.Contains(raw, "\x1bP0;1q") {
-		t.Fatalf("turning the photo: cleared=%v drawn=%v", cleared, strings.Contains(raw, "\x1bP0;1q"))
-	}
-	// A dialog over the home screen takes the picture down; closing it draws it again.
-	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl})
-	if _, cleared := drawn(t, m, cmd); !cleared {
-		t.Fatal("the photo stayed over the start menu")
-	}
-	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if raw, _ := drawn(t, m, cmd); !strings.Contains(raw, "\x1bP0;1q") {
-		t.Fatal("not drawn again when the menu closed")
-	}
-	// The first message replaces the home screen: the picture must go.
-	typeText(m, "hello")
-	cmd = press(m, tea.KeyEnter, 0)
-	if _, cleared := drawn(t, m, cmd); !cleared {
-		t.Fatal("the photo was left on screen after the home screen went")
-	}
-}
-
-func TestWithoutSixelTheHomePhotoIsGlyphsAndNothingIsWrittenOverIt(t *testing.T) {
+func TestWithoutSixelTheWallpaperIsGlyphsAndNothingIsWrittenOverIt(t *testing.T) {
 	m := projectModel(t)
+	m.opts.NoWallpaper = false
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	_, cmd := m.Update(uv.PrimaryDeviceAttributesEvent{62, 22}) // no 4
-	if strings.Count(screen(m), "▄") == 0 {
-		t.Fatal("no glyph photo")
+	if strings.Count(screen(m), "▀") == 0 {
+		t.Fatal("no glyph wallpaper")
 	}
 	if raw, _ := drawn(t, m, cmd); raw != "" {
 		t.Fatal("wrote a picture to a terminal that does not draw Sixel")

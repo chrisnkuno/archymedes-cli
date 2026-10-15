@@ -51,12 +51,25 @@ describe("free-only model adapter", () => {
     const resolved = resolveProvider({ OPENROUTER_API_KEY: "secret", MODEL_INPUT_PER_MILLION: "9", MODEL_OUTPUT_PER_MILLION: "9" }, { provider: "free" });
     expect(resolved).toMatchObject({ spec: { id: "free" }, prices: { inputPerMillion: 0, outputPerMillion: 0 } });
   });
+  it("cuts the reply to the room the input leaves, rather than refusing a conversation that fits", async () => {
+    // An 8K model and 4K of reply asked for; an input of about 4.6K tokens expected (6.9K with the
+    // margin) leaves about 1.2K: send it with that, rather than refusing a conversation that fits.
+    const small = { ...entry, context_length: 8_192, top_provider: { max_completion_tokens: 4_096 } };
+    const small8k = () => Promise.resolve(mergeFreeCatalog(parseFreeOpenRouterModels({ data: [small] }), [], Date.now()));
+    const call = vi.fn(async () => response);
+    const provider = new FreeAgentTurnProvider({ apiKey: "k", model: small.id }, { call, catalog: small8k });
+    await provider.complete({ ...request, messages: [{ role: "user", content: "x".repeat(16_000) }] });
+    const body = (call.mock.calls as unknown as [Record<string, number>, AbortSignal][])[0][0];
+    expect(body.max_tokens).toBeGreaterThanOrEqual(1_024);
+    expect(body.max_tokens).toBeLessThan(4_096);
+  });
   it("never calls inference for an unavailable model or excessive context", async () => {
     const call = vi.fn(async () => response);
     const unknown = new FreeAgentTurnProvider({ apiKey: "k", model: "lab/missing:free" }, { call, catalog });
     await expect(unknown.complete(request)).rejects.toThrow("No eligible");
     const oversized = new FreeAgentTurnProvider({ apiKey: "k", model: entry.id }, { call, catalog });
-    await expect(oversized.complete({ ...request, messages: [{ role: "user", content: "x".repeat(100000) }] })).rejects.toThrow("context");
+    // About 100K tokens for a 64K model: too long however it is counted.
+    await expect(oversized.complete({ ...request, messages: [{ role: "user", content: "x".repeat(400_000) }] })).rejects.toThrow("context");
     expect(call).not.toHaveBeenCalled();
   });
   it("uses bounded metadata caching and revalidates expiry", async () => {

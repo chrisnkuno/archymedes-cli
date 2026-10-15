@@ -64,9 +64,9 @@ func TestClickingAToolCardTogglesOnlyThatCard(t *testing.T) {
 func TestClickingAToastDismissesIt(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.toast(toastInfo, "dismiss me")
-	row := rowOf(t, m, "dismiss me")
-	line := strings.Split(screen(m), "\n")[row]
-	click(m, strings.Index(line, "dismiss me"), row)
+	// By cell, not byte: the home wallpaper's half blocks are three bytes each.
+	x, y := cellOf(t, m, "dismiss me")
+	click(m, x, y)
 	if len(m.toasts) != 0 || strings.Contains(screen(m), "dismiss me") {
 		t.Fatal("toast still there")
 	}

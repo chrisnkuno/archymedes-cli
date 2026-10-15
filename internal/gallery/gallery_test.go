@@ -34,7 +34,7 @@ func TestEveryPhotoIsShippedDecodesAndIsCredited(t *testing.T) {
 			t.Fatalf("%s is not credited: %+v", p.ID, p)
 		}
 		switch p.Theme {
-		case "greek", "math":
+		case "greek", "math", "scifi":
 		default:
 			t.Fatalf("%s has theme %q", p.ID, p.Theme)
 		}
@@ -45,10 +45,30 @@ func TestPickAndThemeWrapBothWays(t *testing.T) {
 	if Pick(len(Photos)) != Photos[0] || Pick(-1) != Photos[len(Photos)-1] {
 		t.Fatal("Pick does not wrap")
 	}
-	if OfTheme("greek", 0).Theme != "greek" || OfTheme("math", 5).Theme != "math" {
+	if OfTheme("greek", 0).Theme != "greek" || OfTheme("math", 5).Theme != "math" || OfTheme("scifi", -3).Theme != "scifi" {
 		t.Fatal("OfTheme picked outside its theme")
+	}
+	for i, p := range Photos {
+		if IndexOf(p) != i || Pick(IndexOf(p)) != p {
+			t.Fatalf("IndexOf(%s) is not its place", p.ID)
+		}
+	}
+	if IndexOf(Photo{ID: "missing"}) != 0 {
+		t.Fatal("an unlisted photo has a place")
 	}
 	if OfTheme("nothing", 2) != Pick(2) {
 		t.Fatal("an unknown theme falls back to Pick")
+	}
+}
+
+func TestTheWallpaperAlternatesAntiquityAndSciFi(t *testing.T) {
+	for n := range 8 {
+		a, b := Wallpaper(n), Wallpaper(n+1)
+		if a.Theme == b.Theme || (a.Theme != "greek" && a.Theme != "scifi") {
+			t.Fatalf("wallpapers %d and %d: %s then %s", n, n+1, a.Theme, b.Theme)
+		}
+	}
+	if Wallpaper(-1) == (Photo{}) || Wallpaper(0).ID != "ORaUWw7Na5c" {
+		t.Fatalf("the first wallpaper is %s, not Archimedes", Wallpaper(0).ID)
 	}
 }

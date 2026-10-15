@@ -7,7 +7,7 @@ import { LocalWorkspace } from "./backends";
 import { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import type { ToolProvider } from "./tool-providers";
-import { classifyVerification, createArchymedesTools, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
+import { classifyVerification, commandTimeout, createArchymedesTools, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
 
 let root: string;
 const context = { taskId: "t", runId: "r", stepId: "s" };
@@ -54,6 +54,38 @@ describe("archymedes tool set", () => {
     expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toContain("8080");
 
     await expect(toolNamed(tools, "read_file").execute({ path: "../escape.txt" }, context)).rejects.toThrow(/escapes the workspace/);
+  });
+
+  it("runs the calls a real session lost: a timeout in seconds sent as milliseconds, and edits sent as an array", async () => {
+    // From a real run: `timeoutMs: 300` killed `python3 x.py` after 300 ms, and `edits` as an array
+    // was refused as "must be a string", the same way twice. Both had one meaning.
+    const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() });
+    const ran = await toolNamed(tools, "run_command").execute({ command: "sleep 0.4 && echo done", timeoutMs: 300 }, context);
+    expect(ran.isError).toBe(false);
+    expect(ran.content).toContain("done");
+    expect(ran.content).toContain("[timeoutMs 300 read as 300 seconds; use timeoutSeconds; limited to the 120s most a command may run]");
+
+    await toolNamed(tools, "read_file").execute({ path: "src/app.ts" }, context);
+    const edited = await toolNamed(tools, "edit_file").execute({ file_path: "src/app.ts", edits: [{ oldText: "3000", newText: "8080" }] }, context);
+    expect(edited.isError).toBeFalsy();
+    expect(edited.content).toContain("[Archymedes adjusted this call: file_path read as path; edit_file.edits was an array; read as JSON text.]");
+    expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toContain("8080");
+  });
+
+  it("reads a command's limit in seconds, and keeps it between one second and the ceiling", () => {
+    expect(commandTimeout({}, 120_000)).toEqual({ timeoutMs: 120_000 });
+    expect(commandTimeout({ timeoutSeconds: 30 }, 120_000)).toEqual({ timeoutMs: 30_000 });
+    expect(commandTimeout({ timeoutMs: 45_000 }, 120_000)).toEqual({ timeoutMs: 45_000 });
+    expect(commandTimeout({ timeoutMs: 70 }, 120_000)).toEqual({ timeoutMs: 70_000, note: "timeoutMs 70 read as 70 seconds; use timeoutSeconds" });
+    expect(commandTimeout({ timeoutSeconds: 600 }, 120_000)).toEqual({ timeoutMs: 120_000, note: "limited to the 120s most a command may run" });
+    expect(commandTimeout({ timeoutMs: 1_000 }, 120_000)).toEqual({ timeoutMs: 1_000 });
+  });
+
+  it("tells a command that ran out of time how to get more", async () => {
+    const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), commandTimeoutMs: 1_000 });
+    const result = await toolNamed(tools, "run_command").execute({ command: "sleep 5", timeoutSeconds: 1 }, context);
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/exceeded its 1s limit and was killed\. If it needs longer, run it again with a larger timeoutSeconds/);
   });
 
   it("retrieves bounded reviewed security knowledge and marks stale evidence", async () => {

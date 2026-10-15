@@ -104,6 +104,7 @@ export type ModelAllowance = {
 export type AgentOutputKind = "text" | "reasoning" | "tool_call";
 
 /** How hard the model should think, where the provider's model supports being told. */
+import { resolveToolCall } from "./tool-aliases";
 import { isShallowToolError, type EffortSignals, type ToolOutcome } from "./effort-policy";
 
 export type ThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -283,6 +284,12 @@ export type AgentRuntimeEvent =
   // `artifact` is present when the result was too large for the transcript and was written to a
   // file instead: `content` is then the bounded excerpt, and the artifact says where the rest is.
   | { type: "tool_result"; toolCallId: string; toolName: string; isError: boolean; effect: ToolEffect; content: string; data?: Record<string, unknown>; artifact?: StoredToolArtifact }
+  // A tool name that is not one of ours: `resolved` is the tool it was translated to, absent when
+  // it could not be. Recorded so the names models really call can be listed (see `tool-aliases`).
+  // The transcript was shortened after the provider said it was too long: step 1 stubbed old tool
+  // output, step 2 set aside the conversation before this request.
+  | { type: "context_shrunk"; iteration: number; step: number }
+  | { type: "tool_name"; iteration: number; toolCallId: string; requested: string; resolved?: string }
   | { type: "runtime_stop"; status: AgentRuntimeResult["status"]; summary: string };
 
 export type AgentRuntimeControl = {
@@ -342,16 +349,33 @@ export type AgentRuntimeResult = {
 
 /**
  * What to tell a model that keeps failing the same way. The error already says what went wrong; what
- * a small model lacks is the instruction to stop guessing and look.
+ * a small model lacks is the instruction to stop guessing and look, and where to look depends on
+ * the failure: "list the files" is no help to a call whose arguments have the wrong shape, or to a
+ * command that only needed longer to run.
  */
-export function repeatedFailureHint(toolName: string, failures: number, missingPathStreak: number): string | null {
+export function repeatedFailureHint(toolName: string, failures: number, missingPathStreak: number, error = "", inputSchema?: unknown): string | null {
   if (failures >= 2) {
+    if (/must be (a|an) |has no parameter|requires \w+|arguments must be/.test(error)) {
+      const parameters = describeParameters(inputSchema);
+      return `This exact ${toolName} call has now failed ${failures} times on its arguments. Do not send it again unchanged.${parameters ? ` ${toolName} takes: ${parameters}.` : ""}`;
+    }
+    if (/limit and was killed/.test(error)) {
+      return `This command has now been stopped ${failures} times for running too long. Run it with a larger timeoutSeconds, or a smaller piece of the work at a time.`;
+    }
     return `This exact ${toolName} call has now failed ${failures} times. Do not send it again unchanged: change the arguments, or run list_files with path "." to see what is really in the project.`;
   }
   if (missingPathStreak >= 3) {
     return "Several paths in a row did not exist. Stop guessing paths: run list_files with path \".\" (or glob_files with \"**/*\") and use only names it returns.";
   }
   return null;
+}
+
+/** A tool's parameters in a line: `path (string, required), offset (integer)`. */
+function describeParameters(schema: unknown): string {
+  const { properties = {}, required = [] } = (schema ?? {}) as { properties?: Record<string, { type?: string }>; required?: string[] };
+  return Object.entries(properties)
+    .map(([name, property]) => `${name} (${property.type ?? "any"}${required.includes(name) ? ", required" : ""})`)
+    .join(", ");
 }
 
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
@@ -405,6 +429,21 @@ export function unavailableToolMessage(name: string, exists: boolean, available:
   const hint = closest.length > 0 ? ` The closest: ${closest.join(" or ")}.` : "";
   return `${head}${hint} Tools you can call: ${names.join(", ")}. Use one of them, or answer without a tool.`;
 }
+/**
+ * Whether a provider refused a request for being longer than the model can hold.
+ *
+ * Every vendor says it differently ("maximum context length", "prompt is too long",
+ * `context_length_exceeded`, free mode's own "exceeds the available free model context"), and none
+ * of it is worth retrying unchanged: the same request is refused the same way. What helps is a
+ * shorter request, which the runtime can make itself (see `shrinkForContext` in `execute`).
+ */
+export function isContextOverflow(error: unknown): boolean {
+  const text = [error, (error as { cause?: unknown })?.cause]
+    .map((value) => (value instanceof Error ? value.message : typeof value === "string" ? value : ""))
+    .join(" ");
+  return /context[_ ]length[_ ]exceeded|maximum context length|context window|prompt is too long|too many tokens|exceeds the (available )?.*context|reduce the length of the (messages|prompt)|input is too long/i.test(text);
+}
+
 /** Exponential backoff when no failure-specific policy applies: 1s, 2s, 4s, ... capped here. */
 const PROVIDER_BACKOFF_BASE_MS = 1_000;
 const PROVIDER_BACKOFF_CAP_MS = 30_000;
@@ -1011,6 +1050,61 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       return changed;
     };
 
+    /**
+     * Makes the transcript shorter after a provider said it does not fit, one step per refusal.
+     *
+     * A refusal for length used to end the run, with "start a new session" as the advice, and
+     * everything the model had done in it lost. The transcript can almost always be made to fit
+     * without that. Step one stubs every tool result except the last round's: the bodies go, every
+     * call keeps its answer, so the conversation stays one the provider accepts. Step two sets aside
+     * the conversation before this request as a whole (never part of a call-and-answer pair) and
+     * says so. Past that, there is nothing left to drop but the request itself, and the run stops.
+     */
+    let historyLength = request.history?.length ?? 0;
+    let contextShrinks = 0;
+    const shrinkForContext = (): boolean => {
+      contextShrinks += 1;
+      if (contextShrinks === 1) {
+        // The last round of this request keeps its output: it is what the model is acting on now.
+        // Earlier conversation has no round of its own here; all of its output may go.
+        let lastRound = messages.length;
+        for (let i = messages.length - 1; i > historyLength; i -= 1) {
+          const message = messages[i];
+          if (message.role === "assistant" && "toolCalls" in message) { lastRound = i; break; }
+        }
+        // A kept result that says "identical to the earlier one" still needs the earlier one.
+        const stillReferenced = new Set(runToolResults.filter((entry) => entry.index >= lastRound && entry.digest).map((entry) => entry.digest));
+        let changed = false;
+        for (let i = 0; i < lastRound; i += 1) {
+          const message = messages[i];
+          if (message.role !== "tool" || (message.content.length < COMPACTION_MIN_CHARS && !message.images?.length)) continue;
+          const tracked = runToolResults.find((candidate) => candidate.index === i);
+          if (tracked?.digest && stillReferenced.has(tracked.digest)) continue;
+          const stub = compactedToolResult(message.name, message.content.length);
+          const { images: _dropped, ...rest } = message;
+          messages[i] = { ...rest, content: stub };
+          const entry = tracked;
+          if (entry?.digest) sentResults.delete(entry.digest); // later copies are no longer "identical to" it
+          if (entry && !entry.compacted) {
+            totalToolResultChars -= entry.chars - stub.length;
+            entry.chars = stub.length;
+            entry.images = 0;
+            entry.compacted = true;
+          }
+          changed = true;
+        }
+        if (changed) return true;
+        contextShrinks += 1; // nothing to stub: go straight to the next step
+      }
+      if (contextShrinks === 2 && historyLength > 0) {
+        messages.splice(1, historyLength, { role: "user", content: "[The conversation before this request was set aside so it fits the model's context. Ask the user if you need something from it.]", internal: true });
+        for (const entry of runToolResults) entry.index -= historyLength - 1;
+        historyLength = 1;
+        return true;
+      }
+      return false;
+    };
+
     const stop = async (status: AgentRuntimeResult["status"], summary: string, iterations: number): Promise<AgentRuntimeResult> => {
       await this.dependencies.control.persistEvent({ type: "runtime_stop", status, summary });
       return {
@@ -1053,6 +1147,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         onTextDelta: (text) => void this.dependencies.control.persistEvent({ type: "assistant_delta", iteration, text }),
       };
       let turn: AgentModelTurn | undefined;
+      let overflowed = false;
       // Total time spent waiting between provider retries, named in the error that finally
       // surfaces, so a user can tell a 300ms blip from a 40s outage.
       let waitedMs = 0;
@@ -1073,6 +1168,17 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         } catch (error) {
           if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) {
             return stop("cancelled", "Run cancelled while waiting for the model provider.", iteration - 1);
+          }
+          // Too long for the model: send a shorter transcript instead of failing the run.
+          if (!emittedOutput && isContextOverflow(error)) {
+            if (!shrinkForContext()) {
+              return stop("failed", "The conversation does not fit this model's context, even with old tool output and earlier messages set aside. Choose a model with a larger context (/model), or start a new session.", iteration - 1);
+            }
+            await this.dependencies.control.persistEvent({ type: "context_shrunk", iteration, step: contextShrinks });
+            promptTotals = addPart(newPartTotals(), JSON.stringify(definitions));
+            measured = 0;
+            overflowed = true;
+            break;
           }
           // Retrying after streamed output risks duplicating both billed text and tool intent. A
           // retry is safe only while the failed attempt has remained completely invisible.
@@ -1103,11 +1209,33 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           }
         }
       }
+      // Shortened to fit: the same iteration again, with the shorter transcript.
+      if (overflowed) {
+        iteration -= 1;
+        continue;
+      }
       // The loop either returned a turn or rethrew the final provider error.
       if (!turn) throw new Error("Model provider retry loop ended without a response");
       if (turn.routingReceipt) routingReceipts.push({ ...turn.routingReceipt, taskId: turn.routingReceipt.taskId ?? modelRequest.requestId });
       usage = addUsage(usage, turn.usage);
       actualModelRwf = priceActualModelUsage(usage.inputTokens, usage.outputTokens, this.dependencies.prices);
+      // A tool name the model brought from another harness (`Bash`, `container.exec`,
+      // `functions.read_file`) is translated to ours before anything checks it; see `tool-aliases`.
+      // Every name that is not ours is recorded, translated or not, so the table can grow from use.
+      if (turn.toolCalls.length > 0) {
+        const available = new Set(tools.map((tool) => tool.name));
+        const toolCalls: AgentToolCall[] = [];
+        for (const call of turn.toolCalls) {
+          const resolution = resolveToolCall(call, available);
+          if (resolution.kind === "exact") { toolCalls.push(call); continue; }
+          await this.dependencies.control.persistEvent({
+            type: "tool_name", iteration, toolCallId: call.id, requested: call.name,
+            ...(resolution.kind === "alias" ? { resolved: resolution.call.name } : {}),
+          });
+          toolCalls.push(resolution.kind === "alias" ? resolution.call : call);
+        }
+        turn = { ...turn, toolCalls };
+      }
       if (actualModelRwf > request.modelReservationRwf) throw new Error("Actual model usage exceeds the reserved model budget");
       await this.dependencies.control.persistEvent({ type: "model_turn", requestId: modelRequest.requestId, iteration, responseId: turn.responseId, model: turn.model, toolCallCount: turn.toolCalls.length, usage: turn.usage, ...(turn.allowance ? { allowance: turn.allowance } : {}), ...(effort ? { effort } : {}), ...(chosen ? { effortReason: chosen.reason } : {}) });
 
@@ -1369,7 +1497,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           const failures = (failedCalls.get(signature) ?? 0) + 1;
           failedCalls.set(signature, failures);
           missingPathStreak = /does not exist|No such file or directory|ENOENT/i.test(raw) ? missingPathStreak + 1 : 0;
-          const hint = repeatedFailureHint(call.name, failures, missingPathStreak);
+          const hint = repeatedFailureHint(call.name, failures, missingPathStreak, raw, tool.inputSchema);
           if (hint) content = `${content}\n\n${hint}`;
         } else {
           missingPathStreak = 0;

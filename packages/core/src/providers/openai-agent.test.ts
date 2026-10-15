@@ -221,6 +221,15 @@ describe("OpenAI agent adapter prompt caching", () => {
     expect((bodies[1].messages as unknown[]).slice(0, 2)).toEqual(bodies[0].messages);
   });
 
+  it("sends only the portable subset to other compatible endpoints like Groq", async () => {
+    const { bodies, call } = capture();
+    await new OpenAIAgentTurnProvider({ apiKey: "gsk", model: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1" }, call).complete(request);
+    expect(bodies[0]).not.toHaveProperty("prompt_cache_key");
+    expect(bodies[0]).not.toHaveProperty("safety_identifier");
+    expect(bodies[0]).not.toHaveProperty("max_completion_tokens");
+    expect(bodies[0].max_tokens).toBe(request.maxOutputTokens);
+  });
+
   it("reads cached prompt tokens into usage", async () => {
     const { call } = capture();
     const turn = await new OpenAIAgentTurnProvider({ apiKey: "sk", model: "gpt-5.6-terra" }, call).complete(request);

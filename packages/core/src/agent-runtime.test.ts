@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { agentMessagePromptParts, BoundedAgentRuntime, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, isContextOverflow, repeatedFailureHint, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
 import type { RoutingReceipt } from "./providers/routing-receipt";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
@@ -698,6 +698,21 @@ describe("bounded agent runtime", () => {
     expect(told).toContain("Tools you can call: grep_files, web_search");
   });
 
+  it("runs a tool name a model brought from another harness as ours, and records it", async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const run: AgentTool = { name: "run_command", description: "Run", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: false, async execute(args) { seen.push(args); return { content: "ok" }; } };
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "1", name: "container.exec", arguments: { cmd: ["bash", "-lc", "go test ./..."] } }] }),
+      turn({ content: "Tests pass." }),
+    ], [run]);
+    await expect(value.runtime.execute(baseRequest)).resolves.toMatchObject({ status: "completed", toolCallsExecuted: 1 });
+    expect(seen).toEqual([{ command: "go test ./..." }]);
+    expect(value.events).toContainEqual({ type: "tool_name", iteration: 1, toolCallId: "1", requested: "container.exec", resolved: "run_command" });
+    // The transcript carries our name, so the tool result answers a call the provider will recognise.
+    const assistant = value.requests[1].messages.find((message) => message.role === "assistant" && "toolCalls" in message);
+    expect(assistant && "toolCalls" in assistant ? assistant.toolCalls[0].name : undefined).toBe("run_command");
+  });
+
   it("keeps going after an occasional wrong name in a long run, but stops a model that keeps inventing tools", async () => {
     const read: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: false, async execute() { return { content: "x" }; } };
     const occasional = harness([
@@ -1304,4 +1319,98 @@ it("reads the wait a provider asked for from retryAfterMs or the retry-after hea
   expect(at).toBeLessThanOrEqual(10_000);
   expect(providerRetryAfterMs({ headers: { "retry-after": "soon" } })).toBeUndefined();
   expect(providerRetryAfterMs({})).toBeUndefined();
+});
+
+describe("a conversation too long for the model", () => {
+  const overflow = () => Object.assign(new Error("400 This model's maximum context length is 32768 tokens."), { status: 400 });
+  const bigTool: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: true, async execute(args) { return { content: `${String(args.path)}:${"x".repeat(4_000)}` }; } };
+
+  function overflowing(script: Array<AgentModelTurn | Error>) {
+    const requests: AgentModelRequest[] = [];
+    const events: AgentRuntimeEvent[] = [];
+    let call = 0;
+    const runtime = new BoundedAgentRuntime({
+      model: { async complete(request) { requests.push({ ...request, messages: request.messages.map((message) => ({ ...message })) }); const next = script[call++]; if (!next) throw new Error("Unexpected model call"); if (next instanceof Error) throw next; return next; } },
+      tools: [bigTool], prices,
+      control: { async heartbeat() {}, async isCancellationRequested() { return false; }, async isToolCallApproved() { return true; }, async persistEvent(event) { events.push(event); } },
+    });
+    return { runtime, requests, events };
+  }
+  const history = [
+    { role: "user" as const, content: "earlier question" },
+    { role: "assistant" as const, content: "", toolCalls: [{ id: "h1", name: "read_file", arguments: { path: "old.ts" } }] },
+    { role: "tool" as const, content: "y".repeat(3_000), toolCallId: "h1", name: "read_file" },
+    { role: "assistant" as const, content: "earlier answer" },
+  ];
+
+  it("recognises every vendor's way of saying so", () => {
+    for (const message of ["This model's maximum context length is 8192 tokens", "prompt is too long: 210000 tokens > 200000 maximum", "context_length_exceeded", "The conversation exceeds the available free model context. Start a new session or select a larger free model.", "Please reduce the length of the messages."]) {
+      expect(isContextOverflow(new Error(message)), message).toBe(true);
+    }
+    expect(isContextOverflow(new Error("rate limit reached"))).toBe(false);
+    expect(isContextOverflow(Object.assign(new Error("request failed"), { cause: new Error("maximum context length exceeded") }))).toBe(true);
+  });
+
+  it("shortens old tool output and carries on, rather than ending the run", async () => {
+    const value = overflowing([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "a", name: "read_file", arguments: { path: "a" } }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "b", name: "read_file", arguments: { path: "b" } }] }),
+      overflow(),
+      turn({ content: "Done after all." }),
+    ]);
+    const result = await value.runtime.execute({ ...baseRequest, history });
+    expect(result.status).toBe("completed");
+    const retried = value.requests[3].messages;
+    // Every call still has its answer; only bodies older than the last round were stubbed.
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "h1")!.content).not.toContain("yyyy");
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "a")!.content).not.toContain("xxxx");
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "b")!.content).toContain("xxxx");
+    expect(value.events).toContainEqual({ type: "context_shrunk", iteration: 3, step: 1 });
+  });
+
+  it("keeps an earlier result that a kept one says it is identical to", async () => {
+    const value = overflowing([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "o", name: "read_file", arguments: { path: "other" } }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "a", name: "read_file", arguments: { path: "same" } }] }),
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "b", name: "read_file", arguments: { path: "same" } }] }),
+      overflow(),
+      turn({ content: "Done." }),
+    ]);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.summary).toBe("Done.");
+    const retried = value.requests[4].messages;
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "o")!.content).not.toContain("xxxx");
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "b")!.content).toMatch(/Identical to the earlier/);
+    expect(retried.find((message) => message.role === "tool" && message.toolCallId === "a")!.content).toContain("xxxx");
+  });
+
+  it("then sets the earlier conversation aside, whole, and stops only when nothing is left to drop", async () => {
+    const value = overflowing([overflow(), overflow(), turn({ content: "Answered." })]);
+    const result = await value.runtime.execute({ ...baseRequest, history });
+    expect(result.status).toBe("completed");
+    const last = value.requests[2].messages;
+    expect(last.map((message) => message.role)).toEqual(["system", "user", "user"]);
+    expect(last[1].content).toMatch(/set aside/);
+
+    const hopeless = overflowing([overflow(), overflow(), overflow()]);
+    const failed = await hopeless.runtime.execute({ ...baseRequest, history });
+    expect(failed.status).toBe("failed");
+    expect(failed.summary).toMatch(/larger context/);
+  });
+});
+
+describe("what a model that keeps failing is told", () => {
+  const schema = { type: "object", properties: { path: { type: "string" }, edits: { type: "string" } }, required: ["path"] };
+  it("names the parameters when the arguments are the problem, not the files", () => {
+    const hint = repeatedFailureHint("edit_file", 2, 0, "edit_file.edits must be a string", schema)!;
+    expect(hint).toContain("edit_file takes: path (string, required), edits (string)");
+    expect(hint).not.toContain("list_files");
+  });
+  it("says to allow more time when the command was only too slow", () => {
+    expect(repeatedFailureHint("run_command", 2, 0, "exit 124\nCommand exceeded its 1s limit and was killed.")).toMatch(/larger timeoutSeconds/);
+  });
+  it("keeps the old advice for anything else", () => {
+    expect(repeatedFailureHint("read_file", 2, 0, "ENOENT")).toMatch(/list_files/);
+    expect(repeatedFailureHint("read_file", 1, 0, "ENOENT")).toBeNull();
+  });
 });

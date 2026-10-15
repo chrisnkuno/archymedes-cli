@@ -447,7 +447,7 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
     timeout = setTimeout(() => {
       if (settled) return;
       forcedExitCode = 124;
-      stderr += `\nCommand exceeded ${options.timeoutMs}ms and was killed.`;
+      stderr += `\nCommand exceeded its ${options.timeoutMs >= 1000 ? `${Math.round(options.timeoutMs / 1000)}s` : `${options.timeoutMs}ms`} limit and was killed. If it needs longer, run it again with a larger timeoutSeconds.`;
       terminate();
     }, options.timeoutMs);
   });

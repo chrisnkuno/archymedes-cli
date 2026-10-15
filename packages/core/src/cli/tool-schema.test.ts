@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { LocalWorkspace } from "./backends";
 import { createArchymedesTools, TodoList } from "./tools";
-import { ToolArgumentError, assertSupportedSchema, validateToolArguments, type ToolInputSchema } from "./tool-schema";
+import { ToolArgumentError, assertSupportedSchema, normalizeToolArguments, validateToolArguments, type ToolInputSchema } from "./tool-schema";
 
 const schema: ToolInputSchema = {
   type: "object",
@@ -32,11 +32,31 @@ describe("tool argument validation", () => {
       .toThrow(/no parameter "recursive".*accepts: path, depth, force, ids/s);
   });
 
-  it("enforces every declared type", () => {
-    expect(() => validateToolArguments("t", schema, { path: 42 })).toThrow(/must be a string/);
+  it("refuses a value with no single reading as the declared type", () => {
     expect(() => validateToolArguments("t", schema, { path: "a", depth: 1.5 })).toThrow(/must be an integer/);
+    expect(() => validateToolArguments("t", schema, { path: "a", depth: "two" })).toThrow(/must be an integer/);
     expect(() => validateToolArguments("t", schema, { path: "a", force: "yes" })).toThrow(/must be true or false/);
     expect(() => validateToolArguments("t", schema, { path: "a", ids: ["x"] })).toThrow(/ids\[0\] must be an integer/);
+  });
+
+  it("repairs a value with exactly one reading, and says what it repaired", () => {
+    // Each of these cost a whole round trip, and often several: the model sent the same call again.
+    const { value, notes } = normalizeToolArguments("t", schema, { file_path: "a.ts", depth: "3", force: "true", ids: "2" });
+    expect(value).toEqual({ path: "a.ts", depth: 3, force: true, ids: [2] });
+    expect(notes).toEqual(["file_path read as path", "t.depth was a string; read as an integer", "t.force was a string; read as a boolean", "t.ids[0] was a string; read as an integer"]);
+    expect(normalizeToolArguments("t", schema, { path: 42, depth: 2.0 }).value).toEqual({ path: "42", depth: 2 });
+    // Structured data where JSON text is declared: edit_file's `edits`, sent as the array it describes.
+    const edits: ToolInputSchema = { type: "object", properties: { edits: { type: "string" } }, additionalProperties: false };
+    const sent = [{ oldText: "a", newText: "b" }];
+    expect(normalizeToolArguments("edit_file", edits, { edits: sent })).toEqual({ value: { edits: JSON.stringify(sent) }, notes: ["edit_file.edits was an array; read as JSON text"] });
+    // The whole arguments object as JSON text.
+    expect(normalizeToolArguments("t", schema, JSON.stringify({ path: "a" }))).toEqual({ value: { path: "a" }, notes: ["arguments were JSON text; read as an object"] });
+  });
+
+  it("never lets a synonym shadow a parameter the tool really has, or a name it was also given", () => {
+    const both: ToolInputSchema = { type: "object", properties: { path: { type: "string" }, file: { type: "string" } }, additionalProperties: false };
+    expect(validateToolArguments("t", both, { path: "a", file: "b" })).toEqual({ path: "a", file: "b" });
+    expect(() => validateToolArguments("t", schema, { path: "a", file_path: "b" })).toThrow(/no parameter "file_path"/);
   });
 
   it("rejects non-finite numbers, which an integer check must not let through", () => {
@@ -57,14 +77,14 @@ describe("tool argument validation", () => {
     expect(validateToolArguments("t", schema, { path: "a", depth: null })).toEqual({ path: "a" });
   });
 
-  it("accepts a lone item where an array is declared, and nothing else", () => {
-    // The single documented coercion — `complete: 2` for `complete: [2]`.
+  it("accepts a lone item where an array is declared", () => {
+    // `complete: 2` for `complete: [2]`.
     expect(validateToolArguments("t", schema, { path: "a", ids: 2 })).toEqual({ path: "a", ids: [2] });
-    expect(() => validateToolArguments("t", schema, { path: "a", ids: "2" })).toThrow(/ids\[0\] must be an integer/);
+    expect(() => validateToolArguments("t", schema, { path: "a", ids: "x" })).toThrow(/ids\[0\] must be an integer/);
   });
 
   it("rejects arguments that are not an object at all", () => {
-    for (const value of [null, undefined, "path=a", 5, [1, 2]]) {
+    for (const value of [null, undefined, "path=a", "[1]", 5, [1, 2]]) {
       expect(() => validateToolArguments("t", schema, value)).toThrow(/must be a JSON object/);
     }
   });
@@ -129,7 +149,7 @@ describe("every real Archymedes tool", () => {
     try {
       const write = (await tools()).find((tool) => tool.name === "write_file")!;
       const context = { taskId: "t", runId: "r", stepId: "s" };
-      await expect(write.execute({ path: "a.txt", content: 42 as never }, context)).rejects.toThrow(ToolArgumentError);
+      await expect(write.execute({ path: "a.txt", content: undefined as never }, context)).rejects.toThrow(ToolArgumentError);
       await expect(write.execute({ path: "a.txt" }, context)).rejects.toThrow(/requires content/);
       await expect(write.execute({ path: "a.txt", content: "ok", mode: "append" as never }, context)).rejects.toThrow(/no parameter "mode"/);
       // The file was never created by any of the rejected calls.
@@ -156,7 +176,7 @@ const GOLDEN_CONTRACT = [
   { name: "scan_secrets", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["include"] },
   { name: "write_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path", "content"], properties: ["path", "content"] },
   { name: "edit_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path"], properties: ["path", "oldText", "newText", "replaceAll", "edits"] },
-  { name: "run_command", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command"], properties: ["command", "timeoutMs"] },
+  { name: "run_command", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command"], properties: ["command", "timeoutSeconds", "timeoutMs"] },
   { name: "start_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command", "port"], properties: ["command", "port", "directory", "path", "timeoutMs"] },
   { name: "application_status", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["id"] },
   { name: "stop_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["id"], properties: ["id"] },

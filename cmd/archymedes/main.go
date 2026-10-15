@@ -74,6 +74,7 @@ func run(args []string) int {
 		Motion: os.Getenv("ARCHYMEDES_REDUCE_MOTION") == "",
 		Debug:  debugLog(), ConfigDir: config.Default(),
 		NoPhotos:      photosOff(os.Getenv("ARCHYMEDES_PHOTOS")),
+		NoWallpaper:   photosOff(os.Getenv("ARCHYMEDES_WALLPAPER")),
 		PhotosOffline: strings.EqualFold(strings.TrimSpace(os.Getenv("ARCHYMEDES_PHOTOS")), "local"),
 	})
 	program := tea.NewProgram(ui)

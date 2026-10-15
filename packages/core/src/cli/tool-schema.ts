@@ -83,6 +83,53 @@ export function assertSupportedSchema(toolName: string, schema: unknown): assert
   }
 }
 
+/**
+ * Parameter names models bring from other tool sets, and the name each one means here.
+ *
+ * Applied only when the tool declares the target and does not declare the synonym itself, so a
+ * synonym never shadows a real parameter. `file_path` means `path` to every tool that has a `path`;
+ * that is the whole rule.
+ */
+const PARAMETER_SYNONYMS: Record<string, readonly string[]> = {
+  path: ["file_path", "filePath", "filepath", "file", "filename", "target_file", "absolute_path", "relative_path", "dir", "directory"],
+  content: ["contents", "file_text", "text", "data"],
+  oldText: ["old_string", "old_str", "oldString", "old_text", "search"],
+  newText: ["new_string", "new_str", "newString", "new_text", "replacement"],
+  replaceAll: ["replace_all"],
+  command: ["cmd", "shell_command", "script"],
+  timeoutMs: ["timeout_ms"],
+  timeoutSeconds: ["timeout", "timeout_seconds", "timeout_secs", "timeoutSecs"],
+  query: ["q", "search_query"],
+  pattern: ["glob"],
+  include: ["include_pattern", "file_pattern"],
+  url: ["uri", "link"],
+};
+
+/**
+ * A value of the wrong type turned into the declared one, when exactly one reading exists; undefined
+ * when there is no such reading and the call should be refused.
+ */
+function coerceScalar(type: ScalarType, value: unknown): unknown {
+  if (type === "string") {
+    // Structured data where a string is declared: the tool takes JSON text (edit_file's `edits`).
+    if (typeof value === "object" && value !== null) return JSON.stringify(value);
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (typeof value === "boolean") return String(value);
+    return undefined;
+  }
+  if (type === "integer") {
+    if (typeof value === "number" && Number.isFinite(value) && Math.abs(value - Math.round(value)) < 1e-9) return Math.round(value);
+    if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) return Number(value.trim());
+    return undefined;
+  }
+  if (typeof value === "string" && /^\s*(true|false)\s*$/i.test(value)) return value.trim().toLowerCase() === "true";
+  return undefined;
+}
+
+function describe(value: unknown): string {
+  return Array.isArray(value) ? "an array" : value === null ? "null" : typeof value === "object" ? "an object" : `a ${typeof value}`;
+}
+
 function checkScalar(type: ScalarType, value: unknown, label: string): void {
   if (type === "string") {
     if (typeof value !== "string") throw new ToolArgumentError(`${label} must be a string`);
@@ -97,28 +144,60 @@ function checkScalar(type: ScalarType, value: unknown, label: string): void {
   if (typeof value !== "boolean") throw new ToolArgumentError(`${label} must be true or false`);
 }
 
+/** Arguments made valid, and what was changed to make them so, for the model to read. */
+export type NormalizedArguments = { value: Record<string, unknown>; notes: string[] };
+
 /**
- * Validates one tool call's arguments against its declared schema.
+ * One tool call's arguments, checked against the declared schema, with unambiguous mistakes repaired.
  *
- * Checks rather than coerces, with exactly one documented exception (a lone item where an array is
- * declared — see below). Coercion is how `"3"` becomes `3` in one place and stays a string in
- * another; a model that sent the wrong type is better told so, because it can fix that next turn.
+ * This used to check without coercing, on the theory that a model told it sent the wrong type fixes
+ * it next turn. In practice a model often does not: it sends the same call again, and each refusal
+ * is a whole round trip (on a free model, a request out of a rationed day) spent on something
+ * nobody was confused about. `edits` sent as an array where JSON text is declared, `"30"` for 30,
+ * `file_path` for `path`: each has exactly one meaning. Those are repaired, the call runs, and the
+ * repair is reported back (`notes`), so the model still learns without losing the turn.
  *
- * `null` for an absent optional value is accepted and dropped: models routinely send explicit
- * nulls for parameters they are not using, and rejecting that is a round trip spent on nothing.
+ * What is still refused, because guessing would do the wrong thing: a parameter with no known
+ * meaning (`write_file({ mode: "append" })` must not silently become an overwrite), a required
+ * value that is missing, and a value with no single reading as the declared type.
+ *
+ * `null` for an absent optional value is dropped: models routinely send explicit nulls for
+ * parameters they are not using.
  */
-export function validateToolArguments(toolName: string, schema: ToolInputSchema, args: unknown): Record<string, unknown> {
-  if (!isPlainObject(args)) throw new ToolArgumentError(`${toolName} arguments must be a JSON object`);
+export function normalizeToolArguments(toolName: string, schema: ToolInputSchema, args: unknown): NormalizedArguments {
+  let input = args;
+  const notes: string[] = [];
+  // Arguments as JSON text rather than an object: one reading, if it parses to an object.
+  if (typeof input === "string") {
+    try {
+      const parsed: unknown = JSON.parse(input);
+      if (isPlainObject(parsed)) {
+        input = parsed;
+        notes.push("arguments were JSON text; read as an object");
+      }
+    } catch {
+      // Not JSON: refused below.
+    }
+  }
+  if (!isPlainObject(input)) throw new ToolArgumentError(`${toolName} arguments must be a JSON object`);
   const properties = schema.properties ?? {};
   const required = new Set(schema.required ?? []);
 
   const present: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(args)) {
+  for (const [given, value] of Object.entries(input)) {
+    let key = given;
+    if (!properties[key]) {
+      const meant = Object.entries(PARAMETER_SYNONYMS).find(([target, synonyms]) => properties[target] && synonyms.includes(given) && !(target in input));
+      if (meant) {
+        key = meant[0];
+        notes.push(`${given} read as ${key}`);
+      }
+    }
     const property = properties[key];
     if (!property) {
       const known = Object.keys(properties);
       throw new ToolArgumentError(
-        `${toolName} has no parameter "${key}". It accepts: ${known.length > 0 ? known.join(", ") : "no parameters"}.`,
+        `${toolName} has no parameter "${given}". It accepts: ${known.length > 0 ? known.join(", ") : "no parameters"}.`,
       );
     }
     // An explicit null means "not supplied" — but only where the schema agrees it is optional.
@@ -127,21 +206,34 @@ export function validateToolArguments(toolName: string, schema: ToolInputSchema,
       continue;
     }
     if (property.type === "array") {
-      // The one coercion this validator performs, and it earns its place: a model asked to close
-      // one todo sends `complete: 2` rather than `complete: [2]` constantly, and the meaning is
-      // unambiguous. Rejecting it costs a full round trip to relearn something nobody was confused
-      // about. Anything other than a lone item of the declared type is still an error.
+      // A lone item where an array is declared (`complete: 2` for `complete: [2]`): one meaning.
       const items = Array.isArray(value) ? value : [value];
-      items.forEach((item, index) => checkScalar(property.items.type, item, `${toolName}.${key}[${index}]`));
-      present[key] = items;
+      present[key] = items.map((item, index) => scalar(property.items.type, item, `${toolName}.${key}[${index}]`, notes));
       continue;
     }
-    checkScalar(property.type, value, `${toolName}.${key}`);
-    present[key] = value;
+    present[key] = scalar(property.type, value, `${toolName}.${key}`, notes);
   }
 
   for (const key of required) {
     if (!(key in present)) throw new ToolArgumentError(`${toolName} requires ${key}`);
   }
-  return present;
+  return { value: present, notes };
+}
+
+/** A declared scalar, repaired when it has one reading, refused when it has none. */
+function scalar(type: ScalarType, value: unknown, label: string, notes: string[]): unknown {
+  try {
+    checkScalar(type, value, label);
+    return value;
+  } catch (error) {
+    const repaired = coerceScalar(type, value);
+    if (repaired === undefined) throw error;
+    notes.push(`${label} was ${describe(value)}; read as ${type === "string" && typeof value === "object" ? "JSON text" : `${type === "integer" ? "an" : "a"} ${type}`}`);
+    return repaired;
+  }
+}
+
+/** `normalizeToolArguments` without the notes, for callers that only need the arguments. */
+export function validateToolArguments(toolName: string, schema: ToolInputSchema, args: unknown): Record<string, unknown> {
+  return normalizeToolArguments(toolName, schema, args).value;
 }

@@ -32,10 +32,7 @@ import (
 // cells has reached the terminal (the renderer draws at most 60 times a second).
 const sixelSettle = 80 * time.Millisecond
 
-type sixelDrawMsg struct {
-	signature string
-	attempt   int // a home photo whose cells are not yet known is tried again a few times
-}
+type sixelDrawMsg struct{ signature string }
 
 // pictureMode is how the Gallery draws: the best the terminal has, unless chosen with g.
 type pictureMode int
@@ -116,21 +113,8 @@ func (m *Model) sixelScene() (place, content string) {
 		return fmt.Sprintf("gallery|%dx%d|%dx%d", m.width, m.height, cw, ch),
 			fmt.Sprintf("%d|%d|%v|%s|%d", g.index, g.builtIn.Fit(), g.liveImage() != nil, g.live.CurrentURL(), len(m.toasts))
 	}
-	if m.activeWindow() == nil && m.homeSixel() && m.landingVisible() {
-		// The home screen is centred, so the photo moves with the size of what is beside it.
-		info := m.landingInfo()
-		widest := 0
-		for _, line := range info {
-			widest = max(widest, ansi.StringWidth(line))
-		}
-		return fmt.Sprintf("home|%dx%d|%dx%d|%d|%d", m.width, m.height, cw, ch, widest, len(info)),
-			fmt.Sprintf("%s|%d", m.homePhoto().ID, len(m.toasts))
-	}
 	return "", ""
 }
-
-// homeSixel is whether the home screen's photo is drawn in Sixel.
-func (m *Model) homeSixel() bool { return m.sixel && !m.opts.NoPhotos }
 
 // sixelAfter is called after every message. When the pictures should look different: if they
 // moved (or must go), the screen is cleared so the renderer draws every cell again and nothing of
@@ -180,22 +164,6 @@ func (m *Model) sixelDraw(msg sixelDrawMsg) tea.Cmd {
 			out.WriteString(ansi.CursorPosition(col+1, row+1))
 			out.WriteString(m.sixelPicture(img, l.innerCols, l.pictureRow, g.builtIn.Fit()))
 		}
-	case strings.HasPrefix(msg.signature, "home|"):
-		// The photo's cells are wherever the frame put them: its click zone says, once the frame is
-		// drawn. Not yet known (or not drawn at this size): ask again shortly, a few times.
-		z := m.zones.frame.Get("photo")
-		if z == nil || z.IsZero() {
-			if msg.attempt < 5 {
-				return tea.Tick(sixelSettle, func(time.Time) tea.Msg { return sixelDrawMsg{msg.signature, msg.attempt + 1} })
-			}
-			return nil
-		}
-		img, err := m.homePhoto().Image()
-		if err != nil {
-			return nil
-		}
-		out.WriteString(ansi.CursorPosition(z.StartX+1, z.StartY+1))
-		out.WriteString(m.sixelPicture(img, homePhotoCols, homePhotoRows, picture.FitCover))
 	default:
 		return nil
 	}

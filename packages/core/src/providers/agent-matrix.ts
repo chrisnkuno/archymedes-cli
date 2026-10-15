@@ -3,6 +3,7 @@ import { PROVIDER_IDS, PROVIDER_INFO, catalogPrices, isProviderId, missingRequir
 import { tokenPrices, type Currency, type TokenPrices } from "../money";
 import { priceAliases } from "../pricing";
 import { AnthropicAgentTurnProvider } from "./anthropic-agent";
+import { VENDOR_DIALECTS } from "./chat-dialects";
 import { OpenAIAgentTurnProvider } from "./openai-agent";
 import { ArchymedesCloudTurnProvider } from "./archymedes-cloud-agent";
 import { FreeAgentTurnProvider } from "./free-agent";
@@ -72,6 +73,7 @@ function openAiCompatibleSpec(id: Exclude<ProviderId, "anthropic" | "openai" | "
         apiKey: environment[`${prefix}_API_KEY`]?.trim() || "local",
         model,
         baseURL: environment[`${prefix}_BASE_URL`]?.trim() || fallbackBase,
+        dialect: VENDOR_DIALECTS[id],
       }),
   };
 }

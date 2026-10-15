@@ -1,5 +1,5 @@
-// Package gallery is the interface's photographs: Archimedes, the Greek world and mathematics,
-// chosen from Unsplash and shipped inside the binary, so they show with no network, no account and
+// Package gallery is the interface's photographs: Archimedes, the Greek world and mathematics, and
+// isometric sci-fi renders, which take turns as the wallpaper; chosen from Unsplash and shipped inside the binary, so they show with no network, no account and
 // no key. Each is under the Unsplash License (free to use, no permission needed) and is credited to
 // its photographer wherever it is drawn anyway.
 package gallery
@@ -21,7 +21,7 @@ type Photo struct {
 	ID    string // Unsplash photo id; the file is photos/<ID>.jpg
 	Title string // what it shows, short enough for a caption
 	By    string // the photographer, as Unsplash credits them
-	Theme string // "greek" or "math"
+	Theme string // "greek", "math", or "scifi" (the wallpapers)
 	// CDN is the photo's address on Unsplash's image CDN, without parameters: where the Gallery
 	// loads the full-resolution photo from (hotlinked, as Unsplash asks), sized by Full.
 	CDN string
@@ -38,6 +38,13 @@ var Photos = []Photo{
 	{"KTQgb5lcAHw", "Equations, read slowly", "Vitaly Gariev", "math", "https://images.unsplash.com/photo-1758685734268-003e12ca57bc"},
 	{"tVXHmtHhsIg", "The Parthenon in grey", "David Watkis", "greek", "https://images.unsplash.com/photo-1567870518898-40273c6d58a3"},
 	{"4dXO2xAzRQk", "A proof in progress", "Vitaly Gariev", "math", "https://images.unsplash.com/photo-1758685734303-e85757067f28"},
+	{"8TttTCQLUKw", "Data blocks in violet light · 3D", "Brecht Corbeel", "scifi", "https://images.unsplash.com/photo-1650954933593-6c9342ba0331"},
+	{"tGGuWW28-5M", "A circuit city, lit from within · 3D", "A Chosen Soul", "scifi", "https://images.unsplash.com/photo-1735744583234-ff1829001965"},
+	{"6XfBmLfaS-k", "A coder's room at night · isometric", "ANTIPOLYGON YOUTUBE", "scifi", "https://images.unsplash.com/photo-1661867011861-671e1cd85cc2"},
+	{"KZzPoMs5eIQ", "Lift-off from the chip · isometric", "Omar:. Lopez-Rincon", "scifi", "https://images.unsplash.com/photo-1744470680770-7db82336ca27"},
+	{"m5HRQlDWDx4", "The violet core · 3D", "LekoArts", "scifi", "https://images.unsplash.com/photo-1684395646154-19832d6265b3"},
+	{"SZcLtU9NcBI", "The machine that mints · isometric", "Tran Mau Tri Tam ✪", "scifi", "https://images.unsplash.com/photo-1647331311387-9cca489b53f2"},
+	{"M3T9qfa_kDQ", "Neon city, made in Blender", "Bojun Liu", "scifi", "https://images.unsplash.com/photo-1732631486925-8f7e9924f993"},
 }
 
 // URL is the photo's page on Unsplash, with the referral Unsplash asks apps to send.
@@ -84,6 +91,48 @@ func Pick(n int) Photo {
 		n += len(Photos)
 	}
 	return Photos[n]
+}
+
+// Wallpaper is the n-th wallpaper (wrapping either way): the antiquity photos (Archimedes, Rome,
+// Greece) and the sci-fi renders, taking turns, so the screen moves between the two worlds the
+// name spans rather than staying in one.
+func Wallpaper(n int) Photo {
+	var greek, scifi []Photo
+	for _, p := range Photos {
+		switch p.Theme {
+		case "greek":
+			greek = append(greek, p)
+		case "scifi":
+			scifi = append(scifi, p)
+		}
+	}
+	var turns []Photo
+	for i := range max(len(greek), len(scifi)) {
+		if i < len(greek) {
+			turns = append(turns, greek[i])
+		}
+		if i < len(scifi) {
+			turns = append(turns, scifi[i])
+		}
+	}
+	if len(turns) == 0 {
+		return Pick(n)
+	}
+	n %= len(turns)
+	if n < 0 {
+		n += len(turns)
+	}
+	return turns[n]
+}
+
+// IndexOf is p's place in Photos, for Pick; 0 when it is not listed.
+func IndexOf(p Photo) int {
+	for i, q := range Photos {
+		if q.ID == p.ID {
+			return i
+		}
+	}
+	return 0
 }
 
 // OfTheme is the n-th photo of a theme (wrapping), or Pick(n) when no photo has that theme.

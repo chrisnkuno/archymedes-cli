@@ -32,7 +32,7 @@ func firstRunProviders() []acp.ProviderOverview {
 func unconfigured(t *testing.T) (*Model, *fakeAgent) {
 	t.Helper()
 	agent := &fakeAgent{messages: make(chan any, 16), providers: firstRunProviders()}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, Cwd: "/tmp/project"})
+	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, Cwd: "/tmp/project"})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	_, cmd := m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Reason: "No model provider is configured"}})
 	run(m, cmd)
@@ -122,7 +122,7 @@ func contains(list []string, want string) bool {
 
 func TestResumeIsAskedOfTheAgentWhenTheSessionOpens(t *testing.T) {
 	agent := &fakeAgent{messages: make(chan any, 16)}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, Resume: "latest"})
+	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, Resume: "latest"})
 	_, cmd := m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	run(m, cmd)
 	if agent.resumed != "latest" || m.phase != ready {
@@ -132,7 +132,7 @@ func TestResumeIsAskedOfTheAgentWhenTheSessionOpens(t *testing.T) {
 
 func TestStartupNoticesArriveAsToastsOnceTheSessionIsOpen(t *testing.T) {
 	agent := &fakeAgent{messages: make(chan any, 16)}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }})
+	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	_, cmd := m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	run(m, cmd)

@@ -68,3 +68,16 @@ func BenchmarkViewShortTranscript(b *testing.B) {
 		m.View()
 	}
 }
+
+// A redraw of a 200×60 home screen with the wallpaper under it: the photo laid cell by cell.
+func BenchmarkViewWithWallpaper(b *testing.B) {
+	m, _ := newTestModel(&testing.T{})
+	m.opts.NoWallpaper = false
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	m.View()
+	b.ResetTimer()
+	for i := range b.N {
+		m.angle = float64(i) // the mark turns: every frame is new
+		m.View()
+	}
+}

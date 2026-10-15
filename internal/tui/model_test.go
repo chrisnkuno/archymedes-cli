@@ -154,7 +154,9 @@ func (f *fakeAgent) Close()               {}
 func newTestModel(t *testing.T) (*Model, *fakeAgent) {
 	t.Helper()
 	agent := &fakeAgent{messages: make(chan any, 16)}
-	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, Cwd: "/tmp/project"})
+	// No wallpaper: these tests read the screen's text, which the wallpaper fills the gaps of. The
+	// wallpaper has its own tests (wallpaper_test.go).
+	m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, Cwd: "/tmp/project", NoWallpaper: true})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	m.Update(connectedMsg{session: acp.Session{ID: "s1", Info: acp.SessionInfo{Model: "m1", ProviderLabel: "Free", Mode: "build"}}})

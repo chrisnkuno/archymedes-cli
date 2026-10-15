@@ -134,7 +134,7 @@ export function parseModelsResponse(body: unknown): string[] {
  * is all `/v1/models` reliably returns — capability metadata is not consistently present.
  */
 const NON_CHAT = [
-  /embed/i, /moderation/i, /whisper/i, /^tts/i, /audio/i, /dall-?e/i, /^stable-/i,
+  /embed/i, /moderation/i, /whisper/i, /tts/i, /orpheus/i, /audio/i, /dall-?e/i, /^stable-/i,
   /image/i, /vision-encoder/i, /rerank/i, /guard/i, /^text-similarity/i, /^text-search/i,
   /transcribe/i, /realtime/i, /^omni-moderation/i, /^davinci/i, /^babbage/i, /codex-mini/i,
 ];

@@ -107,6 +107,9 @@ bun install
 bun run archymedes            # run the CLI from source: the Go interface, with this checkout's agent
 bun run agent "a request"     # the TypeScript agent alone, for one-shot and --json runs
 bun run test                  # vitest
+bun run test:invariants       # seeded random model and random user: the runtime's and the desktop's invariants
+bun run test:live             # one real tool round trip per configured provider (spends a few hundred tokens each)
+bun run test:live --census    # which tool names each model reaches for, ours or not
 bun run typecheck             # tsc --noEmit
 bun run build:packages        # emit packages/*/dist
 bun run build:state           # cargo build the Rust state binary (optional)
@@ -156,7 +159,7 @@ uncommitted changes the first offer is to review them. Stats draws the session a
 call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
 is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the settings
 file. `ARCHYMEDES_REDUCE_MOTION=1` turns off animated scrolling (and the photos stay still);
-`ARCHYMEDES_PHOTOS=off` leaves the photos out, and `ARCHYMEDES_PHOTOS=local` keeps them to the
+`ARCHYMEDES_PHOTOS=off` leaves the photos out, `ARCHYMEDES_WALLPAPER=off` keeps them but not behind the screen, and `ARCHYMEDES_PHOTOS=local` keeps them to the
 built-in copies (the Gallery fetches nothing); `ARCHYMEDES_MODELS_OFFLINE=1` keeps the model list to
 its cache unless refreshed; `ARCHYMEDES_DEBUG_LOG=<file>` writes a structured log of what the
 interface does.

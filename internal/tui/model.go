@@ -76,6 +76,8 @@ type Options struct {
 	AgentArgv []string
 	// NoPhotos leaves the photographs out (ARCHYMEDES_PHOTOS=off): text only, everywhere.
 	NoPhotos bool
+	// NoWallpaper keeps the photographs but not behind the screen (ARCHYMEDES_WALLPAPER=off).
+	NoWallpaper bool
 	// PhotosOffline keeps the photographs to the copies built in (ARCHYMEDES_PHOTOS=local): the
 	// Gallery does not fetch the full-resolution ones from Unsplash.
 	PhotosOffline bool
@@ -119,6 +121,12 @@ type Model struct {
 	photoIndex int
 	photoAt    time.Time
 	photoCache map[string][]string
+	quitting   bool           // quit was asked for: nothing more is drawn
+	wall       *wallpaperGrid // the wallpaper for wallKey: photo, size, dimming and theme
+	wallKey    string
+	// The last frame laid over the wallpaper, and the result, reused while neither changes.
+	underIn, underOut string
+	underGrid         *wallpaperGrid
 	// The terminal's cell size in pixels once it has said (CSI 16 t), so photos keep their shape,
 	// and its window size in pixels (CSI 14 t), for terminals that only say that.
 	cellW, cellH   int
@@ -683,7 +691,10 @@ func (m *Model) quit() tea.Cmd {
 		}
 		go m.agent.Close()
 	}
-	m.zones.close()
+	// Not closing the zone managers: Bubble Tea draws once more after this Update, and a scan on a
+	// closed manager blocks once its buffer fills (a frame with 200+ click targets would hang the
+	// exit). Quitting draws nothing instead, and the process ends with the managers.
+	m.quitting = true
 	return tea.Quit
 }
 

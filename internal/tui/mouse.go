@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -86,7 +87,7 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		}
 	}
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
-		return m.openGallery(m.photoIndex) // the photo, full size
+		return m.openGallery(gallery.IndexOf(m.homePhoto())) // the photo, full size
 	}
 	for _, it := range m.tr.items {
 		if t, ok := it.(*toolItem); ok && t.done && frame.Get("tool:"+t.id).InBounds(msg) {

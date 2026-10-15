@@ -41,7 +41,7 @@ func (m *Model) View() tea.View {
 	if m.opts.Mouse && !m.selecting {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
-	if m.width <= 0 || m.height <= 0 {
+	if m.width <= 0 || m.height <= 0 || m.quitting {
 		return v
 	}
 	rows := make([]string, 0, m.height)
@@ -69,7 +69,7 @@ func (m *Model) View() tea.View {
 	if len(rows) > m.height {
 		rows = rows[len(rows)-m.height:]
 	}
-	v.SetContent(m.composite(strings.Join(rows, "\n")))
+	v.SetContent(m.underlay(m.composite(strings.Join(rows, "\n")), m.width, m.height))
 	return v
 }
 

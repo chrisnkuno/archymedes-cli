@@ -71,6 +71,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
         ARCHYMEDES_MODELS_OFFLINE: "true", // the model list never reaches past the stub
         ARCHYMEDES_AGENT: `${bunExecutable()} run ${path.join(REPO, "packages/archymedes-cli/src/archymedes.ts")}`,
         TZ: "UTC",
+        ARCHYMEDES_WALLPAPER: "off", // the screen is read as text; the wallpaper fills its gaps
         ...env,
       },
     });
@@ -286,7 +287,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
     proc.write("\x1b[24~"); // F12
     await screenShows(screen, "built into Archymedes");
-    expect(await settle(screen)).toMatch(/\d+ of 9/);
+    expect(await settle(screen)).toMatch(/\d+ of \d+/); // the count follows internal/gallery
     const before = await settle(screen);
     proc.write("\x1b[C"); // →
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -295,6 +296,19 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await screenShows(screen, "fit cover");
     proc.write("\x1b"); // esc
     await screenShows(screen, "Ask Archymedes");
+  }, 120_000);
+
+  it("draws the whole screen over the wallpaper, and still quits at once", async () => {
+    const { proc, screen } = boot(130, 34, [], { ARCHYMEDES_WALLPAPER: "on", ARCHYMEDES_PHOTOS: "local" });
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    const frame = await settle(screen);
+    // The photo fills what nothing else does, and the words are all still there.
+    expect(frame).toContain("▀");
+    expect(frame).toContain("a coding agent that shows its work");
+    expect(frame).toMatch(/by .+ · Unsplash/);
+    // Quitting draws once more; that draw once could block on a closed zone manager.
+    proc.write("/quit\r");
+    expect((await proc.waitForExit(15_000)).exitCode).toBe(0);
   }, 120_000);
 
   it("sets up a provider on first run and opens the session with it", async () => {

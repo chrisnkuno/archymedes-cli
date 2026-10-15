@@ -87,6 +87,8 @@ type RuntimeEvent struct {
 	// Effort is how hard the model was asked to think for this call, and EffortReason why.
 	Effort       string `json:"effort"`
 	EffortReason string `json:"effortReason"`
+	// context_shrunk: 1 stubbed old tool output, 2 set aside the earlier conversation
+	Step int `json:"step"`
 	// provider_retry
 	NextAttempt int    `json:"nextAttempt"`
 	MaxAttempts int    `json:"maxAttempts"`

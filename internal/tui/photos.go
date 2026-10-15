@@ -58,10 +58,10 @@ func (m *Model) photoCard(p gallery.Photo, cols, rows int) []string {
 	)
 }
 
-// homePhoto is the photo the home screen shows now: it turns every photoInterval, or with reduced
-// motion stays on the day's photo.
+// homePhoto is the wallpaper now, antiquity and sci-fi in turn: it turns every photoInterval, or
+// with reduced motion stays on the day's.
 func (m *Model) homePhoto() gallery.Photo {
-	return gallery.Pick(m.photoIndex)
+	return gallery.Wallpaper(m.photoIndex)
 }
 
 // turnPhoto advances the home screen's photo when its time is up; called on the landing's tick.

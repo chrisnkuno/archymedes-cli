@@ -19,6 +19,8 @@
     "check": "bun run test && bun run test:go && bun run typecheck && bun run build:packages",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:live": "bun run tooling/live/provider-smoke.ts",
+    "test:invariants": "vitest run packages/core/src/runtime-invariants.test.ts packages/core/src/providers/chat-dialects.test.ts packages/core/src/tool-aliases.test.ts && go test ./internal/tui -run 'Invariants|EveryAppHolds|PureFunction|Wallpaper|Glass|Glyph' -count=1",
     "typecheck": "tsc --noEmit",
     "build:cli": "bun run tooling/build/build-cli.ts",
     "build:packages": "bun run tooling/build/build-packages.ts",

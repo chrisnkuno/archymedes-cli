@@ -102,6 +102,13 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		}
 		m.retrying = fmt.Sprintf("retry %d/%d: %s", ev.NextAttempt, ev.MaxAttempts, ev.Reason)
 		m.retryStart, m.retryDelay = time.Now(), time.Duration(ev.DelayMs)*time.Millisecond
+	case "context_shrunk":
+		// The model said the conversation was too long; the agent made it shorter and carried on.
+		what := "old tool output shortened"
+		if ev.Step >= 2 {
+			what = "the earlier conversation set aside"
+		}
+		m.notice(noticeFaint, "Too long for this model: "+what+", and the turn goes on.")
 	case "runtime_stop":
 		if ev.Status != "completed" && ev.Status != "cancelled" {
 			if summary := stopSummary(ev.Summary); summary != "" {

@@ -110,6 +110,12 @@ class FreeAccessError extends Error {
 }
 
 /** Direct or gateway access, with the free-only constraint enforced on every request. */
+/** Headroom over the expected input size when deciding whether a conversation fits a free model. */
+const FREE_FIT_MARGIN = 1.5;
+
+/** The least reply room a free model must have left after the input to be worth sending to. */
+const MIN_FREE_REPLY_TOKENS = 1_024;
+
 export class FreeAgentTurnProvider implements AgentTurnProvider {
   readonly selection: { provider: string; model: string };
   /**
@@ -250,10 +256,22 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       const candidates = this.options.model === FREE_ROUTER ? (capable.length > 0 ? capable : routable) : selected ? [selected] : [];
       if (!candidates.length) throw new FreeAccessError("No eligible free tool model is available. Run /models refresh or try again later.");
       const messages = toWireMessages(request.messages);
-      const input = approximateInputTokens([JSON.stringify(messages), JSON.stringify(request.tools)]).maximumInputTokens;
+      // What the conversation will take of a model's window: the expected count with half again for
+      // tokenizer variance (code and JSON split finer than prose). Not `maximumInputTokens`: that is
+      // a byte-per-token cap for spending limits, four times the real size, and as a fit check it
+      // refused every free model anything past a quarter of its window, which is how sessions met
+      // "exceeds the available free model context" with most of the context unused. If a model still
+      // finds it too long, the runtime shortens the transcript and asks again.
+      const input = Math.ceil(approximateInputTokens([JSON.stringify(messages), JSON.stringify(request.tools)]).expectedInputTokens * FREE_FIT_MARGIN);
       const output = Math.min(request.maxOutputTokens, this.capabilities.maxOutputTokens, ...candidates.map((model) => model.max_output ?? 4096));
       if (!Number.isSafeInteger(output) || output < 1) throw new FreeAccessError("Free mode requires a positive output token limit");
-      const fitting = candidates.filter((model) => model.context_window !== null && input + output <= model.context_window);
+      // A model fits when the input leaves it room for a useful reply, not necessarily the whole
+      // output allowance: the reply is cut to what is left (`outputFor`), rather than turning a
+      // conversation that fits into "exceeds the available context" because of a ceiling it would
+      // rarely reach. Only when not even that much is left does the runtime shorten the transcript.
+      const floor = Math.min(output, MIN_FREE_REPLY_TOKENS);
+      const fitting = candidates.filter((model) => model.context_window !== null && input + floor <= model.context_window);
+      const outputFor = (model: { context_window: number | null }) => Math.min(output, (model.context_window ?? input + output) - input);
       if (!fitting.length) throw new FreeAccessError("The conversation exceeds the available free model context. Start a new session or select a larger free model.");
       // The virtual router tries verified candidates itself, in FREE_ROUTER_PREFERENCE order, rather than letting
       // OpenRouter pick an unverified model. Some zero-priced models are gated to listed apps (403) or
@@ -289,7 +307,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
           signal: userSignal,
         });
         try {
-          const turn = await this.attempt(candidate.id, messages, output, request, onTextDelta, onOutputProgress, deadline);
+          const turn = await this.attempt(candidate.id, messages, outputFor(candidate), request, onTextDelta, onOutputProgress, deadline);
           void this.health?.record(candidate.id, { ok: true });
           this.pacer.reportSuccess();
           return turn;

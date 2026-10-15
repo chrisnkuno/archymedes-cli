@@ -24,12 +24,6 @@ func newZones() zones {
 	return zones{frame: zone.New(), dialog: zone.New(), toasts: zone.New()}
 }
 
-func (z zones) close() {
-	z.frame.Close()
-	z.dialog.Close()
-	z.toasts.Close()
-}
-
 // scanAt registers the zones marked in block as if it were drawn at (x, y), and returns block with
 // the markers removed, ready to be placed there.
 func scanAt(m *zone.Manager, block string, x, y int) string {

@@ -77,7 +77,7 @@ describe("local command executor", () => {
   it("terminates a timed-out process with a classified exit code", async () => {
     const result = await runLocalCommand('node -e "setTimeout(() => {}, 10000)"', { cwd: root, timeoutMs: 20 });
     expect(result.exitCode).toBe(124);
-    expect(result.stderr).toContain("exceeded 20ms");
+    expect(result.stderr).toContain("exceeded its 20ms limit");
   });
 
   it("terminates the in-flight process tree when the caller cancels", async () => {

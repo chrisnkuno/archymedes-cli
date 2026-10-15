@@ -11,7 +11,7 @@ import type { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import { ARCHYMEDES_CAPABILITIES } from "./permissions";
 import { COMBINED_SECRET_PATTERN, findSecretsInLine, SEVERITY_RANK, type SecretFinding } from "./secret-scan";
-import { assertSupportedSchema, validateToolArguments, type ToolInputSchema } from "./tool-schema";
+import { assertSupportedSchema, normalizeToolArguments, type ToolInputSchema } from "./tool-schema";
 import type { ToolProvider } from "./tool-providers";
 import { collectExternalTools } from "./tool-providers";
 import { credentialRequest, deployOffer, deployPlan, detectWebApp, DEPLOY_PROVIDERS, type DeployTarget } from "./deploy";
@@ -419,7 +419,11 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       description: `Run a bounded command in the project root (builds, tests, linters). Dev servers go through start_application. ${workspace.commandGuidance}`,
       inputSchema: {
         type: "object",
-        properties: { command: { type: "string" }, timeoutMs: { type: "integer" } },
+        properties: {
+          command: { type: "string" },
+          timeoutSeconds: { type: "integer", description: `Default and most: ${Math.round(commandTimeoutMs / 1000)}.` },
+          timeoutMs: { type: "integer" },
+        },
         required: ["command"],
         additionalProperties: false,
       },
@@ -441,7 +445,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
             data: { command, reason: "persistent_foreground_command" },
           };
         }
-        const timeoutMs = Math.min(optionalInteger(args.timeoutMs, "timeoutMs") ?? commandTimeoutMs, commandTimeoutMs);
+        const { timeoutMs, note: timeoutNote } = commandTimeout(args, commandTimeoutMs);
         const result = await workspace.runCommand(command, timeoutMs, context.signal);
         const body = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n") || "(no output)";
         // A missing program is the one failure whose fix is never "try again": the model has to
@@ -450,7 +454,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const missing = missingProgram(command, result);
         if (missing) {
           return {
-            content: `exit ${result.exitCode}\n${body}\n\n'${missing}' is not available in this environment. Do not retry this command. Use a program listed as available in the environment section, or check for an alternative with 'command -v' before running it.`,
+            content: `exit ${result.exitCode}\n${body}${timeoutNote ? `\n\n[${timeoutNote}]` : ""}\n\n'${missing}' is not available in this environment. Do not retry this command. Use a program listed as available in the environment section, or check for an alternative with 'command -v' before running it.`,
             isError: true,
             data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, missingProgram: missing },
           };
@@ -459,7 +463,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const rejectedVerification = kind && result.exitCode === 0 ? rejectedVerificationReason(command, result) : null;
         const verificationNote = rejectedVerification ? `\n\nArchymedes did not accept this as verification: ${rejectedVerification}` : "";
         return {
-          content: `exit ${result.exitCode}\n${body}${verificationNote}`,
+          content: `exit ${result.exitCode}\n${body}${verificationNote}${timeoutNote ? `\n\n[${timeoutNote}]` : ""}`,
           isError: result.exitCode !== 0,
           data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, ...(kind && !rejectedVerification ? { verificationKind: kind } : {}), ...(rejectedVerification ? { verificationRejectedReason: rejectedVerification } : {}) },
           // A passing test command is the evidence the runtime needs before it will call a
@@ -1177,8 +1181,14 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
     // `async` so a rejected argument surfaces as a rejected promise rather than a synchronous
     // throw. `execute` is declared to return a promise, and a caller that only guards `await`
     // would otherwise be bypassed by the one failure mode it most needs to catch.
-    const withValidatedArguments = async (argumentsValue: Record<string, unknown>, context: Parameters<AgentTool["execute"]>[1]) =>
-      execute(validateToolArguments(tool.name, schema, argumentsValue), context);
+    // Unambiguous mistakes in the arguments are repaired rather than refused (see
+    // `normalizeToolArguments`), and what was repaired is said at the end of the result, so the
+    // model learns the right shape without spending a turn to be told it.
+    const withValidatedArguments = async (argumentsValue: Record<string, unknown>, context: Parameters<AgentTool["execute"]>[1]) => {
+      const { value, notes } = normalizeToolArguments(tool.name, schema, argumentsValue);
+      const result = await execute(value, context);
+      return notes.length === 0 ? result : { ...result, content: `${result.content}\n\n[Archymedes adjusted this call: ${notes.join("; ")}.]` };
+    };
     const withInstructions =
       !instructions || !PATH_TOOLS.has(tool.name)
         ? withValidatedArguments
@@ -1187,7 +1197,7 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
           // the three tools got there first.
           async (argumentsValue: Record<string, unknown>, context: Parameters<AgentTool["execute"]>[1]) => {
             const result = await withValidatedArguments(argumentsValue, context);
-            const touchedPath = typeof argumentsValue.path === "string" ? argumentsValue.path : undefined;
+            const touchedPath = pathArgument(tool.name, schema, argumentsValue);
             if (!touchedPath || result.isError) return result;
             const note = NestedInstructionTracker.render(await instructions.discover(touchedPath));
             return note ? { ...result, content: `${result.content}${note}` } : result;
@@ -1207,6 +1217,42 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
       },
     };
   });
+}
+
+/**
+ * How long a command may run, and what to tell the model about how its request was read.
+ *
+ * Models think in seconds. Asked for `timeoutMs`, they sent 180, 300, 70, and every command, a
+ * `pip install` included, was killed in a fraction of a second, a turn lost each time, and the
+ * model never understood why. So `timeoutSeconds` is what is offered; a `timeoutMs` under one
+ * second is read as seconds (no build, test or install finishes that fast, so a sub-second limit
+ * is never what was meant); and nothing is cut below one second or above the configured ceiling.
+ */
+export function commandTimeout(args: Record<string, unknown>, ceilingMs: number): { timeoutMs: number; note?: string } {
+  const seconds = optionalInteger(args.timeoutSeconds, "timeoutSeconds");
+  const millis = optionalInteger(args.timeoutMs, "timeoutMs");
+  let asked: number | undefined;
+  let note: string | undefined;
+  if (seconds !== undefined) asked = seconds * 1000;
+  else if (millis !== undefined && millis < 1000) {
+    asked = millis * 1000;
+    note = `timeoutMs ${millis} read as ${millis} seconds; use timeoutSeconds`;
+  } else asked = millis;
+  if (asked === undefined) return { timeoutMs: ceilingMs };
+  if (asked > ceilingMs) {
+    return { timeoutMs: ceilingMs, note: `${note ? `${note}; ` : ""}limited to the ${Math.round(ceilingMs / 1000)}s most a command may run` };
+  }
+  return { timeoutMs: Math.max(asked, 1000), ...(note ? { note } : {}) };
+}
+
+/** The `path` a call names, read the way the tool reads it (`file_path` included). */
+function pathArgument(toolName: string, schema: ToolInputSchema, args: Record<string, unknown>): string | undefined {
+  try {
+    const path = normalizeToolArguments(toolName, schema, args).value.path;
+    return typeof path === "string" ? path : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Tools whose `path` argument names the file or directory whose instructions matter. */

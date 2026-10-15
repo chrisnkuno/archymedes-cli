@@ -118,7 +118,7 @@ func TestKeysAppRebindsRefusesAndResetsAndTheChangeSurvivesARestart(t *testing.T
 	dir := t.TempDir()
 	agent := &fakeAgent{messages: make(chan any, 16)}
 	newModel := func() *Model {
-		m := New(Options{Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
+		m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
 		m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 		m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 		m.Update(connectedMsg{session: acp.Session{ID: "s1"}})
