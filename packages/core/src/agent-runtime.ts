@@ -290,6 +290,7 @@ export type AgentRuntimeEvent =
   // output, step 2 set aside the conversation before this request.
   | { type: "context_shrunk"; iteration: number; step: number }
   | { type: "tool_name"; iteration: number; toolCallId: string; requested: string; resolved?: string }
+  | { type: "steered"; iteration: number; count: number }
   | { type: "runtime_stop"; status: AgentRuntimeResult["status"]; summary: string };
 
 export type AgentRuntimeControl = {
@@ -333,7 +334,21 @@ export type AgentRuntimeRequest = AgentToolContext & {
   effort?: ThinkingEffort;
   modelReservationRwf: number;
   safetyIdentifier: string;
+  /**
+   * Messages the person sent while this run works. Taken after each round of tool results and
+   * before the run concludes, so they reach the model within the run; closed the moment the run
+   * decides to stop, after which a sender is told it is too late and sends a new turn instead.
+   */
+  steering?: SteeringChannel;
 };
+
+/** Words for a run in progress, from the person watching it (see `AgentRuntimeRequest.steering`). */
+export type SteeringChannel = { take(): string[]; close(): void };
+
+/** How a message sent mid-run reads to the model: the person's words, said while it worked. */
+export function steeringMessage(text: string): string {
+  return `[Sent while you were working] ${text}`;
+}
 
 export type AgentRuntimeResult = {
   status: "completed" | "failed" | "blocked" | "needs_approval" | "needs_verification" | "cancelled" | "iteration_limit";
@@ -1105,7 +1120,19 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       return false;
     };
 
+    // Taking and closing happen with no await between the last take and the close: a message sent
+    // in that gap would otherwise be accepted and then never read.
+    const steer = async (iteration: number): Promise<boolean> => {
+      // A stopped run reads nothing more: what was sent is handed back by whoever owns the channel.
+      if (!request.steering || await this.dependencies.control.isCancellationRequested()) return false;
+      const steered = request.steering.take();
+      if (steered.length === 0) return false;
+      for (const text of steered) messages.push({ role: "user", content: steeringMessage(text) });
+      await this.dependencies.control.persistEvent({ type: "steered", iteration, count: steered.length });
+      return true;
+    };
     const stop = async (status: AgentRuntimeResult["status"], summary: string, iterations: number): Promise<AgentRuntimeResult> => {
+      request.steering?.close();
       await this.dependencies.control.persistEvent({ type: "runtime_stop", status, summary });
       return {
         status, summary, messages, usage, actualModelRwf, iterations, toolCallsExecuted,
@@ -1276,6 +1303,9 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           messages.push({ role: "user", content: TEST_EVIDENCE_NUDGE, internal: true });
           continue;
         }
+        // Something the person said while this answer was being written: answer that too. Only
+        // microtasks run between this take and the close in `stop`, and a message arrives on I/O.
+        if (await steer(iteration)) continue;
         return workspaceNeedsVerification
           // The gate must lead — this is not a success, and a reader skimming the ledger has to see
           // that first. But replacing the summary outright threw away the only account of what the
@@ -1536,6 +1566,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       if (totalToolResultChars >= request.maxTotalToolResultChars) await compactOlderToolResults(iteration);
       await this.dependencies.control.checkpointMessages?.(messages);
       if (totalToolResultChars >= request.maxTotalToolResultChars) return stop("iteration_limit", "Run reached its total tool-result context budget.", iteration);
+      await steer(iteration);
     }
     return stop("iteration_limit", "Run reached its model iteration budget.", request.maxIterations);
   }

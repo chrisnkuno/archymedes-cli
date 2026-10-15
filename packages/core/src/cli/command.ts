@@ -1,9 +1,10 @@
+import { bubblewrapArgs, type SandboxPolicy } from "./os-sandbox";
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
 
 export type CommandRunner = (
   command: string,
-  options: { cwd: string; timeoutMs: number; strictEnvironment?: boolean; containProcessTree?: boolean; signal?: AbortSignal },
+  options: { cwd: string; timeoutMs: number; strictEnvironment?: boolean; containProcessTree?: boolean; signal?: AbortSignal; sandbox?: SandboxPolicy },
 ) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
 
 /**
@@ -352,7 +353,13 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
     return { exitCode: 2, stdout: "", stderr: error instanceof Error ? error.message : "Invalid command" };
   }
 
-  if (options.containProcessTree !== false && await isProcessContainmentAvailable()) {
+  if (options.sandbox) {
+    // bubblewrap is the containment here too: its own pid namespace, gone with its parent.
+    const inner = throughShell ? ["sh", "-c", command] : [program, ...argv];
+    program = "bwrap";
+    argv = [...bubblewrapArgs(options.sandbox, options.cwd), ...inner];
+    throughShell = false;
+  } else if (options.containProcessTree !== false && await isProcessContainmentAvailable()) {
     // unshare needs its own argv, not a shell string — a command that needed a shell still gets
     // one, just as `sh -c` explicitly inside the namespace rather than via spawn's own shell mode.
     const inner = throughShell ? ["sh", "-c", command] : [program, ...argv];

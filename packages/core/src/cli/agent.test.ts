@@ -584,7 +584,9 @@ describe("ArchymedesAgent", () => {
 
     const reverted = await agent.undo();
     expect(reverted?.tree).toBe("tree_abc");
-    expect(gitCalls.at(-1)).toEqual(["read-tree", "-u", "--reset", "tree_abc"]);
+    // The files are restored, then the checkpoint's hidden ref is let go: the turn it guarded is undone.
+    expect(gitCalls.slice(-2)).toEqual([["read-tree", "-u", "--reset", "tree_abc"], ["update-ref", "-d", `refs/archymedes/checkpoints/${agent.sessionId}/1`]]);
+    expect(agent.listCheckpoints()).toEqual([]);
   });
 
   describe("restore scope", () => {
@@ -612,7 +614,11 @@ describe("ArchymedesAgent", () => {
 
       const reverted = await agent.undo("code");
       expect(reverted?.tree).toBe("tree_abc");
-      expect(gitCalls).toEqual([["add", "--all", "--", ".", ":(exclude).archymedes"], ["read-tree", "-u", "--reset", "tree_abc"]]);
+      expect(gitCalls).toEqual([
+        ["add", "--all", "--", ".", ":(exclude).archymedes"],
+        ["read-tree", "-u", "--reset", "tree_abc"],
+        ["update-ref", "-d", `refs/archymedes/checkpoints/${agent.sessionId}/1`],
+      ]);
 
       // The transcript is untouched: a second turn still carries "make a change" and its answer as
       // history, proving this is a real property of the conversation the model receives, not just
@@ -622,14 +628,15 @@ describe("ArchymedesAgent", () => {
       expect(secondRequest.messages.some((message) => message.content === "make a change")).toBe(true);
     });
 
-    it("conversation scope truncates the transcript and never touches git at all", async () => {
+    it("conversation scope truncates the transcript and never touches the files", async () => {
       const { agent, model, gitCalls } = checkpointedAgent();
       await agent.send("make a change");
       gitCalls.length = 0;
 
       const reverted = await agent.undo("conversation");
       expect(reverted?.tree).toBe("tree_abc"); // still names which checkpoint was undone
-      expect(gitCalls).toEqual([]); // no restore() call — code scope alone owns read-tree
+      // No restore() call — code scope alone owns read-tree; only the spent checkpoint's ref goes.
+      expect(gitCalls).toEqual([["update-ref", "-d", `refs/archymedes/checkpoints/${agent.sessionId}/1`]]);
 
       await agent.send("what did you just do?");
       const secondRequest = model.requests.at(-1)!;
@@ -752,6 +759,253 @@ describe("ArchymedesAgent", () => {
     expect(findings.map((finding) => finding.severity)).toEqual(["critical", "medium"]);
     expect(findings[0]).toMatchObject({ path: "config.ts", kind: "AWS access key" });
     expect(model.requests).toHaveLength(0); // no model call was made
+  });
+
+  it("keeps its checkpoints across a resume, and each /undo steps back one more turn", async () => {
+    let trees = 0;
+    const git = async (args: string[]) => ({ exitCode: 0, stdout: args[0] === "write-tree" ? `tree_${trees++}\n` : "", stderr: "" });
+    const model = scriptedModel([{ finishReason: "stop", content: "One." }, { finishReason: "stop", content: "Two." }, { finishReason: "stop", content: "Three." }]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", git });
+    await agent.send("first change");
+    await agent.send("second change");
+    await agent.send("third change");
+    const saved = await loadSession(root, agent.sessionId);
+    expect(saved?.checkpoints?.map((checkpoint) => checkpoint.tree)).toEqual(["tree_0", "tree_1", "tree_2"]);
+    await agent.relinquish();
+
+    const resumed = new ArchymedesAgent({ root, model: scriptedModel([]), prices, mode: "build", approve: async () => "allow", git });
+    resumed.resume(saved!);
+    expect((await resumed.undo())?.tree).toBe("tree_2");
+    expect((await resumed.undo())?.tree).toBe("tree_1");
+    expect(resumed.snapshot().messages.filter((message) => message.role !== "system").map((message) => message.content)).toEqual(["first change", "One."]);
+    expect((await loadSession(root, resumed.sessionId))?.checkpoints?.map((checkpoint) => checkpoint.tree)).toEqual(["tree_0"]);
+  });
+
+  it("rewinds to any earlier turn: that turn and everything after it are gone", async () => {
+    let trees = 0;
+    const model = scriptedModel([{ finishReason: "stop", content: "One." }, { finishReason: "stop", content: "Two." }, { finishReason: "stop", content: "Three." }]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async (args) => ({ exitCode: 0, stdout: args[0] === "write-tree" ? `tree_${trees++}\n` : "", stderr: "" }),
+    });
+    for (const prompt of ["first", "second", "third"]) await agent.send(prompt);
+    expect(await agent.rewind(7)).toBeUndefined();
+    expect((await agent.rewind(1))?.tree).toBe("tree_1");
+    expect(agent.snapshot().messages.filter((message) => message.role !== "system").map((message) => message.content)).toEqual(["first", "One."]);
+    expect(agent.listCheckpoints().map((checkpoint) => checkpoint.tree)).toEqual(["tree_0"]);
+  });
+
+  it("/compact summarizes on request with a focus, and rewinding knows which turns are now summary", async () => {
+    let trees = 0;
+    const model = scriptedModel([
+      { finishReason: "stop", content: "One." }, { finishReason: "stop", content: "Two." }, { finishReason: "stop", content: "Three." },
+      { finishReason: "stop", content: "The user is building a parser; turns one and two added it." },
+      { finishReason: "stop", content: "Four." },
+    ]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async (args) => ({ exitCode: 0, stdout: args[0] === "write-tree" ? `tree_${trees++}\n` : "", stderr: "" }),
+    });
+    for (const prompt of ["first", "second", "third"]) await agent.send(prompt);
+    const compacted = await agent.compactNow("the parser API");
+    expect(compacted?.messagesAfter).toBeLessThan(compacted!.messagesBefore);
+    const summaryRequest = model.requests.at(-1)!;
+    expect(summaryRequest.tools).toEqual([]);
+    expect(String(summaryRequest.messages.at(-1)?.content)).toContain("Above all, keep everything that bears on: the parser API");
+    const visible = agent.snapshot().messages.filter((message) => message.role !== "system").map((message) => String(message.content));
+    expect(visible.some((content) => content.startsWith("[Earlier conversation, summarized]"))).toBe(true);
+    expect(visible.slice(-2)).toEqual(["third", "Three."]); // the last exchange is kept word for word
+    expect((await loadSession(root, agent.sessionId))?.messages.length).toBe(agent.snapshot().messages.length);
+    // Turns one and two are inside the summary now: their files can come back, their conversation cannot.
+    const [first, , third] = agent.listCheckpoints();
+    expect(first.messageCount).toBe(-1);
+    expect(third.messageCount).toBeGreaterThan(0);
+    await expect(agent.rewind(1, "conversation")).rejects.toThrow(/inside the summary/);
+    // The third turn's cut still lands just before "third", in the rewritten transcript.
+    await agent.rewind(2, "conversation");
+    expect(agent.snapshot().messages.at(-1)?.content).not.toBe("Three.");
+    expect(agent.snapshot().messages.some((message) => message.content === "third")).toBe(false);
+  });
+
+  it("/review reads the change with no tools and keeps the findings in the conversation", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: '{"findings":[{"file":"a.ts","line":2,"severity":"high","title":"off by one","body":"skips the last"}],"overall":"One bug."}' }]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "build", approve: async () => "allow",
+      git: async (args) => ({ exitCode: 0, stdout: args[0] === "diff" ? "--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-x\n+y\n" : "", stderr: "" }),
+    });
+    const result = await agent.review("");
+    expect(result).toMatchObject({ target: "the uncommitted changes", findings: [{ file: "a.ts", line: 2, severity: "high", title: "off by one" }], overall: "One bug." });
+    expect(model.requests[0].tools).toEqual([]);
+    expect(String(model.requests[0].messages[0].content)).toContain("<patch>\n--- a/a.ts");
+    const kept = agent.snapshot().messages.slice(-2).map((message) => String(message.content));
+    expect(kept[0]).toBe("/review uncommitted");
+    expect(kept[1]).toContain("1. [high] a.ts:2 — off by one");
+    expect(await agent.review("base -x")).toHaveProperty("error");
+  });
+
+  it("/review of nothing says so without calling the model", async () => {
+    const model = scriptedModel([]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", git: async () => ({ exitCode: 0, stdout: "", stderr: "" }) });
+    expect(await agent.review("")).toMatchObject({ findings: [], overall: "Nothing to review: no file differs in the uncommitted changes." });
+    expect(model.requests).toHaveLength(0);
+  });
+
+  describe("steering", () => {
+    // A model that lets the test act while a given request is in flight, and records what each request held.
+    function steeredModel(turns: Array<Partial<AgentModelTurn>>, during: Record<number, () => void>) {
+      const seen: string[][] = [];
+      let index = 0;
+      const model: AgentTurnProvider = {
+        async complete(request) {
+          seen.push(request.messages.map((message) => String(message.content)));
+          during[index]?.();
+          const turn = turns[Math.min(index, turns.length - 1)];
+          index += 1;
+          return { responseId: `r${index}`, model: "t", finishReason: "stop", content: "Done.", toolCalls: [], usage, ...turn } as AgentModelTurn;
+        },
+      };
+      return { model, seen };
+    }
+
+    it("hands a message sent mid-turn to the model after the running tool calls, in the same turn", async () => {
+      let agent!: ArchymedesAgent;
+      const { model, seen } = steeredModel([
+        { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "app.ts" } }] },
+        { finishReason: "stop", content: "Used 4000." },
+      ], { 0: () => expect(agent.steer("use port 4000 instead")).toBe(true) });
+      agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+      const result = await agent.send("change the port");
+      expect(result.status).toBe("completed");
+      expect(seen).toHaveLength(2);
+      const second = seen[1];
+      expect(second.at(-1)).toBe("[Sent while you were working] use port 4000 instead");
+      expect(second.at(-2)).toContain("export const port"); // right after the tool result it followed
+      expect(agent.steer("too late")).toBe(false);
+    });
+
+    it("a message that arrives while the answer is being written makes the turn go on to answer it", async () => {
+      let agent!: ArchymedesAgent;
+      const { model, seen } = steeredModel([{ finishReason: "stop", content: "First answer." }, { finishReason: "stop", content: "And the tests too." }], {
+        0: () => agent.steer("also update the tests"),
+      });
+      agent = new ArchymedesAgent({ root, model, prices, mode: "plan", approve: async () => "allow" });
+      const result = await agent.send("explain the port");
+      expect(seen).toHaveLength(2);
+      expect(seen[1].slice(-2)).toEqual(["First answer.", "[Sent while you were working] also update the tests"]);
+      expect(result.summary).toBe("And the tests too.");
+    });
+
+    it("hands back a message the turn ended before reading, so it is never lost", async () => {
+      const events: ArchymedesEvent[] = [];
+      let agent!: ArchymedesAgent;
+      const { model } = steeredModel([{ finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "app.ts" } }] }], {
+        0: () => { agent.steer("one more thing"); agent.cancel(); },
+      });
+      agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", onEvent: (event) => events.push(event) });
+      await agent.send("change the port").catch(() => undefined);
+      expect(events.filter((event) => event.type === "steering_unread")).toEqual([{ type: "steering_unread", messages: ["one more thing"] }]);
+      expect(agent.steer("between turns")).toBe(false);
+    });
+  });
+
+  it("/context measures what the next request carries, by kind, against the window", async () => {
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "app.ts" } }] },
+      { finishReason: "stop", content: "Read it." },
+    ]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    const before = await agent.contextUsage();
+    expect(before.parts.find((part) => part.label === "conversation")?.tokens).toBe(0);
+    await agent.send("read app.ts");
+    const usage = await agent.contextUsage();
+    const byLabel = Object.fromEntries(usage.parts.map((part) => [part.label.replace(/ \(\d+\)$/, ""), part.tokens]));
+    expect(byLabel["system prompt and project instructions"]).toBeGreaterThan(100);
+    expect(byLabel["tool definitions"]).toBeGreaterThan(100);
+    expect(byLabel["conversation"]).toBeGreaterThan(0);
+    expect(byLabel["tool results"]).toBeGreaterThan(0);
+    expect(usage.parts.some((part) => part.label === "tool results (1)")).toBe(true);
+    expect(usage.window).toBeGreaterThan(usage.reservedForAnswer);
+  });
+
+  it("judges a goal in a separate call with no tools, adding nothing to the conversation", async () => {
+    const model = scriptedModel([{ finishReason: "stop", content: "Ran the suite: 12 passed." }, { finishReason: "stop", content: '{"status":"met","reason":"12 passed"}' }]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    await agent.send("make the suite pass");
+    const length = agent.snapshot().messages.length;
+    expect(await agent.checkGoal("the suite passes")).toEqual({ status: "met", reason: "12 passed" });
+    expect(model.requests.at(-1)?.tools).toEqual([]);
+    expect(String(model.requests.at(-1)?.messages[0].content)).toContain("Ran the suite: 12 passed.");
+    expect(agent.snapshot().messages).toHaveLength(length);
+  });
+
+  it("names the files changed on disk since it read them at the next turn, once per change", { timeout: 20_000 }, async () => {
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "app.ts" } }, { id: "c2", name: "read_file", arguments: { path: "ARCHYMEDES.md" } }] },
+      { finishReason: "stop", content: "Read." },
+    ]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    await agent.send("read the files");
+    const userTurn = () => String(model.requests.at(-1)!.messages.filter((message) => message.role === "user").at(-1)!.content);
+    await agent.send("nothing changed");
+    expect(userTurn()).toBe("nothing changed");
+
+    await fs.writeFile(path.join(root, "app.ts"), "export const port = 4000;\n");
+    await fs.rm(path.join(root, "ARCHYMEDES.md"));
+    await agent.send("go on");
+    expect(userTurn()).toBe("[Changed on disk since you last read them — re-read before relying on them: ARCHYMEDES.md (deleted), app.ts]\n\ngo on");
+    await agent.send("and again");
+    expect(userTurn()).toBe("and again"); // said once, not every turn
+  });
+
+  it("follows the project's command rules: forbid refuses with the reason and the run goes on, ask asks even in auto mode", async () => {
+    vi.stubEnv("ARCHYMEDES_CONFIG_DIR", path.join(root, ".no-user-config"));
+    await fs.mkdir(path.join(root, ".archymedes"), { recursive: true });
+    await fs.writeFile(path.join(root, ".archymedes", "rules.json"), JSON.stringify({ rules: [
+      { prefix: ["rm", "-rf"], decision: "forbid", reason: "Use trash-put instead." },
+      { prefix: ["git", "push"], decision: "ask" },
+      { prefix: ["echo"], decision: "ask", match: ["ls"] }, // fails its own example: left out and reported
+    ] }));
+    const asked: string[] = [];
+    const events: ArchymedesEvent[] = [];
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "run_command", arguments: { command: "rm -rf build" } }] },
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c2", name: "run_command", arguments: { command: "git push --dry-run" } }] },
+      { finishReason: "stop", content: "Done." },
+    ]);
+    const agent = new ArchymedesAgent({
+      root, model, prices, mode: "auto", onEvent: (event) => events.push(event),
+      approve: async (request) => { asked.push(String((request.call.arguments as { command?: string }).command)); return "deny"; },
+    });
+    const result = await agent.send("clean up and push");
+    const refusal = model.requests[1].messages.find((message) => message.role === "tool");
+    expect(String(refusal?.content)).toContain("Refused by a command rule (rm -rf");
+    expect(String(refusal?.content)).toContain("Use trash-put instead.");
+    expect(asked).toEqual(["git push --dry-run"]); // the forbidden one was never put to the person
+    expect(result.status).toBe("blocked"); // the person said no to the push
+    const problems = events.find((event) => event.type === "rules_problems");
+    expect(problems && "problems" in problems ? problems.problems[0] : "").toContain('should match "ls" but does not');
+    vi.unstubAllEnvs();
+  });
+
+  it("under the command sandbox, a blocked command is told it may escalate, and escalating always asks", async () => {
+    const runs: Array<{ command: string; sandboxed: boolean }> = [];
+    const workspace = new LocalWorkspace(root, undefined, async (command, options) => {
+      runs.push({ command, sandboxed: options.sandbox !== undefined });
+      return options.sandbox ? { exitCode: 1, stdout: "", stderr: "npm ERR! getaddrinfo EAI_AGAIN registry.npmjs.org" } : { exitCode: 0, stdout: "added 3 packages", stderr: "" };
+    });
+    workspace.setCommandSandbox({ state: "on", policy: { writable: [root], readOnly: [], network: false } });
+    const asked: string[] = [];
+    const model = scriptedModel([
+      { finishReason: "tool_calls", content: "", toolCalls: [{ id: "c1", name: "run_command", arguments: { command: "npm install" } }] },
+      { finishReason: "tool_calls", content: "It needs the registry.", toolCalls: [{ id: "c2", name: "run_command", arguments: { command: "npm install", escalate: true } }] },
+      { finishReason: "stop", content: "Installed." },
+    ]);
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "auto", workspace, approve: async (request) => { asked.push(request.summary); return "allow"; } });
+    await agent.send("install the dependencies");
+    expect(model.requests[0].tools.find((tool) => tool.name === "run_command")?.inputSchema).toMatchObject({ properties: { escalate: { type: "boolean" } } });
+    expect(String(model.requests[1].messages.find((message) => message.role === "tool")?.content)).toContain("call run_command again with escalate: true");
+    expect(asked).toEqual(["run npm install OUTSIDE the sandbox"]); // the sandboxed run needed no question in auto mode
+    expect(runs.filter((run) => run.command === "npm install")).toEqual([{ command: "npm install", sandboxed: true }, { command: "npm install", sandboxed: false }]);
   });
 
   it("lists every checkpoint taken so far, and disposes the workspace on request", async () => {

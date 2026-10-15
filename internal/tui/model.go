@@ -45,6 +45,7 @@ type Agent interface {
 	Prompt(ctx context.Context, sessionID, text string) (string, error)
 	Cancel(sessionID string) error
 	SetMode(ctx context.Context, sessionID, mode string) error
+	Steer(ctx context.Context, sessionID, text string) (bool, error)
 	Messages() <-chan any
 	Close()
 }
@@ -164,6 +165,8 @@ type Model struct {
 	current   *assistantItem
 	tools     map[string]*toolItem
 	queue     []string
+	comments  []reviewComment // notes on diff lines, sent with the next message
+	goal      *goalState      // /goal in progress
 	turnStart time.Time
 	turnUsage usageTotals
 	usage     usageTotals
@@ -444,6 +447,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.connectResult(msg)
 	case connectModelsMsg:
 		return m, m.connectModels(msg)
+	case signedInMsg:
+		return m, m.signedIn(msg)
 	case firstRunReadyMsg:
 		return m, m.firstRunReady(msg)
 	case filesLoadedMsg:
@@ -457,12 +462,37 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case diffLoadedMsg:
 		m.diffLoaded(msg)
 		return m, nil
+	case branchesLoadedMsg:
+		return m, m.branchesLoaded(msg)
+	case branchDetailMsg:
+		m.branchDetailLoaded(msg)
+		return m, nil
 	case modelsLoadedMsg:
 		return m, m.modelsLoaded(msg)
 	case modelSetMsg:
 		return m, m.modelSet(msg)
 	case commandDoneMsg:
 		return m, m.commandDone(msg)
+	case steerDoneMsg:
+		return m, m.steerDone(msg)
+	case pushPlanMsg:
+		return m, m.pushPlanned(msg)
+	case pushedMsg:
+		return m, m.pushed(msg)
+	case worktreeMadeMsg:
+		return m, m.worktreeMade(msg)
+	case worktreeBackMsg:
+		return m, m.worktreeBack(msg)
+	case turnsLoadedMsg:
+		if p, ok := m.overlay.(*rewindPicker); ok {
+			return m, p.load(m, msg)
+		}
+		return m, nil
+	case turnDiffMsg:
+		if p, ok := m.overlay.(*rewindPicker); ok {
+			p.diffLoaded(msg)
+		}
+		return m, nil
 	case handoffDoneMsg:
 		return m, m.handoffDone(msg)
 	case sessionsLoadedMsg:
@@ -594,8 +624,7 @@ func (m *Model) submit() tea.Cmd {
 	}
 	switch m.phase {
 	case busy:
-		m.queue = append(m.queue, text)
-		return m.toast(toastInfo, fmt.Sprintf("Queued (%d) — runs when this turn ends", len(m.queue)))
+		return m.steer(text)
 	case ready:
 		return m.send(text)
 	case connecting:
@@ -607,6 +636,7 @@ func (m *Model) submit() tea.Cmd {
 }
 
 func (m *Model) send(text string) tea.Cmd {
+	text = m.withReviewComments(text)
 	m.sel.clear()
 	m.tr.add(&userItem{text: text})
 	m.stats.startTurn(text, time.Now())
@@ -649,6 +679,13 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 	}
 	m.phase = ready
 	tip := m.afterFirstTurn()
+	if m.goal != nil && len(m.queue) == 0 {
+		if msg.err != nil {
+			m.goal = nil // a failed turn ends the goal: repeating it would fail the same way
+		} else {
+			return tea.Batch(reread, tip, m.goalTurnEnded(msg.stop))
+		}
+	}
 	if len(m.queue) > 0 {
 		next := m.queue[0]
 		m.queue = m.queue[1:]
@@ -662,6 +699,7 @@ func (m *Model) cancelTurn() tea.Cmd {
 		return nil
 	}
 	m.queue = nil // stopping means stopping, not moving on to the next queued message
+	m.goal = nil
 	_ = m.agent.Cancel(m.session.ID)
 	return m.toast(toastInfo, "Stopping…")
 }

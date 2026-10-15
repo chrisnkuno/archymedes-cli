@@ -4,6 +4,7 @@ import path from "node:path";
 import { agentMessagePromptParts, type AgentMessage } from "../agent-runtime";
 import { approximateInputTokens } from "../model-cost";
 import { mergeRoutingReceipts, type RoutingReceipt } from "../providers/routing-receipt";
+import type { Checkpoint } from "./checkpoints";
 import type { ArchymedesMode } from "./permissions";
 
 /**
@@ -40,6 +41,13 @@ export type SessionRecord = {
   integrity?: string;
   /** Recovery batch already incorporated atomically into this snapshot. */
   hostedRecoveryBatchId?: string;
+  /**
+   * Claude Code's own session id, when Claude (the person's subscription, through Claude Code)
+   * ran this session: resuming continues Claude's conversation instead of retelling it.
+   */
+  claudeSession?: string;
+  /** The workspace before each turn, oldest first, for `/undo` and rewinding after a resume. */
+  checkpoints?: Checkpoint[];
 };
 
 export const SESSION_SCHEMA_VERSION = 2 as const;
@@ -509,13 +517,16 @@ export function atSafeBoundary(messages: readonly AgentMessage[], options: { wor
  */
 export function planCompaction(
   messages: readonly AgentMessage[],
-  options: { contextLimit: number; outputBudget: number; keepRecent?: number; boundary?: CompactionBoundary },
+  options: { contextLimit: number; outputBudget: number; keepRecent?: number; boundary?: CompactionBoundary; force?: boolean },
 ): CompactionPlan | null {
-  const urgency = compactionUrgency(messages, options);
-  if (urgency === "none") return null;
-  if (urgency === "advisable" && (options.boundary ?? "mid-task") !== "safe") return null;
+  if (!options.force) {
+    const urgency = compactionUrgency(messages, options);
+    if (urgency === "none") return null;
+    if (urgency === "advisable" && (options.boundary ?? "mid-task") !== "safe") return null;
+  }
 
-  const keepRecent = options.keepRecent ?? recentToKeep(messages.slice(messages[0]?.role === "system" ? 2 : 1), options);
+  // Asked for (`/compact`), everything but the last exchange is summarized: the person wants room.
+  const keepRecent = options.keepRecent ?? (options.force ? MINIMUM_KEPT_MESSAGES : recentToKeep(messages.slice(messages[0]?.role === "system" ? 2 : 1), options));
   // The system prompt and the original request are what the whole session means; they never go.
   const head = messages.slice(0, messages[0]?.role === "system" ? 2 : 1);
   const rest = messages.slice(head.length);
@@ -559,6 +570,12 @@ function recentToKeep(recent: readonly AgentMessage[], options: { contextLimit: 
 }
 
 /** The instruction used to compact a conversation, kept next to the policy that triggers it. */
+/** The summary instruction, with what the person asked it to keep in focus (`/compact <focus>`). */
+export function compactionInstruction(focus?: string): string {
+  const trimmed = focus?.trim();
+  return trimmed ? `${COMPACTION_INSTRUCTION} Above all, keep everything that bears on: ${trimmed}` : COMPACTION_INSTRUCTION;
+}
+
 export const COMPACTION_INSTRUCTION = [
   "Summarize the conversation so far so that work can continue without the full transcript.",
   "Include: what the user asked for, what has been done and verified, the exact files and symbols involved, decisions made and why, and what remains.",

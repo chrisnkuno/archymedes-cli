@@ -105,6 +105,9 @@ func (m *Model) tray() string {
 		if len(m.queue) > 0 {
 			status += th.Faint.Render(fmt.Sprintf("+%d ", len(m.queue)))
 		}
+		if m.goal != nil {
+			status += th.Faint.Render(fmt.Sprintf("goal %d/%d ", m.goal.turns, goalMaxTurns))
+		}
 	}
 	tray := status
 	if status == "" && m.usage.input+m.usage.output > 0 {

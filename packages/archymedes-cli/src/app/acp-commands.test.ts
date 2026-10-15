@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CostLedger } from "@archymedes/core/cli/cost";
-import { runSessionCommand } from "./acp-commands";
+import { formatContextUsage, runSessionCommand } from "./acp-commands";
 
 function session(overrides: Record<string, unknown> = {}) {
   const ledger = new CostLedger({ prices: { currency: "USD", inputPerMillion: 3_000_000, outputPerMillion: 15_000_000 }, display: "USD" });
@@ -36,6 +36,40 @@ describe("session commands over acp", () => {
     expect(await runSessionCommand("undo", "everything", value.deps)).toMatchObject({ kind: "error" });
     expect(value.undone).toEqual(["code"]);
     expect(await runSessionCommand("undo", "", session({ undo: async () => undefined }).deps)).toMatchObject({ text: "Nothing to undo." });
+  });
+
+  it("lists the turns that can be rewound to, rewinds by number and scope, and diffs one turn", async () => {
+    const rewound: Array<[number, string]> = [];
+    const value = session({
+      listCheckpoints: () => [{ label: "first", createdAt: 1, tree: "a" }, { label: "second", createdAt: 2, tree: "b" }],
+      rewind: async (index: number, scope: string) => { rewound.push([index, scope]); return index < 2 ? { label: index === 0 ? "first" : "second" } : undefined; },
+      turnPatch: async (index: number) => (index === 0 ? "+changed\n" : ""),
+    });
+    expect(await runSessionCommand("turns", "", value.deps)).toEqual({ kind: "turns", turns: [{ index: 0, label: "first", createdAt: 1 }, { index: 1, label: "second", createdAt: 2 }] });
+    expect(await runSessionCommand("rewind", "1 code", value.deps)).toMatchObject({ kind: "text", text: 'Rewound the files to before "second".' });
+    expect(await runSessionCommand("rewind", "0", value.deps)).toMatchObject({ text: 'Rewound the files and the conversation to before "first".' });
+    expect(await runSessionCommand("rewind", "5", value.deps)).toMatchObject({ kind: "error", text: "No turn 5 to rewind to." });
+    expect(await runSessionCommand("rewind", "one", value.deps)).toMatchObject({ kind: "error" });
+    expect(await runSessionCommand("rewind", "1 everything", value.deps)).toMatchObject({ kind: "error" });
+    expect(rewound).toEqual([[1, "code"], [0, "both"], [5, "both"]]);
+    expect(await runSessionCommand("diff", "turn 0", value.deps)).toEqual({ kind: "diff", patch: "+changed\n" });
+    expect(await runSessionCommand("diff", "turn 1", value.deps)).toMatchObject({ kind: "text", text: "That turn changed no files." });
+  });
+
+  it("compacts with a focus, or says there is too little to summarize", async () => {
+    const asked: string[] = [];
+    const value = session({ compactNow: async (focus: string) => { asked.push(focus); return { messagesBefore: 40, messagesAfter: 5, tokensBefore: 90_000, tokensAfter: 12_000 }; } });
+    expect(await runSessionCommand("compact", "the API", value.deps)).toMatchObject({ kind: "text", text: "Summarized the earlier conversation: 40 messages → 5, about 78,000 tokens freed. Kept in focus: the API." });
+    expect(asked).toEqual(["the API"]);
+    expect(await runSessionCommand("compact", "", session({ compactNow: async () => undefined }).deps)).toMatchObject({ text: "Too little conversation to summarize yet." });
+  });
+
+  it("draws /context as each part's share of the window and what is free", () => {
+    const text = formatContextUsage({ window: 200_000, reservedForAnswer: 32_000, parts: [{ label: "system prompt and project instructions", tokens: 6_000 }, { label: "tool definitions (20)", tokens: 9_000 }, { label: "summary of earlier conversation", tokens: 0 }, { label: "conversation", tokens: 25_000 }] });
+    expect(text.split("\n")[0]).toBe("40,000 of 200,000 tokens in use (20.0%); about 128,000 free");
+    expect(text).toContain("conversation                               25,000   12.5%");
+    expect(text).not.toContain("summary of earlier conversation"); // an empty part is left out
+    expect(text).toContain("kept for the answer");
   });
 
   it("lists the plan, or says there is none", async () => {

@@ -32,6 +32,34 @@ capped request to the execution exchange, which selects the provider and returns
 
 Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and recorded once.
 
+### Claude, on your Claude subscription
+
+Choose **Claude (your subscription)** in Providers (alt+p), or start with `--provider claude`.
+Archymedes then runs your own [Claude Code](https://code.claude.com/docs/en/setup), signed in with
+your Claude account, and shows its work in the same interface: streamed replies, approvals,
+Changes, `/undo` (Claude Code's file checkpoints), `/resume`, and switching to or from any other
+model mid-session with the conversation carried over.
+
+- **Your account stays with Claude Code.** Signing in is Claude Code's own flow (`claude auth
+  login`, which Providers runs for you); Archymedes never reads, stores or forwards a Claude
+  credential. It asks `claude auth status` only whether you are signed in and on which plan.
+- **Your subscription, not an API key.** `ANTHROPIC_API_KEY` is removed from Claude Code's
+  environment, since with it Claude Code bills the key instead; set `ARCHYMEDES_CLAUDE_BILLING=api`
+  to keep it. Turns count against your plan's limits, as using Claude Code does.
+- **Fast.** Claude Code is started when the session opens, before you type, and stays running:
+  each turn is one more message to the same process, so there is no start-up per turn and the
+  prompt cache stays warm (in testing, over 99% of input tokens after the first turn).
+- **Anthropic's SDK is installed, not bundled.** Connecting installs `@anthropic-ai/claude-agent-sdk`
+  (about 5 MB, its JavaScript only) from npm into Archymedes's settings folder. It is Anthropic's
+  code under Anthropic's terms, so Archymedes does not ship it. `ARCHYMEDES_CLAUDE_SDK` points at
+  another copy and `ARCHYMEDES_CLAUDE_PATH` at another `claude`.
+- `CLAUDE_MODEL` picks the model (`opus`, `sonnet`, `haiku` or an id; Claude Code's default
+  otherwise). Claude Code works on this machine only, so it is not offered with `--sandbox`.
+
+Anthropic's rules for using a Claude subscription outside its own apps have changed several times
+in 2026; see its [legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page.
+Archymedes only drives the unmodified Claude Code you installed and signed in to yourself.
+
 `archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account and no
 paid fallback. With your own `OPENROUTER_API_KEY` it goes to OpenRouter directly; without a key it
 needs a [free gateway](packages/free-gateway/README.md) reachable at `ARCHYMEDES_FREE_GATEWAY_URL` —
@@ -45,8 +73,8 @@ reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
 
 ## Custom commands
 
-Save a prompt you reuse as Markdown: `.archymedes/commands/review.md` becomes `/review` for the
-project, and `commands/review.md` in the Archymedes config directory is yours alone (the project
+Save a prompt you reuse as Markdown: `.archymedes/commands/audit.md` becomes `/audit` for the
+project, and `commands/audit.md` in the Archymedes config directory is yours alone (the project
 file wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
 `description:` line in `---` front matter describes it. Built-in commands cannot be replaced.
 They complete as you type `/`, appear in `/help` and the start menu, and run as a prompt (queued if

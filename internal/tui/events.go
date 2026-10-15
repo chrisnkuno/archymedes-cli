@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -47,7 +48,17 @@ func (m *Model) handleEvent(ev acp.Event) {
 			m.handleRuntime(*ev.Event)
 		}
 	case "compaction":
+		if ev.MessagesBefore == 0 && ev.TokensBefore > 0 {
+			// Claude Code compacts its own conversation and says only how long it was.
+			m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation (it was %s tokens).", compact(ev.TokensBefore)))
+			break
+		}
 		m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation: %d → %d messages.", ev.MessagesBefore, ev.MessagesAfter))
+	case "rules_problems":
+		m.notice(noticeWarn, "Some command rules were left out:\n"+strings.Join(ev.Problems, "\n"))
+	case "steering_unread":
+		// The turn ended before reading these: they go first in the queue, as turns of their own.
+		m.queue = append(slices.Clone(ev.Messages), m.queue...)
 	case "jev-review":
 		m.notice(noticeWarn, fmt.Sprintf("Jev disagreed (%s, %.0f%%); asking the agent to check its work.", ev.Outcome, ev.Probability*100))
 	}

@@ -399,4 +399,28 @@ describe("acp model switching", () => {
     expect(sent.at(-1)).toMatchObject({ id: 4, error: { message: expect.stringContaining("No model nope") } });
     expect(current).toBe("m2");
   });
+
+  it("hands a steer to the session and says whether it was taken; a session that cannot steer says no", async () => {
+    const sent: JsonRpcOutgoing[] = [];
+    const steered: string[] = [];
+    let steerable = true;
+    const connection = new AcpConnection({
+      send: (message) => sent.push(message),
+      createSession: async () => ({
+        id: "sess_1", send: async () => ({ status: "completed", summary: "" }), cancel() {}, async setMode() {}, async dispose() {},
+        ...(steerable ? { steer: (text: string) => { steered.push(text); return true; } } : {}),
+      }),
+    });
+    await connection.receive({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: {} } });
+    await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/tmp" } });
+    await connection.receive({ jsonrpc: "2.0", id: 3, method: "_archymedes/session/steer", params: { sessionId: "sess_1", text: "use tabs" } });
+    expect(sent.at(-1)).toMatchObject({ id: 3, result: { accepted: true } });
+    expect(steered).toEqual(["use tabs"]);
+    await connection.receive({ jsonrpc: "2.0", id: 4, method: "_archymedes/session/steer", params: { sessionId: "sess_1" } });
+    expect(sent.at(-1)).toMatchObject({ id: 4, error: { message: "text is required" } });
+    steerable = false;
+    await connection.receive({ jsonrpc: "2.0", id: 5, method: "session/new", params: { cwd: "/tmp" } });
+    await connection.receive({ jsonrpc: "2.0", id: 6, method: "_archymedes/session/steer", params: { sessionId: "sess_1", text: "x" } });
+    expect(sent.at(-1)).toMatchObject({ id: 6, result: { accepted: false } });
+  });
 });

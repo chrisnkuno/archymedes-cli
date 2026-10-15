@@ -216,6 +216,10 @@ export class HeadlessEmitter {
       this.emit("tool_name", { iteration: safe.iteration, requested: safe.requested, ...(safe.resolved ? { resolved: safe.resolved } : {}) });
       return;
     }
+    if (safe.type === "steered") {
+      this.emit("steered", { iteration: safe.iteration, count: safe.count });
+      return;
+    }
     this.emit("runtime_stop", { status: safe.status, summary: safe.summary });
   }
 

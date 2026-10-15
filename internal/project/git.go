@@ -46,6 +46,30 @@ func git(ctx context.Context, root string, args ...string) ([]byte, error) {
 	return out, err
 }
 
+// gitError carries what git said on stderr when it failed.
+type gitError struct {
+	err    error
+	stderr string
+}
+
+func (e *gitError) Error() string { return e.err.Error() + ": " + e.stderr }
+func (e *gitError) Unwrap() error { return e.err }
+
+// gitWithStderr is git that keeps its stderr in the error, for a failure a person must read.
+func gitWithStderr(ctx context.Context, root string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = root
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return out, &gitError{err, strings.TrimSpace(stderr.String())}
+	}
+	return out, nil
+}
+
 // Changes lists the working tree's changes against HEAD, staged and unstaged together, sorted by
 // path. A repository with no commits yet compares against the empty tree.
 func Changes(ctx context.Context, root string) ([]Change, error) {

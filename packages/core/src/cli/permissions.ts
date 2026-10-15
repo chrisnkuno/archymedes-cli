@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AgentTool, AgentToolCall } from "../agent-runtime";
 import { assessToolSafety, type SafetyAssessment } from "./safety";
+import { judgeCommand, type CommandRule } from "./command-rules";
 import type { JevJudge, JevToolCheck } from "./jev";
 
 /**
@@ -338,6 +339,13 @@ export class PermissionLedger {
 
   constructor(private readonly mode: ArchymedesMode, private readonly prompt: ApprovalPrompt, private readonly judge?: JevJudge) {}
 
+  /** The person's command rules, read fresh each turn. */
+  private commandRules: readonly CommandRule[] = [];
+
+  setCommandRules(rules: readonly CommandRule[]): void {
+    this.commandRules = rules;
+  }
+
   /** The turn's objective, set fresh per turn so a judge never reads a stale task. */
   setTaskHint(hint: string): void {
     this.taskHint = hint;
@@ -391,18 +399,28 @@ export class PermissionLedger {
   async decide(call: AgentToolCall, tool: AgentTool): Promise<ToolApprovalOutcome> {
     // A tool that changes nothing needs no gate; the runtime only asks about the ones that do.
     if (tool.effect === "none") return "approved";
+    // The person's own command rules speak first. Forbid: nothing to ask, the command refuses
+    // itself with the rule's reason, and the run goes on. Allow: no question (but defender mode
+    // looks at every change). Ask: always a question, past auto mode and standing approvals.
+    const command = (call.arguments as Record<string, unknown> | undefined)?.command;
+    const ruled = tool.name === "run_command" && isBuiltIn(tool) && typeof command === "string" ? judgeCommand(this.commandRules, command) : undefined;
+    if (ruled?.decision === "forbid") return "approved";
+    if (ruled?.decision === "allow" && this.mode !== "defender") return "approved";
+    // A run outside the command sandbox is the person's call, every time.
+    const mustAsk = ruled?.decision === "ask" || (tool.name === "run_command" && (call.arguments as Record<string, unknown> | undefined)?.escalate === true);
     // Auto mode is an ergonomics feature, not a blanket trust grant. Inspect the exact command,
     // path and content before taking its fast path; credentials, production configuration and
     // high-impact commands remain explicit human decisions.
     const safety = assessToolSafety(call, tool);
-    if (this.mode === "auto" && tool.effect === "workspace" && !safety.sensitive) return "approved";
+    if (!mustAsk && this.mode === "auto" && tool.effect === "workspace" && !safety.sensitive) return "approved";
 
     if (this.legacyDeniedTools.has(tool.name)) return "denied";
     const action = actionDigest(call, tool);
     const scopeKey = `${APPROVAL_POLICY_VERSION}:${action}`;
     const standing = this.standing.get(scopeKey);
-    if (standing) return standing === "allow" ? "approved" : "denied";
-    if (this.patternApproves(call, tool, safety)) return "approved";
+    if (standing === "deny") return "denied";
+    if (standing === "allow" && !mustAsk) return "approved";
+    if (!mustAsk && this.patternApproves(call, tool, safety)) return "approved";
 
     // The second opinion arrives with the prompt, never instead of it. Fast paths above
     // already returned, so routine auto-approved edits never pay for a judgment call —
@@ -490,7 +508,7 @@ export function describeToolCall(call: AgentToolCall, tool: AgentTool): string {
       return `edit ${asString(args.path) ?? "a file"}${origin}`;
     case "run_command": {
       const program = asString(args.command) ?? "a command";
-      return `run ${program}${origin}`;
+      return `run ${program}${args.escalate === true ? " OUTSIDE the sandbox" : ""}${origin}`;
     }
     case "start_application":
       return `start ${asString(args.command) ?? "an application"} on port ${String(args.port ?? "unknown")}${origin}`;

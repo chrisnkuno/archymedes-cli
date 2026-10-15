@@ -77,7 +77,7 @@ func TestAShortHomeScreenKeepsTheEssentials(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	s := screen(m)
-	for _, want := range []string{"A R C H Y M E D E S", "mode", "Good"} {
+	for _, want := range []string{"A R C H Y M E D E S", "mode", strings.Fields(greeting(time.Now()))[0]} { // the greeting follows the clock
 		if !strings.Contains(s, want) {
 			t.Errorf("a short home screen lost %q:\n%s", want, s)
 		}

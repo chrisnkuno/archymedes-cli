@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,8 +19,9 @@ import (
 
 // The Changes app (F10): what is different from the last commit, file by file — the list on the
 // left with each file's lines added and removed, the selected file's diff on the right with old
-// and new line numbers. It reads git directly and never writes; it refreshes itself when a turn
-// ends, since that is when the agent's edits land.
+// and new line numbers. b turns to the Branches view (branches.go): the branches, worktrees and
+// stash. It reads git directly and never writes; it refreshes itself when a turn ends, since that
+// is when the agent's edits (and commits) land.
 
 type changesLoadedMsg struct {
 	changes []project.Change
@@ -40,7 +42,8 @@ type fileDiff struct {
 	err       string
 	rows      []string // drawn, for rowsWidth
 	rowsWidth int
-	hunks     []int // row index of each hunk header
+	hunks     []int     // row index of each hunk header
+	refs      []lineRef // what each row points at, for comments
 }
 
 type changesApp struct {
@@ -51,7 +54,11 @@ type changesApp struct {
 	files   []project.Change
 	cursor  int
 	scroll  int // the diff's first row
+	line    int // the diff row chosen for a comment; -1 is none
 	diffs   map[string]*fileDiff
+
+	showBranches bool
+	br           *branchesView
 }
 
 func (c *changesApp) title() string { return "Changes" }
@@ -64,7 +71,7 @@ func (m *Model) openChanges() tea.Cmd {
 			return c.reload(m) // focusing it again is asking what changed now
 		}
 	}
-	c := &changesApp{diffs: map[string]*fileDiff{}}
+	c := &changesApp{line: -1, diffs: map[string]*fileDiff{}, br: &branchesView{details: map[string]*branchDetail{}}}
 	m.openWindow(c)
 	return c.reload(m)
 }
@@ -78,14 +85,15 @@ func (m *Model) changesWindow() *changesApp {
 	return nil
 }
 
-// reload reads the file list in the background; the diffs are read again as they are shown.
+// reload reads the file list and the branches in the background; the diffs and the branches'
+// details are read again as they are shown.
 func (c *changesApp) reload(m *Model) tea.Cmd {
 	c.loading = true
 	root := m.projectRoot()
-	return func() tea.Msg {
+	return tea.Batch(func() tea.Msg {
 		changes, err := project.Changes(context.Background(), root)
 		return changesLoadedMsg{changes, err}
-	}
+	}, c.br.reload(m))
 }
 
 func (m *Model) changesLoaded(msg changesLoadedMsg) tea.Cmd {
@@ -117,6 +125,9 @@ func (m *Model) changesLoaded(msg changesLoadedMsg) tea.Cmd {
 		if f.Path == selected {
 			c.cursor = i
 		}
+	}
+	if c.showBranches {
+		return nil
 	}
 	return c.loadDiff(m)
 }
@@ -166,15 +177,21 @@ func (c *changesApp) choose(m *Model, i int) tea.Cmd {
 	if i == c.cursor || i < 0 || i >= len(c.files) {
 		return nil
 	}
-	c.cursor, c.scroll = i, 0
+	c.cursor, c.scroll, c.line = i, 0, -1
 	return c.loadDiff(m)
 }
 
 func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	if c.showBranches {
+		return c.br.handle(m, c, msg)
+	}
 	page := max(m.windowHeight()-4, 1)
 	switch msg.String() {
 	case "esc", "q", "ctrl+c":
 		return true, nil
+	case "b":
+		c.showBranches = true
+		return false, c.br.loadDetail(m)
 	case "r":
 		return false, c.reload(m)
 	case "up", "k":
@@ -189,6 +206,10 @@ func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		c.scroll = 0
 	case "n", "p":
 		c.jumpHunk(msg.String() == "n")
+	case "]", "[":
+		c.moveLine(m, map[string]int{"]": 1, "[": -1}[msg.String()])
+	case "c":
+		return false, c.commentOnLine(m)
 	case "@":
 		if f, ok := c.selected(); ok {
 			m.input.area.InsertString("@" + f.Path + " ")
@@ -233,6 +254,21 @@ func (c *changesApp) jumpHunk(next bool) {
 func (c *changesApp) rowCount() int { return len(c.files) }
 
 func (c *changesApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	for _, tab := range []struct {
+		id       string
+		branches bool
+	}{{"chg:tab:files", false}, {"chg:tab:branches", true}} {
+		if m.zones.frame.Get(tab.id).InBounds(msg) && c.showBranches != tab.branches {
+			c.showBranches = tab.branches
+			if tab.branches {
+				return c.br.loadDetail(m)
+			}
+			return c.loadDiff(m)
+		}
+	}
+	if c.showBranches {
+		return c.br.click(m, msg)
+	}
 	for i := range c.files {
 		if m.zones.frame.Get(fmt.Sprintf("chg:%d", i)).InBounds(msg) {
 			return c.choose(m, i)
@@ -244,10 +280,16 @@ func (c *changesApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 func (c *changesApp) view(m *Model) string {
 	th := m.th
 	width, height := m.width, max(m.windowHeight(), 1)
-	title := " " + th.Title.Render("Changes") + th.Faint.Render("  "+path.Base(m.projectRoot()))
+	title := " " + th.Title.Render("Changes") + "  " + c.tabs(m) + th.Faint.Render("  "+path.Base(m.projectRoot())) + c.headLine(m)
 	right := ""
-	if c.loading {
+	if c.loading || c.br.loading {
 		right = m.spin.View() + " "
+	}
+	if c.showBranches {
+		rows := []string{spread(title, right, width)}
+		rows = append(rows, c.br.body(m, width, height-2)...)
+		hint := "↑/↓ select · pgup/pgdn scroll · enter read · R review a branch · b files · r refresh · esc close"
+		return strings.Join(append(rows, " "+th.Faint.Render(ansi.Truncate(hint, max(width-2, 0), "…"))), "\n")
 	}
 	var added, removed int
 	for _, f := range c.files {
@@ -277,9 +319,38 @@ func (c *changesApp) view(m *Model) string {
 	default:
 		rows = append(rows, c.split(m, width, body)...)
 	}
-	hint := "↑/↓ file · pgup/pgdn scroll · n/p hunk · enter read · @ mention · r refresh · esc close"
+	hint := "↑/↓ file · pgup/pgdn scroll · n/p hunk · [/] line · c comment · enter read · @ mention · b branches · r refresh · esc close"
+	if len(m.comments) > 0 {
+		hint = plural(len(m.comments), "comment") + " for your next message · " + hint
+	}
 	rows = append(rows, " "+th.Faint.Render(ansi.Truncate(hint, max(width-2, 0), "…")))
 	return strings.Join(rows, "\n")
+}
+
+// tabs are the two views, the shown one bright; either is a click target.
+func (c *changesApp) tabs(m *Model) string {
+	th := m.th
+	files, branches := th.Key.Render("Files"), th.Faint.Render("Branches")
+	if c.showBranches {
+		files, branches = th.Faint.Render("Files"), th.Key.Render("Branches")
+	}
+	return mark(m.zones.frame, "chg:tab:files", files) + th.Faint.Render(" · ") + mark(m.zones.frame, "chg:tab:branches", branches)
+}
+
+// headLine is where HEAD is, after the project's name: " on main ↑1", " at 3f2a1bc (detached)".
+func (c *changesApp) headLine(m *Model) string {
+	repo := c.br.repo
+	switch {
+	case repo.Head == "":
+		return ""
+	case repo.Detached:
+		return m.th.Faint.Render(" at " + repo.Head + " (detached)")
+	}
+	line := m.th.Faint.Render(" on " + repo.Head)
+	if track := trackText(repo.Ahead, repo.Behind, false); track != "" {
+		line += " " + trackStyle(m, repo.Ahead, repo.Behind, false).Render(track)
+	}
+	return line
 }
 
 // split is the file list beside the selected file's diff.
@@ -388,6 +459,7 @@ func (c *changesApp) diffView(m *Model, f project.Change, width, height int) []s
 	}
 	if d.rowsWidth != width {
 		d.rows, d.rowsWidth = diffRows(m, d.text, width), width
+		d.refs = diffLineRefs(d.text)
 		d.hunks = nil
 		for i, row := range d.rows {
 			if strings.HasPrefix(ansi.Strip(row), "  ⋯") {
@@ -405,7 +477,24 @@ func (c *changesApp) diffView(m *Model, f project.Change, width, height int) []s
 		return []string{th.Faint.Render("no line changes (a mode or rename only)")}
 	}
 	c.scroll = min(c.scroll, max(len(d.rows)-height, 0))
-	return d.rows[c.scroll:min(c.scroll+height, len(d.rows))]
+	shown := slices.Clone(d.rows[c.scroll:min(c.scroll+height, len(d.rows))])
+	// The chosen line and the commented ones are marked in the gutter's first column.
+	for i := range shown {
+		row := c.scroll + i
+		if row >= len(d.refs) || !d.refs[row].ok {
+			continue
+		}
+		commented := m.commentAt(f.Path, d.refs[row]) >= 0
+		switch {
+		case row == c.line && commented:
+			shown[i] = th.Highlight.Render("◆") + ansi.Cut(shown[i], 1, width)
+		case row == c.line:
+			shown[i] = th.Highlight.Render("▸") + ansi.Cut(shown[i], 1, width)
+		case commented:
+			shown[i] = th.Warn.Render("◆") + ansi.Cut(shown[i], 1, width)
+		}
+	}
+	return shown
 }
 
 // diffRows draws a unified diff for reading: git's headers dropped (the file is named above),

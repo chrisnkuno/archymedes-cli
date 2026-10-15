@@ -58,6 +58,16 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+const SANDBOX_CHOICES: readonly SettingChoice[] = [
+  { value: "off", label: "Off — commands run as you would run them (default)" },
+  { value: "on", label: "On — writes only in the project and /tmp, no network; a way out is asked for each time" },
+];
+
+const SANDBOX_NETWORK_CHOICES: readonly SettingChoice[] = [
+  { value: "off", label: "Off — no network inside the sandbox (default)" },
+  { value: "on", label: "On — sandboxed commands may use the network" },
+];
+
 const JEV_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — judge turns and annotate approvals when TYPESAFE_API_KEY is set (default)" },
   { value: "off", label: "Off — never call Jev, even with a key configured" },
@@ -109,7 +119,12 @@ const REASONING_CHOICES: readonly SettingChoice[] = [
   { value: "high", label: "High — slowest" },
 ];
 
-const PROVIDER_CHOICES: readonly SettingChoice[] = PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label }));
+/** Claude is not a model provider but Claude Code run on the person's own subscription (see `app/claude`). */
+const CLAUDE_PROVIDER_ID = "claude";
+const PROVIDER_CHOICES: readonly SettingChoice[] = [
+  ...PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label })),
+  { value: CLAUDE_PROVIDER_ID, label: "Claude (your subscription, through Claude Code)" },
+];
 
 /**
  * Settings Archymedes may persist. Unknown JSON keys are ignored on read.
@@ -138,6 +153,8 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
   { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
+  { key: "ARCHYMEDES_SANDBOX", label: "Command sandbox (Linux, bubblewrap): commands write only to the project and /tmp", choices: SANDBOX_CHOICES },
+  { key: "ARCHYMEDES_SANDBOX_NETWORK", label: "Network inside the command sandbox", choices: SANDBOX_NETWORK_CHOICES },
   { key: "FREE_MODEL", label: "Free mode model (openrouter/free or publisher/model:free)", section: "Free mode" },
   { key: "ARCHYMEDES_TOKEN_SAVER", label: "Free mode token saver", choices: TOKEN_SAVER_CHOICES },
   { key: "ARCHYMEDES_TOKEN_METER", label: "Token meter in the status line", choices: TOKEN_METER_CHOICES },
@@ -149,6 +166,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
   { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES, section: "Providers" },
   { key: "ARCHYMEDES_FALLBACK_MODEL", label: "Fallback after transient provider failure — ask, or provider:model" },
+  { key: "CLAUDE_MODEL", label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for Claude Code's default" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", secret: true },
   { key: "ANTHROPIC_BASE_URL", label: "Anthropic base URL", url: true },
   { key: "ANTHROPIC_MODEL", label: "Anthropic model" },
@@ -334,7 +352,7 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_CLOUD_QUALITY_FLOOR" && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1)) throw new Error("Quality floor must be between 0 and 1.");
   if (key === "MODEL_PRICE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
-  if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase())) throw new Error(`Choose one of: ${PROVIDER_IDS.join(", ")}.`);
+  if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && value.toLowerCase() !== CLAUDE_PROVIDER_ID) throw new Error(`Choose one of: ${[...PROVIDER_IDS, CLAUDE_PROVIDER_ID].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
   if (key === "ARCHYMEDES_JEV" && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
   if (key === "ARCHYMEDES_JEV") return value.toLowerCase();

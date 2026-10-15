@@ -28,12 +28,17 @@ func (m *Model) sessionCommand(command, argument string) tea.Cmd {
 	if m.agent == nil || m.session.ID == "" {
 		return m.toast(toastWarn, "The session is not open yet")
 	}
-	if m.phase == busy && command == "undo" {
-		return m.toast(toastWarn, "Undo between turns; esc stops this one")
+	if m.phase == busy && (command == "undo" || command == "rewind" || command == "compact" || command == "review" || command == "fork") {
+		return m.toast(toastWarn, "/"+command+" between turns; esc stops this one")
 	}
 	agent, id := m.agent, m.session.ID
+	// A summary is a model call: it gets the time a turn would.
+	timeout := 60 * time.Second
+	if command == "compact" || command == "review" || command == "goal-check" {
+		timeout = 5 * time.Minute
+	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		result, err := agent.Command(ctx, id, command, argument)
 		return commandDoneMsg{command, result, err}
@@ -41,11 +46,21 @@ func (m *Model) sessionCommand(command, argument string) tea.Cmd {
 }
 
 func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
+	if strings.HasPrefix(msg.command, "goal-") && (msg.err != nil || msg.result.Kind == "error") {
+		m.goal = nil // an engine that cannot judge a goal cannot pursue one
+	}
 	switch {
 	case msg.err != nil:
 		return m.toast(toastWarn, "/"+msg.command+": "+msg.err.Error())
 	case msg.result.Kind == "error":
 		return m.toast(toastWarn, msg.result.Text)
+	case msg.result.Kind == "goal":
+		return m.goalVerdict(msg.result)
+	case msg.result.Kind == "forked":
+		// The copy is opened in place; the original stays in /resume as it was.
+		return tea.Batch(m.toast(toastInfo, "Forked into “"+msg.result.Title+"”; the original is in /resume"), m.resumeSession(msg.result.ID))
+	case msg.result.Kind == "review":
+		m.tr.add(&reviewItem{result: msg.result})
 	case msg.result.Kind == "diff":
 		m.tr.add(&diffItem{patch: msg.result.Patch})
 	case msg.result.Kind == "todos":
@@ -55,7 +70,7 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		}
 		m.tr.add(item)
 	default:
-		if msg.command == "undo" {
+		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" {
 			// The screen keeps what was said; the agent's conversation is what was rewound.
 			return m.toast(toastInfo, msg.result.Text)
 		}

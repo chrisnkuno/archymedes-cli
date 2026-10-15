@@ -17,6 +17,8 @@ import { collectExternalTools } from "./tool-providers";
 import { credentialRequest, deployOffer, deployPlan, detectWebApp, DEPLOY_PROVIDERS, type DeployTarget } from "./deploy";
 import { addMemory, type MemoryKind, type MemoryScope } from "./memory";
 import { compute, ComputeError } from "./compute";
+import { forbiddenMessage, judgeCommand, type CommandRule } from "./command-rules";
+import { looksSandboxDenied, SANDBOX_ESCALATION_NOTE } from "./os-sandbox";
 import { displayPath, resolveInWorkspace, applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
 import { createExtraTools } from "./tools-extra";
 
@@ -109,6 +111,8 @@ export type ArchymedesToolOptions = {
   instructions?: NestedInstructionTracker;
   /** Skills, MCP servers and plugins — anything offering tools Archymedes did not ship with. See tool-providers.ts. */
   externalToolProviders?: ToolProvider[];
+  /** The person's command rules (command-rules.ts): a forbidden command is refused with its reason. */
+  commandRules?: readonly CommandRule[];
   /** Pre/post tool-call interception. See hooks.ts. Applied to every tool, built-in and external alike. */
   hooks?: HookRegistry;
   /**
@@ -216,6 +220,7 @@ export async function scanWorkspaceForSecrets(workspace: Pick<ArchymedesWorkspac
 export async function createArchymedesTools(options: ArchymedesToolOptions): Promise<AgentTool[]> {
   const { workspace, todos } = options;
   const commandTimeoutMs = options.commandTimeoutMs ?? 120_000;
+  const sandboxed = workspace.commandSandbox?.state === "on";
   // Files this run wrote, so running one of them can count as exercising what was just made.
   const writtenFiles = new Set<string>();
 
@@ -425,6 +430,8 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           command: { type: "string" },
           timeoutSeconds: { type: "integer", description: `Default and most: ${Math.round(commandTimeoutMs / 1000)}.` },
           timeoutMs: { type: "integer" },
+          // Offered only under the command sandbox: a way out the person always decides on.
+          ...(sandboxed ? { escalate: { type: "boolean", description: "Run this once outside the sandbox (it needs network or writes outside the project); the person is asked." } } : {}),
         },
         required: ["command"],
         additionalProperties: false,
@@ -437,6 +444,8 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const command = requiredString(args.command, "command");
         // Refused, not merely gated: these destroy work that no checkpoint can return, and a
         // human approving quickly is exactly the moment they will not notice which flag it was.
+        const ruled = judgeCommand(options.commandRules ?? [], command);
+        if (ruled?.decision === "forbid") return { content: forbiddenMessage(command, ruled), isError: true, data: { command, reason: "command_rule" } };
         if (isRefusedCommand(command)) {
           return { content: `Refused: '${command}' can destroy work irrecoverably. Ask the user to run it themselves if it is really intended.`, isError: true };
         }
@@ -448,7 +457,9 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           };
         }
         const { timeoutMs, note: timeoutNote } = commandTimeout(args, commandTimeoutMs);
-        const result = await workspace.runCommand(command, timeoutMs, context.signal);
+        const escalated = sandboxed && args.escalate === true;
+        const result = await workspace.runCommand(command, timeoutMs, context.signal, { escalated });
+        const sandboxNote = sandboxed && !escalated && looksSandboxDenied(result) ? `\n\n${SANDBOX_ESCALATION_NOTE}` : "";
         const body = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n") || "(no output)";
         // A missing program is the one failure whose fix is never "try again": the model has to
         // pick a different program. Naming that explicitly beats an ENOENT the model reads as a
@@ -467,7 +478,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const rejectedVerification = kind && result.exitCode === 0 ? rejectedVerificationReason(command, result) : null;
         const verificationNote = rejectedVerification ? `\n\nArchymedes did not accept this as verification: ${rejectedVerification}` : "";
         return {
-          content: `exit ${result.exitCode}\n${body}${verificationNote}${timeoutNote ? `\n\n[${timeoutNote}]` : ""}`,
+          content: `exit ${result.exitCode}\n${body}${verificationNote}${timeoutNote ? `\n\n[${timeoutNote}]` : ""}${sandboxNote}`,
           isError: result.exitCode !== 0,
           data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, ...(kind && !rejectedVerification ? { verificationKind: kind } : {}), ...(rejectedVerification ? { verificationRejectedReason: rejectedVerification } : {}) },
           // A passing test command is the evidence the runtime needs before it will call a

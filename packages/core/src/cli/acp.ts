@@ -48,6 +48,8 @@ export interface AcpSession {
   command?(command: string, argument: string): Promise<JsonValue>;
   /** The stored conversation of a loaded session, replayed to the client before `session/load` answers. */
   history?(): readonly AgentMessage[];
+  /** Hands a message to the turn in progress; false when there is none to take it. */
+  steer?(text: string): boolean;
 }
 
 /**
@@ -337,6 +339,12 @@ export class AcpConnection {
         if (!session.command) throw new AcpError(JSON_RPC.methodNotFound, "This agent has no session commands");
         if (typeof params.command !== "string") throw new AcpError(JSON_RPC.invalidParams, "command is required");
         return session.command(params.command, typeof params.argument === "string" ? params.argument : "");
+      }
+      case "_archymedes/session/steer": {
+        // Answered at once, while the turn runs: accepted means the model will read it in this turn.
+        const session = this.sessionFor(params);
+        if (typeof params.text !== "string") throw new AcpError(JSON_RPC.invalidParams, "text is required");
+        return { accepted: session.steer?.(params.text) ?? false };
       }
       case "_archymedes/session/set_model": {
         const session = this.sessionFor(params);

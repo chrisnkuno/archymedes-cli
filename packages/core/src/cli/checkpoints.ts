@@ -34,7 +34,8 @@ export type Checkpoint = {
   /** The turn this checkpoint was captured before, so it can be cross-referenced against the journal. */
   turnId: string;
   /**
-   * How many messages the conversation held at capture time.
+   * How many messages the conversation held at capture time; -1 once a compaction summarized that
+   * point away, when only the files can be returned to it.
    *
    * The number, not a copy of the messages themselves — `ArchymedesAgent` already holds the transcript
    * and is the only thing that can safely truncate it back to this point, in step with its own
@@ -61,18 +62,91 @@ export const runGit: GitRunner = (args, options) =>
     child.on("close", (code) => resolve({ exitCode: code ?? 1, stdout, stderr }));
   });
 
-export class CheckpointStore {
-  private readonly checkpoints: Checkpoint[] = [];
-  private seedAttempted = false;
+/**
+ * Where a checkpoint's tree is kept reachable: one hidden ref per checkpoint, under the session.
+ *
+ * A tree that nothing points to is garbage to git: `git gc` prunes it once it is two weeks old (or
+ * at once with `--prune=now`), and an undo that outlives the session needs the tree to still be
+ * there. A ref outside `refs/heads` and `refs/tags` keeps it without showing up as a branch, in
+ * `git log`, or in a push — the way T3 Code keeps its per-turn checkpoints.
+ */
+export const CHECKPOINT_REF_ROOT = "refs/archymedes/checkpoints";
 
+export function checkpointRef(sessionId: string, index: number): string {
+  return `${CHECKPOINT_REF_ROOT}/${sessionId}/${index + 1}`;
+}
+
+export class CheckpointStore {
+  private checkpoints: Checkpoint[] = [];
+  private seedAttempted = false;
+  /** A `load` still checking its trees: a capture waits for it, so it cannot be overwritten. */
+  private loading: Promise<void> = Promise.resolve();
+
+  /**
+   * @param session the id whose ref namespace the checkpoints are kept under; a function, since a
+   *   resumed or forked session changes it after the store is built.
+   */
   constructor(
     private readonly root: string,
     private readonly indexFile: string,
     private readonly git: GitRunner = runGit,
+    private readonly session: () => string = () => "unsaved",
   ) {}
 
   list(): Checkpoint[] {
     return [...this.checkpoints];
+  }
+
+  /**
+   * Takes over the checkpoints a stored session recorded, so `/undo` and rewinding work after a
+   * resume. A tree git no longer has (a session from before refs were kept, then `git gc`) is left
+   * out here rather than failing a restore later.
+   */
+  load(checkpoints: readonly Checkpoint[]): Promise<void> {
+    this.loading = this.loading.then(() => this.loadNow(checkpoints));
+    return this.loading;
+  }
+
+  private async loadNow(checkpoints: readonly Checkpoint[]): Promise<void> {
+    const kept: Checkpoint[] = [];
+    for (const checkpoint of checkpoints) {
+      if ((await this.git(["cat-file", "-e", `${checkpoint.tree}^{tree}`], { cwd: this.root })).exitCode === 0) kept.push({ ...checkpoint });
+    }
+    this.checkpoints = kept;
+    await this.keep();
+  }
+
+  /** The checkpoint at `index` (0 is the session's first turn). */
+  at(index: number): Checkpoint | undefined {
+    return Number.isInteger(index) ? this.checkpoints[index] : undefined;
+  }
+
+  /**
+   * Forgets the checkpoint at `index` and every later one, with their refs: what rewinding to it
+   * leaves behind. The state they recorded is in the past of a conversation that no longer exists.
+   */
+  async dropFrom(index: number): Promise<void> {
+    if (index < 0 || index >= this.checkpoints.length) return;
+    const dropped = this.checkpoints.length;
+    this.checkpoints = this.checkpoints.slice(0, index);
+    for (let position = index; position < dropped; position += 1) {
+      await this.git(["update-ref", "-d", checkpointRef(this.session(), position)], { cwd: this.root });
+    }
+  }
+
+  /**
+   * Renumbers where each checkpoint cuts the conversation after a compaction rewrote its start.
+   * `map` gives the new count for an old one, or -1 when that point now lies inside the summary.
+   */
+  remapMessages(map: (messageCount: number) => number): void {
+    this.checkpoints = this.checkpoints.map((checkpoint) => ({ ...checkpoint, messageCount: checkpoint.messageCount < 0 ? -1 : map(checkpoint.messageCount) }));
+  }
+
+  /** Points this session's refs at its checkpoints (after a load, or a fork into a new id). */
+  async keep(): Promise<void> {
+    for (const [index, checkpoint] of this.checkpoints.entries()) {
+      await this.git(["update-ref", checkpointRef(this.session(), index), checkpoint.tree], { cwd: this.root });
+    }
   }
 
   /** True when this workspace is a git repository, which is the only place checkpoints work. */
@@ -89,6 +163,7 @@ export class CheckpointStore {
    * a reduction in function.
    */
   async capture(label: string, turnId: string, messageCount: number): Promise<Checkpoint | undefined> {
+    await this.loading;
     // git cannot create its index inside a directory that does not exist, so on a brand-new
     // project the very first capture failed and the first turn silently had no undo — the one
     // turn where a user is most likely to want it.
@@ -107,6 +182,8 @@ export class CheckpointStore {
     const checkpoint = { tree: tree.stdout.trim(), label, createdAt: Date.now(), turnId, messageCount };
     if (!checkpoint.tree) return undefined;
     this.checkpoints.push(checkpoint);
+    // Losing the ref costs only an undo after `git gc`; the checkpoint itself is still good now.
+    await this.git(["update-ref", checkpointRef(this.session(), this.checkpoints.length - 1), checkpoint.tree], { cwd: this.root });
     return checkpoint;
   }
 
@@ -177,8 +254,20 @@ export class CheckpointStore {
     return (await this.diff(["--stat"])).trim();
   }
 
-  private async diff(format: string[]): Promise<string> {
-    const checkpoint = this.latest();
+  /**
+   * What one turn changed: its checkpoint against the next one, or against the workspace for the
+   * last turn. Empty when there is no such turn.
+   */
+  async turnPatch(index: number): Promise<string> {
+    const checkpoint = this.at(index);
+    if (!checkpoint) return "";
+    const next = this.at(index + 1);
+    if (!next) return this.diff(["--unified=3", "--no-color"], checkpoint);
+    const result = await this.git(["diff", "--unified=3", "--no-color", checkpoint.tree, next.tree], { cwd: this.root });
+    return result.exitCode === 0 ? result.stdout : "";
+  }
+
+  private async diff(format: string[], checkpoint = this.latest()): Promise<string> {
     if (!checkpoint) return "";
     // Include newly created files without changing the user's staging area or racing the
     // checkpoint index. Seed from the snapshot so tracked files remain tracked if now ignored.

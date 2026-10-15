@@ -84,6 +84,11 @@ func (m *Model) runShell(command string) tea.Cmd {
 	if command == "" {
 		return m.toast(toastInfo, "!<command> runs it here, e.g. !git status")
 	}
+	return m.runShellIn(command, m.projectRoot(), nil)
+}
+
+// runShellIn is runShell in another folder, with more environment (a worktree's setup script).
+func (m *Model) runShellIn(command, dir string, env []string) tea.Cmd {
 	if m.shellCancel != nil {
 		return m.toast(toastWarn, "A command is still running; esc stops it")
 	}
@@ -93,7 +98,6 @@ func (m *Model) runShell(command string) tea.Cmd {
 	m.tr.toBottom()
 	ctx, cancel := context.WithTimeout(context.Background(), shellTimeout)
 	m.shellCancel = cancel
-	dir := m.projectRoot()
 	return func() tea.Msg {
 		defer cancel()
 		started := time.Now()
@@ -108,7 +112,7 @@ func (m *Model) runShell(command string) tea.Cmd {
 			cmd = exec.CommandContext(ctx, shell, "-c", command)
 		}
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "NO_COLOR=1", "TERM=dumb")
+		cmd.Env = append(append(os.Environ(), "NO_COLOR=1", "TERM=dumb"), env...)
 		var out limitedBuffer
 		cmd.Stdout, cmd.Stderr = &out, &out
 		err := cmd.Run()

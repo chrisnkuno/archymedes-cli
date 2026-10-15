@@ -60,4 +60,15 @@ describe("Anthropic tool results with images", () => {
       ],
     });
   });
+
+  it("puts words sent mid-turn into the tool results' user turn, keeping the roles alternating", () => {
+    const { messages } = toAnthropicMessages([
+      { role: "user", content: "fix it" },
+      { role: "assistant", content: "", toolCalls: [{ id: "r1", name: "read_file", arguments: {} }] },
+      { role: "tool", toolCallId: "r1", name: "read_file", content: "text" },
+      { role: "user", content: "[Sent while you were working] use tabs" },
+    ]);
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "user"]);
+    expect(messages.at(-1)).toEqual({ role: "user", content: [{ type: "tool_result", tool_use_id: "r1", content: "text" }, { type: "text", text: "[Sent while you were working] use tabs" }] });
+  });
 });

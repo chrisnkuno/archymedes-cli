@@ -24,8 +24,8 @@ func writeCommand(t *testing.T, dir, name, text string) {
 func TestCustomCommandsLoadWithProjectWinningAndBuiltinsProtected(t *testing.T) {
 	root := t.TempDir()
 	project, config := filepath.Join(root, "project"), filepath.Join(root, "config")
-	writeCommand(t, config, "review.md", "---\ndescription: from the user\n---\nUser review $ARGUMENTS")
-	writeCommand(t, project, "review.md", "---\ndescription: Review a change for data-loss risks\n---\nReview $ARGUMENTS for data-loss risks.")
+	writeCommand(t, config, "audit.md", "---\ndescription: from the user\n---\nUser review $ARGUMENTS")
+	writeCommand(t, project, "audit.md", "---\ndescription: Review a change for data-loss risks\n---\nReview $ARGUMENTS for data-loss risks.")
 	writeCommand(t, config, "notes.md", "# Notes\nWrite notes")
 	writeCommand(t, project, "help.md", "pretend help")  // a built-in: refused
 	writeCommand(t, project, "Bad Name.md", "nope")      // not a command name
@@ -36,20 +36,20 @@ func TestCustomCommandsLoadWithProjectWinningAndBuiltinsProtected(t *testing.T) 
 	for _, c := range got {
 		names = append(names, c.name)
 	}
-	if strings.Join(names, ",") != "notes,review" {
+	if strings.Join(names, ",") != "audit,notes" {
 		t.Fatalf("commands %v", names)
 	}
-	review := got[1]
+	review := got[0]
 	if review.description != "Review a change for data-loss risks" || !strings.HasPrefix(review.source, project) {
 		t.Fatalf("project file should win: %+v", review)
 	}
-	if got[0].description != "Notes" {
-		t.Fatalf("a missing description is the first line: %q", got[0].description)
+	if got[1].description != "Notes" {
+		t.Fatalf("a missing description is the first line: %q", got[1].description)
 	}
 	if p := review.prompt("the auth module"); p != "Review the auth module for data-loss risks." {
 		t.Fatalf("prompt %q", p)
 	}
-	if p := got[0].prompt("today"); p != "# Notes\nWrite notes\n\ntoday" {
+	if p := got[1].prompt("today"); p != "# Notes\nWrite notes\n\ntoday" {
 		t.Fatalf("a body without $ARGUMENTS gets the text appended: %q", p)
 	}
 }

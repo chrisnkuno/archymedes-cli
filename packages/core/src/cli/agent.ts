@@ -5,7 +5,7 @@ import type { RoutingPlan } from "../providers/routing-plan";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { access } from "node:fs/promises";
-import { agentMessagePromptParts, BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, type SteeringChannel, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
 import { affordableOutputTokens, approximateInputTokens, priceActualModelUsage, type ModelPriceCatalog } from "../model-cost";
 import type { ModelUsage } from "../providers/model";
 import type { ExaSearchClient } from "../providers/exa";
@@ -18,8 +18,9 @@ import { assertTurnTransition, EventJournal, readEventJournal, runtimeEventForJo
 import {
   atSafeBoundary,
   buildCompactedMessages,
-  COMPACTION_INSTRUCTION,
+  compactionInstruction,
   compactionUrgency,
+  estimateMessageTokens,
   newSessionId,
   planCompaction,
   saveSession,
@@ -33,6 +34,10 @@ import {
   type StandingConstraints,
 } from "./session";
 import { loadLocalExternalTooling, type LocalExternalTooling } from "./external-tools";
+import { loadCommandRules } from "./command-rules";
+import { commandSandboxFor } from "./os-sandbox";
+import { goalJudgePrompt, parseGoalVerdict, type GoalVerdict } from "./goal";
+import { describeReviewTarget, parseReview, parseReviewTarget, reviewPatch, reviewPrompt, reviewTranscript, type ReviewResult } from "./review";
 import type { HookGateOutcome } from "../hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import { createArchymedesTools, scanWorkspaceForSecrets, TodoList, type DelegateResult, type DelegateRunner, type PlacedSecretFinding, type TodoItem } from "./tools";
@@ -40,7 +45,7 @@ import type { Expense } from "./cost";
 import { predictAgentUsage, type AgentCostPrediction } from "./cost";
 import { LocalWorkspace, type ArchymedesWorkspace } from "./backends";
 import { WorkspaceArtifactStore } from "./artifacts";
-import type { ReadResult, WorkspaceLimits } from "./workspace";
+import { fileReadTrackerFor, type ReadResult, type WorkspaceLimits } from "./workspace";
 import { DEFAULT_OUTPUT_CEILING } from "../providers/model-capabilities";
 import { DefenderBrain } from "./defender-brain";
 import { toolProfileForObjective, toolsForProfile } from "./tool-profile";
@@ -144,6 +149,10 @@ export function withEditDiagnostics(tools: AgentTool[], afterEdit: ((path: strin
 export type ArchymedesEvent =
   | { type: "runtime"; event: AgentRuntimeEvent }
   | { type: "checkpoint"; checkpoint: Checkpoint }
+  /** Command rules that are malformed or fail their own examples, left out and named. */
+  | { type: "rules_problems"; problems: string[] }
+  /** Messages `steer` accepted that the turn ended before reading; the client sends them next. */
+  | { type: "steering_unread"; messages: string[] }
   // `urgency` and `boundary` say *why* the transcript was compacted here rather than later, which
   // is the only interesting thing about a compaction from outside: at 70% because the work reached
   // a clean stopping point, or at 90% because it had to be.
@@ -201,6 +210,9 @@ export const DEFAULT_ARCHYMEDES_BUDGETS: ArchymedesBudgets = {
 };
 
 export type ArchymedesTurnResult = AgentRuntimeResult & { checkpoint?: Checkpoint };
+
+/** `/context`: the window, the room kept for the answer, and what fills the rest. */
+export type ContextUsage = { window: number; reservedForAnswer: number; parts: Array<{ label: string; tokens: number }> };
 
 /** Which half of a checkpoint to restore. "both" is the historical, sole behaviour of `/undo`. */
 export type RestoreScope = "code" | "conversation" | "both";
@@ -342,10 +354,14 @@ export class ArchymedesAgent {
     // reason `--budget` and the embedder's own options exist.
     this.budgets = { ...DEFAULT_ARCHYMEDES_BUDGETS, ...this.modelBudgets(), ...options.budgets };
     this.workspace = options.workspace ?? new LocalWorkspace(options.root, options.limits);
+    // The OS sandbox for local commands, when the environment asks for it (os-sandbox.ts).
+    if (this.workspace instanceof LocalWorkspace && this.workspace.commandSandbox.state === "off") {
+      this.workspace.setCommandSandbox(commandSandboxFor(options.root, process.env));
+    }
     this.nestedInstructions = new NestedInstructionTracker(this.workspace);
     this.artifacts = new WorkspaceArtifactStore(this.workspace);
     this.defenderBrain = new DefenderBrain(path.join(options.root, ".archymedes", "security-brain"));
-    this.checkpoints = new CheckpointStore(options.root, path.join(options.root, ".archymedes", `checkpoint-index-${randomUUID()}`), options.git);
+    this.checkpoints = new CheckpointStore(options.root, path.join(options.root, ".archymedes", `checkpoint-index-${randomUUID()}`), options.git, () => this.session.id);
     this.session = {
       schemaVersion: 2,
       revision: 0,
@@ -427,6 +443,7 @@ export class ArchymedesAgent {
     this.session = { ...record, routingReceipts: mergeRoutingReceipts(record.routingReceipts), mode: this.options.mode, modelSelection: this.options.model.selection };
     this.messages = [...record.messages];
     this.closeInterruptedTurn();
+    this.pendingCheckpoint = this.checkpoints.load(record.checkpoints ?? []);
     this.recalledMemoryKeys.clear();
     for (const key of record.recalledMemoryKeys ?? []) this.recalledMemoryKeys.add(key);
     // A resumed session may already have been compacted, in which case the earliest surviving user
@@ -671,8 +688,39 @@ export class ArchymedesAgent {
     });
   }
 
+  /**
+   * `/context`: what the next request would fill the model's window with, by kind, against the
+   * window and the room kept for the answer. Estimates, assembled exactly as a turn assembles them.
+   */
+  async contextUsage(): Promise<ContextUsage> {
+    const { systemPrompt, toolSchemas, toolCount, history } = await this.prospectiveParts("");
+    const tokens = (parts: string[]) => (parts.length === 0 ? 0 : approximateInputTokens(parts).expectedInputTokens);
+    const summaries: AgentMessage[] = [];
+    const results: AgentMessage[] = [];
+    const rest: AgentMessage[] = [];
+    for (const message of history) {
+      if (message.role === "tool") results.push(message);
+      else if (message.role === "user" && (message.content.startsWith("[Earlier conversation, summarized]") || message.content.startsWith(STANDING_CONSTRAINTS_HEADING))) summaries.push(message);
+      else rest.push(message);
+    }
+    const parts = [
+      { label: "system prompt and project instructions", tokens: tokens([systemPrompt]) },
+      { label: `tool definitions (${toolCount})`, tokens: tokens([toolSchemas]) },
+      { label: "summary of earlier conversation", tokens: tokens(summaries.flatMap(agentMessagePromptParts)) },
+      { label: "conversation", tokens: tokens(rest.flatMap(agentMessagePromptParts)) },
+      { label: `tool results (${results.length})`, tokens: tokens(results.flatMap(agentMessagePromptParts)) },
+    ];
+    return { window: this.budgets.contextLimit, reservedForAnswer: this.budgets.maxOutputTokens, parts };
+  }
+
   /** What the next turn would send: its assembled size and how many tools it would carry. */
   private async prospectiveRequest(objective: string): Promise<{ initialInputTokens: number; toolCount: number }> {
+    const { systemPrompt, toolSchemas, toolCount, history } = await this.prospectiveParts(objective);
+    const initialInputTokens = approximateInputTokens([systemPrompt, ...history.flatMap(agentMessagePromptParts), objective, toolSchemas]).expectedInputTokens;
+    return { initialInputTokens, toolCount };
+  }
+
+  private async prospectiveParts(objective: string): Promise<{ systemPrompt: string; toolSchemas: string; toolCount: number; history: AgentMessage[] }> {
     const context = await collectProjectContext(this.options.root);
     const externalTooling = await this.loadExternalTooling();
     const delegate = this.createDelegateRunner(context, () => this.budgets.maxRwf);
@@ -701,42 +749,59 @@ export class ArchymedesAgent {
     delegate.setTools(scoped.filter((tool) => !DELEGATION_TOOLS.has(tool.name)));
     const systemPrompt = buildArchymedesSystemPrompt(context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: tokenSaver });
     const toolSchemas = JSON.stringify(scoped.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })));
-    const initialInputTokens = approximateInputTokens([
-      systemPrompt,
-      ...(tokenSaver ? stubEarlierToolResults(this.messages) : this.messages).filter((message) => message.role !== "system").flatMap(agentMessagePromptParts),
-      objective,
-      toolSchemas,
-    ]).expectedInputTokens;
-    return { initialInputTokens, toolCount: scoped.length };
+    const history = (tokenSaver ? stubEarlierToolResults(this.messages) : this.messages).filter((message) => message.role !== "system");
+    return { systemPrompt, toolSchemas, toolCount: scoped.length, history };
   }
 
   /**
-   * Restores the last checkpoint — code, conversation, or both.
+   * Restores the last checkpoint — code, conversation, or both — and steps back one turn: a second
+   * `/undo` restores the turn before.
    *
    * The three scopes answer three different regrets: "the edit was wrong but the plan we discussed
    * to get there was fine" (code), "the model went down a conversational dead end but the files
    * are untouched or already fixed by hand" (conversation), and "start this turn over completely"
    * (both, the default and the only thing `/undo` did before this).
-   *
-   * A conversation restore is written back to the session file immediately, not left to catch up
-   * on the next `send()` — someone who undoes and then closes Archymedes without sending another turn
-   * must not find the untruncated transcript still on disk.
    */
   async undo(scope: RestoreScope = "both"): Promise<Checkpoint | undefined> {
     if (this.turnAbort) throw new Error("Cannot undo while a turn is running");
-    await this.acquireOwnership();
     await this.pendingCheckpoint; // a turn stopped in its first moments may still be storing its snapshot
-    const checkpoint = this.checkpoints.latest();
+    const count = this.checkpoints.list().length;
+    return count === 0 ? undefined : this.rewind(count - 1, scope);
+  }
+
+  /**
+   * Returns the session to the moment before turn `index` (0 is the first): its files, its
+   * conversation, or both. That checkpoint and every later one are dropped, since they record a
+   * future that no longer happens.
+   *
+   * A conversation restore is written back to the session file immediately, not left to catch up
+   * on the next `send()` — someone who rewinds and then closes Archymedes without sending another
+   * turn must not find the untruncated transcript still on disk.
+   */
+  async rewind(index: number, scope: RestoreScope = "both"): Promise<Checkpoint | undefined> {
+    if (this.turnAbort) throw new Error("Cannot rewind while a turn is running");
+    await this.acquireOwnership();
+    await this.pendingCheckpoint;
+    const checkpoint = this.checkpoints.at(index);
     if (!checkpoint) return undefined;
+    const summarized = checkpoint.messageCount < 0;
+    if (summarized && scope === "conversation") throw new Error("That turn is inside the summary of the earlier conversation: only its files can be restored (/rewind <n> code).");
     if (scope === "code" || scope === "both") {
       if (!(await this.checkpoints.restore(checkpoint.tree))) return undefined;
     }
-    if (scope === "conversation" || scope === "both") {
+    if ((scope === "conversation" || scope === "both") && !summarized) {
       this.messages = this.messages.slice(0, checkpoint.messageCount);
-      this.session = { ...this.session, messages: this.messages, updatedAt: Date.now() };
-      await saveSession(this.session);
     }
+    await this.checkpoints.dropFrom(index);
+    this.session = { ...this.session, messages: this.messages, checkpoints: this.checkpoints.list(), updatedAt: Date.now() };
+    await saveSession(this.session);
     return checkpoint;
+  }
+
+  /** What turn `index` changed (its checkpoint against the next, or the workspace for the last). */
+  async turnPatch(index: number): Promise<string> {
+    await this.pendingCheckpoint;
+    return this.checkpoints.turnPatch(index);
   }
 
   /**
@@ -837,6 +902,8 @@ export class ArchymedesAgent {
     this.cancelled = false;
     const turnAbort = new AbortController();
     this.turnAbort = turnAbort;
+    const steering = new SteeringQueue();
+    this.steering = steering;
     // What actually ran this turn, for the judge to read afterwards. Reset every turn:
     // the verdict after turn two must not contain turn one's history. Declared outside
     // the try, which the post-turn verdict is: it reads what the turn ran, after
@@ -847,6 +914,7 @@ export class ArchymedesAgent {
       turnAbort.signal.throwIfAborted();
     } catch (error) {
       this.turnAbort = null;
+      steering.close();
       throw error;
     }
     const turnId = `turn_${randomUUID()}`;
@@ -895,6 +963,12 @@ export class ArchymedesAgent {
       const delegate = this.createDelegateRunner(this.context, () => Math.max(0, this.budgets.maxRwf - compactionActualRwf - this.delegatedRwf));
 
       const externalTooling = await this.loadExternalTooling();
+      // Read every turn: a rule written between turns applies to the next one.
+      const commandRules = await loadCommandRules(this.options.root, process.env);
+      this.permissions.setCommandRules(commandRules.rules);
+      const problems = commandRules.problems.join("\n");
+      if (problems && problems !== this.reportedRuleProblems) this.options.onEvent?.({ type: "rules_problems", problems: commandRules.problems });
+      this.reportedRuleProblems = problems;
       const tools = await createArchymedesTools({
         workspace: this.workspace,
         todos: this.todoList,
@@ -906,6 +980,7 @@ export class ArchymedesAgent {
         delegate: delegate.runner,
         memoryRoot: this.options.root,
         defenderBrain: this.defenderBrain,
+        commandRules: commandRules.rules,
       });
       const capabilities = capabilitiesForMode(this.options.mode);
       // Token saver (free mode): leaner budgets, prompt, tool set and history; see `token-saver.ts`.
@@ -948,7 +1023,8 @@ export class ArchymedesAgent {
       const memoryBlock = memoryPromptBlock(recalled);
       const attached = await attachMentionedImages(this.workspace, objective);
       const requested = objectiveWithImageProblems(objective, attached.problems);
-      const turnObjective = memoryBlock ? `${memoryBlock}\n\n${requested}` : requested;
+      const changedNote = await this.filesChangedNote();
+      const turnObjective = [memoryBlock, changedNote, requested].filter(Boolean).join("\n\n");
 
       // Snapshot before the agent can touch anything, so `/undo` returns to the state the user saw
       // when they typed. Taken per turn rather than per tool call: a turn is the unit a person
@@ -1053,6 +1129,7 @@ export class ArchymedesAgent {
         modelReservationRwf: Math.max(0, this.budgets.maxRwf - compaction.actualRwf),
         safetyIdentifier: `archymedes_cli_${this.session.id}`.slice(0, 64),
         signal: turnAbort.signal,
+        steering,
       });
 
       const combinedUsage = addModelUsage(compaction.usage, addModelUsage(result.usage, this.delegatedUsage));
@@ -1076,6 +1153,7 @@ export class ArchymedesAgent {
         updatedAt: Date.now(),
       };
       await checkpointReady; // normally long done; makes the result's checkpoint certain
+      this.session.checkpoints = this.checkpoints.list();
       const terminalStatus = runtimeStatusToTurnStatus(result.status);
       await transition(terminalStatus, true);
       await this.recordHostedUsage();
@@ -1089,6 +1167,11 @@ export class ArchymedesAgent {
       if (this.closeInterruptedTurn()) await saveSession(this.session).catch(() => undefined);
       throw error;
     } finally {
+      steering.close();
+      // Accepted but never read (the turn was stopped, failed, or hit a limit first): handed back,
+      // so the client sends them as turns of their own instead of their being lost.
+      const unread = steering.take();
+      if (unread.length > 0) this.options.onEvent?.({ type: "steering_unread", messages: unread });
       if (this.turnAbort === turnAbort) this.turnAbort = null;
       this.activeTurnId = null;
       this.activeTransition = null;
@@ -1176,6 +1259,10 @@ export class ArchymedesAgent {
 
   /** The current turn's snapshot while it is being taken; undo and diff wait for it. */
   private pendingCheckpoint: Promise<void> = Promise.resolve();
+  /** The command-rule problems last reported, so the same broken file is named once. */
+  private reportedRuleProblems = "";
+  /** The running turn's mailbox for `steer`, closed once the turn has concluded. */
+  private steering: SteeringQueue | null = null;
 
   /** Jev's last confident reading of the current task's difficulty, when `reasoning` is `auto`. */
   private jevDifficulty: Difficulty | undefined;
@@ -1260,6 +1347,124 @@ export class ArchymedesAgent {
    * summarizer holding an `edit_file` tool is a summarizer that will eventually use it.
    */
   private async compactIfNeeded(turnId: string, objective: string, signal?: AbortSignal, tokenSaver = false): Promise<{ usage: ModelUsage; actualRwf: number }> {
+    return this.compact(turnId, objective, { signal, tokenSaver });
+  }
+
+  /**
+   * `/compact [focus]`: summarizes the conversation now, whatever its size, keeping the last
+   * exchange word for word. Between turns only. Undefined when there is too little to summarize.
+   */
+  async compactNow(focus?: string): Promise<{ messagesBefore: number; messagesAfter: number; tokensBefore: number; tokensAfter: number } | undefined> {
+    if (this.turnAbort) throw new Error("Cannot compact while a turn is running");
+    await this.acquireOwnership();
+    const before = this.messages.length;
+    const tokensBefore = estimateMessageTokens(this.messages);
+    const objective = this.openingObjective ?? this.session.title;
+    const result = await this.compact(`compact-${randomUUID()}`, objective, { force: true, focus });
+    if (this.messages.length === before) return undefined;
+    this.session = {
+      ...this.session,
+      messages: this.messages,
+      checkpoints: this.checkpoints.list(),
+      totalRwf: this.session.totalRwf + result.actualRwf,
+      updatedAt: Date.now(),
+    };
+    await saveSession(this.session);
+    return { messagesBefore: before, messagesAfter: this.messages.length, tokensBefore, tokensAfter: estimateMessageTokens(this.messages) };
+  }
+
+  /**
+   * Hands a message to the turn in progress: the model reads it after the tool calls it is running,
+   * within this turn. False when no turn is running or it has already concluded — then the message
+   * is a turn of its own.
+   */
+  steer(text: string): boolean {
+    const trimmed = text.trim();
+    if (!trimmed || !this.steering) return false;
+    return this.steering.push(trimmed);
+  }
+
+  /**
+   * Files the agent read that changed on disk since (the person edited them between turns, a
+   * formatter ran), named once per change at the start of the next turn: what the model holds of
+   * them is stale, and it should re-read before relying on them. Empty when nothing changed.
+   */
+  private async filesChangedNote(): Promise<string> {
+    const changed = await fileReadTrackerFor(this.workspace).changedSinceRead(async (file) => {
+      try {
+        return (await this.workspace.readFile(file)).content;
+      } catch {
+        return undefined;
+      }
+    });
+    if (changed.length === 0) return "";
+    changed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    const shown = changed.slice(0, 20).map((file) => `${file.path}${file.deleted ? " (deleted)" : ""}`);
+    const more = changed.length > shown.length ? ` and ${changed.length - shown.length} more` : "";
+    return `[Changed on disk since you last read them — re-read before relying on them: ${shown.join(", ")}${more}]`;
+  }
+
+  /**
+   * `/goal`'s verdict after a turn: has the condition been met, shown to be impossible, or not yet?
+   * One tool-less call over the recent conversation; nothing is added to the conversation.
+   */
+  async checkGoal(condition: string): Promise<GoalVerdict> {
+    if (this.turnAbort) throw new Error("Cannot judge a goal while a turn is running");
+    const prompt = goalJudgePrompt(condition, this.messages);
+    const maximumOutputTokens = affordableOutputTokens([prompt], 600, this.budgets.maxRwf, this.options.prices);
+    if (maximumOutputTokens < 1) return { status: "impossible", reason: "the budget left cannot pay for another check" };
+    const turn = await this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "goal").complete({
+      effort: "low",
+      messages: [{ role: "user", content: prompt }],
+      tools: [],
+      maxOutputTokens: maximumOutputTokens,
+      safetyIdentifier: `archymedes_cli_${this.session.id}`.slice(0, 64),
+    });
+    const actualRwf = priceActualModelUsage(turn.usage.inputTokens, turn.usage.outputTokens, this.options.prices);
+    this.session = { ...this.session, totalRwf: this.session.totalRwf + actualRwf };
+    return parseGoalVerdict(turn.content);
+  }
+
+  /**
+   * `/review [target]`: reads a change and reports findings, touching nothing. One model call with
+   * no tools: a reviewer that can edit is not a reviewer. The verdict joins the conversation, so
+   * the next message can ask for one of the findings to be fixed.
+   */
+  async review(argument: string): Promise<ReviewResult | { error: string }> {
+    if (this.turnAbort) throw new Error("Cannot review while a turn is running");
+    const target = parseReviewTarget(argument);
+    if ("error" in target) return target;
+    const described = describeReviewTarget(target);
+    const read = await reviewPatch(this.options.root, target, this.options.git);
+    if ("error" in read) return { error: `Could not read ${described}: ${read.error}` };
+    if (!read.patch.trim()) return { target: described, findings: [], overall: `Nothing to review: no file differs in ${described}.` };
+    await this.acquireOwnership();
+    // Room for the patch: the window less the answer, at about three characters a token.
+    const limit = Math.max(4_000, (this.budgets.contextLimit - this.budgets.maxOutputTokens) * 3);
+    const prompt = reviewPrompt(target, read.patch, limit);
+    const maximumOutputTokens = affordableOutputTokens([prompt], Math.min(this.budgets.maxOutputTokens, 8_000), this.budgets.maxRwf, this.options.prices);
+    if (maximumOutputTokens < 1) return { error: "The budget left cannot pay for a review" };
+    const turn = await this.recovery.wrap(this.options.model, () => this.session, this.options.prices, "review").complete({
+      messages: [{ role: "user", content: prompt }],
+      tools: [],
+      maxOutputTokens: maximumOutputTokens,
+      safetyIdentifier: `archymedes_cli_${this.session.id}`.slice(0, 64),
+    });
+    const actualRwf = priceActualModelUsage(turn.usage.inputTokens, turn.usage.outputTokens, this.options.prices);
+    const result = parseReview(turn.content, described);
+    this.messages = [...this.messages, { role: "user", content: `/review ${argument.trim() || "uncommitted"}` }, { role: "assistant", content: reviewTranscript(result) }];
+    this.session = { ...this.session, messages: this.messages, totalRwf: this.session.totalRwf + actualRwf, updatedAt: Date.now() };
+    await saveSession(this.session);
+    return result;
+  }
+
+  private async compact(
+    turnId: string,
+    objective: string,
+    options: { signal?: AbortSignal; tokenSaver?: boolean; force?: boolean; focus?: string },
+  ): Promise<{ usage: ModelUsage; actualRwf: number }> {
+    const { signal, tokenSaver = false, force = false } = options;
+    const instruction = compactionInstruction(options.focus);
     // Compaction happens between turns, which is already the cleanest boundary a session has: the
     // previous exchange concluded, no tool call is outstanding. `atSafeBoundary` still asks,
     // because "concluded" is not the same as "finished" — an agent that left an item in progress
@@ -1273,12 +1478,12 @@ export class ArchymedesAgent {
     // whole inside the request that writes one.
     const basis = tokenSaver ? stubEarlierToolResults(this.messages) : this.messages;
     const urgency = compactionUrgency(basis, { contextLimit: this.budgets.contextLimit, outputBudget: this.budgets.maxOutputTokens });
-    const plan = planCompaction(basis, { contextLimit: this.budgets.contextLimit, outputBudget: this.budgets.maxOutputTokens, boundary });
+    const plan = planCompaction(basis, { contextLimit: this.budgets.contextLimit, outputBudget: this.budgets.maxOutputTokens, boundary, force });
     if (!plan) return { usage: emptyModelUsage(), actualRwf: 0 };
     const before = this.messages.length;
 
     const maximumOutputTokens = affordableOutputTokens(
-      [...plan.toSummarize.map((message) => message.content), COMPACTION_INSTRUCTION],
+      [...plan.toSummarize.map((message) => message.content), instruction],
       Math.min(this.budgets.maxOutputTokens, 4_000),
       this.budgets.maxRwf,
       this.options.prices,
@@ -1291,7 +1496,7 @@ export class ArchymedesAgent {
       // in the session that produces nothing the user asked for. Providers whose model does not
       // take the setting ignore it.
       effort: "low",
-      messages: [...plan.toSummarize, { role: "user", content: COMPACTION_INSTRUCTION }],
+      messages: [...plan.toSummarize, { role: "user", content: instruction }],
       tools: [],
       maxOutputTokens: maximumOutputTokens,
       safetyIdentifier: `archymedes_cli_${this.session.id}`.slice(0, 64),
@@ -1302,6 +1507,12 @@ export class ArchymedesAgent {
     if (!turn.content.trim()) return { usage: turn.usage, actualRwf };
 
     this.messages = buildCompactedMessages(turn.content, plan, this.standingConstraints(objective));
+    // Where each checkpoint cuts the conversation moves with the kept tail; a point inside the
+    // summary can no longer be cut at. The turn's own checkpoint may still be being stored.
+    await this.pendingCheckpoint;
+    const keptFrom = before - plan.toKeep.length;
+    const prefix = this.messages.length - plan.toKeep.length;
+    this.checkpoints.remapMessages((count) => (count >= keptFrom ? count - keptFrom + prefix : -1));
     this.options.onEvent?.({ type: "compaction", tokensBefore: 0, messagesBefore: before, messagesAfter: this.messages.length, urgency, boundary });
     await this.journal.append({ type: "compaction", turnId, messagesBefore: before, messagesAfter: this.messages.length, actualRwf });
     return { usage: turn.usage, actualRwf };
@@ -1347,4 +1558,26 @@ function runtimeStatusToTurnStatus(status: AgentRuntimeResult["status"]): TurnSt
 
 function isActiveTurnStatus(status: TurnStatus): boolean {
   return status === "queued" || status === "running" || status === "waiting_approval";
+}
+
+/** A turn's `SteeringChannel`: messages in, taken by the runtime, refused once closed. */
+class SteeringQueue implements SteeringChannel {
+  private pending: string[] = [];
+  private closed = false;
+
+  push(text: string): boolean {
+    if (this.closed) return false;
+    this.pending.push(text);
+    return true;
+  }
+
+  take(): string[] {
+    const taken = this.pending;
+    this.pending = [];
+    return taken;
+  }
+
+  close(): void {
+    this.closed = true;
+  }
 }

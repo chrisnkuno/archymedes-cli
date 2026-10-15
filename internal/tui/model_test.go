@@ -38,9 +38,17 @@ type fakeAgent struct {
 	models     []string
 	commands   []string
 	closed     []string
+	// steering: what Steer was given, and whether it refuses
+	steered     []string
+	cannotSteer bool
+	cwds        []string // where each session was opened
+	goalChecks  int
 }
 
-func (f *fakeAgent) NewSession(_ context.Context, _ string, resumeID string) (acp.Session, error) {
+func (f *fakeAgent) NewSession(_ context.Context, cwd string, resumeID string) (acp.Session, error) {
+	f.mu.Lock()
+	f.cwds = append(f.cwds, cwd)
+	f.mu.Unlock()
 	f.resumed = resumeID
 	return acp.Session{ID: "s1", Info: acp.SessionInfo{Model: "m1", Mode: "build"}}, nil
 }
@@ -64,7 +72,32 @@ func (f *fakeAgent) Command(_ context.Context, _ string, command, argument strin
 	f.commands = append(f.commands, command+":"+argument)
 	f.mu.Unlock()
 	switch command {
+	case "goal-prompt":
+		return acp.CommandResult{Kind: "goal", Status: "continue", Next: "Work until: " + argument}, nil
+	case "goal-check":
+		f.mu.Lock()
+		f.goalChecks++
+		checks := f.goalChecks
+		f.mu.Unlock()
+		if checks < 2 {
+			return acp.CommandResult{Kind: "goal", Status: "continue", Reason: "two tests still fail", Next: "Continue: " + argument}, nil
+		}
+		return acp.CommandResult{Kind: "goal", Status: "met", Reason: "the suite passed"}, nil
+	case "fork":
+		return acp.CommandResult{Kind: "forked", ID: "s2", Title: "fix the bug (fork)"}, nil
+	case "review":
+		return acp.CommandResult{Kind: "review", Target: "the uncommitted changes", Overall: "One real bug.", Findings: []acp.Finding{
+			{File: "parser.go", Line: 12, Severity: "high", Title: "loses the last token", Body: "the loop stops one short when the input ends without a newline"},
+			{File: "lexer.go", Severity: "low", Title: "unused field"},
+		}}, nil
+	case "turns":
+		return acp.CommandResult{Kind: "turns", Turns: []acp.Turn{{Index: 0, Label: "add the parser", CreatedAt: 1}, {Index: 1, Label: "fix the flaky test", CreatedAt: 2}}}, nil
+	case "rewind":
+		return acp.CommandResult{Kind: "text", Text: "Rewound to before turn " + argument}, nil
 	case "diff":
+		if argument == "turn 0" {
+			return acp.CommandResult{Kind: "diff", Patch: "--- a/parser.go\n+++ b/parser.go\n@@ -1 +1 @@\n-old parser\n+new parser\n"}, nil
+		}
 		return acp.CommandResult{Kind: "diff", Patch: "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old line\n+new line\n"}, nil
 	case "todos":
 		return acp.CommandResult{Kind: "todos", Items: []struct {
@@ -148,6 +181,12 @@ func (f *fakeAgent) SetMode(_ context.Context, _ string, mode string) error {
 	return nil
 }
 func (f *fakeAgent) Messages() <-chan any { return f.messages }
+func (f *fakeAgent) Steer(_ context.Context, _ string, text string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.steered = append(f.steered, text)
+	return !f.cannotSteer, nil
+}
 func (f *fakeAgent) Close()               {}
 
 // newTestModel is a connected model at 80x24 with the session already open.
@@ -288,10 +327,11 @@ func TestApprovalHoldsTheKeyboardAndEscapeDenies(t *testing.T) {
 
 func TestMessagesSentDuringATurnAreQueuedAndEscapeDropsThem(t *testing.T) {
 	m, agent := newTestModel(t)
+	agent.cannotSteer = true // an engine without steering: messages wait for the turn to end
 	typeText(m, "first")
 	first := press(m, tea.KeyEnter, 0)
 	typeText(m, "second")
-	press(m, tea.KeyEnter, 0)
+	run(m, press(m, tea.KeyEnter, 0))
 	if len(m.queue) != 1 {
 		t.Fatalf("queue = %q", m.queue)
 	}
@@ -305,6 +345,26 @@ func TestMessagesSentDuringATurnAreQueuedAndEscapeDropsThem(t *testing.T) {
 	press(m, tea.KeyEscape, 0)
 	if agent.cancelled != 1 || len(m.queue) != 0 {
 		t.Fatalf("cancelled=%d queue=%q", agent.cancelled, m.queue)
+	}
+}
+
+func TestAMessageSentDuringATurnSteersIt(t *testing.T) {
+	m, agent := newTestModel(t)
+	typeText(m, "first")
+	press(m, tea.KeyEnter, 0) // the turn runs (its end is never delivered here)
+	typeText(m, "use tabs, not spaces")
+	run(m, press(m, tea.KeyEnter, 0))
+	if len(m.queue) != 0 || len(agent.steered) != 1 || agent.steered[0] != "use tabs, not spaces" {
+		t.Fatalf("steered %q, queue %q", agent.steered, m.queue)
+	}
+	if !strings.Contains(screen(m), "use tabs, not spaces") || !strings.Contains(screen(m), "Sent to the running turn") {
+		t.Fatalf("the steer shows in the conversation:\n%s", screen(m))
+	}
+	// Accepted but never read: handed back, first in line.
+	m.queue = []string{"later"}
+	m.handleEvent(acp.Event{Type: "steering_unread", Messages: []string{"use tabs, not spaces"}})
+	if strings.Join(m.queue, "|") != "use tabs, not spaces|later" {
+		t.Fatalf("queue %q", m.queue)
 	}
 }
 

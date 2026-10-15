@@ -20,6 +20,7 @@ import {
   type WorkspaceLimits,
 } from "./workspace";
 import { hasShellSyntax, runLocalCommand, tokenizeCommand, type CommandRunner } from "./command";
+import type { CommandSandbox } from "./os-sandbox";
 import { LocalApplicationSupervisor, type ApplicationStatus, type StartApplicationRequest } from "./applications";
 export { hasShellSyntax, tokenizeCommand } from "./command";
 
@@ -58,7 +59,10 @@ export interface ArchymedesWorkspace {
   list(prefix: string, depth: number): Promise<string[]>;
   glob(pattern: string): Promise<string[]>;
   grep(query: string, options?: { include?: string; regex?: boolean }): Promise<GrepMatch[]>;
-  runCommand(command: string, timeoutMs: number, signal?: AbortSignal): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  /** `escalated`: this one run was allowed outside the command sandbox by the person. */
+  runCommand(command: string, timeoutMs: number, signal?: AbortSignal, options?: { escalated?: boolean }): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  /** The OS sandbox commands run under, where the backend has one (the local workspace). */
+  readonly commandSandbox?: CommandSandbox;
   /** Managed preview applications. Only the local workspace can expose a host-reachable URL today. */
   startApplication(request: StartApplicationRequest): Promise<ApplicationStatus>;
   applicationStatus(id?: string): Promise<ApplicationStatus[]>;
@@ -167,13 +171,25 @@ export class LocalWorkspace implements ArchymedesWorkspace {
     return grepWorkspace(this.root, query, { ...options, limits: this.limits });
   }
 
-  runCommand(command: string, timeoutMs: number, signal?: AbortSignal): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  /** See os-sandbox.ts. Off until the agent sets it from the session's environment. */
+  commandSandbox: CommandSandbox = { state: "off" };
+
+  setCommandSandbox(sandbox: CommandSandbox): void {
+    this.commandSandbox = sandbox;
+  }
+
+  runCommand(command: string, timeoutMs: number, signal?: AbortSignal, options: { escalated?: boolean } = {}): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const sandbox = options.escalated ? undefined : this.commandSandbox;
+    if (sandbox?.state === "unavailable") {
+      return Promise.resolve({ exitCode: 126, stdout: "", stderr: `Refused: the command sandbox is on (ARCHYMEDES_SANDBOX=on) but cannot run here: ${sandbox.reason}.` });
+    }
     return this.runner(command, {
       cwd: this.root,
       timeoutMs,
       strictEnvironment: this.limits.strictCommandEnvironment,
       containProcessTree: this.limits.containProcessTree,
       signal,
+      ...(sandbox?.state === "on" ? { sandbox: sandbox.policy } : {}),
     });
   }
 

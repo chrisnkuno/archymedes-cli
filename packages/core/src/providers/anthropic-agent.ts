@@ -197,6 +197,13 @@ export function toAnthropicMessages(messages: readonly AgentMessage[]): { system
       continue;
     }
 
+    // Words that arrive right after tool results (a message the person sent mid-turn) join the
+    // results' user turn: two user turns in a row is not the alternation the API expects.
+    const previous = converted[converted.length - 1];
+    if (message.role === "user" && previous?.role === "user" && Array.isArray(previous.content) && (previous.content as Array<{ type: string }>)[0]?.type === "tool_result") {
+      (previous.content as unknown[]).push({ type: "text", text: message.content.trim() || "(no content)" });
+      continue;
+    }
     // A turn with no text at all is rejected; the runtime can produce one when a model answers
     // with tool calls only, and dropping it would orphan the tool results that follow.
     converted.push({ role: message.role, content: message.content.trim() || "(no content)" });

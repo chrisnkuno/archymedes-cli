@@ -228,11 +228,20 @@ func (p *providersApp) view(m *Model) string {
 			lines = append(lines, " "+th.Body.Render("This session runs on it ("+m.session.Info.Model+"). enter lists its models, fetched from it."))
 		case row.Configured:
 			lines = append(lines, " "+th.Body.Render("Ready. enter lists its models (fetched from it) to switch to; d makes it the default for new sessions."))
+		case len(row.Login) > 0:
+			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter opens Claude Code's own sign-in in this terminal."))
 		default:
 			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter asks for it: paste, and its models are fetched."))
 		}
+		if row.Note != "" {
+			lines = append(lines, " "+th.Faint.Render(ansi.Truncate(row.Note, width-2, "…")))
+		}
 		if row.KeyURL != "" {
-			lines = append(lines, " "+th.Faint.Render("Get a key: ")+th.Highlight.Render(ansi.Truncate(row.KeyURL, width-14, "…")))
+			lead := "Get a key: "
+			if row.ID == "claude" {
+				lead = "Install Claude Code: "
+			}
+			lines = append(lines, " "+th.Faint.Render(lead)+th.Highlight.Render(ansi.Truncate(row.KeyURL, width-len(lead)-3, "…")))
 		}
 	}
 	if p.pending != "" {

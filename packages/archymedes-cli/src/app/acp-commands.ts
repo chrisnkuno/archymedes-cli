@@ -1,5 +1,6 @@
-import type { ArchymedesAgent } from "@archymedes/core/cli/agent";
+import type { ArchymedesAgent, ContextUsage } from "@archymedes/core/cli/agent";
 import type { CostLedger } from "@archymedes/core/cli/cost";
+import { goalContinuation, goalPrompt } from "@archymedes/core/cli/goal";
 import { addMemory, clearMemories, forgetMemory, loadMemories, type MemoryKind } from "@archymedes/core/cli/memory";
 
 /**
@@ -12,6 +13,14 @@ export type SessionCommandResult =
   | { kind: "text"; text: string }
   | { kind: "diff"; patch: string }
   | { kind: "todos"; items: Array<{ text: string; status: string }> }
+  /** The turns that can be rewound to, oldest first: `index` is what `rewind` and `diff turn` take. */
+  | { kind: "turns"; turns: Array<{ index: number; label: string; createdAt: number }> }
+  /** `/review`: findings worst first, and a sentence on the change as a whole. */
+  | { kind: "review"; target: string; findings: Array<{ file: string; line?: number; severity: string; title: string; body: string }>; overall: string }
+  /** `/fork`: the new session the conversation was copied into, for the client to open. */
+  | { kind: "forked"; id: string; title: string }
+  /** `/goal`: the turn to send (`prompt`), or the verdict after one (`goal-check`). */
+  | { kind: "goal"; status: "met" | "impossible" | "continue"; reason: string; next?: string }
   | { kind: "error"; text: string };
 
 export async function runSessionCommand(
@@ -23,6 +32,11 @@ export async function runSessionCommand(
     case "cost":
       return { kind: "text", text: session.ledger.formatReport() };
     case "diff": {
+      const turn = /^turn\s+(\d+)$/.exec(argument.trim());
+      if (turn) {
+        const patch = await session.agent.turnPatch(Number(turn[1]));
+        return patch.trim() ? { kind: "diff", patch } : { kind: "text", text: "That turn changed no files." };
+      }
       const patch = argument === "stat" ? await session.agent.diffStat() : await session.agent.diffPatch();
       if (!patch.trim()) return { kind: "text", text: "Nothing changed since the last checkpoint." };
       return argument === "stat" ? { kind: "text", text: patch } : { kind: "diff", patch };
@@ -34,6 +48,36 @@ export async function runSessionCommand(
       if (!restored) return { kind: "text", text: "Nothing to undo." };
       const verb = scope === "code" ? "Reverted the files for" : scope === "conversation" ? "Rewound the conversation before" : "Reverted";
       return { kind: "text", text: `${verb} "${restored.label}".` };
+    }
+    case "goal-prompt":
+      return { kind: "goal", status: "continue", reason: "", next: goalPrompt(argument) };
+    case "goal-check": {
+      const verdict = await session.agent.checkGoal(argument);
+      return { kind: "goal", ...verdict, ...(verdict.status === "continue" ? { next: goalContinuation(argument, verdict.reason) } : {}) };
+    }
+    case "context":
+      return { kind: "text", text: formatContextUsage(await session.agent.contextUsage()) };
+    case "compact": {
+      const result = await session.agent.compactNow(argument);
+      if (!result) return { kind: "text", text: "Too little conversation to summarize yet." };
+      const saved = Math.max(result.tokensBefore - result.tokensAfter, 0);
+      return { kind: "text", text: `Summarized the earlier conversation: ${result.messagesBefore} messages → ${result.messagesAfter}, about ${saved.toLocaleString("en-US")} tokens freed.${argument.trim() ? ` Kept in focus: ${argument.trim()}.` : ""}` };
+    }
+    case "review": {
+      const result = await session.agent.review(argument);
+      return "error" in result ? { kind: "error", text: result.error } : { kind: "review", ...result };
+    }
+    case "turns":
+      return { kind: "turns", turns: session.agent.listCheckpoints().map((checkpoint, index) => ({ index, label: checkpoint.label, createdAt: checkpoint.createdAt })) };
+    case "rewind": {
+      const [position = "", scopeWord = ""] = argument.trim().split(/\s+/);
+      const index = Number(position);
+      const scope = scopeWord === "code" || scopeWord === "conversation" ? scopeWord : scopeWord === "" ? "both" : null;
+      if (!/^\d+$/.test(position) || scope === null) return { kind: "error", text: `/rewind takes a turn number and optionally "code" or "conversation" — not "${argument}".` };
+      const restored = await session.agent.rewind(index, scope);
+      if (!restored) return { kind: "error", text: `No turn ${index} to rewind to.` };
+      const what = scope === "code" ? "the files" : scope === "conversation" ? "the conversation" : "the files and the conversation";
+      return { kind: "text", text: `Rewound ${what} to before "${restored.label}".` };
     }
     case "todos": {
       const items = session.agent.todos.map((item) => ({ text: item.text, status: item.status }));
@@ -49,6 +93,25 @@ export async function runSessionCommand(
     default:
       return { kind: "error", text: `Unknown session command "${command}".` };
   }
+}
+
+/** `/context` as a small table: each part, its share of the window, and what is left. */
+export function formatContextUsage(usage: ContextUsage): string {
+  const used = usage.parts.reduce((sum, part) => sum + part.tokens, 0);
+  const free = Math.max(usage.window - usage.reservedForAnswer - used, 0);
+  const number = (value: number) => value.toLocaleString("en-US");
+  const share = (value: number) => `${((value / Math.max(usage.window, 1)) * 100).toFixed(1).padStart(5)}%`;
+  const width = Math.max(...usage.parts.map((part) => part.label.length), "kept for the answer".length);
+  const row = (label: string, value: number) => `${label.padEnd(width)}  ${number(value).padStart(9)}  ${share(value)}`;
+  return [
+    `${number(used)} of ${number(usage.window)} tokens in use (${share(used).trim()}); about ${number(free)} free`,
+    "",
+    ...usage.parts.filter((part) => part.tokens > 0).map((part) => row(part.label, part.tokens)),
+    row("kept for the answer", usage.reservedForAnswer),
+    row("free", free),
+    "",
+    "Estimates. /compact [focus] summarizes the conversation to free room.",
+  ].join("\n");
 }
 
 const MEMORY_KINDS: readonly MemoryKind[] = ["preference", "convention", "decision", "lesson", "fact"];

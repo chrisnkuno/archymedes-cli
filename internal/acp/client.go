@@ -143,6 +143,15 @@ func (c *Client) SetMode(ctx context.Context, sessionID, mode string) error {
 	return c.call(ctx, "session/set_mode", map[string]any{"sessionId": sessionID, "modeId": mode}, nil)
 }
 
+// Steer hands text to the turn in progress; false when no turn can take it (send it as a turn).
+func (c *Client) Steer(ctx context.Context, sessionID, text string) (bool, error) {
+	var result struct {
+		Accepted bool `json:"accepted"`
+	}
+	err := c.call(ctx, "_archymedes/session/steer", map[string]any{"sessionId": sessionID, "text": text}, &result)
+	return result.Accepted, err
+}
+
 // Close ends stdin, which the agent reads as the end of the connection, and waits for it to exit.
 func (c *Client) Close() {
 	_ = c.stdin.Close()

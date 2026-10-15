@@ -114,6 +114,10 @@ type Event struct {
 	Probability float64         `json:"probability"`
 	// checkpoint
 	Checkpoint json.RawMessage `json:"checkpoint"`
+	// steering_unread: messages a turn accepted but ended before reading
+	Messages []string `json:"messages"`
+	// rules_problems: command rules left out, each with why
+	Problems []string `json:"problems"`
 }
 
 // PermissionOption is one choice the agent offers for an approval.
@@ -197,6 +201,11 @@ type ProviderOverview struct {
 	IsDefault   bool     `json:"isDefault"`
 	// Fields is what it is set up with: key, base URL and anything else it requires.
 	Fields []ProviderField `json:"fields"`
+	// Login, when set, is the command that signs in to it (Claude: `claude auth login`, Claude
+	// Code's own flow). The interface runs it in the terminal; nothing of the account passes here.
+	Login []string `json:"login"`
+	// Note is a line about how it is set up, such as which Claude plan it is signed in with.
+	Note string `json:"note"`
 }
 
 // ProviderField is one value a provider is set up with; a secret's value arrives masked.
@@ -290,13 +299,41 @@ type ModelList struct {
 
 // CommandResult is a session command's answer: text, a patch, or a plan.
 type CommandResult struct {
-	Kind  string `json:"kind"` // text | diff | todos | error
+	Kind  string `json:"kind"` // text | diff | todos | turns | review | forked | goal | error
 	Text  string `json:"text"`
 	Patch string `json:"patch"`
 	Items []struct {
 		Text   string `json:"text"`
 		Status string `json:"status"`
 	} `json:"items"`
+	Turns []Turn `json:"turns"`
+	// review: what was reviewed, the findings worst first, and the verdict on the whole.
+	Target   string    `json:"target"`
+	Findings []Finding `json:"findings"`
+	Overall  string    `json:"overall"`
+	// forked: the new session the conversation was copied into
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	// goal: met | impossible | continue, why, and the turn to send next when it continues
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+	Next   string `json:"next"`
+}
+
+// Finding is one problem a /review found.
+type Finding struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Severity string `json:"severity"` // high | medium | low
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+}
+
+// Turn is one turn a session can be rewound to: Index is what /rewind and "diff turn" take.
+type Turn struct {
+	Index     int    `json:"index"`
+	Label     string `json:"label"`
+	CreatedAt int64  `json:"createdAt"` // milliseconds since the epoch
 }
 
 // SessionSummary is one stored session, for a resume picker.

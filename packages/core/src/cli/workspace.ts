@@ -426,10 +426,30 @@ export function fingerprintText(content: string): string {
  */
 export class FileReadTracker {
   private readonly seen = new Map<string, string>();
+  /** The content each changed file was last reported with, so one change is reported once. */
+  private readonly reported = new Map<string, string>();
+
+  /**
+   * The files read earlier whose content on disk is no longer what was read (or that are gone),
+   * each reported once per change: someone edited them, so what the model holds of them is stale.
+   * `read` gives a file's current content, or undefined when it no longer exists.
+   */
+  async changedSinceRead(read: (path: string) => Promise<string | undefined>): Promise<Array<{ path: string; deleted: boolean }>> {
+    const changed: Array<{ path: string; deleted: boolean }> = [];
+    for (const [path, known] of this.seen) {
+      const content = await read(path).catch(() => undefined);
+      const now = content === undefined ? "(deleted)" : fingerprintText(content);
+      if (now === known || this.reported.get(path) === now) continue;
+      this.reported.set(path, now);
+      changed.push({ path, deleted: content === undefined });
+    }
+    return changed;
+  }
 
   /** Records the full content the agent now knows `path` to have. */
   record(path: string, content: string): void {
     this.seen.set(path, fingerprintText(content));
+    this.reported.delete(path);
   }
 
   forget(path: string): void {

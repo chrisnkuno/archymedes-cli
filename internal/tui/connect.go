@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -75,6 +76,9 @@ type connectModelsMsg struct {
 }
 
 type firstRunReadyMsg struct{ err error }
+
+// signedInMsg: the provider's own sign-in (run in the terminal) has finished.
+type signedInMsg struct{ err error }
 
 func newConnectDialog(m *Model) *connectDialog {
 	f := textinput.New()
@@ -228,6 +232,9 @@ func (d *connectDialog) submit(m *Model) tea.Cmd {
 		values[field.Key] = value
 	}
 	d.step, d.working, d.err, d.errField, d.note = stepWorking, "checking with "+d.provider.Label, "", "", ""
+	if d.provider.ID == "claude" {
+		d.working = "checking Claude Code (and installing Anthropic's Agent SDK the first time)"
+	}
 	agent, id := m.agent, d.provider.ID
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -257,6 +264,27 @@ func (m *Model) connectResult(msg connectResultMsg) tea.Cmd {
 	}
 	d.provider.Configured, d.note = true, msg.result.Note
 	return tea.Batch(d.showModels(m, msg.result.Models), m.reloadProviders())
+}
+
+// signIn hands the terminal to the provider's own sign-in (Claude Code's `claude auth login`) and
+// connects when it returns. Archymedes only waits: the account is between the person and Anthropic.
+func (d *connectDialog) signIn() tea.Cmd {
+	d.step, d.working, d.err = stepWorking, "signing in, in Claude Code", ""
+	cmd := exec.Command(d.provider.Login[0], d.provider.Login[1:]...)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg { return signedInMsg{err} })
+}
+
+func (m *Model) signedIn(msg signedInMsg) tea.Cmd {
+	d := m.connectDialog()
+	if d == nil {
+		return m.reloadProviders()
+	}
+	if msg.err != nil {
+		d.step, d.err = stepForm, "Sign-in did not finish: "+msg.err.Error()
+		return nil
+	}
+	d.provider.Login = nil // signed in, as far as we know: connecting checks
+	return d.submit(m)
 }
 
 func (d *connectDialog) fetchModels(m *Model) tea.Cmd {
@@ -393,6 +421,10 @@ func (d *connectDialog) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		case "ctrl+s":
 			return false, d.submit(m)
 		case "enter":
+			// A provider signed in to elsewhere (Claude, in Claude Code) signs in first, then connects.
+			if len(d.provider.Login) > 0 && !d.provider.Configured {
+				return false, d.signIn()
+			}
 			// Connect as soon as everything required is there (paste a key, enter); otherwise go to
 			// what is still missing.
 			if next := d.nextMissing(); next >= 0 {
@@ -558,8 +590,19 @@ func (d *connectDialog) view(m *Model) string {
 				b.WriteString(th.Bad.Render(ansi.Wrap(d.err, inner, "")) + "\n")
 			}
 		}
-		if len(p.Fields) == 0 {
+		switch {
+		case p.ID == "claude":
+			b.WriteString("\n" + th.Body.Render(ansi.Wrap("Runs your own Claude Code on your Claude plan. Signing in is Claude Code's own; Archymedes never sees your account.", inner, "")) + "\n")
+			if len(p.Login) > 0 && !p.Configured {
+				b.WriteString("\n" + th.Highlight.Render("enter signs in") + th.Faint.Render(" — Claude Code's sign-in opens in this terminal, then you are back here.") + "\n")
+			} else if !p.Configured {
+				b.WriteString("\n" + th.Faint.Render(ansi.Wrap("enter connects: "+strings.Join(p.Missing, ", "), inner, "")) + "\n")
+			}
+		case len(p.Fields) == 0:
 			b.WriteString("\n" + th.Faint.Render("Nothing to fill in.") + "\n")
+		}
+		if p.Note != "" {
+			b.WriteString(th.Faint.Render(ansi.Wrap(p.Note, inner, "")) + "\n")
 		}
 		if d.err != "" && d.errField == "" {
 			b.WriteString("\n" + th.Bad.Render(ansi.Wrap(d.err, inner, "")) + "\n")
@@ -614,6 +657,8 @@ func connectHint(p acp.ProviderOverview) string {
 		return "ready · " + p.Model
 	case p.ID == "free":
 		return "no paid account needed"
+	case len(p.Login) > 0:
+		return "sign in with Claude"
 	case len(p.Missing) == 1:
 		return "needs a key"
 	}
