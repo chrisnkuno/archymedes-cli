@@ -7,7 +7,7 @@ import { LocalWorkspace } from "./backends";
 import { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import type { ToolProvider } from "./tool-providers";
-import { classifyVerification, commandTimeout, createArchymedesTools, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
+import { classifyVerification, commandTimeout, createArchymedesTools, runsInlineAssertion, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
 
 let root: string;
 const context = { taskId: "t", runId: "r", stepId: "s" };
@@ -70,6 +70,30 @@ describe("archymedes tool set", () => {
     expect(edited.isError).toBeFalsy();
     expect(edited.content).toContain("[Archymedes adjusted this call: file_path read as path; edit_file.edits was an array; read as JSON text.]");
     expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toContain("8080");
+  });
+
+  it("counts running a script it just fixed, and an inline assertion, as evidence", async () => {
+    // From the final release check: three providers fixed greet.py and ran it (one also asserted on
+    // greet() inline), and all three runs ended "needs_verification", because only a script made
+    // with write_file counted and no test runner's name appeared in the one-liner.
+    await fs.writeFile(path.join(root, "greet.py"), 'def greet(name):\n    return "Helo, " + name\n\nprint(greet("world"))\n');
+    const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() });
+    await toolNamed(tools, "read_file").execute({ path: "greet.py" }, context);
+    await toolNamed(tools, "edit_file").execute({ path: "greet.py", oldText: "Helo", newText: "Hello" }, context);
+    const ran = await toolNamed(tools, "run_command").execute({ command: "python3 greet.py" }, context);
+    expect(ran.content).toContain("Hello, world");
+    expect(ran.verification).toMatchObject({ passed: true, kind: "smoke" });
+    const asserted = await toolNamed(tools, "run_command").execute({ command: `python3 -c "import greet; assert greet.greet('x') == 'Hello, x'"` }, context);
+    expect(asserted.verification).toMatchObject({ passed: true, kind: "tests" });
+  });
+
+  it("knows an asserting one-liner from one that only prints", () => {
+    expect(runsInlineAssertion(`python3 -c "import m; assert m.f() == 2"`)).toBe(true);
+    expect(runsInlineAssertion(`node -e "require('assert').strictEqual(1, 1)"`)).toBe(true);
+    expect(runsInlineAssertion(`node -e "console.assert(f() === 2)"`)).toBe(true);
+    expect(runsInlineAssertion(`python3 -c "print('assertion')"`)).toBe(false);
+    expect(runsInlineAssertion(`python3 -c "print(1)"`)).toBe(false);
+    expect(runsInlineAssertion("python3 script_with_assert.py")).toBe(false);
   });
 
   it("reads a command's limit in seconds, and keeps it between one second and the ceiling", () => {

@@ -408,6 +408,8 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const updated = applyTextEdits(existing.content, edits, existing.path);
         await workspace.writeFile(filePath, updated.content);
         tracker.record(existing.path, updated.content);
+        // Edited counts as written: running a script just fixed is the smallest proof of the fix.
+        writtenFiles.add(existing.path);
         return {
           content: `Edited ${existing.path} (${updated.replacements} replacement${updated.replacements === 1 ? "" : "s"}).`,
           data: { path: existing.path, replacements: updated.replacements },
@@ -459,7 +461,9 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
             data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, missingProgram: missing },
           };
         }
-        const kind = classifyVerification(command) ?? (runsWrittenScript(command, writtenFiles) ? "smoke" : null);
+        const kind = classifyVerification(command)
+          ?? (runsWrittenScript(command, writtenFiles) ? "smoke" : null)
+          ?? (runsInlineAssertion(command) ? "tests" : null);
         const rejectedVerification = kind && result.exitCode === 0 ? rejectedVerificationReason(command, result) : null;
         const verificationNote = rejectedVerification ? `\n\nArchymedes did not accept this as verification: ${rejectedVerification}` : "";
         return {
@@ -1398,7 +1402,7 @@ export function rejectedVerificationReason(
 const SCRIPT_INTERPRETER = /^(?:python[\d.]*|py|node|bun|deno|tsx|ts-node|ruby|php|perl|bash|sh|zsh|lua|Rscript)$/;
 
 /**
- * True when the command is just "run this script", and the script is a file the agent wrote.
+ * True when the command is just "run this script", and the script is a file the agent wrote or edited.
  *
  * A scratch script has no test command to point at, so the gate that wants evidence refused a run
  * that had in fact executed the program and shown its output. Running the thing just made is the
@@ -1417,6 +1421,24 @@ export function runsWrittenScript(command: string, written: ReadonlySet<string>)
   if (!file) return false;
   const clean = file.replace(/^(\.\/)+/, "");
   return [...written].some((path) => clean === path || clean.endsWith(`/${path}`));
+}
+
+/**
+ * True when the command is an interpreter one-liner that asserts something: `python3 -c "import
+ * greet; assert greet.greet('x') == 'Hello, x'"`. That is a unit test without a test file, and
+ * models write them constantly to check a fix; the gate refused them because no test runner's name
+ * appears in the command. Assertion-free one-liners still verify nothing.
+ */
+export function runsInlineAssertion(command: string): boolean {
+  let tokens: string[];
+  try {
+    tokens = tokenizeCommand(verificationTarget(command));
+  } catch {
+    return false;
+  }
+  if (tokens.length < 3 || !SCRIPT_INTERPRETER.test(tokens[0].split("/").pop() ?? "")) return false;
+  const flag = tokens.findIndex((token) => token === "-c" || token === "-e" || token === "--eval");
+  return flag > 0 && flag + 1 < tokens.length && /\bassert\b|console\.assert|assert\.(?:equal|strictEqual|deepEqual|ok)\b/.test(tokens[flag + 1]);
 }
 
 /** The strongest kind of evidence a command provides, or null when it verifies nothing. */
