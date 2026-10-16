@@ -123,9 +123,10 @@ describe("archymedes settings under a real pty", () => {
 
     const opened = p.output().length;
     p.write(`${downTo("ARCHYMEDES_PROVIDER")}${ENTER}`);  // Default provider
-    // "Anthropic API key" is already visible in the parent list. Wait for a row unique to the
-    // provider chooser so Enter cannot race the submenu opening and select the parent row again.
-    await p.waitFor(/Clear this setting/, { timeoutMs: 15_000, since: opened });
+    // "Anthropic API key" is already visible in the parent list. Wait for the chooser's own footer
+    // so Enter cannot race the submenu opening and select the parent row again. (Not its "Clear this
+    // setting" row: that is last, and with every engine listed it starts below a 30-row screen.)
+    await p.waitFor(/Enter choose/, { timeoutMs: 15_000, since: opened });
     const chosen = p.output().length;
     p.write(ENTER);
     // Back on the field list, with the value it just took shown on the row.

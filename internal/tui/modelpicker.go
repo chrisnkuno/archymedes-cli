@@ -223,8 +223,8 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			return false, m.toast(toastWarn, fmt.Sprintf("%s needs %s — /settings adds it, then pick %s", choice.ProviderLabel, strings.Join(choice.Missing, " and "), choice.Model))
 		}
 		p.pending = true
-		if choice.Small {
-			return false, tea.Batch(m.switchModel(choice), m.toast(toastWarn, choice.Model+" is a small model: fine for chat, but it often misuses tools. Use a larger one for edits."))
+		if warning := fitWarning(choice); warning != "" {
+			return false, tea.Batch(m.switchModel(choice), m.toast(toastWarn, warning))
 		}
 		return false, m.switchModel(choice)
 	default:
@@ -302,8 +302,8 @@ func (p *modelPicker) view(m *Model) string {
 			if at, ok := m.limited[c.Model]; ok && time.Since(at) < 2*time.Minute && !c.Locked {
 				priceText += " · rate limited"
 			}
-			if c.Small && !c.Locked {
-				priceText += " · small"
+			if label := fitLabel(c); label != "" && !c.Locked {
+				priceText += " · " + label
 			}
 			price := ansi.Truncate(priceText, priceWidth, "…")
 			var row string
@@ -335,4 +335,36 @@ func (p *modelPicker) view(m *Model) string {
 	}
 	b.WriteString(th.Faint.Render(ansi.Truncate(footer, inner, "")))
 	return frame(th, "Model", b.String(), width)
+}
+
+// fitLabel is the few words a free model's measured fit adds to its row; a verified or unmeasured
+// model adds none. A small model is labelled whether or not it is free.
+func fitLabel(c acp.ModelChoice) string {
+	switch {
+	case c.Fit == "slow":
+		return "slow"
+	case c.Fit == "busy":
+		return "busy"
+	case c.Fit == "apps-only":
+		return "apps only"
+	case c.Small || c.Fit == "small":
+		return "small"
+	}
+	return ""
+}
+
+// fitWarning is what picking a model with a poor fit should say; it is still switched to, because
+// the person asked for it and the measurement may be out of date.
+func fitWarning(c acp.ModelChoice) string {
+	switch fitLabel(c) {
+	case "slow":
+		return c.Model + " is slow on the free tier (" + c.FitNote + "). Expect long waits; openrouter/free picks a faster one."
+	case "busy":
+		return c.Model + " is often refused upstream on the free tier (" + c.FitNote + "). Expect rate-limit waits; openrouter/free switches for you."
+	case "apps only":
+		return c.Model + ": " + c.FitNote + ". Requests will likely fail; openrouter/free picks one that answers."
+	case "small":
+		return c.Model + " is a small model: fine for chat, but it often misuses tools. Use a larger one for edits."
+	}
+	return ""
 }

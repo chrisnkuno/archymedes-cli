@@ -42,7 +42,7 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | `platform/i18n.ts` | 318 | 7 | Keyed by shortcut id, not by position. |
 | `platform/local-currency.ts` | 235 | 3 | The countries a location can be set to, in the sense that matters: ones we can price in. |
 | `platform/network.ts` | 330 | 4 | Turns raw fetch/undici/SDK errors into one actionable sentence. |
-| `platform/settings.ts` | 594 | 15 | A value that can be picked from a list, with the human name shown beside the stored code. |
+| `platform/settings.ts` | 610 | 16 | A value that can be picked from a list, with the human name shown beside the stored code. |
 | `platform/update.ts` | 261 | 2 | Parses the strict subset package registries use; invalid versions never reach a command line. |
 
 ## `catalog`
@@ -118,25 +118,32 @@ Lower sections never import higher ones. Files at the root are entry points and 
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `app/acp-commands.ts` | 92 | 2 | The session commands a drawing client asks for over `_archymedes/session/command`: the data |
+| `app/acp-commands.ts` | 155 | 3 | The session commands a drawing client asks for over `_archymedes/session/command`: the data |
 | `app/acp-connect.ts` | 191 | 2 | Connecting a provider in one step, for a client that draws the form (the Go interface). |
 | `app/acp-models.ts` | 80 | 1 | `_archymedes/models` for a client that draws its own model picker: every model of every provider, |
-| `app/acp-session.ts` | 241 | 2 | One ACP session, on whichever engine runs it: Archymedes's own agent (any model provider), or |
+| `app/acp-session.ts` | 282 | 2 | One ACP session, on whichever engine runs it: Archymedes's own agent (any model provider), or |
 | `app/acp-settings.ts` | 87 | 1 | The settings menu as data, for a client that draws it (the Go interface). The fields, their |
-| `app/acp-setup.ts` | 134 | 3 | First-run setup for a client that draws its own screens (the Go interface), over ACP. |
+| `app/acp-setup.ts` | 134 | 4 | First-run setup for a client that draws its own screens (the Go interface), over ACP. |
 | `app/agent-factory.ts` | 97 | 3 | Builds an agent for a tab. |
 | `app/args.ts` | 219 | 7 | Whether a command-line mode flag should override a resumed session's saved posture. |
 | `app/balance-tracking.ts` | 119 | 2 | The tracked account balance and the session's spend against it. |
-| `app/claude/backend.ts` | 168 | 3 | Claude as one of the Providers app's rows, and the steps that make it ready. |
+| `app/claude/backend.ts` | 162 | 3 | Claude as one of the Providers app's rows, and the steps that make it ready. |
 | `app/claude/executable.ts` | 84 | 1 | The person's own Claude Code: where it is, whether they are signed in, and the environment it |
 | `app/claude/identity.ts` | 3 | 5 | How Claude is named to the rest of Archymedes: the provider id people choose, and its label. |
-| `app/claude/install.ts` | 41 | 2 | Installs Anthropic's Claude Agent SDK into Archymedes's own folder, from npm, on this machine. |
+| `app/claude/install.ts` | 41 | 3 | Installs Anthropic's Claude Agent SDK into Archymedes's own folder, from npm, on this machine. |
 | `app/claude/listing.ts` | 48 | 1 | Claude in the lists the interface draws — the Providers app, the model picker, first-run setup — |
 | `app/claude/sdk.ts` | 172 | 4 | The part of Anthropic's Claude Agent SDK this integration uses, and how it is found. |
-| `app/claude/session.ts` | 419 | 1 | One Archymedes session run by the person's own Claude Code. |
-| `app/claude/translate.ts` | 336 | 1 | Claude Code's stream, said in Archymedes's events: the ones the interface already draws. |
+| `app/claude/session.ts` | 426 | 1 | One Archymedes session run by the person's own Claude Code. |
+| `app/claude/translate.ts` | 341 | 1 | Claude Code's stream, said in Archymedes's events: the ones the interface already draws. |
+| `app/codex/backend.ts` | 185 | 2 | Codex as one of the Providers app's rows: the person's own Codex CLI, signed in with their |
+| `app/codex/fake-codex.ts` | 157 | 0 | A stand-in for `codex app-server`, for tests: answers the requests a session makes and plays a |
+| `app/codex/identity.ts` | 3 | 4 | How Codex is named to the rest of Archymedes: the provider id people choose, and its label. |
+| `app/codex/rpc.ts` | 158 | 3 | JSON-RPC 2.0 with `codex app-server`, one message per line on its stdin and stdout. |
+| `app/codex/session.ts` | 413 | 1 | One Archymedes session run by the person's own Codex, through `codex app-server`. |
+| `app/codex/translate.ts` | 281 | 1 | Codex's app-server notifications, said in Archymedes's events: the ones the interface already |
 | `app/display-currency.ts` | 129 | 1 | The currency a session reports costs in, and the exchange rates behind it. |
 | `app/free-setup.ts` | 115 | 3 | Free mode without a dead end, and with its one caveat said out loud. |
+| `app/handoff.ts` | 57 | 3 | Context across engines. One Archymedes session can be run by Archymedes's own agent, by the |
 | `app/help.ts` | 121 | 1 | The `--help` text, built after rendering is configured so its colours match the terminal. |
 | `app/interrupts.ts` | 61 | 1 | Ctrl-C interrupts the turn rather than the process, so a long tool loop can be stopped without |
 | `app/jev.ts` | 19 | 2 | Jev (TypeSafe System One) configuration from the environment. |
@@ -160,13 +167,13 @@ Lower sections never import higher ones. Files at the root are entry points and 
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `acp-server.ts` | 173 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
+| `acp-server.ts` | 191 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
 | `archymedes.ts` | 441 | 0 | Archymedes CLI — the terminal front end. |
-| `headless.ts` | 229 | 4 | Archymedes speaking to a program instead of a person. |
+| `headless.ts` | 233 | 4 | Archymedes speaking to a program instead of a person. |
 | `job-worker.ts` | 297 | 1 | The process that actually does the work once a job has been handed to it. |
 
 ## Open findings
 
 - **Large files (over 800 lines):** `render/tui.ts` (1368).
 - **Duplicate escape helpers:** none.
-- **Modules with no source importer:** none.
+- **Modules with no source importer:** `app/codex/fake-codex.ts`.

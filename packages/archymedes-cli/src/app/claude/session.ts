@@ -6,6 +6,7 @@ import type { ArchymedesMode, PermissionDecision } from "@archymedes/core/cli/pe
 import { loadSession, newSessionId, saveSession, titleFromObjective, type SessionRecord } from "@archymedes/core/cli/session";
 import type { SessionCommandResult } from "../acp-commands";
 import type { CanUseTool, ClaudeSdk, PermissionMode, PermissionUpdate, Query, SdkMessage, SdkUserMessage, WarmQuery } from "./sdk";
+import { handoffPreface, markSeen, prefaceFrom } from "../handoff";
 import { CLAUDE_LABEL, CLAUDE_PROVIDER } from "./identity";
 import { ClaudeTranslator, describeToolUse, type ResultSummary } from "./translate";
 
@@ -32,8 +33,7 @@ import { ClaudeTranslator, describeToolUse, type ResultSummary } from "./transla
 /** Archymedes's modes, as Claude Code's permission modes. Defender asks like build does. */
 export const PERMISSION_MODES: Record<ArchymedesMode, PermissionMode> = { plan: "plan", build: "default", auto: "acceptEdits", defender: "default" };
 
-/** How much of an earlier conversation (on another model) Claude is told, at most. */
-export const MAX_PREFACE_CHARS = 24_000;
+export { MAX_PREFACE_CHARS, prefaceFrom } from "../handoff";
 
 export type ClaudeSessionOptions = {
   root: string;
@@ -54,7 +54,7 @@ export type ClaudeSessionOptions = {
   onModels?: (models: string[]) => void;
 };
 
-type Turn = { resolve: (result: Pick<AgentRuntimeResult, "status" | "summary">) => void; prompt: string; cancelled: boolean };
+type Turn = { resolve: (result: Pick<AgentRuntimeResult, "status" | "summary">) => void; prompt: string; cancelled: boolean; steers: string[] };
 
 export class ClaudeSession {
   readonly kind = "claude" as const;
@@ -80,7 +80,7 @@ export class ClaudeSession {
     this.record.modelSelection = { provider: CLAUDE_PROVIDER, model: this.model ?? "default" };
     // A conversation Claude has not seen (it was on another model, or Claude's own copy is gone)
     // is told to it once, before the first new prompt.
-    this.preface = this.record.claudeSession ? "" : prefaceFrom(this.record.messages);
+    this.preface = handoffPreface(this.record, CLAUDE_PROVIDER, Boolean(this.record.claudeSession));
   }
 
   get id(): string {
@@ -102,7 +102,7 @@ export class ClaudeSession {
     // rather than taking the first one's place.
     let resolve!: Turn["resolve"];
     const done = new Promise<Pick<AgentRuntimeResult, "status" | "summary">>((settle) => { resolve = settle; });
-    const turn: Turn = { resolve, prompt, cancelled: false };
+    const turn: Turn = { resolve, prompt, cancelled: false, steers: [] };
     this.turn = turn;
     this.translator.begin();
     let input: InputQueue<SdkUserMessage>;
@@ -120,6 +120,20 @@ export class ClaudeSession {
     this.turnIds.push({ id, title: titleFromObjective(prompt) });
     input.push({ type: "user", message: { role: "user", content: this.preface ? `${this.preface}\n\n${prompt}` : prompt }, parent_tool_use_id: null, uuid: id });
     return done;
+  }
+
+  /**
+   * A message for the running turn. Taken only while one of Claude's tools runs: Claude Code then
+   * reads it after that tool and answers it within the same turn (checked live with Claude Code
+   * 2.1). At any other moment it could arrive after Claude has finished and start a turn of its
+   * own, so the answer is no and the message waits for the next turn instead.
+   */
+  steer(text: string): boolean {
+    const turn = this.turn;
+    if (!turn || turn.cancelled || !this.translator.toolRunning || !this.process) return false;
+    turn.steers.push(text);
+    void this.process.then(({ input }) => input.push({ type: "user", message: { role: "user", content: text }, parent_tool_use_id: null, uuid: randomUUID() }));
+    return true;
   }
 
   cancel(): void {
@@ -276,15 +290,21 @@ export class ClaudeSession {
     const { events, outcome } = this.translator.finish(result, { cancelled: turn.cancelled, ...(error ? { error } : {}) });
     for (const event of events) this.options.onEvent(event);
     if (outcome.status !== "failed" || outcome.text) this.preface = ""; // Claude has now seen it
-    void this.remember(turn.prompt, outcome.text).finally(() => turn.resolve({ status: outcome.status, summary: outcome.summary }));
+    void this.remember(turn.prompt, outcome.text, turn.steers).finally(() => turn.resolve({ status: outcome.status, summary: outcome.summary }));
   }
 
   /** The turn, saved as Archymedes saves any session: the prompt, the reply, Claude's session id. */
-  private async remember(prompt: string, reply: string): Promise<void> {
+  private async remember(prompt: string, reply: string, steers: readonly string[] = []): Promise<void> {
     const record = this.record;
-    record.messages = [...record.messages, { role: "user", content: prompt }, ...(reply.trim() ? [{ role: "assistant" as const, content: reply }] : [])];
+    record.messages = [
+      ...record.messages,
+      { role: "user", content: prompt },
+      ...steers.map((text) => ({ role: "user" as const, content: `[Sent while you were working] ${text}` })),
+      ...(reply.trim() ? [{ role: "assistant" as const, content: reply }] : []),
+    ];
     if (record.title === "Untitled session") record.title = titleFromObjective(prompt);
     if (this.translator.sessionId) record.claudeSession = this.translator.sessionId;
+    markSeen(record, CLAUDE_PROVIDER);
     record.mode = this.mode;
     const save = this.options.save ?? saveSession;
     try {
@@ -358,19 +378,6 @@ export class ClaudeSession {
 /** "Always allow" lasts for this session, as Archymedes's own approvals do, never written to a settings file. */
 function forThisSession(suggestions: PermissionUpdate[] | undefined): PermissionUpdate[] | undefined {
   return suggestions?.map((suggestion) => ({ ...suggestion, destination: "session" }));
-}
-
-/** What was said before, for a Claude that was not there: the text of each turn, newest kept. */
-export function prefaceFrom(messages: SessionRecord["messages"]): string {
-  const lines: string[] = [];
-  for (const message of messages) {
-    if (message.internal || (message.role !== "user" && message.role !== "assistant") || !message.content.trim()) continue;
-    lines.push(`${message.role === "user" ? "User" : "Assistant"}: ${message.content.trim()}`);
-  }
-  if (lines.length === 0) return "";
-  let body = lines.join("\n\n");
-  if (body.length > MAX_PREFACE_CHARS) body = `…\n${body.slice(body.length - MAX_PREFACE_CHARS)}`;
-  return `<earlier_conversation note="This conversation began with another model. It is what was said, for context; the work it describes is in the files.">\n${body}\n</earlier_conversation>`;
 }
 
 function newRecord(root: string, mode: ArchymedesMode): SessionRecord {

@@ -232,8 +232,11 @@ func (d *connectDialog) submit(m *Model) tea.Cmd {
 		values[field.Key] = value
 	}
 	d.step, d.working, d.err, d.errField, d.note = stepWorking, "checking with "+d.provider.Label, "", "", ""
-	if d.provider.ID == "claude" {
+	switch d.provider.ID {
+	case "claude":
 		d.working = "checking Claude Code (and installing Anthropic's Agent SDK the first time)"
+	case "codex":
+		d.working = "checking Codex and its sign-in"
 	}
 	agent, id := m.agent, d.provider.ID
 	return func() tea.Msg {
@@ -269,7 +272,7 @@ func (m *Model) connectResult(msg connectResultMsg) tea.Cmd {
 // signIn hands the terminal to the provider's own sign-in (Claude Code's `claude auth login`) and
 // connects when it returns. Archymedes only waits: the account is between the person and Anthropic.
 func (d *connectDialog) signIn() tea.Cmd {
-	d.step, d.working, d.err = stepWorking, "signing in, in Claude Code", ""
+	d.step, d.working, d.err = stepWorking, "signing in, in "+engineName(d.provider), ""
 	cmd := exec.Command(d.provider.Login[0], d.provider.Login[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return signedInMsg{err} })
 }
@@ -591,10 +594,14 @@ func (d *connectDialog) view(m *Model) string {
 			}
 		}
 		switch {
-		case p.ID == "claude":
-			b.WriteString("\n" + th.Body.Render(ansi.Wrap("Runs your own Claude Code on your Claude plan. Signing in is Claude Code's own; Archymedes never sees your account.", inner, "")) + "\n")
+		case p.OutsideEngine():
+			about := p.About
+			if about == "" {
+				about = "Runs your own Claude Code on your Claude plan. Signing in is Claude Code's own; Archymedes never sees your account."
+			}
+			b.WriteString("\n" + th.Body.Render(ansi.Wrap(about, inner, "")) + "\n")
 			if len(p.Login) > 0 && !p.Configured {
-				b.WriteString("\n" + th.Highlight.Render("enter signs in") + th.Faint.Render(" — Claude Code's sign-in opens in this terminal, then you are back here.") + "\n")
+				b.WriteString("\n" + th.Highlight.Render("enter signs in") + th.Faint.Render(" — "+engineName(p)+"'s sign-in opens in this terminal, then you are back here.") + "\n")
 			} else if !p.Configured {
 				b.WriteString("\n" + th.Faint.Render(ansi.Wrap("enter connects: "+strings.Join(p.Missing, ", "), inner, "")) + "\n")
 			}
@@ -657,6 +664,8 @@ func connectHint(p acp.ProviderOverview) string {
 		return "ready · " + p.Model
 	case p.ID == "free":
 		return "no paid account needed"
+	case len(p.Login) > 0 && p.ID == "codex":
+		return "sign in with ChatGPT"
 	case len(p.Login) > 0:
 		return "sign in with Claude"
 	case len(p.Missing) == 1:
@@ -668,4 +677,12 @@ func connectHint(p acp.ProviderOverview) string {
 // cmdKey is /key [provider]: the Connect dialog, on that provider's form when one is named.
 func (m *Model) cmdKey(arg string) tea.Cmd {
 	return m.openConnect(arg, "form")
+}
+
+// engineName is what an outside engine is called in a sentence.
+func engineName(p acp.ProviderOverview) string {
+	if p.ID == "codex" {
+		return "Codex"
+	}
+	return "Claude Code"
 }

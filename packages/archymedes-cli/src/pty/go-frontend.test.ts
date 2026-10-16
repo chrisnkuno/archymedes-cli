@@ -331,7 +331,8 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("Welcome to Archymedes", { timeoutMs: 60_000 });
     await proc.waitFor("Anthropic", { timeoutMs: 30_000 }); // provider rows loaded; earlier keys would be dropped
     proc.write("\x1b[B"); // Free → Claude (subscription)
-    proc.write("\x1b[B"); // Claude → Anthropic
+    proc.write("\x1b[B"); // Claude → Codex (ChatGPT plan)
+    proc.write("\x1b[B"); // Codex → Anthropic
     proc.write("\r");
     await proc.waitFor("Get a key", { timeoutMs: 10_000 });
     proc.write("sk-ant-first-run");

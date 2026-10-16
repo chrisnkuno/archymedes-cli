@@ -1,5 +1,6 @@
 import { PROVIDER_IDS, PROVIDERS, catalogPrices, missingRequirements, providerEnvPrefix, type ProviderId } from "@archymedes/core/providers/agent-matrix";
-import { isFreeModelId, isSmallModel } from "@archymedes/core/providers/free-catalog";
+import { FREE_ROUTER, isFreeModelId, isSmallModel } from "@archymedes/core/providers/free-catalog";
+import { freeModelProfile, type FreeModelFit } from "@archymedes/core/providers/free-model-profiles";
 import { fetchableProviders, isCacheFresh, loadLiveModels, readModelCache, type FetchLike } from "@archymedes/core/providers/model-fetch";
 import { describePrice, modelsForProvider } from "../session/models";
 
@@ -14,6 +15,8 @@ import { describePrice, modelsForProvider } from "../session/models";
  *   see what adding a key would give them, and not selectable until it is added.
  * - `free` marks a model that costs nothing: the free provider's, an OpenRouter `:free` id, or a
  *   zero rate card.
+ * - `fit` and `fitNote` say how a concrete `:free` model measured as an agent (free-model-profiles.ts):
+ *   verified, busy upstream, slow, served only to apps OpenRouter lists, or chat-sized.
  *
  * `ARCHYMEDES_MODELS_OFFLINE=1` keeps it off the network unless asked to refresh, and never asks
  * the keyless listings.
@@ -47,6 +50,7 @@ export async function modelList(
   type Choice = {
     provider: ProviderId; providerLabel: string; model: string; isDefault: boolean; live: boolean;
     price: string; free: boolean; locked: boolean; missing: string[]; small: boolean;
+    fit?: FreeModelFit; fitNote?: string;
   };
   const ready: Choice[] = [];
   const locked: Choice[] = [];
@@ -73,6 +77,10 @@ export async function modelList(
         price: free ? "free" : prices ? describePrice(prices, prices.currency, (value) => value) : "unpriced",
         free, locked: missing.length > 0, missing, small: isSmallModel(model),
       };
+      if (model !== FREE_ROUTER && isFreeModelId(model)) {
+        const profile = freeModelProfile(model);
+        Object.assign(choice, { fit: profile.fit, fitNote: profile.note });
+      }
       (choice.locked ? locked : ready).push(choice);
     }
   }

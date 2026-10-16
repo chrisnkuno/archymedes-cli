@@ -258,6 +258,24 @@ describe("ClaudeSession", () => {
   });
 });
 
+describe("steering Claude", () => {
+  it("takes a message only while a tool runs, hands it to Claude Code, and keeps it in the transcript", async () => {
+    // Claude Code reads a message sent mid-turn after the running tool and answers it in the same
+    // turn: the fake gives that message no turn of its own.
+    const { claude, session, saved } = setup((prompt) => (prompt.startsWith("use tabs") ? [] : [{ type: "system", subtype: "init", session_id: "s-1", model: "m", tools: [] }, toolUse("t1", "Bash", { command: "sleep 5" }), { hang: true }]));
+    const turn = session.send("format the code");
+    expect(session.steer("too soon")).toBe(false); // nothing running yet: it would come after the end
+    for (let i = 0; i < 5; i += 1) await tick();
+    expect(session.steer("use tabs, not spaces")).toBe(true);
+    session.cancel();
+    await turn;
+    for (let i = 0; i < 5; i += 1) await tick(); // the fake reads its input one turn at a time
+    expect(claude.prompts.map((prompt) => prompt.message.content)).toEqual(["format the code", "use tabs, not spaces"]);
+    expect(session.steer("after the end")).toBe(false);
+    expect(saved.at(-1)!.messages.map((message) => message.content)).toEqual(["format the code", "[Sent while you were working] use tabs, not spaces"]);
+  });
+});
+
 describe("prefaceFrom", () => {
   it("keeps the newest of a long conversation, and says nothing for an empty one", () => {
     expect(prefaceFrom([])).toBe("");

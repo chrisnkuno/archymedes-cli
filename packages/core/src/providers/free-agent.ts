@@ -9,11 +9,13 @@ import type { AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvi
 import { providerRetryAfterMs } from "../agent-runtime";
 import { RequestPacer } from "./request-pacer";
 import { approximateInputTokens } from "../model-cost";
-import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, isSmallModel, type FreeCatalog, type FreeModel } from "./free-catalog";
+import { FREE_BASE_URL, FREE_CATALOG_TTL_MS, FREE_ROUTER, FREE_ROUTER_PREFERENCE, isFreeModelId, type FreeCatalog, type FreeModel } from "./free-catalog";
+import { FREE_ROUTABLE_TIER, freeRoutingTier } from "./free-model-profiles";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
 import { fileFreeInstallStore, FREE_INSTALL_HEADER, FREE_INSTALL_STATUS_HEADER, freeInstallFile, FreeInstallToken } from "./free-install";
 import { describeFreeFailure, isOpenRouterDailyLimit, parseFreeLimitBody } from "./free-errors";
 import { fileFreeHealthStore, freeHealthFile, FreeHealthTracker, orderByFreeHealth } from "./free-health";
+import { FreeEndpointUptime } from "./free-endpoint-uptime";
 import { allowanceAfterCall, fileFreeUsageStore, FreeUsageMeter, freeUsageFile, parseFreeAllowanceHeaders, utcDay, type FreeAllowanceHeaders } from "./free-usage";
 import { nextUtcMidnight, OpenRouterKeyInfoCache } from "./openrouter-key-info";
 import { repairToolCalls } from "./tool-call-repair";
@@ -62,6 +64,32 @@ function openRouterEffort(effort: AgentModelRequest["effort"]): "minimal" | "low
   return effort === "xhigh" || effort === "max" ? "high" : effort;
 }
 
+const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/**
+ * The `reasoning` field for one model, from what its listing says (`FreeModel.reasoning`).
+ *
+ * The runtime's effort is a request to *spend less* on routine steps (effort-policy.ts), so it must
+ * never turn into the opposite:
+ * - A model whose reasoning is off unless asked (Gemma 4) would start thinking if sent `minimal` or
+ *   `low`, since sending any effort enables reasoning on OpenRouter. Nothing is sent: off is lower.
+ * - A model that names its levels gets the nearest one it names, never `none`: a model whose
+ *   reasoning is mandatory answers `none` with a 400 ("Reasoning is mandatory for this endpoint").
+ *   OpenRouter maps an unnamed level itself today; asking for a named one does not depend on that.
+ */
+export function freeReasoningFor(model: Pick<FreeModel, "reasoning"> | undefined, effort: AgentModelRequest["effort"]): { effort: string } | undefined {
+  const wanted = openRouterEffort(effort);
+  if (!wanted) return undefined;
+  const reasoning = model?.reasoning;
+  if (reasoning?.defaultEnabled === false && (wanted === "minimal" || wanted === "low")) return undefined;
+  const named = reasoning?.efforts?.filter((level) => level !== "none");
+  if (!named?.length || named.includes(wanted)) return { effort: wanted };
+  const at = EFFORT_ORDER.indexOf(wanted);
+  // Nearest by position; a tie goes to the lower level, since the runtime only ever asks to save.
+  const nearest = [...named].sort((a, b) => Math.abs(EFFORT_ORDER.indexOf(a) - at) - Math.abs(EFFORT_ORDER.indexOf(b) - at) || EFFORT_ORDER.indexOf(a) - EFFORT_ORDER.indexOf(b))[0];
+  return { effort: nearest };
+}
+
 /** The per-minute request ceiling free endpoints commonly enforce; the pacer waits only once a minute holds this many. */
 const FREE_REQUESTS_PER_MINUTE = 20;
 
@@ -78,9 +106,16 @@ const CATALOG_TIMEOUT_MS = 15_000;
  */
 export const FREE_CANDIDATE_FIRST_BYTE_TIMEOUT_MS = 45_000;
 
-function rank(id: string): number {
+/** The router's static order: measured fit first (see free-model-profiles.ts), then the preference list. */
+function rank(id: string): [tier: number, position: number] {
   const index = FREE_ROUTER_PREFERENCE.indexOf(id);
-  return index === -1 ? FREE_ROUTER_PREFERENCE.length : index;
+  return [freeRoutingTier(id) ?? Infinity, index === -1 ? FREE_ROUTER_PREFERENCE.length : index];
+}
+
+function byRank(a: string, b: string): number {
+  const [tierA, positionA] = rank(a);
+  const [tierB, positionB] = rank(b);
+  return tierA - tierB || positionA - positionB;
 }
 
 /**
@@ -138,6 +173,8 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
   private readonly health?: FreeHealthTracker;
   /** OpenRouter's own figures for the user's key (daily free requests, credits); never with the gateway. */
   private readonly keyInfo?: OpenRouterKeyInfoCache;
+  /** Live endpoint uptime for router candidates (free-endpoint-uptime.ts); never with the gateway. */
+  private readonly uptime?: FreeEndpointUptime;
   /**
    * Learned request pacing for the free tier's per-key rate limit. Lives as long as the provider, so
    * a session that hit the limiter keeps spacing its requests across turns instead of re-forming the
@@ -165,6 +202,8 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     health?: FreeHealthTracker | null;
     /** OpenRouter key info for the user's own key. Same defaulting as `usage`; never used via the gateway. */
     keyInfo?: OpenRouterKeyInfoCache | null;
+    /** Endpoint uptime for the router. Same defaulting as `keyInfo`: direct access only, none in tests. */
+    uptime?: FreeEndpointUptime | null;
     /** Request pacing; a fresh, unthrottled pacer by default. */
     pacer?: RequestPacer;
   } = {}) {
@@ -197,6 +236,9 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
         ? (injected ? undefined : new OpenRouterKeyInfoCache(apiKey, dependencies.now ? { now: dependencies.now } : {}))
         : dependencies.keyInfo ?? undefined;
       if (keyInfo) this.keyInfo = keyInfo;
+      // Direct access only: through the gateway, OpenRouter is the gateway's to talk to.
+      const uptime = dependencies.uptime === undefined ? (injected ? undefined : new FreeEndpointUptime(dependencies.now ? { now: dependencies.now } : {})) : dependencies.uptime ?? undefined;
+      if (uptime) this.uptime = uptime;
     }
     if (this.viaGateway) {
       const install = dependencies.install === undefined
@@ -248,11 +290,15 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       }
       const eligible = this.catalog.models.filter((model) => model.eligible && isFreeModelId(model.id));
       const selected = eligible.find((model) => model.id === this.options.model);
-      // The virtual router may omit tool metadata; its concrete candidates must still qualify.
-      const routable = eligible.filter((model) => model.id !== FREE_ROUTER);
-      // Chat-sized models are left out of routing while any capable one is listed: they take the
-      // first turn happily and then misuse the tools. Pinned explicitly, they are still honoured.
-      const capable = routable.filter((model) => !isSmallModel(model.id));
+      // The virtual router may omit tool metadata; its concrete candidates must still qualify, and a
+      // model OpenRouter serves only to apps it lists would refuse every turn (free-model-profiles.ts).
+      const routable = eligible.filter((model) => model.id !== FREE_ROUTER && freeRoutingTier(model.id) !== null);
+      // Chat-sized and very slow models are left out of routing while any capable one is listed: the
+      // first take the first turn happily and then misuse the tools, the second spend a minute or
+      // more per turn. So is a model whose endpoint OpenRouter reports down right now. Pinned
+      // explicitly, any model is still honoured.
+      const down = this.options.model === FREE_ROUTER && this.uptime ? await this.uptime.down(routable.map((model) => model.id), userSignal) : new Set<string>();
+      const capable = routable.filter((model) => (freeRoutingTier(model.id) ?? Infinity) <= FREE_ROUTABLE_TIER && !down.has(model.id));
       const candidates = this.options.model === FREE_ROUTER ? (capable.length > 0 ? capable : routable) : selected ? [selected] : [];
       if (!candidates.length) throw new FreeAccessError("No eligible free tool model is available. Run /models refresh or try again later.");
       const messages = toWireMessages(request.messages);
@@ -278,7 +324,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       // briefly rate-limited upstream (429), so a refusal moves to the next candidate — only before
       // any text has streamed, and never to anything outside the verified free list.
       const preferred = this.options.model === FREE_ROUTER
-        ? fitting.filter((model) => !this.refused.has(model.id)).sort((a, b) => rank(a.id) - rank(b.id) || (b.context_window ?? 0) - (a.context_window ?? 0) || a.id.localeCompare(b.id))
+        ? fitting.filter((model) => !this.refused.has(model.id)).sort((a, b) => byRank(a.id, b.id) || (b.context_window ?? 0) - (a.context_window ?? 0) || a.id.localeCompare(b.id))
         : fitting;
       // Models that have been answering lately go first; the static preference breaks ties.
       const ordered = this.options.model === FREE_ROUTER && this.health
@@ -307,7 +353,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
           signal: userSignal,
         });
         try {
-          const turn = await this.attempt(candidate.id, messages, outputFor(candidate), request, onTextDelta, onOutputProgress, deadline);
+          const turn = await this.attempt(candidate, messages, outputFor(candidate), request, onTextDelta, onOutputProgress, deadline);
           void this.health?.record(candidate.id, { ok: true });
           this.pacer.reportSuccess();
           return turn;
@@ -371,7 +417,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     }
   }
 
-  private async attempt(model: string, messages: ReturnType<typeof toWireMessages>, output: number, request: AgentModelRequest,
+  private async attempt(candidate: FreeModel, messages: ReturnType<typeof toWireMessages>, output: number, request: AgentModelRequest,
     onTextDelta: AgentModelRequest["onTextDelta"], onOutputProgress: AgentModelRequest["onOutputProgress"], deadline: StreamDeadline): Promise<AgentModelTurn> {
     // Read per attempt: a token an earlier attempt had rejected is not sent again.
     const token = this.install?.current();
@@ -381,15 +427,19 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       this.install?.observe(headers?.get?.(FREE_INSTALL_STATUS_HEADER), token);
       if (this.viaGateway) allowance = parseFreeAllowanceHeaders(headers) ?? allowance;
     };
+    const model = candidate.id;
+    const reasoning = freeReasoningFor(candidate, request.effort);
     let response: unknown;
     try {
       response = await deadline.race(this.call({
         model, messages: withOpenRouterCacheControl(messages, model), max_tokens: output,
         ...(request.tools.length ? { tools: request.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })) } : {}),
-        // The effort is chosen per call by the runtime (see effort-policy.ts). Every tool-capable free
-        // model lists `reasoning` among its parameters, so sending it cannot make `require_parameters`
-        // exclude one; unset leaves each model at its own default.
-        ...(openRouterEffort(request.effort) ? { reasoning: { effort: openRouterEffort(request.effort) } } : {}),
+        // The effort is chosen per call by the runtime (see effort-policy.ts) and fitted to what this
+        // model's listing says (`freeReasoningFor`). Every tool-capable free model lists `reasoning`
+        // among its parameters, so sending it cannot make `require_parameters` exclude one; unset
+        // leaves each model at its own default. Sampling is never sent: each model then runs at the
+        // defaults OpenRouter lists for it (lfm 0.1; Nemotron, Gemma 1.0/0.95), which are its card's.
+        ...(reasoning ? { reasoning } : {}),
         provider: { require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false },
         stream: true, stream_options: { include_usage: true },
       }, deadline.signal, token ? { [FREE_INSTALL_HEADER]: token } : {}, observe));

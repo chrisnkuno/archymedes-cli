@@ -22,22 +22,23 @@ export const FREE_DISCOVERY_URL = "https://raw.githubusercontent.com/ClawLabsAI/
 export const FREE_CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
 export const FREE_CATALOG_MAX_RECORDS = 10_000;
 /**
- * Order the free router tries verified candidates in. Probed 2026-09-15 with a real tool call:
- * these answered with a structured call quickly. Largest-context-first chose gated (403 outside
- * listed apps) and very slow models. Ordering only; eligibility still comes from the live listing,
- * and unlisted eligible models follow by context size.
+ * Order the free router tries verified candidates in, within a measured fit (free-model-profiles.ts):
+ * the models that finished the end-to-end test task on 2026-10-16, fastest first, then the fastest
+ * to answer. Ordering only; eligibility still comes from the live listing, and unlisted eligible
+ * models follow by fit and then context size.
  */
 export const FREE_ROUTER_PREFERENCE: readonly string[] = [
-  "cohere/north-mini-code:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "google/gemma-4-31b-it:free",
+  "nvidia/nemotron-3.5-super-vl:free",
   "dots-studio/dots-3-note-preview:free",
-  "nex-agi/nex-n2.5-pro:free",
-  "nvidia/nemotron-3.5-lightning:free",
-  "google/gemma-4-26b-a4b-it:free",
-  "inclusionai/ling-3.0-flash-vl:free",
-  "poolside/laguna-xs-2.1:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "cohere/north-mini-code:free",
 ];
+
+/**
+ * What OpenRouter's listing says about a model's reasoning (`reasoning` on /models): whether it can
+ * be turned off, whether it is on when nothing is asked, and which effort levels it names.
+ */
+export type FreeReasoning = { mandatory: boolean; defaultEnabled?: boolean; efforts?: string[] };
 
 export type FreeModel = {
   id: string;
@@ -50,6 +51,8 @@ export type FreeModel = {
   source: string;
   eligible: boolean;
   reason?: string;
+  /** Live listings only; absent when the listing does not say. */
+  reasoning?: FreeReasoning;
   /** Original third-party claims, kept separate from verified OpenRouter facts. */
   discovery?: Omit<FreeModel, "eligible" | "reason" | "discovery">;
 };
@@ -130,6 +133,20 @@ export function parseFreeDiscovery(body: unknown): FreeModel[] {
   return [...models.values()].filter((model) => !duplicates.has(model.id));
 }
 
+const EFFORT_WORDS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+/** The listing's `reasoning` object, field by field; anything malformed is left out rather than guessed. */
+export function parseReasoning(value: unknown): FreeReasoning | undefined {
+  const row = record(value);
+  if (typeof row.mandatory !== "boolean") return undefined;
+  const efforts = strings(row.supported_efforts).filter((effort) => EFFORT_WORDS.has(effort));
+  return {
+    mandatory: row.mandatory,
+    ...(typeof row.default_enabled === "boolean" ? { defaultEnabled: row.default_enabled } : {}),
+    ...(efforts.length ? { efforts } : {}),
+  };
+}
+
 /** Only explicitly zero-priced, text-producing tool models qualify. Missing metadata fails closed. */
 export function parseFreeOpenRouterModels(body: unknown): FreeModel[] {
   const models = new Map<string, FreeModel>();
@@ -149,8 +166,10 @@ export function parseFreeOpenRouterModels(body: unknown): FreeModel[] {
       : !strings(architecture.output_modalities).includes("text") ? "No text output"
       : !strings(row.supported_parameters).includes("tools") ? "Tool calling not confirmed"
       : !context ? "Context limit unknown" : undefined;
+    const reasoning = parseReasoning(row.reasoning);
     if (models.has(id)) duplicates.add(id);
     models.set(id, {
+      ...(reasoning ? { reasoning } : {}),
       id, name: label(row.name, id), provider: id.split("/")[0], context_window: context,
       max_output: output, modalities: strings(architecture.input_modalities),
       rate_limit: "OpenRouter account quotas apply", source: `https://openrouter.ai/${id}`,

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/chrisnkuno/archymedes-cli/internal/acp"
 )
 
 func TestModelPickerFiltersAndSwitchesKeepingTheConversation(t *testing.T) {
@@ -55,5 +57,27 @@ func TestModelPickerFitsEverySize(t *testing.T) {
 	for _, size := range [][2]int{{100, 30}, {50, 16}, {20, 6}, {12, 3}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		assertFits(t, m, "model picker")
+	}
+}
+
+func TestFreeModelFitLabelsAndWarnings(t *testing.T) {
+	slow := acp.ModelChoice{Model: "nvidia/nemotron-3.5-lightning:free", Fit: "slow", FitNote: "15s-3min before the first token"}
+	gated := acp.ModelChoice{Model: "thinkingmachines/inkling:free", Fit: "apps-only", FitNote: "refused (403) here"}
+	small := acp.ModelChoice{Model: "liquid/lfm-2.5-2.6b:free", Small: true, Fit: "small"}
+	busy := acp.ModelChoice{Model: "google/gemma-4-31b-it:free", Fit: "busy"}
+	agent := acp.ModelChoice{Model: "cohere/north-mini-code:free", Fit: "agent"}
+	for choice, label := range map[*acp.ModelChoice]string{&slow: "slow", &gated: "apps only", &small: "small", &busy: "busy", &agent: ""} {
+		if got := fitLabel(*choice); got != label {
+			t.Errorf("fitLabel(%s) = %q, want %q", choice.Model, got, label)
+		}
+	}
+	if w := fitWarning(slow); !strings.Contains(w, "3min") || !strings.Contains(w, "openrouter/free") {
+		t.Errorf("slow warning should say why and what to use instead: %q", w)
+	}
+	if w := fitWarning(gated); !strings.Contains(w, "403") {
+		t.Errorf("an apps-only model should say why it will be refused: %q", w)
+	}
+	if fitWarning(agent) != "" {
+		t.Error("a verified model should be switched to without a warning")
 	}
 }

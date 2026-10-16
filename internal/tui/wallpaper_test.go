@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -72,9 +73,18 @@ func TestTheWallpaperNeverChangesAWordOrALink(t *testing.T) {
 		for _, size := range wallpaperSizes {
 			m := wallpaperModel(t, size[0], size[1])
 			setup(m)
-			with := cells(m.View().Content, m.width, m.height)
-			m.opts.NoWallpaper = true
-			without := cells(m.View().Content, m.width, m.height)
+			var with, without *lipgloss.Canvas
+			for {
+				// The top bar's clock is the real time: render the pair again if the minute turned between them.
+				minute := time.Now().Format("15:04")
+				m.opts.NoWallpaper = false
+				with = cells(m.View().Content, m.width, m.height)
+				m.opts.NoWallpaper = true
+				without = cells(m.View().Content, m.width, m.height)
+				if time.Now().Format("15:04") == minute {
+					break
+				}
+			}
 			for y := range m.height {
 				for x := range m.width {
 					a, b := without.CellAt(x, y), with.CellAt(x, y)

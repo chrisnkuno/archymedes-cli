@@ -162,6 +162,12 @@ function listing(model: FreeModel) {
     pricing: { prompt: "0", completion: "0" },
     architecture: { input_modalities: model.modalities, output_modalities: ["text"] },
     supported_parameters: ["tools"],
+    // Passed through so the client fits its effort to the model as it does on a direct key.
+    ...(model.reasoning ? { reasoning: {
+      mandatory: model.reasoning.mandatory,
+      ...(model.reasoning.defaultEnabled !== undefined ? { default_enabled: model.reasoning.defaultEnabled } : {}),
+      ...(model.reasoning.efforts ? { supported_efforts: model.reasoning.efforts } : {}),
+    } } : {}),
   };
 }
 

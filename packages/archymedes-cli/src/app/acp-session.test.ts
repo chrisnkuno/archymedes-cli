@@ -3,7 +3,23 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { saveSession, type SessionRecord } from "@archymedes/core/cli/session";
-import { openSession, startsOnClaude, type SessionContext, type SessionEngine } from "./acp-session";
+import { engineFor, openSession, startingEngine, type SessionContext, type SessionEngine } from "./acp-session";
+import { completed, FakeCodex, replyWith } from "./codex/fake-codex";
+import { CodexSession } from "./codex/session";
+
+/** A real Codex engine over a scripted app-server; the app-server itself is tested in codex/. */
+function codexOver(fake: FakeCodex): SessionContext["codex"] {
+  return async (ctx, record, mode, model) => {
+    const session = new CodexSession({
+      root: ctx.root, executable: "codex", environment: {}, mode, record, ...(model && model !== "default" ? { model } : {}),
+      onEvent: ctx.onEvent, approve: ctx.approve, transport: fake.transport,
+      git: async () => ({ exitCode: 128, stdout: "", stderr: "not a git repository" }),
+      save: async () => undefined,
+    });
+    await session.open();
+    return session;
+  };
+}
 
 /** A Claude engine that records what it was given; the real one is tested in claude/session.test.ts. */
 function fakeClaude(log: Array<{ record?: SessionRecord; mode: string; model?: string }>, options: { fail?: string } = {}): SessionContext["claude"] {
@@ -46,12 +62,12 @@ describe("which engine a session starts on", () => {
   it("is Claude when asked for, when the stored session ran on it, or when it is the default for new ones", () => {
     const claudeRecord = { modelSelection: { provider: "claude", model: "opus" } } as SessionRecord;
     const openaiRecord = { modelSelection: { provider: "openai", model: "gpt" } } as SessionRecord;
-    expect(startsOnClaude({ provider: "claude", environment: {} }, openaiRecord)).toBe(true);
-    expect(startsOnClaude({ provider: "openai", environment: { ARCHYMEDES_PROVIDER: "claude" } }, claudeRecord)).toBe(false);
-    expect(startsOnClaude({ environment: {} }, claudeRecord)).toBe(true);
-    expect(startsOnClaude({ environment: { ARCHYMEDES_PROVIDER: "claude" } }, openaiRecord)).toBe(false);
-    expect(startsOnClaude({ environment: { ARCHYMEDES_PROVIDER: "Claude " } }, undefined)).toBe(true);
-    expect(startsOnClaude({ environment: { ARCHYMEDES_PROVIDER: "openai" } }, undefined)).toBe(false);
+    expect(startingEngine({ provider: "claude", environment: {} }, openaiRecord)).toBe("claude");
+    expect(startingEngine({ provider: "openai", environment: { ARCHYMEDES_PROVIDER: "claude" } }, claudeRecord)).not.toBe("claude");
+    expect(startingEngine({ environment: {} }, claudeRecord)).toBe("claude");
+    expect(startingEngine({ environment: { ARCHYMEDES_PROVIDER: "claude" } }, openaiRecord)).not.toBe("claude");
+    expect(startingEngine({ environment: { ARCHYMEDES_PROVIDER: "Claude " } }, undefined)).toBe("claude");
+    expect(startingEngine({ environment: { ARCHYMEDES_PROVIDER: "openai" } }, undefined)).not.toBe("claude");
   });
 });
 
@@ -105,6 +121,37 @@ describe("one session, either engine", () => {
     const session = await openSession(ctx, "latest");
     expect(log[0]).toMatchObject({ mode: "auto", record: { id: "20261015T120000Z-claude", claudeSession: "c-1" } });
     expect(session.history?.()).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  it("picks Codex when asked, when the session ran on it, or when it is the default", () => {
+    expect(engineFor("codex")).toBe("codex");
+    expect(startingEngine({ environment: {} }, { modelSelection: { provider: "codex", model: "default" } } as SessionRecord)).toBe("codex");
+    expect(startingEngine({ environment: { ARCHYMEDES_PROVIDER: "codex" } }, undefined)).toBe("codex");
+    expect(startingEngine({ provider: "openai", environment: { ARCHYMEDES_PROVIDER: "codex" } }, undefined)).toBe("archymedes");
+  });
+
+  it("keeps the conversation across Codex, Claude and back: each engine is told what it missed", async () => {
+    const codex = new FakeCodex((prompt) => [...replyWith(`codex: ${prompt.split("\n").at(-1)}`), completed()]);
+    const log: Array<{ record?: SessionRecord; mode: string; model?: string }> = [];
+    const session = await openSession(context({ provider: "codex", codex: codexOver(codex), claude: fakeClaude(log) }));
+    const id = session.id;
+    await session.send("one");
+    await session.setModel?.("claude", "opus");
+    expect(log[0].record?.messages.map((message) => message.content)).toEqual(["one", "codex: one"]);
+    await session.send("two");
+    await session.setModel?.("codex", "gpt-6-luna");
+    await session.send("three");
+    expect(session.id).toBe(id);
+    // Codex resumed its own thread and was told only the Claude turn it was not there for.
+    expect(codex.requests.filter((request) => request.method === "thread/resume")).toHaveLength(1);
+    expect(codex.prompts[1]).toContain("While you were away");
+    expect(codex.prompts[1]).toContain("User: two");
+    expect(codex.prompts[1]).toContain("Assistant: claude: two");
+    expect(codex.prompts[1]).not.toContain("User: one");
+    expect(codex.prompts[1].endsWith("\n\nthree")).toBe(true);
+    expect(session.history?.().map((message) => message.content)).toEqual(["one", "codex: one", "two", "claude: two", "three", "codex: three"]);
+    expect(session.info?.()).toMatchObject({ provider: "codex", model: "gpt-6-luna" });
+    await session.dispose();
   });
 
   it("refuses Claude in a sandboxed session, which Claude Code cannot work in", async () => {

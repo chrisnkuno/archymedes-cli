@@ -12,6 +12,9 @@ import { runSessionCommand } from "./acp-commands";
 import { claudeIsDefault, claudeModel, claudeRuntime, learnClaudeModels } from "./claude/backend";
 import { CLAUDE_PROVIDER } from "./claude/identity";
 import { ClaudeSession } from "./claude/session";
+import { codexEnvironment, codexIsDefault, codexModel, codexReadiness, learnCodexModels } from "./codex/backend";
+import { CODEX_PROVIDER } from "./codex/identity";
+import { CodexSession } from "./codex/session";
 import { jevOptionsFromEnvironment } from "./jev";
 import { resolveSessionProvider } from "./session-provider";
 
@@ -25,8 +28,11 @@ import { resolveSessionProvider } from "./session-provider";
  * session exactly as it was.
  */
 
+/** Which engine runs a session: Archymedes's own agent, or the person's Claude Code or Codex. */
+export type EngineKind = "archymedes" | "claude" | "codex";
+
 export type SessionEngine = AcpSession & {
-  readonly kind: "archymedes" | "claude";
+  readonly kind: EngineKind;
   /** The transcript as a session record, to hand to the next engine. */
   snapshot(): SessionRecord;
 };
@@ -44,6 +50,8 @@ export type SessionContext = {
   warn?: (message: string) => void;
   /** For tests: how a Claude engine is built. */
   claude?: (context: SessionContext, record: SessionRecord | undefined, mode: ArchymedesMode, model: string | undefined) => Promise<SessionEngine>;
+  /** For tests: how a Codex engine is built. */
+  codex?: (context: SessionContext, record: SessionRecord | undefined, mode: ArchymedesMode, model: string | undefined) => Promise<SessionEngine>;
 };
 
 export async function openSession(context: SessionContext, resumeSessionId?: string): Promise<AcpSession> {
@@ -55,17 +63,26 @@ export async function openSession(context: SessionContext, resumeSessionId?: str
     if (!record) throw new Error(resumeSessionId === "latest" ? `No earlier session in ${context.root}` : `No stored session ${resumeSessionId} in ${context.root}`);
   }
   const mode = context.mode;
-  const engine = startsOnClaude(context, record)
+  const kind = startingEngine(context, record);
+  const engine = kind === "claude"
     ? await (context.claude ?? claudeEngine)(context, record, record?.mode ?? mode, context.provider === CLAUDE_PROVIDER ? context.model : claudeModel(context.environment))
-    : await archymedesEngine(context, { record, mode, provider: context.provider, model: context.model, resume: resumeSessionId });
+    : kind === "codex"
+      ? await (context.codex ?? codexEngine)(context, record, record?.mode ?? mode, context.provider === CODEX_PROVIDER ? context.model : codexModel(context.environment))
+      : await archymedesEngine(context, { record, mode, provider: context.provider, model: context.model, resume: resumeSessionId });
   return new SwitchingSession(engine, context, mode);
 }
 
-/** Claude when asked for, when the stored session ran on it, or when it is the default for new ones. */
-export function startsOnClaude(context: Pick<SessionContext, "provider" | "environment">, record: SessionRecord | undefined): boolean {
-  if (context.provider) return context.provider === CLAUDE_PROVIDER;
-  if (record) return record.modelSelection?.provider === CLAUDE_PROVIDER;
-  return claudeIsDefault(context.environment);
+/** The engine a provider id names. */
+export function engineFor(provider: string | undefined): EngineKind {
+  return provider === CLAUDE_PROVIDER ? "claude" : provider === CODEX_PROVIDER ? "codex" : "archymedes";
+}
+
+/** The engine asked for, else the one the stored session ran on, else the default for new ones. */
+export function startingEngine(context: Pick<SessionContext, "provider" | "environment">, record: SessionRecord | undefined): EngineKind {
+  if (context.provider) return engineFor(context.provider);
+  if (record) return engineFor(record.modelSelection?.provider);
+  if (claudeIsDefault(context.environment)) return "claude";
+  return codexIsDefault(context.environment) ? "codex" : "archymedes";
 }
 
 class SwitchingSession implements AcpSession {
@@ -95,16 +112,18 @@ class SwitchingSession implements AcpSession {
   }
 
   async setModel(provider: string, model?: string): Promise<void> {
-    const toClaude = provider === CLAUDE_PROVIDER;
-    if (toClaude === (this.engine.kind === "claude")) {
+    const target = engineFor(provider);
+    if (target === this.engine.kind) {
       if (!this.engine.setModel) throw new Error("This session cannot switch models");
       await this.engine.setModel(provider, model);
       return;
     }
     const record = this.engine.snapshot();
-    const next = toClaude
+    const next = target === "claude"
       ? await (this.context.claude ?? claudeEngine)(this.context, record, this.mode, model)
-      : await archymedesEngine({ ...this.context, createWorkspace: undefined }, { record, mode: this.mode, provider, model });
+      : target === "codex"
+        ? await (this.context.codex ?? codexEngine)(this.context, record, this.mode, model)
+        : await archymedesEngine({ ...this.context, createWorkspace: undefined }, { record, mode: this.mode, provider, model });
     const previous = this.engine;
     this.engine = next;
     await previous.dispose().catch((error: unknown) => this.context.warn?.(`archymedes: retiring the previous engine: ${error instanceof Error ? error.message : String(error)}`));
@@ -129,6 +148,20 @@ async function claudeEngine(context: SessionContext, record: SessionRecord | und
     throw new Error("Claude is not ready: it needs signing in to Claude (claude auth login). Open Providers (alt+p) and choose Claude.");
   }
   if (failed) throw failed;
+  return session;
+}
+
+/** The person's Codex, started now (its first start takes seconds) so the first prompt finds it warm. */
+async function codexEngine(context: SessionContext, record: SessionRecord | undefined, mode: ArchymedesMode, model: string | undefined): Promise<SessionEngine> {
+  if (context.createWorkspace) throw new Error("Codex runs on this machine in its own sandbox; it cannot work in a --sandbox workspace.");
+  const readiness = await codexReadiness({ environment: context.environment, processEnvironment: process.env as Record<string, string | undefined> });
+  if (!readiness.ready) throw new Error(`Codex is not ready: it needs ${readiness.missing}. Open Providers (alt+p) and choose Codex.`);
+  const session = new CodexSession({
+    root: context.root, executable: readiness.executable, environment: codexEnvironment(process.env as Record<string, string | undefined>), mode, record,
+    ...(model && model !== "default" ? { model } : {}),
+    onEvent: context.onEvent, approve: context.approve, warn: context.warn, onModels: learnCodexModels,
+  });
+  await session.open();
   return session;
 }
 

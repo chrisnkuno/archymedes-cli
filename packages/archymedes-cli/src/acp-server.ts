@@ -10,6 +10,8 @@ import { openSession } from "./app/acp-session";
 import { claudeModels, claudeOverview, connectClaude, rememberClaudeModel } from "./app/claude/backend";
 import { claudeSetupStatus, withClaude, withClaudeModels } from "./app/claude/listing";
 import { CLAUDE_PROVIDER } from "./app/claude/identity";
+import { codexModels, codexOverview, codexSetupStatus, connectCodex, rememberCodexModel, withCodex, withCodexModels } from "./app/codex/backend";
+import { CODEX_PROVIDER } from "./app/codex/identity";
 import { installInChildProcess, startupMaintenance } from "./app/startup-update";
 
 /**
@@ -70,18 +72,34 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
     send,
     extensions: {
       // Claude (the person's own Claude Code) is answered beside the model providers: see app/claude.
-      "_archymedes/providers": async () => ({ providers: withClaude(providerOverview(options.environment), await claudeOverview(claude)) }),
+      // Claude and Codex (the person's own Claude Code and Codex) are answered beside the model
+      // providers: see app/claude and app/codex.
+      "_archymedes/providers": async () => {
+        const [claudeRow, codexRow] = await Promise.all([claudeOverview(claude), codexOverview(claude)]);
+        return { providers: withCodex(withClaude(providerOverview(options.environment), claudeRow), codexRow) };
+      },
       "_archymedes/providers/connect": async (params) =>
-        params.provider === CLAUDE_PROVIDER ? connectClaude(claude) : connectProvider(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
+        params.provider === CLAUDE_PROVIDER ? connectClaude(claude)
+          : params.provider === CODEX_PROVIDER ? connectCodex(claude)
+            : connectProvider(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/providers/models": async (params) =>
-        params.provider === CLAUDE_PROVIDER ? { models: claudeModels() } : providerModels(params, { environment: options.environment }),
-      "_archymedes/providers/remember-model": async (params) =>
-        params.provider === CLAUDE_PROVIDER ? rememberClaudeModel(typeof params.model === "string" ? params.model : "", claude) : rememberModel(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
-      "_archymedes/setup/status": async () => claudeSetupStatus(setupStatus(options.environment, { provider: options.provider, model: options.model }), options, claude),
+        params.provider === CLAUDE_PROVIDER ? { models: claudeModels() }
+          : params.provider === CODEX_PROVIDER ? { models: codexModels() }
+            : providerModels(params, { environment: options.environment }),
+      "_archymedes/providers/remember-model": async (params) => {
+        const model = typeof params.model === "string" ? params.model : "";
+        if (params.provider === CLAUDE_PROVIDER) return rememberClaudeModel(model, claude);
+        if (params.provider === CODEX_PROVIDER) return rememberCodexModel(model, claude);
+        return rememberModel(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> });
+      },
+      "_archymedes/setup/status": async () => codexSetupStatus(await claudeSetupStatus(setupStatus(options.environment, { provider: options.provider, model: options.model }), options, claude), options, claude),
       "_archymedes/setup/save": async (params) => saveSetup(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
       "_archymedes/settings/list": async () => listSettings(process.env as Record<string, string | undefined>),
       "_archymedes/settings/set": async (params) => setSetting(params, { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> }),
-      "_archymedes/models": async (params) => withClaudeModels(await modelList(options.environment, params), await claudeOverview(claude)),
+      "_archymedes/models": async (params) => {
+        const [listing, claudeRow, codexRow] = await Promise.all([modelList(options.environment, params), claudeOverview(claude), codexOverview(claude)]);
+        return withCodexModels(withClaudeModels(listing, claudeRow), codexRow);
+      },
       // Asked by the Go interface once its session is open: the daily update check and install the
       // terminal CLI runs at startup. Once per process; an editor that never asks never updates.
       "_archymedes/startup": async () => ({

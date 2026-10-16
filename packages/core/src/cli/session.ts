@@ -46,6 +46,13 @@ export type SessionRecord = {
    * ran this session: resuming continues Claude's conversation instead of retelling it.
    */
   claudeSession?: string;
+  /** The person's Codex thread, when their Codex ran this session: resuming continues it. */
+  codexThread?: string;
+  /**
+   * How far each outside engine (claude, codex) has seen the transcript, in messages: one that
+   * comes back is told only what was said after that (see app/handoff.ts).
+   */
+  engineSeen?: Record<string, number>;
   /** The workspace before each turn, oldest first, for `/undo` and rewinding after a resume. */
   checkpoints?: Checkpoint[];
 };

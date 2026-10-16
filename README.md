@@ -60,6 +60,29 @@ Anthropic's rules for using a Claude subscription outside its own apps have chan
 in 2026; see its [legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page.
 Archymedes only drives the unmodified Claude Code you installed and signed in to yourself.
 
+### Codex, on your ChatGPT plan
+
+Choose **Codex (your ChatGPT plan)** in Providers, or start with `--provider codex`. Archymedes then
+runs your own [Codex CLI](https://developers.openai.com/codex/cli) through `codex app-server` and
+shows its work the same way: streamed replies, its commands and file changes as the usual cards (a
+change's result is its diff), approvals in the interface, `/undo` and `/rewind` (Archymedes's own
+checkpoints, taken before each Codex turn), steering mid-turn, `/compact`, `/resume` (Codex's own
+thread), and switching to or from any other engine with the conversation kept.
+
+- **Your account stays with Codex.** Signing in is `codex login` (Providers runs it for you);
+  Archymedes asks `codex login status` only whether you are signed in. `OPENAI_API_KEY` is removed
+  from Codex's environment unless `ARCHYMEDES_CODEX_BILLING=api`.
+- **Modes are Codex's own sandbox.** Plan is Codex's read-only sandbox with no escalation; build
+  runs in its workspace sandbox and asks before anything not known to be safe; auto asks only to
+  leave the sandbox.
+- `CODEX_MODEL` picks the model from the list Codex gives (Codex's own default otherwise; a
+  default your plan cannot use fails with Codex's own explanation — pick another in Providers).
+
+**Switching keeps the conversation.** An engine that has never seen the session is told what was
+said; one coming back to a session it ran before resumes its own conversation and is told only what
+was said while it was away (Claude → Codex → Claude loses nothing). What is passed is what was said,
+not tool state: the work is in the files.
+
 `archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account and no
 paid fallback. With your own `OPENROUTER_API_KEY` it goes to OpenRouter directly; without a key it
 needs a [free gateway](packages/free-gateway/README.md) reachable at `ARCHYMEDES_FREE_GATEWAY_URL` —

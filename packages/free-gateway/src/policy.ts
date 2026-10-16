@@ -34,6 +34,9 @@ function validTool(tool: unknown): boolean {
     && (tool.function.parameters === undefined || isRecord(tool.function.parameters));
 }
 
+/** The `reasoning.effort` words forwarded upstream; `none` is not, since a mandatory-reasoning model rejects it. */
+const REASONING_EFFORTS = new Set(["minimal", "low", "medium", "high"]);
+
 export function sanitizeChatRequest(raw: unknown, eligible: ReadonlyMap<string, FreeModel>, limits: GatewayLimits = DEFAULT_LIMITS): PolicyResult {
   if (!isRecord(raw)) return { status: 400, message: "Request body must be a JSON object." };
   const model = typeof raw.model === "string" ? eligible.get(raw.model) : undefined;
@@ -53,12 +56,17 @@ export function sanitizeChatRequest(raw: unknown, eligible: ReadonlyMap<string, 
   const ceiling = Math.min(limits.maxOutputTokens, model.max_output ?? 4_096);
   const maxTokens = typeof requested === "number" && Number.isSafeInteger(requested) && requested > 0 ? Math.min(requested, ceiling) : ceiling;
   const stream = raw.stream === true;
+  // Only the effort word, from a fixed list: the client fits it to the model (`freeReasoningFor`),
+  // and nothing else of the client's `reasoning` object (token budgets, exclusions) is forwarded.
+  const effort = isRecord(raw.reasoning) ? raw.reasoning.effort : undefined;
+  const reasoning = typeof effort === "string" && REASONING_EFFORTS.has(effort) ? { effort } : undefined;
   return {
     body: {
       model: model.id,
       messages,
       ...(Array.isArray(tools) && tools.length ? { tools } : {}),
       max_tokens: maxTokens,
+      ...(reasoning ? { reasoning } : {}),
       stream,
       ...(stream ? { stream_options: { include_usage: true } } : {}),
       provider: { require_parameters: true, max_price: { prompt: 0, completion: 0 }, allow_fallbacks: false },

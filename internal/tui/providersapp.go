@@ -229,7 +229,7 @@ func (p *providersApp) view(m *Model) string {
 		case row.Configured:
 			lines = append(lines, " "+th.Body.Render("Ready. enter lists its models (fetched from it) to switch to; d makes it the default for new sessions."))
 		case len(row.Login) > 0:
-			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter opens Claude Code's own sign-in in this terminal."))
+			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter opens "+engineName(*row)+"'s own sign-in in this terminal."))
 		default:
 			lines = append(lines, " "+th.Body.Render("Needs "+strings.Join(row.Missing, " and ")+". enter asks for it: paste, and its models are fetched."))
 		}
@@ -238,8 +238,8 @@ func (p *providersApp) view(m *Model) string {
 		}
 		if row.KeyURL != "" {
 			lead := "Get a key: "
-			if row.ID == "claude" {
-				lead = "Install Claude Code: "
+			if row.OutsideEngine() {
+				lead = "Install " + engineName(*row) + ": "
 			}
 			lines = append(lines, " "+th.Faint.Render(lead)+th.Highlight.Render(ansi.Truncate(row.KeyURL, width-len(lead)-3, "…")))
 		}

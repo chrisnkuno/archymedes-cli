@@ -78,6 +78,11 @@ export class ClaudeTranslator {
 
   constructor(private readonly root: string) {}
 
+  /** Whether a tool call is running: Claude reads anything sent now before it concludes the turn. */
+  get toolRunning(): boolean {
+    return this.open.size > 0 && !this.ended;
+  }
+
   /** A new turn: per-turn state cleared, session facts kept. */
   begin(): void {
     this.streamed.clear();

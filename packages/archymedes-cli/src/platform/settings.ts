@@ -121,9 +121,12 @@ const REASONING_CHOICES: readonly SettingChoice[] = [
 
 /** Claude is not a model provider but Claude Code run on the person's own subscription (see `app/claude`). */
 const CLAUDE_PROVIDER_ID = "claude";
+/** Engines that are the person's own installed agents rather than model providers. */
+const OUTSIDE_ENGINE_IDS = [CLAUDE_PROVIDER_ID, "codex"];
 const PROVIDER_CHOICES: readonly SettingChoice[] = [
   ...PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDER_INFO[id].label })),
   { value: CLAUDE_PROVIDER_ID, label: "Claude (your subscription, through Claude Code)" },
+  { value: "codex", label: "Codex (your ChatGPT plan, through the Codex CLI)" },
 ];
 
 /**
@@ -167,6 +170,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES, section: "Providers" },
   { key: "ARCHYMEDES_FALLBACK_MODEL", label: "Fallback after transient provider failure — ask, or provider:model" },
   { key: "CLAUDE_MODEL", label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for Claude Code's default" },
+  { key: "CODEX_MODEL", label: "Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", secret: true },
   { key: "ANTHROPIC_BASE_URL", label: "Anthropic base URL", url: true },
   { key: "ANTHROPIC_MODEL", label: "Anthropic model" },
@@ -352,7 +356,7 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_CLOUD_QUALITY_FLOOR" && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1)) throw new Error("Quality floor must be between 0 and 1.");
   if (key === "MODEL_PRICE_CURRENCY" && !/^[A-Za-z]{3}$/.test(value)) throw new Error("Currency must be a three-letter ISO code such as USD.");
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
-  if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && value.toLowerCase() !== CLAUDE_PROVIDER_ID) throw new Error(`Choose one of: ${[...PROVIDER_IDS, CLAUDE_PROVIDER_ID].join(", ")}.`);
+  if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && !OUTSIDE_ENGINE_IDS.includes(value.toLowerCase())) throw new Error(`Choose one of: ${[...PROVIDER_IDS, ...OUTSIDE_ENGINE_IDS].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
   if (key === "ARCHYMEDES_JEV" && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
   if (key === "ARCHYMEDES_JEV") return value.toLowerCase();

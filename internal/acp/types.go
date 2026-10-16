@@ -206,7 +206,12 @@ type ProviderOverview struct {
 	Login []string `json:"login"`
 	// Note is a line about how it is set up, such as which Claude plan it is signed in with.
 	Note string `json:"note"`
+	// About says what an outside engine (the person's Claude Code or Codex) is, for the connect dialog.
+	About string `json:"about"`
 }
+
+// OutsideEngine is a provider that is the person's own installed agent, signed in on its own.
+func (p ProviderOverview) OutsideEngine() bool { return p.ID == "claude" || p.ID == "codex" }
 
 // ProviderField is one value a provider is set up with; a secret's value arrives masked.
 type ProviderField struct {
@@ -284,6 +289,10 @@ type ModelChoice struct {
 	Free    bool     `json:"free"`
 	Locked  bool     `json:"locked"`
 	Missing []string `json:"missing"`
+	// Fit is how a concrete free model measured as an agent: "agent", "busy", "slow", "apps-only", "small"
+	// or "unmeasured" (empty for everything else); FitNote says why in a few words.
+	Fit     string `json:"fit,omitempty"`
+	FitNote string `json:"fitNote,omitempty"`
 }
 
 // ModelList is what the agent can switch to, and the providers it cannot use yet.

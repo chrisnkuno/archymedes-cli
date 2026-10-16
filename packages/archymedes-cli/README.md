@@ -3,7 +3,8 @@
 A coding agent for your terminal. It reads, searches, edits and runs commands in a real project,
 asks before it changes anything you have not allowed, keeps a checkpoint before every turn, and
 says what each request cost. It works with the model you choose: your own API key for any of ten
-providers, free models through OpenRouter, or your Claude subscription through your own Claude Code.
+providers, free models through OpenRouter, your Claude subscription through your own Claude Code, or
+your ChatGPT plan through your own Codex.
 
 ```bash
 npm install -g archymedes-cli
@@ -111,10 +112,13 @@ it re-reads instead of editing from a stale copy.
 | Any OpenAI-compatible endpoint | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` |
 | Free models (`--free`) | `OPENROUTER_API_KEY` |
 | Claude (your subscription) | none: your own Claude Code, signed in (`claude auth login`) |
+| Codex (your ChatGPT plan) | none: your own Codex CLI, signed in (`codex login`) |
 
 Keys can be set in the environment or saved through Providers or `archymedes settings`. Claude
 runs through your installed Claude Code with Anthropic's Agent SDK (installed on your machine when
-you connect it); Archymedes never handles your Claude credentials.
+you connect it), and Codex through your installed Codex CLI (`codex app-server`); Archymedes never
+handles either account's credentials. Switching between them and any other model mid-session keeps
+the conversation: each engine is told what was said while it was not there.
 
 ## Extending it
 
@@ -152,6 +156,6 @@ archymedes settings | history | doctor | update
 Node 22.5 or newer on Linux, macOS or Windows. The interface is a native binary installed with the
 package for linux, darwin and win32 on x64 and arm64; where none fits, every mode without the
 interface still works. `git` enables checkpoints, Changes, review and worktrees; `gh` is needed for
-`/pr`; bubblewrap for the command sandbox.
+`/pr`; bubblewrap for the command sandbox; Claude Code or the Codex CLI to run on those plans.
 
 Apache-2.0 licensed. Source: [github.com/chrisnkuno/archymedes-cli](https://github.com/chrisnkuno/archymedes-cli).
