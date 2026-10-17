@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 const maxDropupRows = 8

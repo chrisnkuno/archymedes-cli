@@ -10,9 +10,9 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // resumePicker lists this project's stored sessions, newest first, filtered by title as you type.
@@ -114,10 +114,14 @@ func (p *resumePicker) view(m *Model) string {
 			if s.ID == m.session.ID {
 				badge = "● "
 			}
-			title := ansi.Truncate(strings.Join(strings.Fields(s.Title), " "), max(inner-14, 4), "…")
-			row := th.Highlight.Render(badge) + th.Faint.Render(when) + th.Body.Render(title)
+			elsewhere := ""
+			if s.OpenElsewhere {
+				elsewhere = " · open in another terminal"
+			}
+			title := ansi.Truncate(strings.Join(strings.Fields(s.Title), " "), max(inner-14-ansi.StringWidth(elsewhere), 4), "…")
+			row := th.Highlight.Render(badge) + th.Faint.Render(when) + th.Body.Render(title) + th.Faint.Render(elsewhere)
 			if i == p.cursor {
-				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(padRight(badge+when+title, inner))
+				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(padRight(badge+when+title+elsewhere, inner))
 			}
 			b.WriteString(mark(m.zones.dialog, rowID(i), row))
 			b.WriteString("\n")
@@ -126,6 +130,10 @@ func (p *resumePicker) view(m *Model) string {
 			b.WriteString(th.Faint.Render("nothing matches") + "\n")
 		}
 	}
-	b.WriteString(th.Faint.Render(ansi.Truncate("enter resume · esc close", inner, "")))
+	help := "enter resume · esc close"
+	if p.cursor < len(p.shown) && p.shown[p.cursor].OpenElsewhere {
+		help = "enter opens a copy (the original stays with the other terminal) · esc close"
+	}
+	b.WriteString(th.Faint.Render(ansi.Truncate(help, inner, "")))
 	return frame(th, "Resume a session", b.String(), width)
 }

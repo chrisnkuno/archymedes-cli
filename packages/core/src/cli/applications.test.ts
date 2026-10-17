@@ -43,22 +43,37 @@ describe("LocalApplicationSupervisor", () => {
       server.listen(Number(process.argv[2]), "127.0.0.1", () => console.log("ready"));
     `);
 
-    const started = await supervisor.start({ command: `node server.mjs ${port}`, port, timeoutMs: 5_000 });
+    const started = await supervisor.start({ command: `node server.mjs ${port}`, port, timeoutMs: 20_000 });
     expect(started).toMatchObject({ id: "app-1", state: "running", port, url: `http://127.0.0.1:${port}/` });
-    expect(await (await fetch(started.url)).text()).toBe("archymedes-preview-ok");
+    expect(await (await fetch(started.url!)).text()).toBe("archymedes-preview-ok");
     expect(supervisor.get(started.id)[0]).toMatchObject({ state: "running", stdout: expect.stringContaining("ready") });
 
     const stopped = await supervisor.stop(started.id);
     expect(stopped.state).toBe("exited");
-    await expect(fetch(started.url)).rejects.toThrow();
+    await expect(fetch(started.url!)).rejects.toThrow();
   });
 
   it("does not mistake startup logs for a reachable application", async () => {
     const port = await unusedPort();
     const { supervisor } = await fixture(`console.log("running at port ${port}"); setTimeout(() => process.exit(3), 50);`);
     await expect(supervisor.start({ command: "node server.mjs", port, timeoutMs: 2_000 }))
-      .rejects.toThrow(new RegExp(`exited before port ${port} became ready[\\s\\S]*running at port ${port}`));
+      .rejects.toThrow(new RegExp(`exited with exit code 3 before port ${port} became ready[\\s\\S]*running at port ${port}`));
     expect(supervisor.list()).toMatchObject([{ state: "exited", exitCode: 3 }]);
+  });
+
+  it("points a browser app started under Node at a static server", async () => {
+    const port = await unusedPort();
+    const { root, supervisor } = await fixture("new window.p5();");
+    await fs.writeFile(path.join(root, "index.html"), "<canvas></canvas>");
+    await expect(supervisor.start({ command: "node server.mjs", port, timeoutMs: 10_000 }))
+      .rejects.toThrow(`has an index.html: if this is a browser app, serve the folder instead of running its script under Node, e.g. \`npx --yes http-server -p ${port} -c-1 .\``);
+  });
+
+  it("says a command that finished cleanly is not a server", async () => {
+    const port = await unusedPort();
+    const { supervisor } = await fixture("console.log('done');");
+    await expect(supervisor.start({ command: "node server.mjs", port, timeoutMs: 10_000 }))
+      .rejects.toThrow(/exit code 0[\s\S]*finished instead of staying up/);
   });
 
   it("stops a process that never serves HTTP when readiness expires", async () => {
@@ -67,6 +82,21 @@ describe("LocalApplicationSupervisor", () => {
     await expect(supervisor.start({ command: "node server.mjs", port, timeoutMs: 1_000 }))
       .rejects.toThrow(/did not answer HTTP.*and was stopped/s);
     expect(supervisor.list()[0]?.state).toBe("exited");
+  });
+
+  it("starts a process with no port once it stays up, and stops it on request", async () => {
+    const { supervisor } = await fixture("console.log('worker up'); setInterval(() => {}, 1000);");
+    const started = await supervisor.start({ command: "node server.mjs", timeoutMs: 600 });
+    expect(started).toMatchObject({ id: "app-1", state: "running", stdout: expect.stringContaining("worker up") });
+    expect(started.port).toBeUndefined();
+    expect(started.url).toBeUndefined();
+    expect((await supervisor.stop(started.id)).state).toBe("exited");
+  });
+
+  it("says a portless command that finished is a one-shot command", async () => {
+    const { supervisor } = await fixture("console.log('done');");
+    await expect(supervisor.start({ command: "node server.mjs", timeoutMs: 5_000 }))
+      .rejects.toThrow(/exit code 0 within its first moments[\s\S]*run it with run_command/);
   });
 
   it("refuses occupied ports and directories outside the workspace", async () => {

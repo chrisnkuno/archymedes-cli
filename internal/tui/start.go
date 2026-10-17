@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/render"
 )
 
 // The start menu: the one place to find anything by typing — apps, every action, recent sessions
@@ -86,7 +86,11 @@ func (p *startMenu) addSessions(m *Model) {
 			continue
 		}
 		title := strings.Join(strings.Fields(s.Title), " ")
-		p.entries = append(p.entries, paletteEntry{"↺ " + title, relativeTime(s.UpdatedAt, now), "session", func(m *Model) tea.Cmd { return m.resumeSession(s.ID) }})
+		hint := relativeTime(s.UpdatedAt, now)
+		if s.OpenElsewhere {
+			hint += " · open in another terminal"
+		}
+		p.entries = append(p.entries, paletteEntry{"↺ " + title, hint, "session", func(m *Model) tea.Cmd { return m.resumeSession(s.ID) }})
 	}
 	p.refilter()
 }

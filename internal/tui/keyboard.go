@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 
@@ -20,7 +21,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	}
 	if m.approval != nil {
-		if answered, choice := m.approval.handle(msg); answered {
+		if answered, choice := m.approval.handle(msg); answered && m.approval.ask != nil {
+			m.approval.ask.Answer(choice)
+			m.approval = nil
+			if choice == "" {
+				return m.toast(toastInfo, "Question dismissed; the agent carries on without an answer")
+			}
+			return nil
+		} else if answered {
 			m.approval.req.Answer(choice)
 			title := m.approval.req.ToolCall.Title
 			m.approval = nil
@@ -104,6 +112,9 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	case key.Matches(msg, k.Send):
+		if m.input.continueLine() {
+			return nil // `\` then enter: a new line, not a send
+		}
 		// A command typed out in full runs, even when a longer one also matches (/model, /models).
 		if len(m.input.complete) > 0 && !m.namesCommand(m.input.value()) && m.input.accept() {
 			if c := matchingCommands(strings.TrimSpace(m.input.value()), m.custom...); len(c) != 1 || c[0].args != "" {
@@ -116,7 +127,7 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.Complete) && m.input.accept():
 		return nil
 	case key.Matches(msg, k.Mode):
-		return m.setMode(nextMode(m.mode))
+		return m.setMode(nextMode(cmp.Or(m.pendingMode, m.mode)))
 	case key.Matches(msg, k.Expand):
 		m.expanded = !m.expanded
 		return nil

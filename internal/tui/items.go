@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // renderCtx is what every item draws with.

@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // The Settings app (alt+s, /settings): every setting the terminal menu had, in sections, edited in

@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 func TestModelPickerFiltersAndSwitchesKeepingTheConversation(t *testing.T) {

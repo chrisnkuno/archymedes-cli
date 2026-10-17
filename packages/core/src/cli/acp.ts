@@ -2,6 +2,7 @@ import type { AgentMessage, AgentRuntimeResult } from "../agent-runtime";
 import type { ArchymedesEvent } from "./agent";
 import type { ApprovalPattern, ArchymedesMode, PermissionDecision } from "./permissions";
 import { runtimeEventForJournal } from "./protocol";
+import type { AskUser, UserQuestion } from "./tools";
 
 /**
  * Archymedes as an ACP agent: the same session, driven by an editor instead of a terminal.
@@ -73,6 +74,18 @@ export function archymedesEventForClient(event: ArchymedesEvent): ArchymedesEven
   return { type: "runtime", event: runtimeEventForJournal(event.event) };
 }
 
+/**
+ * `ask_user`'s request to the client: one question, its suggested options, and the person's answer
+ * back as text (`{answer}`), or `{dismissed: true}`. Offered only to a client that sets
+ * `clientCapabilities._meta.archymedes.questions: true`: any other client would never answer it.
+ */
+export const ARCHYMEDES_ASK_METHOD = "_archymedes/session/ask";
+
+function wantsQuestions(params: Record<string, JsonValue>): boolean {
+  const capabilities = params.clientCapabilities as { _meta?: { archymedes?: { questions?: unknown } } } | undefined;
+  return capabilities?._meta?.archymedes?.questions === true;
+}
+
 function wantsArchymedesEvents(params: Record<string, JsonValue>): boolean {
   const capabilities = params.clientCapabilities as { _meta?: { archymedes?: { events?: unknown } } } | undefined;
   return capabilities?._meta?.archymedes?.events === true;
@@ -93,6 +106,8 @@ export type AcpSessionFactory = (input: {
   onEvent: (event: ArchymedesEvent) => void;
   /** Asks the *client* to decide, since in ACP the editor owns the human. */
   approve: (request: AcpApprovalRequest) => Promise<PermissionDecision>;
+  /** Puts a question to the client's human; present only when the client can show one. */
+  ask?: AskUser;
   /** Present only for `session/load`: resume this stored session rather than starting one. */
   resumeSessionId?: string;
 }) => Promise<AcpSession>;
@@ -196,6 +211,7 @@ export class AcpConnection {
   private nextRequestId = 1;
   private initialized = false;
   private archymedesEvents = false;
+  private questions = false;
 
   constructor(private readonly dependencies: {
     send: (message: JsonRpcOutgoing) => void;
@@ -288,6 +304,7 @@ export class AcpConnection {
       case "initialize": {
         this.initialized = true;
         this.archymedesEvents = wantsArchymedesEvents(params);
+        this.questions = wantsQuestions(params);
         return {
           protocolVersion: ACP_PROTOCOL_VERSION,
           agentCapabilities: {
@@ -316,6 +333,7 @@ export class AcpConnection {
           resumeSessionId,
           onEvent: (event) => { if (bound) this.publish(bound.id, event); },
           approve: async (request) => (bound ? this.askClient(bound.id, request) : "deny"),
+          ...(this.questions ? { ask: async (question: UserQuestion) => (bound ? this.askQuestion(bound.id, question) : null) } : {}),
         });
         bound = session;
         this.sessions.set(session.id, session);
@@ -392,6 +410,19 @@ export class AcpConnection {
     // `cancelled` is the client saying the human went away. That is not consent either.
     if (outcome.outcome !== "selected") return "deny";
     return decisionFromOptionId(outcome.selectedOptionId, request.pattern !== undefined);
+  }
+
+  /** A question for the human; anything but a non-empty answer (an error, a closed client) is no answer. */
+  private async askQuestion(sessionId: string, question: UserQuestion): Promise<string | null> {
+    const reply = await this.request(ARCHYMEDES_ASK_METHOD, {
+      sessionId,
+      question: question.question,
+      options: question.options,
+      multiSelect: question.multiSelect,
+      ...(question.toolCallId ? { toolCallId: question.toolCallId } : {}),
+    }).catch(() => null);
+    const answer = typeof reply === "object" && reply !== null && !Array.isArray(reply) ? (reply as Record<string, JsonValue>).answer : undefined;
+    return typeof answer === "string" && answer.trim() ? answer : null;
   }
 
   private replay(sessionId: string, message: AgentMessage): void {

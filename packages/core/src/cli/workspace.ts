@@ -84,8 +84,21 @@ export function resolveInWorkspace(root: string, candidate: string): string {
 export async function realPathWithin(root: string, candidate: string): Promise<string> {
   const resolved = resolveInWorkspace(root, candidate);
   const absoluteRoot = await fs.realpath(path.resolve(root)).catch(() => path.resolve(root));
-  const real = await fs.realpath(resolved).catch(() => null);
-  if (real === null) return resolved;
+  let real = await fs.realpath(resolved).catch(() => null);
+  if (real === null) {
+    // Not there yet: what creating it would go through is its nearest ancestor that is. Checking
+    // only the path itself let `link/new/dir/file` (with `link` pointing outside) be created
+    // outside the tree, its directories with it — the parent did not exist either.
+    // Only up to the root: above it is outside by definition, and a root not created yet (a
+    // download's destination) has nothing in it to pass through.
+    const lexicalRoot = path.resolve(root);
+    let ancestor = resolved;
+    while (real === null && ancestor !== lexicalRoot) {
+      ancestor = path.dirname(ancestor);
+      real = await fs.realpath(ancestor).catch(() => null);
+    }
+    if (real === null) return resolved;
+  }
   if (real !== absoluteRoot && !real.startsWith(absoluteRoot + path.sep)) {
     throw new WorkspaceViolation(`path resolves outside the workspace root: ${candidate}`);
   }
@@ -244,7 +257,13 @@ function similarity(left: string, right: string): number {
   return (2 * shared) / (left.length + right.length - 2);
 }
 
-/** A hint naming the line most like oldText's first line, so a near miss is fixable in one turn. */
+/**
+ * A hint naming the line most like oldText's first line, so a near miss is fixable in one turn.
+ *
+ * The line is shown verbatim on its own line, never JSON-encoded: encoding a line that already holds
+ * `\"` (a package.json script, a string literal) doubles every backslash, and a model that copies the
+ * hint then sends the wrong escaping again — the same miss, repeated until the turn is cancelled.
+ */
 export function nearestLineHint(content: string, oldText: string): string {
   const needle = toLf(oldText).split("\n").map((line) => line.trim()).find(Boolean);
   if (!needle) return "";
@@ -258,9 +277,40 @@ export function nearestLineHint(content: string, oldText: string): string {
   }
   if (best.score < 0.5) return " Re-read the file and copy oldText exactly.";
   const text = lines[best.line - 1];
-  const shown = text.length > 160 ? `${text.slice(0, 160)}…` : text;
+  const shown = text.length > 300 ? `${text.slice(0, 300)}…` : text;
   const exactIgnoringIndent = text.trim() === needle;
-  return ` Closest line is ${best.line}${exactIgnoringIndent ? " (same text, different indentation)" : ""}: ${JSON.stringify(shown)}. Re-read the file and copy oldText exactly.`;
+  return ` Closest line is ${best.line}${exactIgnoringIndent ? " (same text, different indentation)" : ""}, verbatim:\n${shown}\nCopy oldText exactly as the file has it, backslashes and quotes included.`;
+}
+
+/**
+ * Undoes one level of string escaping: `\\` `\"` `\'` `` \` `` to the bare character, `\n` `\t` to
+ * a newline and a tab. A model that escapes its arguments once too often sends `\\"` for a file's
+ * `\"`, or a literal `\n` between lines; the same slip is in its newText, so both get the fix.
+ */
+function unescapeOnce(text: string): string {
+  return text.replace(/\\([\\"'`nt])/g, (_, char: string) => (char === "n" ? "\n" : char === "t" ? "\t" : char));
+}
+
+/**
+ * Where oldText occurs once backslashes are ignored on both sides: the file escapes a quote that
+ * oldText does not (or the reverse). Never applied — which quotes newText meant to escape is a
+ * guess — but the exact span makes the retry a copy, not another guess.
+ */
+function backslashInsensitiveMatches(content: string, oldText: string): Array<{ start: number; end: number }> {
+  const needle = oldText.replace(/\\/g, "");
+  if (needle.trim() === "") return [];
+  let stripped = "";
+  const origin: number[] = [];
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === "\\") continue;
+    stripped += content[index];
+    origin.push(index);
+  }
+  const matches: Array<{ start: number; end: number }> = [];
+  for (let at = stripped.indexOf(needle); at !== -1; at = stripped.indexOf(needle, at + needle.length)) {
+    matches.push({ start: origin[at], end: origin[at + needle.length - 1] + 1 });
+  }
+  return matches;
 }
 
 /**
@@ -312,11 +362,16 @@ function trailingWhitespaceInsensitiveMatches(content: string, oldText: string):
  *   file's line ending so a CRLF file never ends up with a stray block of LF lines (or vice versa).
  * - Trailing whitespace, line-wise, and only when that match is unique — an ambiguous fuzzy match is
  *   still an error, never a guess.
+ * - One level of backslash escaping too many, undone in oldText and newText alike. Escaping that
+ *   differs any other way is an error that quotes the file's exact text, so the retry is a copy.
+ *
+ * `notes` says when a tolerance was used, so the model learns its escaping was off.
  */
-export function applyTextEdits(content: string, edits: readonly TextEdit[], label: string): { content: string; replacements: number } {
+export function applyTextEdits(content: string, edits: readonly TextEdit[], label: string): { content: string; replacements: number; notes?: string[] } {
   if (!Array.isArray(edits) || edits.length === 0) throw new WorkspaceViolation("at least one edit is required");
   let current = content;
   let replacements = 0;
+  const notes: string[] = [];
   edits.forEach((edit, index) => {
     const prefix = edits.length > 1 ? `edits[${index}]: ` : "";
     const { oldText, newText } = edit ?? ({} as TextEdit);
@@ -357,9 +412,29 @@ export function applyTextEdits(content: string, edits: readonly TextEdit[], labe
     if (fuzzy.length > 1) {
       throw new WorkspaceViolation(`${prefix}oldText was not found exactly in ${label}, and matches ${fuzzy.length} places when trailing whitespace is ignored; include more surrounding context`);
     }
+
+    if (oldText.includes("\\")) {
+      const unescaped = adapt(unescapeOnce(oldText));
+      const count = unescaped === oldText ? 0 : countOccurrences(current, unescaped);
+      if (count === 1 || (count > 1 && edit.replaceAll)) {
+        current = replaceText(current, unescaped, adapt(unescapeOnce(newText)), edit.replaceAll === true);
+        replacements += edit.replaceAll ? count : 1;
+        notes.push(`${prefix}oldText matched only after removing one level of backslash escaping, so newText was unescaped the same way. Send file text as-is next time.`);
+        return;
+      }
+    }
+    const escaping = backslashInsensitiveMatches(current, oldText);
+    if (escaping.length === 1) {
+      const [{ start, end }] = escaping;
+      const line = current.slice(0, start).split("\n").length;
+      throw new WorkspaceViolation(
+        `${prefix}oldText was not found in ${label}, but matches at line ${line} when backslashes are ignored: the file escapes it differently. `
+        + `The file's text, verbatim:\n${current.slice(start, end)}\nSend exactly that as oldText, and write newText with the file's escaping.`,
+      );
+    }
     throw new WorkspaceViolation(`${prefix}oldText was not found in ${label}.${nearestLineHint(current, oldText)}`);
   });
-  return { content: current, replacements };
+  return { content: current, replacements, notes: notes.length > 0 ? notes : undefined };
 }
 
 /**

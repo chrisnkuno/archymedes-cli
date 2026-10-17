@@ -18,7 +18,7 @@ const OUT_DIR = "dist";
 declare const Bun: { build(options: Record<string, unknown>): Promise<{ success: boolean; logs: unknown[] }> };
 
 const built = await Bun.build({
-  entrypoints: ["packages/archymedes-cli/src/archymedes.ts"],
+  entrypoints: ["packages/friday-cli/src/friday.ts"],
   target: "node",
   outdir: OUT_DIR,
   // Code splitting, and it is not cosmetic. Without it Bun hoists every dynamically imported

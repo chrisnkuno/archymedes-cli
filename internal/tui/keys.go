@@ -6,7 +6,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // Every shortcut is one row of `actions`: dispatch, the dock, the help, the start menu and the Keys

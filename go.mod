@@ -1,4 +1,4 @@
-module github.com/chrisnkuno/archymedes-cli
+module github.com/chrisnkuno/friday-cli
 
 go 1.26.8
 

@@ -23,12 +23,12 @@ benchmark = ["dep:tempfile"]
 
 [[bin]]
 name = "archymedes-state-bench"
-path = "src/bin/archymedes-state-bench.rs"
+path = "src/bin/friday-state-bench.rs"
 required-features = ["benchmark"]
 
 [[bin]]
 name = "archymedes-defender-brain-bench"
-path = "src/bin/archymedes-defender-brain-bench.rs"
+path = "src/bin/friday-defender-brain-bench.rs"
 required-features = ["benchmark"]
 
 [profile.release]

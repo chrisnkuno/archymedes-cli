@@ -16,7 +16,7 @@ same unless the goal says otherwise.
 A pass succeeds when every change is recorded in the tracker, every task has passed its recheck, and
 the guard counts in `tooling/check/baseline.json` have fallen or held steady.
 
-- **Scope:** `$SCOPE` (default: `packages/archymedes-cli`)
+- **Scope:** `$SCOPE` (default: `packages/friday-cli`)
 - **Goal:** `$GOAL` (default: sections + compartmentalization + measured optimization)
 - **Budget:** stop at a clean checkpoint after the tasks you can fully verify. Never leave a task half-moved.
 
@@ -164,7 +164,7 @@ Do not micro-optimize code that is not on a measured hot path.
   contiguous. Match with `flowText`, or inspect the repaint with `paintContaining`.
 - TermUI widgets take colour **token values** (`#e5a58c`, `cyan`), not escape codes. Passing
   `palette.accent` (an escape code) silently breaks colour.
-- The size guard counts `archymedes.ts`. New imports there cost lines, so pay for them by extracting.
+- The size guard counts `friday.ts`. New imports there cost lines, so pay for them by extracting.
 - A moved file keeps its tests green only if `vi.mock()` and dynamic `import()` paths moved with it.
 - Text-based tooling (import rewriting, unused-import detection) is a heuristic. Always follow it with
   typecheck and the PTY suite: a spread like `...name(` once looked like a property access and hid a real use.

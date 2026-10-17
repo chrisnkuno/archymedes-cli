@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"strings"
 	"testing"
 )

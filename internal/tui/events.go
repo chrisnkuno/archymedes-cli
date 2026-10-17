@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // handleAgent turns one agent message into transcript changes.
@@ -26,6 +26,9 @@ func (m *Model) handleAgent(msg any) {
 		m.tr.add(&userItem{text: msg.Text})
 	case acp.PermissionRequest:
 		m.approval = &approval{req: msg}
+	case acp.QuestionRequest:
+		m.closeAssistant() // the question follows what was said, not inside it
+		m.approval = &approval{ask: &msg}
 	case acp.AgentEvent:
 		m.handleEvent(msg.Event)
 	case acp.Exited:

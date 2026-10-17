@@ -1,4 +1,4 @@
-"""Lists exported symbols of packages/archymedes-cli/src that no other source file uses.
+"""Lists exported symbols of packages/friday-cli/src that no other source file uses.
 
     python3 tooling/check/unused_exports.py [--json]
 

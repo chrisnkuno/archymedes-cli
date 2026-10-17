@@ -57,7 +57,7 @@ func (m *Model) topBar() string {
 	// what the agent may do.
 	tray := m.tray()
 	if m.width-ansi.StringWidth(start)-ansi.StringWidth(tray)-1 < 12 {
-		tray = th.Pill(m.mode, th.ModeColor(m.mode)) + " "
+		tray = m.modePill() + " "
 	}
 	room := max(m.width-ansi.StringWidth(start)-ansi.StringWidth(tray)-1, 0)
 
@@ -123,7 +123,7 @@ func (m *Model) tray() string {
 	if m.unread > 0 {
 		tray += mark(m.zones.frame, "notes", th.SoftPill(fmt.Sprintf("● %d", m.unread), th.Warning)) + " "
 	}
-	return tray + th.Pill(m.mode, th.ModeColor(m.mode)) + " " + th.Faint.Render(time.Now().Format("15:04")) + " "
+	return tray + m.modePill() + " " + th.Faint.Render(time.Now().Format("15:04")) + " "
 }
 
 // streamRate is a one-row sparkline of how fast the reply is streaming, a quarter second per
@@ -201,4 +201,14 @@ func (m *Model) dockHint() string {
 		hint = h.ShortHelpView(m.keys.shortFor(m))
 	}
 	return hint + " " // the session's tokens are in the tray
+}
+
+// modePill is the mode, with the one chosen for after this turn when there is one. A click cycles it,
+// as shift+tab does.
+func (m *Model) modePill() string {
+	pill := m.th.Pill(m.mode, m.th.ModeColor(m.mode))
+	if m.pendingMode != "" {
+		pill += m.th.Faint.Render(" → ") + m.th.SoftPill(m.pendingMode, m.th.ModeColor(m.pendingMode))
+	}
+	return mark(m.zones.frame, "mode", pill)
 }

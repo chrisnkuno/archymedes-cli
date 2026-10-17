@@ -139,7 +139,6 @@ func (m *Model) edited(msg editedMsg) tea.Cmd {
 	}
 	m.input.area.SetValue(strings.TrimRight(string(raw), "\n"))
 	m.input.area.MoveToEnd()
-	m.input.fit()
 	m.input.refreshCompletions()
 	return nil
 }

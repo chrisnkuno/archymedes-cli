@@ -2,7 +2,7 @@
 
     python3 tooling/check/extract_declarations.py <from.ts> <to.ts> <Name> [<Name> ...] [--header "doc comment text"]
 
-Paths are relative to packages/archymedes-cli/src. Each declaration moves with its leading comment.
+Paths are relative to packages/friday-cli/src. Each declaration moves with its leading comment.
 The target receives the source's imports (re-rooted and pruned) and every moved name is exported;
 the source imports back whatever it still uses, and other importers are repointed. Always follow
 with `bun run typecheck` and the recheck the tracker names.

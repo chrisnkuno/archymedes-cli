@@ -1,4 +1,4 @@
-"""Import rewriting for structural refactors in packages/archymedes-cli.
+"""Import rewriting for structural refactors in packages/friday-cli.
 
   move-symbols <from-module> <to-module> <Name> [<Name> ...]
       Repoint named imports of the given symbols from one module to another in every importer.

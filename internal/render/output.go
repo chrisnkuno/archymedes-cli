@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // LooksLikeDiff is true for unified-diff text, which is drawn with added and removed lines coloured.

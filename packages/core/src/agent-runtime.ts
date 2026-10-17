@@ -104,7 +104,7 @@ export type ModelAllowance = {
 export type AgentOutputKind = "text" | "reasoning" | "tool_call";
 
 /** How hard the model should think, where the provider's model supports being told. */
-import { resolveToolCall } from "./tool-aliases";
+import { aliasTarget, resolveToolCall } from "./tool-aliases";
 import { isShallowToolError, type EffortSignals, type ToolOutcome } from "./effort-policy";
 
 export type ThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -244,7 +244,8 @@ export type AgentToolResult = {
   images?: AgentImage[];
 };
 
-export type AgentToolContext = { taskId: string; runId: string; stepId: string; signal?: AbortSignal };
+/** `toolCallId` is the call being executed, for a tool whose request to the client must name it. */
+export type AgentToolContext = { taskId: string; runId: string; stepId: string; signal?: AbortSignal; toolCallId?: string };
 
 /**
  * Where a tool came from: Archymedes's own fixed set, or something loaded at runtime.
@@ -435,9 +436,22 @@ function editDistance(a: string, b: string): number {
 }
 
 /** What the model is told when it asks for a tool it cannot use: which case it is, and what to use. */
-export function unavailableToolMessage(name: string, exists: boolean, available: ReadonlyArray<{ name: string; description: string }>): string {
+export function unavailableToolMessage(name: string, exists: boolean, available: ReadonlyArray<{ name: string; description: string; inputSchema?: unknown }>): string {
   const names = available.map((tool) => tool.name);
   const closest = suggestTools(name, available);
+  // Only when the habit has one reading here: "search" could be the web or the files, and saying
+  // it is grep_files would send a web question to grep.
+  const target = exists ? undefined : aliasTarget(name, new Set(names));
+  const tool = target && closest.every((candidate) => candidate === target) ? available.find((candidate) => candidate.name === target) : undefined;
+  if (tool) {
+    const schema = tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] } | undefined;
+    const parts = [
+      schema?.required?.length ? `needs ${schema.required.join(" and ")}` : "",
+      schema?.properties && Object.keys(schema.properties).length ? `accepts ${Object.keys(schema.properties).join(", ")}` : "",
+    ].filter(Boolean);
+    const detail = parts.length ? ` It ${parts.join("; it ")}.` : "";
+    return `"${name}" is ${target} here, but this call did not carry what ${target} needs.${detail} Call ${target} with those arguments.`;
+  }
   const head = exists
     ? `${name} is not allowed in this run (the current mode does not include it).`
     : `There is no tool named "${name}".`;
@@ -1399,7 +1413,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         // is exactly the moment a person needs to know what is being waited on.
         await this.dependencies.control.persistEvent({ type: "tool_call", toolCallId: call.id, toolName: call.name, effect: tool.effect, arguments: argumentsValue });
         try {
-          return { call, tool, result: await tool.execute(argumentsValue, request) };
+          return { call, tool, result: await tool.execute(argumentsValue, { ...request, toolCallId: call.id }) };
         } catch (error) {
           return { call, tool, result: { content: error instanceof Error ? error.message : "Tool execution failed", isError: true } as AgentToolResult };
         }

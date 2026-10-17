@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 func submitCommand(m *Model, text string) {
@@ -106,5 +108,24 @@ func TestToolCardsLinkTheirFileAndDrawListingsAsTrees(t *testing.T) {
 	m.toast(toastInfo, "hello")
 	if !strings.Contains(m.View().Content, "\x1b]8;;file:///home/p/src/app.go") {
 		t.Fatal("the compositor dropped the link")
+	}
+}
+
+func TestASessionOpenInAnotherTerminalIsMarkedAndResumedAsACopy(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	submitCommand(m, "/resume")
+	p := m.overlay.(*resumePicker)
+	p.load(sessionsLoadedMsg{sessions: []acp.SessionSummary{{ID: "s1", Title: "this one"}, {ID: "s9", Title: "refactor the router", OpenElsewhere: true}}})
+	typeText(m, "router")
+	s := screen(m)
+	if !strings.Contains(s, "refactor the router · open in another terminal") || !strings.Contains(s, "enter opens a copy") {
+		t.Fatalf("picker:\n%s", s)
+	}
+	// The agent opened a copy and says why, once, in the conversation.
+	m.overlay = nil
+	m.Update(connectedMsg{session: acp.Session{ID: "s10", Info: acp.SessionInfo{Model: "m1", Mode: "build", Notice: `"refactor the router" is open in another terminal (pid 42), so this is a copy of it: s10. Approvals start fresh here.`}}})
+	if s := screen(m); !strings.Contains(s, "open in another terminal (pid 42)") || m.session.ID != "s10" {
+		t.Fatalf("session %q:\n%s", m.session.ID, s)
 	}
 }

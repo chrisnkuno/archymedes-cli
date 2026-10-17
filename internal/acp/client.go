@@ -83,7 +83,7 @@ func newClient(stdin io.WriteCloser, stdout io.Reader) *Client {
 	return c
 }
 
-// Messages delivers TextChunk, AgentEvent, PermissionRequest and finally Exited, then closes.
+// Messages delivers TextChunk, AgentEvent, PermissionRequest, QuestionRequest and finally Exited, then closes.
 func (c *Client) Messages() <-chan any { return c.messages }
 
 func (c *Client) initialize(ctx context.Context) error {
@@ -92,7 +92,7 @@ func (c *Client) initialize(ctx context.Context) error {
 	}
 	params := map[string]any{
 		"protocolVersion":    ProtocolVersion,
-		"clientCapabilities": map[string]any{"_meta": map[string]any{"archymedes": map[string]any{"events": true}}},
+		"clientCapabilities": map[string]any{"_meta": map[string]any{"archymedes": map[string]any{"events": true, "questions": true}}},
 	}
 	if err := c.call(ctx, "initialize", params, &result); err != nil {
 		return fmt.Errorf("agent handshake: %w", err)
@@ -243,6 +243,8 @@ func (c *Client) dispatch(f frame) {
 		call.reply <- f
 	case f.Method == "session/request_permission" && len(f.ID) > 0:
 		c.messages <- c.permissionRequest(f)
+	case f.Method == AskMethod && len(f.ID) > 0:
+		c.messages <- c.questionRequest(f)
 	case f.Method == "session/update":
 		if chunk, ok := textChunk(f.Params); ok {
 			c.messages <- chunk
@@ -274,6 +276,27 @@ func (c *Client) permissionRequest(f frame) PermissionRequest {
 				outcome = map[string]any{"outcome": "selected", "selectedOptionId": optionID}
 			}
 			_ = c.write(frame{JSONRPC: "2.0", ID: id, Result: mustJSON(outcome)})
+		})
+	}}
+}
+
+func (c *Client) questionRequest(f frame) QuestionRequest {
+	var params struct {
+		ToolCallID  string   `json:"toolCallId"`
+		Question    string   `json:"question"`
+		Options     []string `json:"options"`
+		MultiSelect bool     `json:"multiSelect"`
+	}
+	_ = json.Unmarshal(f.Params, &params)
+	var once sync.Once
+	id := f.ID
+	return QuestionRequest{ToolCallID: params.ToolCallID, Question: params.Question, Options: params.Options, MultiSelect: params.MultiSelect, answer: func(text string) {
+		once.Do(func() {
+			result := map[string]any{"dismissed": true}
+			if strings.TrimSpace(text) != "" {
+				result = map[string]any{"answer": text}
+			}
+			_ = c.write(frame{JSONRPC: "2.0", ID: id, Result: mustJSON(result)})
 		})
 	}}
 }

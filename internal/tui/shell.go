@@ -3,7 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // The desktop: Chat is always the first window; Files, readers and the Keys app open as more
@@ -120,6 +120,8 @@ func (m *Model) runAction(id string) tea.Cmd {
 		return m.openChanges()
 	case "gallery":
 		return m.openGallery(gallery.IndexOf(m.homePhoto()))
+	case "showcase":
+		return m.openShowcase()
 	case "stats":
 		for _, w := range m.windows {
 			if s, ok := w.(*statsApp); ok {

@@ -1,6 +1,7 @@
 import { checkDestination, fetchPublicText, type ResolveHost } from "./safe-fetch";
 import type { AgentTool } from "../agent-runtime";
 import type { ExaCategory, ExaSearchClient, ExaSearchHit } from "../providers/exa";
+import { unavailableMessage, WebSearchUnavailable, type WebSearchBackend } from "../providers/web-search";
 import type { Expense } from "./cost";
 import type { DefenderBrain } from "./defender-brain";
 import type { ArchymedesWorkspace } from "./backends";
@@ -93,6 +94,11 @@ export type ArchymedesToolOptions = {
   todos: TodoList;
   search?: ExaSearchClient;
   /**
+   * Search without Exa (providers/web-search.ts): a keyed backend or the keyless pair. Offers
+   * `web_search` when `search` is absent; Exa, when configured, is the richer tool and wins.
+   */
+  webSearch?: WebSearchBackend;
+  /**
    * Where metered spending outside the model is reported.
    *
    * The tool is the only place that knows a search happened and how many results it billed for, so
@@ -131,7 +137,19 @@ export type ArchymedesToolOptions = {
    * tool" rule `search` already follows.
    */
   delegate?: DelegateRunner;
+  /**
+   * Puts a question to the person and waits for the answer, when a client that can show one is
+   * attached (the Go interface). Absent this — a headless run, an editor that never opted in —
+   * `ask_user` is not offered: a question nobody can see would stall the turn until it is cancelled.
+   */
+  ask?: AskUser;
 };
+
+/** One question for the person. `options` are suggestions: they may always type their own answer. */
+export type UserQuestion = { question: string; options: string[]; multiSelect: boolean; toolCallId?: string };
+
+/** The person's answer, or null when they dismissed the question (or the client went away). */
+export type AskUser = (question: UserQuestion) => Promise<string | null>;
 
 export type DelegateResult = { report: string; status: string; iterations: number; toolCallsExecuted: number };
 /**
@@ -205,7 +223,7 @@ export function isRefusedCommand(command: string): boolean {
 export type PlacedSecretFinding = SecretFinding & { path: string; line: number };
 
 /**
- * The `scan_secrets` tool's own logic, exported so a UI surface (`archymedes.ts`'s `/scan`) can run the
+ * The `scan_secrets` tool's own logic, exported so a UI surface (`friday.ts`'s `/scan`) can run the
  * identical scan directly — without spending a model turn, and without the two ever drifting into
  * scanning slightly different things. Sorted worst-first: a findings list a person reads top to
  * bottom should read most-consequential first, the same convention `DEFENDER_PLAYBOOKS`' own
@@ -220,6 +238,9 @@ export async function scanWorkspaceForSecrets(workspace: Pick<ArchymedesWorkspac
 export async function createArchymedesTools(options: ArchymedesToolOptions): Promise<AgentTool[]> {
   const { workspace, todos } = options;
   const commandTimeoutMs = options.commandTimeoutMs ?? 120_000;
+  // What a call may ask for: a deploy or an image build routinely takes many minutes, and a ceiling
+  // at the default killed them part way, leaving a half-finished deploy behind.
+  const commandCeilingMs = Math.max(commandTimeoutMs, MAX_COMMAND_TIMEOUT_MS);
   const sandboxed = workspace.commandSandbox?.state === "on";
   // Files this run wrote, so running one of them can count as exercising what was just made.
   const writtenFiles = new Set<string>();
@@ -416,19 +437,19 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         // Edited counts as written: running a script just fixed is the smallest proof of the fix.
         writtenFiles.add(existing.path);
         return {
-          content: `Edited ${existing.path} (${updated.replacements} replacement${updated.replacements === 1 ? "" : "s"}).`,
+          content: [`Edited ${existing.path} (${updated.replacements} replacement${updated.replacements === 1 ? "" : "s"}).`, ...(updated.notes ?? [])].join("\n"),
           data: { path: existing.path, replacements: updated.replacements },
         };
       },
     },
     {
       name: "run_command",
-      description: `Run a bounded command in the project root (builds, tests, linters). Dev servers go through start_application. ${workspace.commandGuidance}`,
+      description: `Run a shell command in the project root and wait for it: builds, tests, scripts, deploys. Long-running processes: start_application. ${workspace.commandGuidance}`,
       inputSchema: {
         type: "object",
         properties: {
           command: { type: "string" },
-          timeoutSeconds: { type: "integer", description: `Default and most: ${Math.round(commandTimeoutMs / 1000)}.` },
+          timeoutSeconds: { type: "integer", description: `Default ${Math.round(commandTimeoutMs / 1000)}, max ${Math.round(commandCeilingMs / 1000)}.` },
           timeoutMs: { type: "integer" },
           // Offered only under the command sandbox: a way out the person always decides on.
           ...(sandboxed ? { escalate: { type: "boolean", description: "Run this once outside the sandbox (it needs network or writes outside the project); the person is asked." } } : {}),
@@ -449,16 +470,26 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         if (isRefusedCommand(command)) {
           return { content: `Refused: '${command}' can destroy work irrecoverably. Ask the user to run it themselves if it is really intended.`, isError: true };
         }
-        if (isLikelyPersistentCommand(command)) {
-          return {
-            content: "Refused a likely persistent foreground command. Use start_application so Archymedes can keep it alive, verify the HTTP endpoint, and return a reachable URL. Use a short timeout only for a temporary smoke test that should stop afterward.",
-            isError: true,
-            data: { command, reason: "persistent_foreground_command" },
-          };
-        }
-        const { timeoutMs, note: timeoutNote } = commandTimeout(args, commandTimeoutMs);
+        // `npm start` may be a server or a script that finishes, and only running it tells which.
+        // So it runs, briefly: one that finishes is answered like any command; one still going is
+        // stopped and pointed at start_application, with what it printed, instead of holding the
+        // turn for the whole timeout and every retry.
+        const trial = isLikelyPersistentCommand(command);
+        const asked = commandTimeout(args, commandTimeoutMs, commandCeilingMs);
+        const { note: timeoutNote } = asked;
+        const timeoutMs = trial ? Math.min(asked.timeoutMs, PERSISTENT_TRIAL_MS) : asked.timeoutMs;
         const escalated = sandboxed && args.escalate === true;
         const result = await workspace.runCommand(command, timeoutMs, context.signal, { escalated });
+        if (trial && /limit and was killed/.test(result.stderr)) {
+          const output = [result.stdout.trim(), result.stderr.replace(/\n?Command exceeded its .*$/s, "").trim()].filter(Boolean).join("\n");
+          return {
+            content: `'${command}' was still running after ${PERSISTENT_TRIAL_MS / 1000}s, so it was stopped: it is a long-running process, not a command that finishes. `
+              + "Start it with start_application: with its port for a server (Archymedes checks it answers and returns the URL), without a port for a worker, bot or watcher."
+              + (output ? `\n\nWhat it printed:\n${output}` : ""),
+            isError: true,
+            data: { command, reason: "persistent_foreground_command", stdout: result.stdout, stderr: result.stderr },
+          };
+        }
         const sandboxNote = sandboxed && !escalated && looksSandboxDenied(result) ? `\n\n${SANDBOX_ESCALATION_NOTE}` : "";
         const body = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n") || "(no output)";
         // A missing program is the one failure whose fix is never "try again": the model has to
@@ -492,7 +523,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
     },
     {
       name: "start_application",
-      description: "Start a dev application that keeps running across turns; succeeds only once it answers HTTP. Logs: application_status.",
+      description: "Start a process that keeps running. With port: a server, ready once it answers HTTP. Without: a worker, bot or watcher. Logs: application_status.",
       inputSchema: {
         type: "object",
         properties: {
@@ -502,7 +533,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           path: { type: "string", description: "Readiness HTTP path. Default '/'." },
           timeoutMs: { type: "integer", description: "1000-60000. Default 20000." },
         },
-        required: ["command", "port"],
+        required: ["command"],
         additionalProperties: false,
       },
       capabilityId: ARCHYMEDES_CAPABILITIES.terminal,
@@ -512,12 +543,19 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       async execute(args, context) {
         const status = await workspace.startApplication({
           command: requiredString(args.command, "command"),
-          port: optionalInteger(args.port, "port")!,
+          port: optionalInteger(args.port, "port"),
           directory: typeof args.directory === "string" ? args.directory : undefined,
           path: typeof args.path === "string" ? args.path : undefined,
           timeoutMs: optionalInteger(args.timeoutMs, "timeoutMs"),
           signal: context.signal,
         });
+        if (!status.url) {
+          const logs = [status.stdout.trim(), status.stderr.trim()].filter(Boolean).join("\n");
+          return {
+            content: `Background process ${status.id} is running. It keeps running while this Archymedes session is open; application_status shows its logs, stop_application stops it.${logs ? `\n\nSo far it printed:\n${logs.slice(-2_000)}` : ""}`,
+            data: status,
+          };
+        }
         return {
           content: `Application ${status.id} is running and answered HTTP at ${status.url}. It will remain available while this Archymedes session is open.`,
           data: status,
@@ -542,7 +580,9 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         const applications = await workspace.applicationStatus(id);
         if (applications.length === 0) return { content: id ? `No managed application named ${id}.` : "No managed applications.", data: { applications: [] } };
         const content = applications.map((application) => {
-          const header = `${application.id}: ${application.state} at ${application.url} (port ${application.port})`;
+          const header = application.url
+            ? `${application.id}: ${application.state} at ${application.url} (port ${application.port})`
+            : `${application.id}: ${application.state} in the background (${application.command})`;
           const logs = [application.stdout.trim(), application.stderr.trim()].filter(Boolean).join("\n");
           return logs ? `${header}\nRecent logs:\n${logs}` : header;
         }).join("\n\n");
@@ -564,7 +604,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       parallelSafe: false,
       async execute(args) {
         const status = await workspace.stopApplication(requiredString(args.id, "id"));
-        return { content: `Stopped ${status.id} on port ${status.port}.`, data: status };
+        return { content: `Stopped ${status.id}${status.port ? ` on port ${status.port}` : ""}.`, data: status };
       },
     },
     {
@@ -882,6 +922,100 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           ].filter(Boolean).join("\n"),
           data: { requestId: response.requestId, searchType: response.searchType, sources, grounding: response.output?.grounding ?? [] },
         };
+      },
+    });
+  }
+
+  if (!options.search && options.webSearch) {
+    const web = options.webSearch;
+    tools.push({
+      name: "web_search",
+      description:
+        "Search the web: docs, APIs, error messages, current facts. Returns titles, links and snippets; web_fetch one for the page.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+          numResults: { type: "integer", description: "1-10, default 5." },
+          includeDomains: { type: "array", items: { type: "string" } },
+          excludeDomains: { type: "array", items: { type: "string" } },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      capabilityId: ARCHYMEDES_CAPABILITIES.research,
+      effect: "none",
+      requiresApproval: false,
+      parallelSafe: true,
+      async execute(args) {
+        const query = requiredString(args.query, "query").trim();
+        if (!query) return { content: "web_search needs a query: say what to look for.", isError: true };
+        const includeDomains = optionalStringArray(args.includeDomains, "includeDomains");
+        const excludeDomains = optionalStringArray(args.excludeDomains, "excludeDomains");
+        let response;
+        try {
+          response = await web.search({
+            query,
+            // Clamped rather than refused: 0 or 50 has one sensible reading, and a refusal costs a turn.
+            numResults: Math.min(Math.max(typeof args.numResults === "number" ? Math.trunc(args.numResults) : 5, 1), 10),
+            ...(includeDomains ? { includeDomains } : {}),
+            ...(excludeDomains ? { excludeDomains } : {}),
+          });
+        } catch (error) {
+          // Not "No results": that reads as an answer. Say it could not be done, and what would help.
+          if (error instanceof WebSearchUnavailable) return { content: unavailableMessage(error), isError: true, data: { unavailable: error.reason } };
+          throw error;
+        }
+        const note = response.note ? `${response.note}\n\n` : "";
+        if (response.results.length === 0) {
+          return { content: `${note}${response.provider} found no results for "${query}". Try other words${includeDomains ? " or fewer domain filters" : ""}.`, data: { provider: response.provider, urls: [] } };
+        }
+        const rendered = response.results
+          .map((hit, index) => [`[${index + 1}] ${hit.title}${hit.publishedDate ? ` (${hit.publishedDate})` : ""}`, hit.url, ...(hit.snippet ? [hit.snippet] : [])].join("\n"))
+          .join("\n\n");
+        return { content: `${note}${rendered}`, data: { provider: response.provider, urls: response.results.map((hit) => hit.url) } };
+      },
+    });
+  }
+
+  if (options.ask) {
+    const ask = options.ask;
+    tools.push({
+      name: "ask_user",
+      description:
+        "Ask the user a question and wait for the answer. Use it when a choice is theirs to make (an approach, a name, a missing detail) "
+        + "and guessing would waste their time; not for anything you can find out yourself. Offer options when there are clear choices; they can always type their own.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "One clear question, ending with a question mark." },
+          options: { type: "array", items: { type: "string" }, description: "2-6 short choices, recommended first. Omit for an open question." },
+          multiSelect: { type: "boolean", description: "Let them pick more than one option." },
+        },
+        required: ["question"],
+        additionalProperties: false,
+      },
+      capabilityId: ARCHYMEDES_CAPABILITIES.planning,
+      effect: "none",
+      requiresApproval: false,
+      parallelSafe: false,
+      async execute(args, context) {
+        const question = requiredString(args.question, "question").trim();
+        if (!question) return { content: "ask_user needs a question.", isError: true };
+        // A lone string is one option, not an error worth a turn; more than the dialog can show is cut.
+        const offered = typeof args.options === "string" ? [args.options] : optionalStringArray(args.options, "options") ?? [];
+        const options = [...new Set(offered)].slice(0, 9);
+        const asked = ask({ question, options, multiSelect: args.multiSelect === true && options.length > 1, ...(context?.toolCallId ? { toolCallId: context.toolCallId } : {}) });
+        // A cancelled turn stops waiting; the dialog is the client's to close.
+        const signal = context?.signal;
+        const answer = signal
+          ? await Promise.race([asked, new Promise<null>((resolve) => { if (signal.aborted) resolve(null); else signal.addEventListener("abort", () => resolve(null), { once: true }); })])
+          : await asked;
+        if (signal?.aborted) return { content: "The turn was cancelled while waiting for the user's answer.", isError: true };
+        if (answer === null || !answer.trim()) {
+          return { content: "The user dismissed the question without answering. Do not ask it again; carry on with your best judgment and say what you assumed.", data: { answered: false } };
+        }
+        return { content: `The user answered: ${answer.trim()}`, data: { answered: true, answer: answer.trim() } };
       },
     });
   }
@@ -1243,7 +1377,13 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
  * second is read as seconds (no build, test or install finishes that fast, so a sub-second limit
  * is never what was meant); and nothing is cut below one second or above the configured ceiling.
  */
-export function commandTimeout(args: Record<string, unknown>, ceilingMs: number): { timeoutMs: number; note?: string } {
+/** The most a `run_command` call may ask for: 30 minutes. */
+export const MAX_COMMAND_TIMEOUT_MS = 30 * 60_000;
+
+/** How long a likely-persistent command (`npm start`, `vite`) runs before it is judged a server. */
+const PERSISTENT_TRIAL_MS = 15_000;
+
+export function commandTimeout(args: Record<string, unknown>, defaultMs: number, ceilingMs = defaultMs): { timeoutMs: number; note?: string } {
   const seconds = optionalInteger(args.timeoutSeconds, "timeoutSeconds");
   const millis = optionalInteger(args.timeoutMs, "timeoutMs");
   let asked: number | undefined;
@@ -1253,7 +1393,7 @@ export function commandTimeout(args: Record<string, unknown>, ceilingMs: number)
     asked = millis * 1000;
     note = `timeoutMs ${millis} read as ${millis} seconds; use timeoutSeconds`;
   } else asked = millis;
-  if (asked === undefined) return { timeoutMs: ceilingMs };
+  if (asked === undefined) return { timeoutMs: defaultMs };
   if (asked > ceilingMs) {
     return { timeoutMs: ceilingMs, note: `${note ? `${note}; ` : ""}limited to the ${Math.round(ceilingMs / 1000)}s most a command may run` };
   }

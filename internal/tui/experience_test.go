@@ -13,9 +13,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
-	"github.com/chrisnkuno/archymedes-cli/internal/config"
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // --- the home screen's photographs ---
@@ -64,8 +64,9 @@ func TestTheHomeLineTurnsWithThePhoto(t *testing.T) {
 	before := spark(m.photoIndex)
 	m.photoIndex++
 	// Its first words: a long line wraps inside the card.
-	after := spark(m.photoIndex)
-	if after == before || !strings.Contains(screen(m), strings.Join(strings.Fields(after)[:3], " ")) {
+	fields := strings.Fields(after := spark(m.photoIndex))
+	head := strings.Join(fields[:min(3, len(fields))], " ")
+	if after == before || !strings.Contains(screen(m), head) {
 		t.Fatalf("the line did not turn with the photo: %q then %q", before, after)
 	}
 	if spark(-1) == "" {

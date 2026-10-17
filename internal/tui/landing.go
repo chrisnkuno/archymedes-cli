@@ -11,8 +11,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // The landing screen fills the transcript area until the first message: the mark turning slowly,
@@ -138,6 +138,7 @@ func (m *Model) homeInfo(width, height int) []string {
 	} else {
 		sections = append(sections, section{3, fit(
 			tip(th, "enter", "ask anything"),
+			tip(th, m.newlineKey(), "new line"),
 			tip(th, keyLabel(m.keys.Start.Keys()), "find anything"),
 			tip(th, keyLabel(m.keys.Mode.Keys()), "plan · build · auto"),
 			tip(th, keyLabel(m.keys.Changes.Keys()), "what changed"),
@@ -284,7 +285,7 @@ func centreLines(lines []string, width int) []string {
 }
 
 func tip(th theme.Theme, key, desc string) string {
-	return th.Key.Render(padRight(key, 11)) + th.Faint.Render(desc)
+	return th.Key.Render(padRight(key, max(11, ansi.StringWidth(key)+1))) + th.Faint.Render(desc)
 }
 
 // centre places block in the middle of a width×height area, clipping what does not fit.

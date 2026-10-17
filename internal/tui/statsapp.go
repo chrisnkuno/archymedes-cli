@@ -15,7 +15,7 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/sparkline"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // The Stats app (F9): the session as charts (ntcharts v2), about what a person watching an agent

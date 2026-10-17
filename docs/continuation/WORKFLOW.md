@@ -17,7 +17,7 @@ Add the task before writing the code, and update the status as you go, not at th
 
 ## 2. Change in compartments
 
-- New behaviour goes in a focused module with explicit inputs, not into `archymedes.ts`.
+- New behaviour goes in a focused module with explicit inputs, not into `friday.ts`.
 - Touching code in a large file? Extract the part you touch when that is practical.
 - Rendering takes colours from the `Palette` (`theme.ts`). Never use raw ANSI colour constants.
 - Pure logic (state, layout math, parsing) is separate from terminal I/O, so it can be unit-tested.

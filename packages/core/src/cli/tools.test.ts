@@ -7,7 +7,7 @@ import { LocalWorkspace } from "./backends";
 import { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import type { ToolProvider } from "./tool-providers";
-import { classifyVerification, commandTimeout, createArchymedesTools, runsInlineAssertion, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
+import { classifyVerification, commandTimeout, MAX_COMMAND_TIMEOUT_MS, createArchymedesTools, runsInlineAssertion, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
 
 let root: string;
 const context = { taskId: "t", runId: "r", stepId: "s" };
@@ -63,7 +63,7 @@ describe("archymedes tool set", () => {
     const ran = await toolNamed(tools, "run_command").execute({ command: "sleep 0.4 && echo done", timeoutMs: 300 }, context);
     expect(ran.isError).toBe(false);
     expect(ran.content).toContain("done");
-    expect(ran.content).toContain("[timeoutMs 300 read as 300 seconds; use timeoutSeconds; limited to the 120s most a command may run]");
+    expect(ran.content).toContain("[timeoutMs 300 read as 300 seconds; use timeoutSeconds]");
 
     await toolNamed(tools, "read_file").execute({ path: "src/app.ts" }, context);
     const edited = await toolNamed(tools, "edit_file").execute({ file_path: "src/app.ts", edits: [{ oldText: "3000", newText: "8080" }] }, context);
@@ -102,6 +102,10 @@ describe("archymedes tool set", () => {
     expect(commandTimeout({ timeoutMs: 45_000 }, 120_000)).toEqual({ timeoutMs: 45_000 });
     expect(commandTimeout({ timeoutMs: 70 }, 120_000)).toEqual({ timeoutMs: 70_000, note: "timeoutMs 70 read as 70 seconds; use timeoutSeconds" });
     expect(commandTimeout({ timeoutSeconds: 600 }, 120_000)).toEqual({ timeoutMs: 120_000, note: "limited to the 120s most a command may run" });
+    // A deploy may ask for more than the default, up to the ceiling.
+    expect(commandTimeout({ timeoutSeconds: 900 }, 120_000, MAX_COMMAND_TIMEOUT_MS)).toEqual({ timeoutMs: 900_000 });
+    expect(commandTimeout({}, 120_000, MAX_COMMAND_TIMEOUT_MS)).toEqual({ timeoutMs: 120_000 });
+    expect(commandTimeout({ timeoutSeconds: 7_200 }, 120_000, MAX_COMMAND_TIMEOUT_MS)).toEqual({ timeoutMs: 1_800_000, note: "limited to the 1800s most a command may run" });
     expect(commandTimeout({ timeoutMs: 1_000 }, 120_000)).toEqual({ timeoutMs: 1_000 });
   });
 
@@ -198,11 +202,13 @@ describe("archymedes tool set", () => {
     expect(plain.verification).toBeUndefined();
   });
 
-  it("refuses foreground dev servers but permits a bounded start-probe-cleanup smoke command", async () => {
-    const seen: string[] = [];
+  it("tries a likely server briefly: one still running is stopped and sent to start_application, one that finishes is answered", async () => {
+    const seen: Array<{ command: string; timeoutMs: number }> = [];
     const tools = await createArchymedesTools({
-      workspace: new LocalWorkspace(root, undefined, async (command: string) => {
-        seen.push(command);
+      workspace: new LocalWorkspace(root, undefined, async (command: string, options: { timeoutMs: number }) => {
+        seen.push({ command, timeoutMs: options.timeoutMs });
+        if (command === "cd game && bun run dev") return { exitCode: 124, stdout: "Local: http://localhost:5173", stderr: "\nCommand exceeded its 15s limit and was killed. If it needs longer, run it again with a larger timeoutSeconds." };
+        if (command === "npm start") return { exitCode: 0, stdout: "Generated 3 reports", stderr: "" };
         return { exitCode: 0, stdout: "HTTP 200", stderr: "" };
       }),
       todos: new TodoList(),
@@ -211,11 +217,18 @@ describe("archymedes tool set", () => {
     const persistent = await run.execute({ command: "cd game && bun run dev", timeoutMs: 100_000 }, context);
     expect(persistent).toMatchObject({ isError: true, data: { reason: "persistent_foreground_command" } });
     expect(persistent.content).toContain("start_application");
-    expect(seen).toHaveLength(0);
+    expect(persistent.content).toContain("Local: http://localhost:5173");
+    expect(persistent.content).not.toContain("larger timeoutSeconds");
+    expect(seen[0]).toEqual({ command: "cd game && bun run dev", timeoutMs: 15_000 });
+
+    const script = await run.execute({ command: "npm start" }, context);
+    expect(script).toMatchObject({ isError: false });
+    expect(script.content).toContain("Generated 3 reports");
+    seen.length = 0;
 
     const bounded = "bun run dev & server_pid=$!; trap 'kill $server_pid' EXIT; curl --fail http://127.0.0.1:3000";
     const smoke = await run.execute({ command: bounded }, context);
-    expect(seen).toEqual([bounded]);
+    expect(seen.map((call) => call.command)).toEqual([bounded]);
     expect(smoke.verification).toMatchObject({ passed: true, kind: "smoke" });
   });
 
@@ -291,6 +304,33 @@ describe("archymedes tool set", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content).toContain("[x] 1. read the config"); // the valid id still applied
     expect(result.content).toContain("No todo with id 3");
+  });
+
+  it("offers ask_user only with a client that can show it, and returns the answer or the dismissal", async () => {
+    const without = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() });
+    expect(without.some((tool) => tool.name === "ask_user")).toBe(false);
+
+    const asked: unknown[] = [];
+    const replies: Array<string | null> = ["Postgres", null];
+    const tools = await createArchymedesTools({
+      workspace: new LocalWorkspace(root), todos: new TodoList(),
+      ask: async (question) => { asked.push(question); return replies.shift() ?? null; },
+    });
+    const ask = toolNamed(tools, "ask_user");
+    const answered = await ask.execute({ question: "Which database?", options: ["Postgres", "SQLite", "Postgres"], multiSelect: true }, { ...context, toolCallId: "c1" });
+    expect(answered.content).toBe("The user answered: Postgres");
+    expect(asked[0]).toEqual({ question: "Which database?", options: ["Postgres", "SQLite"], multiSelect: true, toolCallId: "c1" });
+    const dismissed = await ask.execute({ question: "Name?", options: "x" }, context);
+    expect(dismissed.content).toMatch(/dismissed the question/);
+    expect(asked[1]).toMatchObject({ options: ["x"], multiSelect: false });
+  });
+
+  it("stops waiting for an answer when the turn is cancelled", async () => {
+    const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), ask: () => new Promise(() => undefined) });
+    const controller = new AbortController();
+    const pending = toolNamed(tools, "ask_user").execute({ question: "Wait?" }, { ...context, signal: controller.signal });
+    controller.abort();
+    expect(await pending).toMatchObject({ isError: true, content: expect.stringMatching(/cancelled/) });
   });
 
   it("offers web_search only when search is configured", async () => {

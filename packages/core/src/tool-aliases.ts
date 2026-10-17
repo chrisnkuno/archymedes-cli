@@ -169,3 +169,16 @@ export function resolveToolCall(call: AgentToolCall, available: ReadonlySet<stri
   const mapped = alias.args(args);
   return mapped ? translate(alias.tool, mapped) : { kind: "unknown" };
 }
+
+/**
+ * The tool a habitual name stands for here, whatever its arguments: `Read` is `read_file`. For the
+ * message when a call's arguments did not carry what that tool needs, so the model is told what to
+ * send rather than that the tool does not exist (it does, by another name), and its next call is
+ * right instead of the same habit again.
+ */
+export function aliasTarget(name: string, available: ReadonlySet<string>): string | undefined {
+  const bare = normalizeToolName(name.replace(NAMESPACES, ""));
+  if (bare === "str_replace_based_edit_tool" || bare === "str_replace_editor" || bare === "text_editor") return undefined; // one name, three tools
+  const tool = (QUALIFIED[name.trim().toLowerCase()] ?? ALIASES[bare])?.tool;
+  return tool && available.has(tool) ? tool : undefined;
+}

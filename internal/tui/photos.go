@@ -9,7 +9,7 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/picture"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // Photographs (internal/gallery), drawn with ntcharts' picture component in half-block glyphs, so

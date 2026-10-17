@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // /push and /pr: the branch goes to the remote, and /pr then has the agent write the pull request

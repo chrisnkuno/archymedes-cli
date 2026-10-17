@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 // package as cwd, so anything relative breaks the moment `prepublishOnly` invokes it.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CORE = path.join(ROOT, "packages/core");
-const CLI = path.join(ROOT, "packages/archymedes-cli");
+const CLI = path.join(ROOT, "packages/friday-cli");
 const DEFENDER_KNOWLEDGE = path.join(ROOT, "packages", "archymedes-state", "defender-knowledge");
 const TSC = path.join(ROOT, "node_modules", "typescript", "bin", "tsc");
 
@@ -83,7 +83,7 @@ console.log(`core: emitted modules and types, rewrote ${rewritten} import specif
 // 2. CLI: one self-contained executable.
 if (coreOnly) process.exit(0);
 const built = await Bun.build({
-  entrypoints: [path.join(CLI, "src", "archymedes.ts")],
+  entrypoints: [path.join(CLI, "src", "friday.ts")],
   target: "node",
   outdir: path.join(CLI, "dist"),
   // Code splitting, and it is not cosmetic. Without it Bun hoists every dynamically imported

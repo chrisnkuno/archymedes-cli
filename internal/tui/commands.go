@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // command is one slash command. The registry is the single source for completion, /help and dispatch.
@@ -27,7 +27,7 @@ var commands []command
 func init() {
 	commands = []command{
 		{"help", "", "Show commands and keys", (*Model).cmdHelp},
-		{"mode", "[plan|build|auto|defender]", "Show or change what the agent may do", (*Model).cmdMode},
+		{"mode", "[plan|build|auto|defender]", "Show or change what the agent may do (shift+tab cycles plan, build, auto)", (*Model).cmdMode},
 		{"model", "[name]", "Pick a model, or switch straight to one; the conversation carries on", (*Model).cmdModel},
 		{"models", "", "Every model you can switch to, with prices", func(m *Model, _ string) tea.Cmd { return m.cmdModel("") }},
 		{"resume", "", "Pick an earlier session in this project and continue it", (*Model).cmdResume},
@@ -49,6 +49,7 @@ func init() {
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
 		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
+		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"key", "[provider]", "Set or replace an API key: pick a provider, paste the key", (*Model).cmdKey},
 		{"copy", "[code]", "Copy the last reply, or its last code block, to the clipboard", (*Model).cmdCopy},

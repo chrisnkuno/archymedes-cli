@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "archymedes-cli",
+      "name": "friday-cli",
       "devDependencies": {
         "@anthropic-ai/sdk": "^0.116.0",
         "@types/node": "^22.0.0",
@@ -15,19 +15,19 @@
         "vitest": "^3.0.0",
       },
     },
-    "packages/archymedes-cli": {
-      "name": "archymedes-cli",
-      "version": "3.7.0",
+    "packages/friday-cli": {
+      "name": "@archymedes/friday",
+      "version": "3.8.0",
       "bin": {
-        "archymedes": "bin/archymedes.mjs",
+        "friday": "bin/friday.mjs",
       },
       "optionalDependencies": {
-        "@archymedes/cli-darwin-arm64": "3.7.0",
-        "@archymedes/cli-darwin-x64": "3.7.0",
-        "@archymedes/cli-linux-arm64": "3.7.0",
-        "@archymedes/cli-linux-x64": "3.7.0",
-        "@archymedes/cli-win32-arm64": "3.7.0",
-        "@archymedes/cli-win32-x64": "3.7.0",
+        "@archymedes/friday-darwin-arm64": "3.8.0",
+        "@archymedes/friday-darwin-x64": "3.8.0",
+        "@archymedes/friday-linux-arm64": "3.8.0",
+        "@archymedes/friday-linux-x64": "3.8.0",
+        "@archymedes/friday-win32-arm64": "3.8.0",
+        "@archymedes/friday-win32-x64": "3.8.0",
         "@archymedes/state-darwin-arm64": "0.4.0",
         "@archymedes/state-darwin-x64": "0.4.0",
         "@archymedes/state-linux-arm64-gnu": "0.4.0",
@@ -238,7 +238,7 @@
 
     "ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
 
-    "archymedes-cli": ["archymedes-cli@workspace:packages/archymedes-cli"],
+    "@archymedes/friday": ["@archymedes/friday@workspace:packages/friday-cli"],
 
     "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
 

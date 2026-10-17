@@ -22,7 +22,7 @@ import { createArchymedesTools, TodoList } from "../../packages/core/src/cli/too
 import { RequestPacer } from "../../packages/core/src/providers/request-pacer";
 
 const repo = path.resolve(import.meta.dir, "../..");
-const entry = path.join(repo, "packages/archymedes-cli/src/archymedes.ts");
+const entry = path.join(repo, "packages/friday-cli/src/friday.ts");
 
 type Result = { id: string; what: string; unit: string; value: number };
 const results: Result[] = [];

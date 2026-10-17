@@ -6,6 +6,7 @@ import {
   acpStopReason,
   acpToolKind,
   acpUpdateFor,
+  ARCHYMEDES_ASK_METHOD,
   ARCHYMEDES_EVENT_METHOD,
   ARCHYMEDES_EVENTS_VERSION,
   archymedesEventForClient,
@@ -198,6 +199,36 @@ describe("acp permission requests", () => {
     expect(request).toMatchObject({ params: { sessionId: "sess_1", toolCall: { kind: "edit", status: "pending" } } });
     expect((request as unknown as { params: { options: Array<{ optionId: string }> } }).params.options.map((option) => option.optionId))
       .toEqual(["allow", "allow_always", "deny", "deny_always"]);
+  });
+
+  it("offers questions only to a client that opted in, and reads its answer back", async () => {
+    const replies: unknown[] = [{ answer: "Use Postgres" }, { dismissed: true }];
+    async function open(clientCapabilities: Record<string, unknown>) {
+      const sent: JsonRpcOutgoing[] = [];
+      let ask: ((question: { question: string; options: string[]; multiSelect: boolean }) => Promise<string | null>) | undefined;
+      const connection = new AcpConnection({
+        send: (message) => {
+          sent.push(message);
+          if ("method" in message && message.method === ARCHYMEDES_ASK_METHOD && message.id !== undefined) {
+            void connection.receive({ jsonrpc: "2.0", id: message.id, result: replies.shift() as never });
+          }
+        },
+        createSession: async (input) => {
+          ask = input.ask;
+          return { id: "sess_1", async send() { return { status: "completed" as const, summary: "" }; }, cancel() {}, async setMode() {}, async dispose() {} };
+        },
+      });
+      await connection.receive({ jsonrpc: "2.0", id: 1, method: "initialize", params: { ...initialize, clientCapabilities } });
+      await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/tmp/p" } });
+      return { sent, ask };
+    }
+
+    expect((await open({})).ask).toBeUndefined();
+    const { sent, ask } = await open({ _meta: { archymedes: { questions: true } } });
+    expect(await ask!({ question: "Which database?", options: ["Postgres", "SQLite"], multiSelect: false })).toBe("Use Postgres");
+    expect(await ask!({ question: "Name?", options: [], multiSelect: false })).toBeNull();
+    expect(sent.find((message) => "method" in message && message.method === ARCHYMEDES_ASK_METHOD))
+      .toMatchObject({ params: { sessionId: "sess_1", question: "Which database?", options: ["Postgres", "SQLite"], multiSelect: false } });
   });
 
   it("reads an unknown option id as a denial", () => {

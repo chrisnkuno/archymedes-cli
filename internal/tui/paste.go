@@ -23,6 +23,7 @@ type pasteTarget interface {
 func (m *Model) routePaste(msg tea.Msg, text string) tea.Cmd {
 	switch {
 	case m.approval != nil:
+		m.approval.paste(text)
 		return nil
 	case m.overlay != nil:
 		if t, ok := m.overlay.(pasteTarget); ok {
@@ -35,6 +36,9 @@ func (m *Model) routePaste(msg tea.Msg, text string) tea.Cmd {
 	}
 	if c, ok := m.activeWindow().(capturing); ok && c.capturing() {
 		return nil
+	}
+	if p, ok := msg.(tea.PasteMsg); ok {
+		msg = tea.PasteMsg{Content: pasteText(p.Content)}
 	}
 	return m.input.update(msg)
 }

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -12,7 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 type fakeAgent struct {
@@ -187,7 +189,7 @@ func (f *fakeAgent) Steer(_ context.Context, _ string, text string) (bool, error
 	f.steered = append(f.steered, text)
 	return !f.cannotSteer, nil
 }
-func (f *fakeAgent) Close()               {}
+func (f *fakeAgent) Close() {}
 
 // newTestModel is a connected model at 80x24 with the session already open.
 func newTestModel(t *testing.T) (*Model, *fakeAgent) {
@@ -233,6 +235,21 @@ func run(m *Model, cmd tea.Cmd) {
 	case tea.BatchMsg:
 		for _, c := range msg {
 			run(m, c)
+		}
+	case interface{}:
+		// tea.Sequence's message is an unexported []tea.Cmd: run each in order, as the program does.
+		if v := reflect.ValueOf(msg); v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf((tea.Cmd)(nil)) {
+			for i := range v.Len() {
+				run(m, v.Index(i).Interface().(tea.Cmd))
+			}
+			break
+		}
+		_, next := m.Update(msg)
+		// Animation ticks re-arm themselves forever; following them would never return.
+		switch msg.(type) {
+		case spinner.TickMsg, animTickMsg:
+		default:
+			run(m, next)
 		}
 	default:
 		_, next := m.Update(msg)
@@ -322,6 +339,61 @@ func TestApprovalHoldsTheKeyboardAndEscapeDenies(t *testing.T) {
 	press(m, tea.KeyEnter, 0)
 	if strings.Join(answers, ",") != "deny,allow,allow_always" {
 		t.Fatalf("answers = %q", answers)
+	}
+}
+
+func TestQuestionTakesAnOptionATypedAnswerOrADismissal(t *testing.T) {
+	m, _ := newTestModel(t)
+	var answers []string
+	ask := func(multi bool) {
+		m.Update(agentMsg{acp.NewQuestionRequestForTest("Which database should the app use?", []string{"Postgres", "SQLite", "MySQL"}, multi, func(text string) { answers = append(answers, text) })})
+	}
+	ask(false)
+	if s := screen(m); !strings.Contains(s, "Which database should the app use?") || !strings.Contains(s, "2. SQLite") || !strings.Contains(s, "type your own answer") {
+		t.Fatalf("question not shown:\n%s", s)
+	}
+	typeText(m, "2") // a digit picks
+	ask(false)
+	press(m, tea.KeyDown, 0)
+	press(m, tea.KeyDown, 0)
+	press(m, tea.KeyEnter, 0) // enter takes the highlighted one
+	ask(false)
+	typeText(m, "DuckDB, k?") // letters (j/k too) are an answer of one's own, not navigation
+	press(m, tea.KeyBackspace, 0)
+	press(m, tea.KeyEnter, 0)
+	ask(true)
+	typeText(m, "1")
+	typeText(m, "3")
+	press(m, tea.KeyEnter, 0)
+	ask(false)
+	m.Update(tea.PasteMsg{Content: "pasted answer\n"})
+	press(m, tea.KeyEnter, 0)
+	ask(false)
+	press(m, tea.KeyEscape, 0)
+	want := []string{"SQLite", "MySQL", "DuckDB, k", "Postgres, MySQL", "pasted answer", ""}
+	if strings.Join(answers, "|") != strings.Join(want, "|") {
+		t.Fatalf("answers = %q, want %q", answers, want)
+	}
+	if m.approval != nil || m.input.value() != "" {
+		t.Fatal("the question leaked into the composer or stayed open")
+	}
+}
+
+func TestAModeChosenDuringATurnAppliesBeforeTheNextMessage(t *testing.T) {
+	m, agent := newTestModel(t)
+	agent.cannotSteer = true
+	typeText(m, "first")
+	first := press(m, tea.KeyEnter, 0)
+	press(m, tea.KeyTab, tea.ModShift) // build → auto, during the turn
+	press(m, tea.KeyTab, tea.ModShift) // auto → plan
+	if len(agent.modes) != 0 || m.pendingMode != "plan" || !regexp.MustCompile(`build\s+→\s+plan`).MatchString(screen(m)) {
+		t.Fatalf("modes=%v pending=%q\n%s", agent.modes, m.pendingMode, screen(m))
+	}
+	typeText(m, "second")
+	run(m, press(m, tea.KeyEnter, 0))
+	run(m, first)
+	if strings.Join(agent.modes, ",") != "plan" || m.mode != "plan" || m.pendingMode != "" || len(agent.prompts) != 2 {
+		t.Fatalf("modes=%v mode=%s pending=%q prompts=%q", agent.modes, m.mode, m.pendingMode, agent.prompts)
 	}
 }
 

@@ -1,5 +1,5 @@
 // Package config is where the Go interface keeps what a person changed: the same directory the
-// agent's settings.json lives in (settingsDirectory in packages/archymedes-cli/src/platform/settings.ts),
+// agent's settings.json lives in (settingsDirectory in packages/friday-cli/src/platform/settings.ts),
 // so both halves of the CLI share one place, each in its own file.
 package config
 

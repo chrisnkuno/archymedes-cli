@@ -97,6 +97,8 @@ func DescribeToolCall(toolName string, args map[string]any) string {
 		return `"` + asString(args["query"]) + `"`
 	case "web_fetch":
 		return asString(args["url"])
+	case "ask_user":
+		return asString(args["question"])
 	case "todo_write":
 		if items, ok := args["items"].([]any); ok {
 			return plural(len(items), "step", "steps")
@@ -130,7 +132,7 @@ var (
 	exitLine       = regexp.MustCompile(`^exit (\d+)`)
 	previewURL     = regexp.MustCompile(`https?://\S+`)
 	trailingPunct  = regexp.MustCompile(`[.,;:)\]]+$`)
-	appStatusLine  = regexp.MustCompile(`^(\S+): (starting|running|exited) at (\S+)`)
+	appStatusLine  = regexp.MustCompile(`^(\S+): (starting|running|exited) (?:at (\S+)|(in the background))`)
 	secretCount    = regexp.MustCompile(`^(\d+) possible secret`)
 	todoDone       = regexp.MustCompile(`(?m)^\[x\]`)
 	todoAny        = regexp.MustCompile(`(?m)^\[[ x~]\]`)
@@ -197,6 +199,9 @@ func SummarizeToolResult(toolName, body string, isError bool) string {
 		case 0:
 			return "none"
 		case 1:
+			if entries[0][4] != "" {
+				return entries[0][2] + " in the background"
+			}
 			return entries[0][2] + " at " + entries[0][3]
 		}
 		return fmt.Sprintf("%d applications", len(entries))
@@ -224,6 +229,14 @@ func SummarizeToolResult(toolName, body string, isError bool) string {
 		return plural(lineCount(body), "line", "lines")
 	case "write_file", "edit_file":
 		return TruncateMiddle(firstLine(body), 60)
+	case "ask_user":
+		if answer, ok := strings.CutPrefix(firstLine(body), "The user answered: "); ok {
+			return TruncateMiddle(answer, 60)
+		}
+		if strings.Contains(body, "dismissed the question") {
+			return "dismissed"
+		}
+		return TruncateMiddle(firstLine(body), 48)
 	case "todo_write", "todo_read":
 		done, total := len(todoDone.FindAllString(body, -1)), len(todoAny.FindAllString(body, -1))
 		if total > 0 {

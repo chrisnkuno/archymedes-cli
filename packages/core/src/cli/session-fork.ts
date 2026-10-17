@@ -8,10 +8,15 @@ import { newSessionId, saveSession, type SessionRecord } from "./session";
  * stays exactly as it was and can still be resumed. The copy's checkpoints get refs of their own,
  * so rewinding works in either one and deleting one session's refs never takes the other's trees.
  *
- * Claude Code's own session id is not carried: two Archymedes sessions continuing one Claude
- * conversation would interleave in it. The fork tells Claude what was said instead.
+ * Claude Code's own session id and Codex's thread are not carried: two Archymedes sessions
+ * continuing one engine conversation would interleave in it. The fork tells the engine what was said
+ * instead.
+ *
+ * `freshApprovals` leaves the standing approvals behind: a copy made because another terminal has
+ * the original open is a session of its own, and asks again before anything it has not been
+ * allowed in it.
  */
-export async function forkSession(record: SessionRecord, git: GitRunner = runGit): Promise<SessionRecord> {
+export async function forkSession(record: SessionRecord, git: GitRunner = runGit, options: { freshApprovals?: boolean } = {}): Promise<SessionRecord> {
   const now = Date.now();
   const fork: SessionRecord = {
     ...structuredClone(record),
@@ -23,6 +28,8 @@ export async function forkSession(record: SessionRecord, git: GitRunner = runGit
   };
   delete fork.integrity;
   delete fork.claudeSession;
+  delete fork.codexThread;
+  if (options.freshApprovals) fork.approvals = {};
   delete fork.hostedRecoveryBatchId;
   if (fork.checkpoints?.length) {
     const store = new CheckpointStore(fork.root, path.join(fork.root, ".archymedes", `fork-index-${randomUUID()}`), git, () => fork.id);

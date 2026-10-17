@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/config"
 )
 
 // The Keys app: every action, its key, and a way to change it without editing a file. Enter on a

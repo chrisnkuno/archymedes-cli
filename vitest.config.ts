@@ -2,7 +2,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 /** The suites that drive a real terminal, kept out of the parallel pool. See `projects` below. */
-const PTY_TESTS = "packages/archymedes-cli/src/pty/**/*.test.ts";
+const PTY_TESTS = "packages/friday-cli/src/pty/**/*.test.ts";
 const PRIVATE_CHECKOUTS = ".private/**";
 
 /**

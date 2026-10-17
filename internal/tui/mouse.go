@@ -1,8 +1,9 @@
 package tui
 
 import (
+	"cmp"
 	"fmt"
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -54,6 +55,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		x, y := frame.Get("composer").Pos(msg)
 		m.input.placeCursor(x, y)
 		return nil
+	}
+	if frame.Get("mode").InBounds(msg) {
+		return m.setMode(nextMode(cmp.Or(m.pendingMode, m.mode)))
 	}
 	if frame.Get("notes").InBounds(msg) {
 		return m.runAction("notifications")

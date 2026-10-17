@@ -421,8 +421,9 @@ const FUNCTIONS: Record<string, (args: Value[]) => Value> = {
   p99: (a) => percentile(nonEmpty(statSample(a, "p99"), "p99"), 99),
 
   convert: (a) => {
-    if (typeof a[1] !== "string" || typeof a[2] !== "string") throw new ComputeError('convert(n, "from", "to") needs the units as quoted strings.');
-    return convertUnit(asNumber(a[0], "convert value"), a[1] as unknown as string, a[2] as unknown as string);
+    const [value, from, to] = a;
+    if (typeof from !== "string" || typeof to !== "string") throw new ComputeError('convert(n, "from", "to") needs the units as quoted strings.');
+    return convertUnit(asNumber(value, "convert value"), from, to);
   },
 };
 

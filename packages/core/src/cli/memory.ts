@@ -274,7 +274,7 @@ export function recalledMemoryKey(entry: MemoryEntry): string {
  * The block prepended to a turn.
  *
  * Sent once per thread rather than per turn: the conversation carries it forward, so re-sending it
- * every turn would bill the user for the same paragraph on every message. `archymedes.ts` re-sends it
+ * every turn would bill the user for the same paragraph on every message. `friday.ts` re-sends it
  * only when the set actually changes, which is the other moment the model needs to see it.
  */
 export function memoryPromptBlock(entries: readonly MemoryEntry[]): string {

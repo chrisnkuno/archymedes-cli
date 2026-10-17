@@ -15,7 +15,7 @@ maintaining a second competing set of rules here.
 
 ## Design rules
 
-- Place behavior in its owning module. Keep `archymedes.ts` as application wiring; extract a
+- Place behavior in its owning module. Keep `friday.ts` as application wiring; extract a
   focused handler with explicit inputs when touching a large inline block.
 - Keep parsing, validation, selection and rendering pure. Inject network, filesystem, clock and
   terminal dependencies at their edges. Importing model metadata must not construct a client.

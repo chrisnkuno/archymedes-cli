@@ -1,6 +1,6 @@
 // Package theme is colour as named roles, the only place the Go front end names a colour.
 //
-// The built-in palettes are the same tokens as packages/archymedes-cli/src/theme/theme.ts, so a
+// The built-in palettes are the same tokens as packages/friday-cli/src/theme/theme.ts, so a
 // theme name means the same thing in both front ends while they coexist.
 package theme
 

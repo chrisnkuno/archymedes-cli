@@ -19,10 +19,10 @@ describe("recheck guards", () => {
     const rules = { text: ["text"], render: ["render", "text"], ui: ["ui", "render", "text"] };
     const source = `import { a } from "../text/ansi";\nimport { b } from "../ui/chooser";\nconst c = await import("./markdown");\nimport x from "@archymedes/core";`;
     expect(sectionOf("render/sections.ts", rules)).toBe("render");
-    expect(sectionOf("archymedes.ts", rules)).toBeUndefined();
+    expect(sectionOf("friday.ts", rules)).toBeUndefined();
     expect(sectionOf("pty/harness.ts", rules)).toBeUndefined();
     expect(countLayeringViolations("render/sections.ts", source, rules)).toBe(1);
-    expect(countLayeringViolations("archymedes.ts", `import { b } from "./ui/chooser";`, rules)).toBe(0);
+    expect(countLayeringViolations("friday.ts", `import { b } from "./ui/chooser";`, rules)).toBe(0);
     expect(countLayeringViolations("text/ansi.ts", `import { b } from "../render/banner";`, rules)).toBe(1);
   });
 

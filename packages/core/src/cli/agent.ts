@@ -9,6 +9,7 @@ import { agentMessagePromptParts, BoundedAgentRuntime, type SteeringChannel, typ
 import { affordableOutputTokens, approximateInputTokens, priceActualModelUsage, type ModelPriceCatalog } from "../model-cost";
 import type { ModelUsage } from "../providers/model";
 import type { ExaSearchClient } from "../providers/exa";
+import type { WebSearchBackend } from "../providers/web-search";
 import { CheckpointStore, type Checkpoint, type GitRunner } from "./checkpoints";
 import { capabilitiesForMode, PermissionLedger, type ApprovalPrompt, type ArchymedesMode } from "./permissions";
 import { loadMemories, memoryPromptBlock, recallMemories, recalledMemoryKey } from "./memory";
@@ -40,7 +41,7 @@ import { goalJudgePrompt, parseGoalVerdict, type GoalVerdict } from "./goal";
 import { describeReviewTarget, parseReview, parseReviewTarget, reviewPatch, reviewPrompt, reviewTranscript, type ReviewResult } from "./review";
 import type { HookGateOutcome } from "../hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
-import { createArchymedesTools, scanWorkspaceForSecrets, TodoList, type DelegateResult, type DelegateRunner, type PlacedSecretFinding, type TodoItem } from "./tools";
+import { createArchymedesTools, scanWorkspaceForSecrets, TodoList, type DelegateResult, type DelegateRunner, type PlacedSecretFinding, type TodoItem, type AskUser } from "./tools";
 import type { Expense } from "./cost";
 import { predictAgentUsage, type AgentCostPrediction } from "./cost";
 import { LocalWorkspace, type ArchymedesWorkspace } from "./backends";
@@ -76,6 +77,10 @@ export type ArchymedesAgentOptions = {
    */
   workspace?: ArchymedesWorkspace;
   search?: ExaSearchClient;
+  /** Search without Exa: offered as `web_search` when `search` is absent (providers/web-search.ts). */
+  webSearch?: WebSearchBackend;
+  /** Questions to the person, when a client can show them: offered as `ask_user`. */
+  ask?: AskUser;
   git?: GitRunner;
   limits?: WorkspaceLimits;
   /** Reported as the session unfolds: tool calls, model turns, checkpoints. */
@@ -641,6 +646,8 @@ export class ArchymedesAgent {
       workspace: this.workspace,
       todos: this.todoList,
       search: this.options.search,
+      webSearch: this.options.webSearch,
+      ask: this.options.ask,
       onExpense: this.options.onExpense,
       instructions: this.nestedInstructions,
       externalToolProviders: externalTooling?.providers,
@@ -728,6 +735,8 @@ export class ArchymedesAgent {
       workspace: this.workspace,
       todos: this.todoList,
       search: this.options.search,
+      webSearch: this.options.webSearch,
+      ask: this.options.ask,
       onExpense: this.options.onExpense,
       instructions: this.nestedInstructions,
       externalToolProviders: externalTooling?.providers,
@@ -973,6 +982,8 @@ export class ArchymedesAgent {
         workspace: this.workspace,
         todos: this.todoList,
         search: this.options.search,
+        webSearch: this.options.webSearch,
+        ask: this.options.ask,
         onExpense: this.options.onExpense,
         instructions: this.nestedInstructions,
         externalToolProviders: externalTooling?.providers,

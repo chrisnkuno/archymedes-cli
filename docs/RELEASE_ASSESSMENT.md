@@ -43,7 +43,7 @@ pseudo-terminal coverage. Keep these foundations.
    usable prompt, cross-process resume — on a small (6-file) and a large (600-file) repository,
    writing `benchmarks/journeys/latest.json` with Node version, platform, sample count and a
    `model: "stub"` marker. A lean two-sample pass runs in the suite as a structural-regression
-   guard (`packages/archymedes-cli/src/pty/journeys.test.ts`). Still to do: run it against a live
+   guard (`packages/friday-cli/src/pty/journeys.test.ts`). Still to do: run it against a live
    provider for real latency, add an approval-latency journey, and record it per CI platform. The
    stub numbers are an Archymedes-only regression signal, not a comparison against other tools;
    the bundled 91/100 `reliability/latest.json` is a dated single-model six-case report and names
@@ -56,7 +56,7 @@ pseudo-terminal coverage. Keep these foundations.
    introduces a side effect fails. Next: lift the read-only commands that touch the ledger
    (`/cost`, `/diff`) behind the same context, then the mutating ones (`/undo`, `/retry`,
    `/model`) once integration tests pin the approval, cost and checkpoint invariants they depend
-   on. `archymedes.ts` is still ~4,800 lines; this is a multi-release path, not a single change.
+   on. `friday.ts` is still ~4,800 lines; this is a multi-release path, not a single change.
 3. **Make review the center of the workspace.** _Started._ `/task` (`task-view.ts`) is a pure
    renderer that assembles the session's request, the agent's plan (`/todos`), every file changed
    with its line delta, every verification outcome, and the blockers between here and a finished

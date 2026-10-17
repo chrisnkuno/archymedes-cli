@@ -9,7 +9,7 @@ import (
 )
 
 // testdata/geometry.json is renderGeometry's output from the TypeScript front end; regenerate it
-// from packages/archymedes-cli/src/render/identity.ts if the mark ever changes there.
+// from packages/friday-cli/src/render/identity.ts if the mark ever changes there.
 func TestGeometryMatchesTheTypeScriptMark(t *testing.T) {
 	data, err := os.ReadFile("testdata/geometry.json")
 	if err != nil {

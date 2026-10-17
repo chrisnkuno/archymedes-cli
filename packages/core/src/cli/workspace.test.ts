@@ -245,7 +245,29 @@ describe("edit robustness", () => {
 
   it("names the nearest similar line when oldText is not found", () => {
     expect(() => applyTextEdits("one\n    const total = price * qty;\nthree\n", [{ oldText: "const total = price * quantity;", newText: "x" }], "f.ts"))
-      .toThrow(/oldText was not found in f\.ts\. Closest line is 2: "    const total = price \* qty;"/);
+      .toThrow(/oldText was not found in f\.ts\. Closest line is 2, verbatim:\n    const total = price \* qty;\n/);
+  });
+
+  // The package.json miss that looped until cancelled: a script line holding \" escapes.
+  const packageJson = '{\n  "scripts": {\n    "test": "echo \\"Error: no test specified\\" && exit 1"\n  }\n}\n';
+
+  it("shows the closest line verbatim, never JSON-encoded with doubled backslashes", () => {
+    expect(() => applyTextEdits(packageJson, [{ oldText: '"test": "echo Error: no test specified && exit 1"', newText: "x" }], "package.json"))
+      .toThrow('Closest line is 3, verbatim:\n    "test": "echo \\"Error: no test specified\\" && exit 1"\n');
+  });
+
+  it("undoes one extra level of escaping in oldText and newText alike, and says so", () => {
+    const result = applyTextEdits(packageJson, [{
+      oldText: '"test": "echo \\\\\\"Error: no test specified\\\\\\" && exit 1"',
+      newText: '"test": "node --test",\\n    \\"start\\": \\"npx http-server\\"',
+    }], "package.json");
+    expect(result.content).toBe('{\n  "scripts": {\n    "test": "node --test",\n    "start": "npx http-server"\n  }\n}\n');
+    expect(result.notes?.[0]).toMatch(/one level of backslash escaping/);
+  });
+
+  it("quotes the file's exact text when oldText drops the file's escapes", () => {
+    expect(() => applyTextEdits(packageJson, [{ oldText: '"test": "echo "Error: no test specified" && exit 1"', newText: "x" }], "package.json"))
+      .toThrow('matches at line 3 when backslashes are ignored: the file escapes it differently. The file\'s text, verbatim:\n"test": "echo \\"Error: no test specified\\" && exit 1"\n');
   });
 
   it("applies several edits in order, all or nothing", async () => {

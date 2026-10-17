@@ -619,7 +619,7 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     metric: "share of rebuild",
     budget: { min: 0.02, max: 0.4 },
     baseline: { value: 0.17, on: "2026-08-22" },
-    evidence: "packages/archymedes-state/src/bin/archymedes-state-bench.rs · `sources.shareOfIndex`",
+    evidence: "packages/archymedes-state/src/bin/friday-state-bench.rs · `sources.shareOfIndex`",
     remediation:
       "Reported by `bun run bench:state`. This is the work the benchmark could not see until its corpus carried integrity digests and journals: canonicalize + SHA-256 per snapshot, and a hash-chain verification per journal event. A rise means parsing or verification grew; a fall towards zero probably means the corpus stopped being representative again, which is the failure that hid this work in the first place.",
   },
@@ -684,9 +684,9 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     what: "Time from process start to an interactive prompt",
     metric: "milliseconds",
     budget: { max: 200 },
-    evidence: "packages/archymedes-cli/src/archymedes.ts, tooling/build/cli-bundle.ts",
+    evidence: "packages/friday-cli/src/friday.ts, tooling/build/cli-bundle.ts",
     remediation:
-      "Two mechanisms, and both are load-bearing. The bundler must keep `splitting: true` with `.mjs` chunk naming, or Bun hoists every dynamically imported subtree into the entry file and the provider SDKs execute on `archymedes --help` (entry 3.90 MB vs 0.94 MB; 0.17s vs 0.12s measured). And the launcher (dist/archymedes.mjs) must stay a separate tiny file that calls module.enableCompileCache() before *dynamically* importing the main bundle — a static import is hoisted above the call and silently disables it. Measure with: `bun run build:cli` then time `node dist/archymedes.mjs --help`.",
+      "Two mechanisms, and both are load-bearing. The bundler must keep `splitting: true` with `.mjs` chunk naming, or Bun hoists every dynamically imported subtree into the entry file and the provider SDKs execute on `archymedes --help` (entry 3.90 MB vs 0.94 MB; 0.17s vs 0.12s measured). And the launcher (dist/friday.mjs) must stay a separate tiny file that calls module.enableCompileCache() before *dynamically* importing the main bundle — a static import is hoisted above the call and silently disables it. Measure with: `bun run build:cli` then time `node dist/friday.mjs --help`.",
   },
 ];
 

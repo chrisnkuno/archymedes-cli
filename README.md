@@ -1,14 +1,14 @@
-# Archymedes CLI
+# Friday CLI
 
 A coding agent that runs in your terminal — against your working tree, or inside an isolated
 remote sandbox when the work shouldn't touch your machine.
 
 ```bash
-npm install -g archymedes-cli
-archymedes "fix the failing test in src/parser.ts"
+npm install -g @archymedes/friday
+friday "fix the failing test in src/parser.ts"
 ```
 
-Open source under the Apache License 2.0. Archymedes CLI began as a fork of the Nova coding agent
+Open source under the Apache License 2.0. Friday CLI began as a fork of the Nova coding agent
 (MIT) and has since been rebranded end to end; see `NOTICE`.
 
 ## Providers
@@ -137,15 +137,15 @@ spent, and a one-shot `--json` run reports its own cost.
 
 ## Languages
 
-The control surfaces are localized into 16 languages — `archymedes --language <code>` or
-`/settings`. See [`packages/archymedes-cli/I18N.md`](packages/archymedes-cli/I18N.md).
+The control surfaces are localized into 16 languages — `friday --language <code>` or
+`/settings`. See [`packages/friday-cli/I18N.md`](packages/friday-cli/I18N.md).
 
 ## Layout
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `cmd/archymedes`, `internal/` | `@archymedes/cli-<platform>-<arch>` (Go) | The interactive interface: Bubble Tea v2, driving the agent over ACP. |
-| `packages/archymedes-cli` | `archymedes-cli` | The agent (`archymedes acp`, one-shot, `--json`, `settings`, `doctor`) and the npm launcher that runs the Go interface. |
+| `cmd/friday`, `internal/` | `@archymedes/friday-<platform>-<arch>` (Go) | The interactive interface: Bubble Tea v2, driving the agent over ACP. |
+| `packages/friday-cli` | `@archymedes/friday` | The agent (`friday acp`, one-shot, `--json`, `settings`, `doctor`) and the npm launcher that runs the Go interface. |
 | `packages/core` | `@archymedes/core` | Provider-neutral agent runtime, model adapters, workspace backends, cost accounting. Internal CLI-only code lives under `src/cli/`. |
 | `packages/archymedes-state` | `archymedes-state` (Rust) | The local, rebuildable history and memory index. Optional at runtime — the CLI falls back to a portable TypeScript projection. |
 | `packages/free-gateway` | `@archymedes/free-gateway` (private) | Separately deployed server behind `archymedes --free`: holds the OpenRouter key, serves only verified free models, rate limits. |
@@ -169,7 +169,7 @@ bun run build:state           # cargo build the Rust state binary (optional)
 ### The interface is Go
 
 The terminal interface is a Go program on [Bubble Tea v2](https://github.com/charmbracelet/bubbletea)
-(`cmd/archymedes`, `internal/`). The agent behind it is still the TypeScript package, run as
+(`cmd/friday`, `internal/`). The agent behind it is still the TypeScript package, run as
 `archymedes acp` and driven over the Agent Client Protocol with Archymedes's `_archymedes/*`
 extensions; non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
 `settings`) go to the agent unchanged. There is no TypeScript interface: the agent run with no
@@ -179,10 +179,10 @@ agent still serves every non-interactive mode, and asked for the interface it sa
 none and how to install it.
 
 ```bash
-bun run archymedes                      # from a checkout: go run ./cmd/archymedes (`bun run dev` too)
+bun run archymedes                      # from a checkout: go run ./cmd/friday (`bun run dev` too)
 go test ./...                           # Go tests; `bun run check` runs these too
 bun run build:go                        # all six platform binaries → artifacts/npm
-ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/archymedes   # log every protocol frame
+ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/friday   # log every protocol frame
 ```
 
 The interface is a small desktop: a top bar with a `◇` start menu (ctrl+space — finds any app,

@@ -35,8 +35,8 @@ func fakeAgent() {
 		params, _ := f["params"].(map[string]any)
 		switch method {
 		case "initialize":
-			events := params["clientCapabilities"].(map[string]any)["_meta"].(map[string]any)["archymedes"].(map[string]any)["events"]
-			if events != true {
+			archymedes := params["clientCapabilities"].(map[string]any)["_meta"].(map[string]any)["archymedes"].(map[string]any)
+			if archymedes["events"] != true || archymedes["questions"] != true {
 				send(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": -32602, "message": "extension not requested"}})
 				continue
 			}
@@ -45,6 +45,20 @@ func fakeAgent() {
 			send(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"sessionId": "s1", "_meta": map[string]any{"archymedes": map[string]any{"model": "m1", "provider": "free", "mode": "build"}}}})
 		case "session/prompt":
 			text := params["prompt"].([]any)[0].(map[string]any)["text"].(string)
+			if text == "ask" {
+				send(map[string]any{"jsonrpc": "2.0", "id": "archymedes-9", "method": AskMethod, "params": map[string]any{"sessionId": "s1", "toolCallId": "c9", "question": "Which database?", "options": []any{"Postgres", "SQLite"}, "multiSelect": false}})
+				var answer map[string]any
+				for in.Scan() {
+					json.Unmarshal(in.Bytes(), &answer)
+					if answer["id"] == "archymedes-9" {
+						break
+					}
+				}
+				reply, _ := json.Marshal(answer["result"])
+				send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{"update": map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": string(reply)}}}})
+				send(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"stopReason": "end_turn"}})
+				continue
+			}
 			if text == "crash" {
 				fmt.Fprintln(os.Stderr, "boom: provider exploded")
 				os.Exit(3)
@@ -119,6 +133,41 @@ func TestPromptStreamsTextEventsAndRoundTripsApproval(t *testing.T) {
 				}
 				m.Answer("allow")
 				m.Answer("deny") // a second answer must not reach the agent
+			case Exited:
+				t.Fatalf("agent exited: %v %s", m.Err, m.Stderr)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out")
+		}
+	}
+}
+
+func TestQuestionRoundTripsItsAnswer(t *testing.T) {
+	c := startFake(t)
+	ctx := context.Background()
+	session, err := c.NewSession(ctx, "/tmp", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = c.Prompt(ctx, session.ID, "ask") }()
+	var text strings.Builder
+	for {
+		select {
+		case msg := <-c.Messages():
+			switch m := msg.(type) {
+			case QuestionRequest:
+				if m.Question != "Which database?" || len(m.Options) != 2 || m.ToolCallID != "c9" {
+					t.Fatalf("question = %+v", m)
+				}
+				m.Answer("Postgres")
+				m.Answer("SQLite") // a second answer must not reach the agent
+			case TextChunk:
+				text.WriteString(m.Text)
+			case TurnEnded:
+				if text.String() != `{"answer":"Postgres"}` {
+					t.Fatalf("agent read %q", text.String())
+				}
+				return
 			case Exited:
 				t.Fatalf("agent exited: %v %s", m.Err, m.Stderr)
 			}

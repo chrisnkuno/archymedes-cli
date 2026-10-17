@@ -60,7 +60,7 @@ These modules exist. `free-cache` tests live in `model-fetch.test.ts`; resume an
 
 Integrate with existing `model-list.ts` / `model-fetch.ts` caching rather than creating two competing
 catalog caches. Keep catalog loading lazy; normal startup and non-model commands must stay offline.
-Coordinate edits to `archymedes.ts` with the ongoing handler extraction; new policy does not belong there.
+Coordinate edits to `friday.ts` with the ongoing handler extraction; new policy does not belong there.
 
 ## Catalog contract
 

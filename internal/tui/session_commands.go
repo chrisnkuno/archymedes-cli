@@ -11,8 +11,8 @@ import (
 	"charm.land/lipgloss/v2/list"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/render"
 )
 
 // /cost, /diff, /undo, /todos: the agent answers with data, and the answer becomes a block in the

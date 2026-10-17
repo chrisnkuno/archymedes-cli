@@ -12,8 +12,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // The Connect dialog: one flow for setting up and switching providers, used on first run, from the

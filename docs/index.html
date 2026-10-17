@@ -119,12 +119,12 @@
 <div class="wrap">
 
   <nav>
-    <div class="brand"><span class="ring"></span> archymedes</div>
+    <div class="brand"><span class="ring"></span> Friday</div>
     <div class="links">
       <a href="#features">Features</a>
       <a href="#demo">Demo</a>
       <a href="#quickstart">Quickstart</a>
-      <a href="https://www.npmjs.com/package/archymedes-cli">npm</a>
+      <a href="https://www.npmjs.com/package/@archymedes/friday">npm</a>
       <a href="https://github.com/chrisnkuno/archymedes-cli">GitHub</a>
     </div>
   </nav>
@@ -136,8 +136,8 @@
       guarded execution, recoverable edits, explicit cost, durable history.
       Your keys, your machine, your terminal.
     </p>
-    <button class="install" onclick="navigator.clipboard.writeText('npm install -g archymedes-cli')">
-      <span class="prompt">$</span> npm install -g archymedes-cli
+    <button class="install" onclick="navigator.clipboard.writeText('npm install -g @archymedes/friday')">
+      <span class="prompt">$</span> npm install -g @archymedes/friday
     </button>
     <div class="cta-row">
       <a href="#quickstart">Get started →</a>
@@ -154,14 +154,14 @@
       <div class="card"><h3>Explicit cost</h3><p>Live spend in your currency, priced from a dated per-model catalog with cached-token discounts. Models without pricing say so instead of guessing.</p></div>
       <div class="card"><h3>Durable history</h3><p>Sessions are saved after every tool step, so a killed process resumes where it stopped — not where it started.</p></div>
       <div class="card"><h3>Your providers, your keys</h3><p>Anthropic, OpenAI, Gemini, Grok, DeepSeek, Mistral, Groq, Ollama (local), any OpenAI-compatible endpoint, and free OpenRouter models with your own key. Keys stay on your machine.</p></div>
-      <div class="card"><h3>16 languages</h3><p>The interface speaks 16 languages out of the box: <code>archymedes --language &lt;code&gt;</code>.</p></div>
+      <div class="card"><h3>16 languages</h3><p>The interface speaks 16 languages out of the box: <code>friday --language &lt;code&gt;</code>.</p></div>
     </div>
   </section>
 
   <section id="demo">
     <h2>See a turn</h2>
     <p class="lede">A real session shape — request, guarded edits, verification, review — as it renders in the terminal.</p>
-    <pre class="term"><span class="t-dim">$</span> archymedes <span class="t-white">"fix the failing test in src/parser.ts"</span>
+    <pre class="term"><span class="t-dim">$</span> friday <span class="t-white">"fix the failing test in src/parser.ts"</span>
 
 <span class="t-dim">◷ planning</span>
 <span class="t-bronze">● edit</span> src/parser.ts        <span class="t-dim">-4 +9</span>  <span class="t-dim">(snapshotted)</span>
@@ -176,8 +176,8 @@
     <h2>Quickstart</h2>
     <p class="lede">Node 22+ on macOS, Linux, or Windows.</p>
     <ol class="steps">
-      <li><code>npm install -g archymedes-cli</code></li>
-      <li>Run <code>archymedes</code> in your project, pick a provider, paste a key — stored locally, nothing proxied. <code>&lt;PROVIDER&gt;_MODEL</code> chooses a model.</li>
+      <li><code>npm install -g @archymedes/friday</code></li>
+      <li>Run <code>friday</code> in your project, pick a provider, paste a key — stored locally, nothing proxied. <code>&lt;PROVIDER&gt;_MODEL</code> chooses a model.</li>
       <li>Give it a task: <i>“fix the failing test in src/parser.ts.”</i></li>
       <li>Review with <code>/task</code>, inspect with <code>/diff</code>, undo with <code>/undo</code>.</li>
       <li>Prefer windows? <a href="https://github.com/soniaineza/Archymedes-desktop/releases">Install Archymedes Desktop</a> and open any folder as a workspace.</li>
@@ -190,9 +190,9 @@
   </section>
 
   <footer>
-    <div>Apache-2.0 · Archymedes began as a fork of the Nova coding agent (MIT)</div>
+    <div>Apache-2.0 · Friday began as a fork of the Nova coding agent (MIT)</div>
     <div>
-      <a href="https://www.npmjs.com/package/archymedes-cli">npm</a> ·
+      <a href="https://www.npmjs.com/package/@archymedes/friday">npm</a> ·
       <a href="https://github.com/chrisnkuno/archymedes-cli">CLI source</a> ·
       <a href="https://github.com/soniaineza/Archymedes-desktop">Desktop source</a> ·
       <a href="https://github.com/chrisnkuno/archymedes-cli/issues">Issues</a>

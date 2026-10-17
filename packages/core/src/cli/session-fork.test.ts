@@ -42,6 +42,22 @@ describe("forking a session", () => {
     expect(await loadSession(root, id)).toEqual(before);
   });
 
+  it("shares no engine conversation with the original, and leaves approvals behind when asked to", async () => {
+    const original: SessionRecord = {
+      schemaVersion: 2, revision: 0, id: newSessionId(), createdAt: 1, updatedAt: 1, root, title: "t",
+      messages: [{ role: "user", content: "hi" }], approvals: { "v2:run_command:npm test": "allow" }, totalRwf: 0,
+      claudeSession: "claude-1", codexThread: "thread-1",
+    };
+    await saveSession(original);
+    const kept = await forkSession((await loadSession(root, original.id))!);
+    expect(kept.codexThread).toBeUndefined();
+    expect(kept.claudeSession).toBeUndefined();
+    expect(kept.approvals).toEqual(original.approvals);
+    const fresh = await forkSession((await loadSession(root, original.id))!, undefined, { freshApprovals: true });
+    expect((await loadSession(root, fresh.id))?.approvals).toEqual({});
+    expect((await loadSession(root, original.id))?.approvals).toEqual(original.approvals);
+  });
+
   it("does not pile up suffixes on a fork of a fork", () => {
     expect(forkTitle("a (fork)")).toBe("a (fork)");
   });

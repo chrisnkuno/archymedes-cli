@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CLI = path.join(ROOT, "packages/archymedes-cli");
+const CLI = path.join(ROOT, "packages/friday-cli");
 const OUT = path.join(ROOT, "artifacts", "npm");
 export const SCOPE = "@archymedes";
 
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     await fs.rm(dir, { recursive: true, force: true });
     await fs.mkdir(path.join(dir, "bin"), { recursive: true });
     const binary = path.join(dir, "bin", target.platform === "win32" ? "archymedes.exe" : "archymedes");
-    const built = spawnSync("go", ["build", "-trimpath", "-ldflags", `-s -w -X main.version=${version}`, "-o", binary, "./cmd/archymedes"], {
+    const built = spawnSync("go", ["build", "-trimpath", "-ldflags", `-s -w -X main.version=${version}`, "-o", binary, "./cmd/friday"], {
       cwd: ROOT,
       stdio: "inherit",
       env: { ...process.env, CGO_ENABLED: "0", GOOS: target.goos, GOARCH: target.goarch },

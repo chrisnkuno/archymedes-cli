@@ -10,8 +10,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/render"
 )
 
 // /rewind: every turn of the session that can be returned to, newest first, with what the selected

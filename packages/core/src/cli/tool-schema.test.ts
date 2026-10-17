@@ -177,7 +177,7 @@ const GOLDEN_CONTRACT = [
   { name: "write_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path", "content"], properties: ["path", "content"] },
   { name: "edit_file", effect: "workspace", capabilityId: "workspace.files", requiresApproval: true, parallelSafe: false, required: ["path"], properties: ["path", "oldText", "newText", "replaceAll", "edits"] },
   { name: "run_command", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command"], properties: ["command", "timeoutSeconds", "timeoutMs"] },
-  { name: "start_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command", "port"], properties: ["command", "port", "directory", "path", "timeoutMs"] },
+  { name: "start_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["command"], properties: ["command", "port", "directory", "path", "timeoutMs"] },
   { name: "application_status", effect: "none", capabilityId: "workspace.files.read", requiresApproval: false, parallelSafe: true, required: [], properties: ["id"] },
   { name: "stop_application", effect: "workspace", capabilityId: "workspace.terminal", requiresApproval: true, parallelSafe: false, required: ["id"], properties: ["id"] },
   // Defender-only by capability: current native knowledge and the broad fallback playbooks are
@@ -236,6 +236,17 @@ describe("the tool contract is pinned", () => {
     }
   });
 
+  it("adds ask_user only when a client can show the question, in every mode's capability", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-golden-"));
+    try {
+      const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), ask: async () => null });
+      const ask = tools.find((tool) => tool.name === "ask_user");
+      expect(ask).toMatchObject({ effect: "none", capabilityId: "reasoning.plan", requiresApproval: false, parallelSafe: false, inputSchema: { required: ["question"] } });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("adds web_search only when a search client is configured", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-golden-"));
     try {
@@ -246,6 +257,17 @@ describe("the tool contract is pinned", () => {
       });
       const search = withSearch.find((tool) => tool.name === "web_search");
       expect(search).toMatchObject({ effect: "none", capabilityId: "web.research", requiresApproval: false, parallelSafe: true });
+      // Without Exa, a keyless or keyed backend offers the same tool under the same authority…
+      const webSearch = { label: "test", search: async () => ({ provider: "test", results: [] }) };
+      const keyless = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), webSearch });
+      const plain = keyless.find((tool) => tool.name === "web_search");
+      expect(plain).toMatchObject({ effect: "none", capabilityId: "web.research", requiresApproval: false, parallelSafe: true });
+      expect(Object.keys((plain!.inputSchema as ToolInputSchema).properties ?? {})).toEqual(["query", "numResults", "includeDomains", "excludeDomains"]);
+      expect(keyless.some((tool) => tool.name === "deep_research")).toBe(false);
+      // …and with both, Exa's is the one: never two tools of one name.
+      const both = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), search: { search: async () => ({ results: [] }) } as never, webSearch });
+      expect(both.filter((tool) => tool.name === "web_search")).toHaveLength(1);
+      expect(both.some((tool) => tool.name === "deep_research")).toBe(true);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

@@ -190,6 +190,7 @@ function leanRules(toolNames: readonly string[]): string {
     "- Requests are rationed: every turn resends the whole conversation, so finish in as few turns as the task allows.",
     "- Put independent tool calls in the same turn: read several files at once, run several searches at once, edit different files together. Wait for a result only when the next call depends on it.",
     ...(has("todo_write") ? ["- For multi-step work call todo_write once, and update it alongside real work, never as a turn of its own."] : []),
+    ...(has("ask_user") ? ["- When a decision is the user's (an approach, a name, a missing requirement), ask with ask_user instead of guessing or ending the turn on a question."] : []),
     ...(has("compute") ? ["- Numbers in your answer (percentages, totals, conversions) go through the compute tool."] : []),
     "- An error is information about the problem, not a reason to retry the same thing.",
     ...(has("start_application") ? ["- Report an app as running only after start_application verifies it is reachable."] : []),

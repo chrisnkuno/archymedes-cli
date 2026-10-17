@@ -13,6 +13,9 @@ const ProtocolVersion = 1
 // EventMethod is the extension notification (`ARCHYMEDES_EVENT_METHOD` in core/cli/acp.ts).
 const EventMethod = "_archymedes/event"
 
+// AskMethod is the agent's question for the human; the client opts in with the questions capability.
+const AskMethod = "_archymedes/session/ask"
+
 // Modes are the agent's capability sets, in the order the agent lists them.
 var Modes = []string{"plan", "build", "auto", "defender"}
 
@@ -44,6 +47,9 @@ type SessionInfo struct {
 	// Workspace is where the work runs: local, docker or e2b.
 	Workspace      string `json:"workspace"`
 	WorkspaceLabel string `json:"workspaceLabel"`
+	// Notice is said once when the session opened is not quite the one asked for: a session open
+	// in another terminal is resumed as a copy of it.
+	Notice string `json:"notice"`
 }
 
 // Session is what `session/new` returned.
@@ -160,6 +166,28 @@ func (r PermissionRequest) Answer(optionID string) {
 	if r.answer != nil {
 		r.answer(optionID)
 	}
+}
+
+// QuestionRequest is the agent asking the human a question (ask_user, or an engine's own). Options
+// are suggestions; any text is an answer. Answer exactly once; an empty answer dismisses it.
+type QuestionRequest struct {
+	ToolCallID  string
+	Question    string
+	Options     []string
+	MultiSelect bool
+	answer      func(text string)
+}
+
+// Answer replies to the agent. Calling it more than once has no further effect.
+func (r QuestionRequest) Answer(text string) {
+	if r.answer != nil {
+		r.answer(text)
+	}
+}
+
+// NewQuestionRequestForTest builds a question whose answer goes to answer, for front-end tests.
+func NewQuestionRequestForTest(question string, options []string, multiSelect bool, answer func(string)) QuestionRequest {
+	return QuestionRequest{Question: question, Options: options, MultiSelect: multiSelect, answer: answer}
 }
 
 // Exited is the agent process ending; Err is nil for a clean exit after Close.
@@ -350,4 +378,6 @@ type SessionSummary struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	UpdatedAt int64  `json:"updatedAt"` // milliseconds since the epoch
+	// OpenElsewhere: another terminal has it open, so resuming it opens a copy.
+	OpenElsewhere bool `json:"openElsewhere"`
 }

@@ -28,7 +28,7 @@ esac
 cd "$REPO"
 if [ "$EFFORT" = default ]; then unset ARCHYMEDES_REASONING; else export ARCHYMEDES_REASONING="$EFFORT"; fi
 START=$(date +%s)
-FREE_MODEL="$MODEL" timeout "$LIMIT" bun run packages/archymedes-cli/src/archymedes.ts --free --auto --cwd "$DIR" --json "$PROMPT" > "$LOG" 2>/dev/null
+FREE_MODEL="$MODEL" timeout "$LIMIT" bun run packages/friday-cli/src/friday.ts --free --auto --cwd "$DIR" --json "$PROMPT" > "$LOG" 2>/dev/null
 END=$(date +%s)
 
 cd "$DIR"

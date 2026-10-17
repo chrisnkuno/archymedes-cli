@@ -12,7 +12,7 @@ keyed by width and version), drawing fixed regions on the alt screen: header, tr
 list, input box, status bar. Keep that architecture. Every colour comes from a theme role in
 `internal/theme`; the seven built-in palettes match the TypeScript ones and `archymedes-blue` is the
 default. The identity is Archymedes's own, not Charm's: the nested-tetrahedra mark from
-`packages/archymedes-cli/src/render/identity.ts`, a calm Solarized ground, and type that reads at a
+`packages/friday-cli/src/render/identity.ts`, a calm Solarized ground, and type that reads at a
 glance. Port that mark rather than inventing a new logo, and keep a version of every view that
 works on a 16-colour terminal and in a light theme (`parchment`).
 
@@ -54,6 +54,6 @@ would hide the bug. Tool output stays escape-stripped. Width math uses `x/ansi`,
 Animation runs only while something animates (the landing mark while the transcript is empty, the
 spinner during a turn), so an idle session does not repaint. Keep files under 400 lines and pure
 renderers in `internal/render`. Verify with `go test -race ./...`, the PTY test
-`packages/archymedes-cli/src/pty/go-frontend.test.ts`, and a look at real screens at 100x30 and
+`packages/friday-cli/src/pty/go-frontend.test.ts`, and a look at real screens at 100x30 and
 50x16, then record the evidence in the tracker. Features that need the agent to do something new
 (switching models, resuming from a list) are out of scope for a design pass; note them, do not fake them.

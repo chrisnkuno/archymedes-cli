@@ -19,10 +19,10 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/acp"
-	"github.com/chrisnkuno/archymedes-cli/internal/config"
-	"github.com/chrisnkuno/archymedes-cli/internal/render"
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/render"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // Agent is the running agent as the model needs it; *acp.Client implements it.
@@ -106,7 +106,10 @@ type Model struct {
 	tr       *transcript
 	input    composer
 	approval *approval
-	overlay  overlay // a dialog over the focused window
+	// pendingMode is a mode chosen during a turn: the agent changes mode between turns, so it is
+	// applied the moment this one ends, before anything queued is sent.
+	pendingMode string
+	overlay     overlay // a dialog over the focused window
 	// windows are the open apps beside Chat; active is the focused one (0 = Chat, i = windows[i-1]).
 	windows  []window
 	active   int
@@ -152,6 +155,9 @@ type Model struct {
 	keyOverrides map[string][]string
 	// startupNote is said once the interface is up (a toast), e.g. a keys file that could not be read.
 	startupNote string
+	// shiftEnter: the terminal tells shift+enter from enter (it answered the keyboard enhancement
+	// request), so that is the newline key worth showing.
+	shiftEnter bool
 	// recentSessions is this project's stored sessions, newest first, once read.
 	recentSessions []acp.SessionSummary
 	filesLoading   bool
@@ -310,6 +316,9 @@ func (m *Model) animate() tea.Cmd {
 		m.animated = true
 		cmds = append(cmds, animTick())
 	}
+	if s, ok := m.activeWindow().(*showcaseApp); ok {
+		cmds = append(cmds, s.wake()) // brought back to the front: moving again
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -353,7 +362,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.sel.clear()
 		m.input.setWidth(m.width - 4)
-		m.input.fit()
 		if g := m.galleryWindow(); g != nil {
 			return m, g.relayout(m)
 		}
@@ -391,6 +399,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
+	case showcaseTickMsg:
+		return m, m.showcaseTicked()
 	case animTickMsg:
 		if !m.landingVisible() {
 			m.animated = false
@@ -519,6 +529,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.session.Info.Mode != "" {
 			m.mode = msg.session.Info.Mode
 		}
+		if msg.session.Info.Notice != "" {
+			m.notice(noticeInfo, msg.session.Info.Notice)
+		}
 		if m.opts.Prompt != "" {
 			m.queue = append([]string{m.opts.Prompt}, m.queue...)
 		}
@@ -560,6 +573,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = msg.mode
 		return m, m.toast(toastInfo, "Mode: "+msg.mode+" — "+modeBlurb[msg.mode])
+	case tea.KeyboardEnhancementsMsg:
+		m.shiftEnter = msg.Flags != 0
+		return m, nil
 	case tea.PasteMsg:
 		return m, m.routePaste(msg, msg.Content)
 	case tea.ClipboardMsg:
@@ -679,19 +695,30 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 	}
 	m.phase = ready
 	tip := m.afterFirstTurn()
+	// A mode chosen during the turn goes first: whatever is sent next runs under it.
+	var modeChange tea.Cmd
+	if m.pendingMode != "" {
+		modeChange = m.setMode(m.pendingMode)
+	}
+	then := func(cmds ...tea.Cmd) tea.Cmd {
+		if modeChange == nil {
+			return tea.Batch(cmds...)
+		}
+		return tea.Sequence(modeChange, tea.Batch(cmds...))
+	}
 	if m.goal != nil && len(m.queue) == 0 {
 		if msg.err != nil {
 			m.goal = nil // a failed turn ends the goal: repeating it would fail the same way
 		} else {
-			return tea.Batch(reread, tip, m.goalTurnEnded(msg.stop))
+			return then(reread, tip, m.goalTurnEnded(msg.stop))
 		}
 	}
 	if len(m.queue) > 0 {
 		next := m.queue[0]
 		m.queue = m.queue[1:]
-		return tea.Batch(reread, tip, m.send(next))
+		return then(reread, tip, m.send(next))
 	}
-	return tea.Batch(reread, tip)
+	return then(reread, tip)
 }
 
 func (m *Model) cancelTurn() tea.Cmd {
@@ -712,8 +739,14 @@ func (m *Model) setMode(mode string) tea.Cmd {
 		return nil
 	}
 	if m.phase == busy {
-		return m.toast(toastWarn, "Change mode between turns; esc stops this one")
+		if mode == m.mode {
+			m.pendingMode = ""
+			return m.toast(toastInfo, "Staying in "+mode+" mode")
+		}
+		m.pendingMode = mode
+		return m.toast(toastInfo, "Switching to "+mode+" mode when this turn ends")
 	}
+	m.pendingMode = ""
 	agent, id := m.agent, m.session.ID
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

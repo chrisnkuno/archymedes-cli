@@ -162,7 +162,7 @@ describe("what this package refuses to let rot", () => {
       .map((module) => module.relative.replace(/\.test\.ts$/, ".ts"))
       .filter((expected) => !sourceNames.has(expected))
       // These test a subject spread across several modules rather than one file of the same name.
-      .filter((expected) => !["providers/truncation.ts", "providers/streaming.ts", "cli/remember.ts", "cli/adversarial-policy.ts", "cli/workspace-conformance.ts", "cli/migration.ts", "cli/nested-instructions.ts", "cli/auto-mode.ts", "conformance.ts", "runtime-invariants.ts"].includes(expected));
+      .filter((expected) => !["providers/truncation.ts", "providers/streaming.ts", "cli/remember.ts", "cli/adversarial-policy.ts", "cli/workspace-conformance.ts", "cli/migration.ts", "cli/nested-instructions.ts", "cli/auto-mode.ts", "conformance.ts", "runtime-invariants.ts", "cli/tool-invariants.ts"].includes(expected));
     expect(orphans).toEqual([]);
   });
 });

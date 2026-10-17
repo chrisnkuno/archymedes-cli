@@ -25,7 +25,7 @@ import { availableProviders, PROVIDERS, providerEnvPrefix } from "../../packages
 import { isProviderId, type ProviderId } from "../../packages/core/src/providers/provider-specs";
 import { createArchymedesTools, TodoList } from "../../packages/core/src/cli/tools";
 import { resolveToolCall } from "../../packages/core/src/tool-aliases";
-import { loadSettings, mergedEnvironment } from "../../packages/archymedes-cli/src/platform/settings";
+import { loadSettings, mergedEnvironment } from "../../packages/friday-cli/src/platform/settings";
 
 /** Need a gateway or local daemon rather than a key, so they run only when named. */
 const ONLY_WHEN_NAMED: readonly ProviderId[] = ["ollama", "free", "archymedes-cloud"];

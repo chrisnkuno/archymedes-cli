@@ -10,10 +10,15 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/theme"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 const maxComposerLines = 8
+
+// maxComposerRows is how much can be written, in rows as wrapped: far past anything typed, but a
+// bound. Without it the textarea falls back to treating its visible height as a cap on logical
+// lines, and a ninth line could not be started.
+const maxComposerRows = 5000
 
 // composer is the input box: a textarea that grows with its content, plus sent-message history
 // and slash-command completion. Enter belongs to the composer's owner (send); the textarea only
@@ -69,7 +74,11 @@ func newComposer(th theme.Theme) composer {
 	area.ShowLineNumbers = false
 	area.Prompt = ""
 	area.CharLimit = 0
-	area.MaxHeight = 0
+	// The textarea counts its own rows as it wraps them (by word, with a column kept for the cursor
+	// at a line's end), so it sizes itself; counting characters here undercounted every sentence
+	// that wrapped early and hid its first line in a box that had room to grow.
+	area.DynamicHeight = true
+	area.MinHeight, area.MaxHeight, area.MaxContentHeight = 1, maxComposerLines, maxComposerRows
 	area.SetHeight(1)
 	area.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"))
 	c := composer{area: area}
@@ -95,13 +104,38 @@ func (c *composer) value() string { return c.area.Value() }
 
 func (c *composer) setWidth(width int) { c.area.SetWidth(max(width, 10)) }
 
-// fit grows the box to its content, up to maxComposerLines; beyond that the textarea scrolls.
-func (c *composer) fit() {
-	lines := 0
-	for _, line := range strings.Split(c.area.Value(), "\n") {
-		lines += max(1, (ansi.StringWidth(line)+c.area.Width()-1)/max(c.area.Width(), 1))
+// continueLine turns a `\` typed just before enter into a line break, as a shell does: the one way
+// to a new line that every terminal can send (Windows Terminal reports shift+enter as enter and
+// keeps alt+enter for full screen). True when it did.
+func (c *composer) continueLine() bool {
+	value := c.area.Value()
+	if !strings.HasSuffix(value, `\`) || !c.cursorAtEnd() {
+		return false
 	}
-	c.area.SetHeight(min(max(lines, 1), maxComposerLines))
+	c.area.SetValue(value[:len(value)-1] + "\n")
+	c.refreshCompletions()
+	return true
+}
+
+// newlineKey is the new-line key to show: shift+enter where the terminal can tell it from enter,
+// else the `\` continuation, which every terminal can send.
+func (m *Model) newlineKey() string {
+	if m.shiftEnter {
+		return "shift+enter"
+	}
+	return `\ enter`
+}
+
+// cursorAtEnd: the cursor is after the last character of the last line.
+func (c *composer) cursorAtEnd() bool {
+	lines := strings.Split(c.area.Value(), "\n")
+	return c.area.Line() == len(lines)-1 && c.area.Column() >= len([]rune(lines[len(lines)-1]))
+}
+
+// pasteText is pasted text with Windows line endings made one break each. The textarea reads `\r`
+// and `\n` as a break apiece, so a paste from a Windows program doubled every line.
+func pasteText(text string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 }
 
 // take empties the box and remembers what was in it.
@@ -112,15 +146,18 @@ func (c *composer) take() string {
 	}
 	c.histPos, c.draft = len(c.history), ""
 	c.area.Reset()
-	c.fit()
 	c.refreshCompletions()
 	return text
 }
 
-// browse moves through history; only on a single-line input, so up/down still move the cursor
-// inside a message being written over several lines.
+// browse moves through history: only on a single line, and only from its first row going up or
+// its last going down, so up/down still move the cursor through a message that wraps or spans
+// several lines.
 func (c *composer) browse(delta int) bool {
 	if strings.Contains(c.area.Value(), "\n") || len(c.history) == 0 {
+		return false
+	}
+	if info := c.area.LineInfo(); (delta < 0 && info.RowOffset > 0) || (delta > 0 && info.RowOffset < info.Height-1) {
 		return false
 	}
 	if c.histPos == len(c.history) {
@@ -137,7 +174,6 @@ func (c *composer) browse(delta int) bool {
 		c.area.SetValue(c.history[next])
 	}
 	c.area.MoveToEnd()
-	c.fit()
 	return true
 }
 
@@ -179,7 +215,6 @@ func (c *composer) accept() bool {
 func (c *composer) update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	c.area, cmd = c.area.Update(msg)
-	c.fit()
 	c.refreshCompletions()
 	return cmd
 }

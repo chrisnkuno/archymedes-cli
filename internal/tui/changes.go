@@ -13,8 +13,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // The Changes app (F10): what is different from the last commit, file by file — the list on the
@@ -213,7 +213,6 @@ func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "@":
 		if f, ok := c.selected(); ok {
 			m.input.area.InsertString("@" + f.Path + " ")
-			m.input.fit()
 			return true, m.toast(toastInfo, "@"+f.Path+" added to your message")
 		}
 	case "enter":

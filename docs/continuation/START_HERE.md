@@ -22,7 +22,7 @@ verified live with a keyed tool round trip.
 ## Workspace and ownership
 
 - Public checkout: this repository.
-- Public code: `packages/archymedes-cli`, `packages/core`, `packages/archymedes-state`.
+- Public code: `packages/friday-cli`, `packages/core`, `packages/archymedes-state`.
 - Separate private checkouts exist under `.private/`; they are not part of the public repository's diff.
 - Inspect `git status --short` in each checkout. Existing uncommitted work belongs to this effort; do not reset or overwrite it.
 - Use Bun commands in TypeScript packages. Follow applicable AGENTS.md instructions.
@@ -60,7 +60,7 @@ Files to review first:
 - `packages/core/src/agent-runtime.ts` and its tests.
 - `packages/core/src/providers/archymedes-cloud-agent.ts` and its tests.
 - `packages/core/src/providers/routing-receipt.ts` and its tests.
-- `packages/archymedes-cli/src/render/routing-receipt.ts` and its tests.
+- `packages/friday-cli/src/render/routing-receipt.ts` and its tests.
 
 Changes:
 
@@ -84,7 +84,7 @@ Current limitations:
 2. Run targeted tests:
 
    ```sh
-   bun run test -- packages/core/src/agent-runtime.test.ts packages/core/src/providers/archymedes-cloud-agent.test.ts packages/core/src/providers/routing-receipt.test.ts packages/archymedes-cli/src/render/routing-receipt.test.ts
+   bun run test -- packages/core/src/agent-runtime.test.ts packages/core/src/providers/archymedes-cloud-agent.test.ts packages/core/src/providers/routing-receipt.test.ts packages/friday-cli/src/render/routing-receipt.test.ts
    bun run typecheck
    ```
 
@@ -129,7 +129,7 @@ The hosted `/v1/routes/plan` endpoint existed with no client. `/route plan` is n
 - `ArchymedesAgent.planNextTurn()`: assembles the prospective request once and shares that assembly
   with `estimateNextTurn`, so the preflight and the turn cannot price different requests. A direct
   provider returns null rather than a locally invented ranking.
-- `packages/archymedes-cli/src/render/routing-plan.ts`: renders forecasts as forecasts, says once that
+- `packages/friday-cli/src/render/routing-plan.ts`: renders forecasts as forecasts, says once that
   nothing was reserved, and prints an empty plan as an explicit "no route available" with the
   exclusion reasons — never as a quiet success. Route figures sit on their own row so a wordy reason
   cannot clip the cost off a narrow terminal.
@@ -176,7 +176,7 @@ typed, and the exchange's real ledger was unreachable from the CLI.
 - `ArchymedesCloudTurnProvider.creditBalance()`: a plain authenticated read, no idempotency key,
   asking for the currency this provider reserves in so the figure shown is the figure the next turn
   draws against.
-- `renderHostedBalance` in `packages/archymedes-cli/src/commands/balance.ts`, and `/balance` now prefers it
+- `renderHostedBalance` in `packages/friday-cli/src/commands/balance.ts`, and `/balance` now prefers it
   whenever the provider can answer.
 
 Three distinctions the tests pin, because each is a way to misstate someone's money:

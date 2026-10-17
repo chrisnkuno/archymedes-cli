@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // /worktree [name]: a new session in a new worktree — a branch of its own, checked out under

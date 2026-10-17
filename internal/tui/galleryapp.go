@@ -11,7 +11,7 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/picture/pictureurl"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/gallery"
+	"github.com/chrisnkuno/friday-cli/internal/gallery"
 )
 
 // The Gallery app (F12, or a click on the home screen's photo): one photograph at a time, two ways
@@ -92,7 +92,7 @@ func (m *Model) openGallery(index int) tea.Cmd {
 		live: pictureurl.NewWithConfig(pictureurl.Config{
 			KittyID: kittyIDLive, Fit: picture.FitContain,
 			// Image hosts turn away Go's stock User-Agent; say who is asking.
-			UserAgent: "archymedes/" + m.opts.Version + " (+https://github.com/chrisnkuno/archymedes-cli)",
+			UserAgent: "archymedes/" + m.opts.Version + " (+https://github.com/chrisnkuno/friday-cli)",
 		}),
 	}
 	m.openWindow(g)

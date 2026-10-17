@@ -6,11 +6,11 @@
  * Inputs are sized like a long real session: 120-column lines and a markdown answer streamed a line
  * at a time. Record before/after numbers in the tracker.
  */
-import { renderMarkdownLine, newMarkdownState } from "../../packages/archymedes-cli/src/render/markdown";
-import { highlightCode } from "../../packages/archymedes-cli/src/render/code-view";
-import { visibleWidth } from "../../packages/archymedes-cli/src/text/text-width";
-import { buildPalette, findBuiltinTheme } from "../../packages/archymedes-cli/src/theme/theme";
-import { UNICODE_GLYPHS } from "../../packages/archymedes-cli/src/text/glyphs";
+import { renderMarkdownLine, newMarkdownState } from "../../packages/friday-cli/src/render/markdown";
+import { highlightCode } from "../../packages/friday-cli/src/render/code-view";
+import { visibleWidth } from "../../packages/friday-cli/src/text/text-width";
+import { buildPalette, findBuiltinTheme } from "../../packages/friday-cli/src/theme/theme";
+import { UNICODE_GLYPHS } from "../../packages/friday-cli/src/text/glyphs";
 
 const palette = buildPalette(findBuiltinTheme("archymedes")!, "truecolor");
 const styled = (i: number) => `\x1b[38;2;231;187;120m  ${i.toString().padStart(4)} │\x1b[0m const value = await load("item-${i}"); // 界 emoji 👩‍💻 ${"x".repeat(i % 90)}`;

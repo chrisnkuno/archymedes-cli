@@ -7,7 +7,7 @@ import (
 
 // Geometry is the Archymedes mark: nested tetrahedra joined at their vertices, a triangular
 // analogue of a hypercube, seen from angle (radians). A port of renderGeometry in
-// packages/archymedes-cli/src/render/identity.ts; testdata/geometry.json holds that function's
+// packages/friday-cli/src/render/identity.ts; testdata/geometry.json holds that function's
 // output, and the two must agree character for character.
 func Geometry(angle float64, ascii bool) []string {
 	const width, height = 23, 11

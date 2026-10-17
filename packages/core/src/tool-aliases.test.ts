@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { normalizeToolName, resolveToolCall } from "./tool-aliases";
+import { unavailableToolMessage } from "./agent-runtime";
+import { aliasTarget, normalizeToolName, resolveToolCall } from "./tool-aliases";
 
 const ALL = new Set(["read_file", "list_files", "glob_files", "grep_files", "write_file", "edit_file", "run_command", "web_search", "web_fetch", "todo_write"]);
 const resolve = (name: string, args: unknown, available: ReadonlySet<string> = ALL) => resolveToolCall({ id: "c1", name, arguments: args }, available);
@@ -115,5 +116,23 @@ describe("tool aliases, end to end", () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("says what a habitual name means here when its arguments did not fit, instead of that it does not exist", () => {
+    // Told "there is no tool named Edit", a model trained on Edit calls Edit again, and the second
+    // time ends the run. Told what Edit is here and what it takes, its next call is right.
+    expect(aliasTarget("Edit", ALL)).toBe("edit_file");
+    expect(aliasTarget("functions.Bash", ALL)).toBe("run_command");
+    expect(aliasTarget("Bash", new Set(["read_file"]))).toBeUndefined(); // not in this run: the mode's answer stands
+    expect(aliasTarget("str_replace_based_edit_tool", ALL)).toBeUndefined(); // one name, three tools
+    expect(aliasTarget("bogus", ALL)).toBeUndefined();
+    const tools = [
+      { name: "edit_file", description: "Edit", inputSchema: { type: "object", properties: { path: {}, oldText: {}, newText: {} }, required: ["path"] } },
+      { name: "read_file", description: "Read", inputSchema: { type: "object", properties: {}, required: [] } },
+    ];
+    expect(unavailableToolMessage("Edit", false, tools)).toBe('"Edit" is edit_file here, but this call did not carry what edit_file needs. It needs path; it accepts path, oldText, newText. Call edit_file with those arguments.');
+    expect(unavailableToolMessage("Read", false, tools)).toBe('"Read" is read_file here, but this call did not carry what read_file needs. Call read_file with those arguments.');
+    expect(unavailableToolMessage("bogus", false, tools)).toMatch(/^There is no tool named "bogus"/);
+    expect(unavailableToolMessage("edit_file", true, tools)).toMatch(/not allowed in this run/);
   });
 });

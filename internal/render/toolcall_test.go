@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// Cases ported from packages/archymedes-cli/src/render/transcript.test.ts, so both front ends agree.
+// Cases ported from packages/friday-cli/src/render/transcript.test.ts, so both front ends agree.
 
 func TestTruncateMiddle(t *testing.T) {
 	if got := TruncateMiddle("npm test", 40); got != "npm test" {
@@ -82,6 +82,9 @@ func TestSummarizeToolResult(t *testing.T) {
 		{"start_application", "Started app-1. Preview verified at http://127.0.0.1:4173/.", false, "ready at http://127.0.0.1:4173/"},
 		{"application_status", "No managed applications.", false, "none"},
 		{"application_status", "app-1: running at http://127.0.0.1:4173/ (port 4173)\nRecent logs:\nready", false, "running at http://127.0.0.1:4173/"},
+		{"application_status", "app-2: running in the background (node worker.js)", false, "running in the background"},
+		{"ask_user", "The user answered: Postgres", false, "Postgres"},
+		{"ask_user", "The user dismissed the question without answering. Do not ask it again.", false, "dismissed"},
 		{"application_status", "app-1: running at http://127.0.0.1:1/ (port 1)\n\napp-2: exited at http://127.0.0.1:2/ (port 2)", false, "2 applications"},
 	}
 	for _, c := range cases {

@@ -1,6 +1,6 @@
 {
-  "//": "Sections of packages/archymedes-cli/src and what each may import. A file's section is its first directory; files at the root are entry points and may import anything. See docs/continuation/MODULE_MAP.md.",
-  "sourceRoot": "packages/archymedes-cli/src",
+  "//": "Sections of packages/friday-cli/src and what each may import. A file's section is its first directory; files at the root are entry points and may import anything. See docs/continuation/MODULE_MAP.md.",
+  "sourceRoot": "packages/friday-cli/src",
   "allowed": {
     "text": ["text"],
     "platform": ["platform", "text"],

@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/config"
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // The first minutes with Archymedes. Until someone has sent a first request the home screen says
@@ -68,7 +68,6 @@ func (m *Model) offerStarter() bool {
 	}
 	m.input.take()
 	m.input.area.InsertString(starters[next])
-	m.input.fit()
 	return true
 }
 
@@ -80,7 +79,6 @@ func (m *Model) useStarter(i int) {
 	}
 	m.input.take()
 	m.input.area.InsertString(starters[i])
-	m.input.fit()
 }
 
 // welcome marks the first request sent: remembered, and the next finished turn ends with a tip.

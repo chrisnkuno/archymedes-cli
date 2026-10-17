@@ -14,7 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // The Changes app's Branches view (b): the repository beyond the working tree — the branches,

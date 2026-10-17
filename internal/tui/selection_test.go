@@ -106,7 +106,6 @@ func TestClickingTheComposerPlacesTheCursorOnThatRowAndCell(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
 	typeText(m, "first line")
 	m.input.area.InsertString("\nsecond line here")
-	m.input.fit()
 	screen(m)
 	time.Sleep(40 * time.Millisecond) // the zone worker scans asynchronously
 	box := m.zones.frame.Get("composer")

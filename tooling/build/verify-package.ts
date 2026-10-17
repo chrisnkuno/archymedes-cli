@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const packageRoot = path.join(root, "packages/archymedes-cli");
+const packageRoot = path.join(root, "packages/friday-cli");
 const artifactRoot = path.join(root, "artifacts");
 const manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
 const archive = path.join(artifactRoot, `${manifest.name}-${manifest.version}.tgz`);
@@ -30,7 +30,7 @@ for (const entry of entries) {
   assert(!entry.split("/").some((part) => ["..", ".private", ".env", ".archymedes", "node_modules"].includes(part)), `Unexpected packed path: ${entry}`);
   assert(!/\.(?:test\.[cm]?[jt]sx?|map)$/.test(entry), `Development artifact: ${entry}`);
 }
-for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "bin/archymedes.mjs", "bin/launcher.mjs", "bin/launcher.d.mts", "dist/archymedes.mjs"]) {
+for (const required of ["package.json", "LICENSE", "NOTICE", "README.md", "I18N.md", "bin/friday.mjs", "bin/launcher.mjs", "bin/launcher.d.mts", "dist/friday.mjs"]) {
   assert(entries.includes(`package/${required}`), `Missing ${required}`);
 }
 
@@ -50,7 +50,7 @@ try {
   assert.equal(installedManifest.license, "Apache-2.0");
   assert.match(await readFile(path.join(installed, "LICENSE"), "utf8"), /Apache License/);
   assert.equal(await readFile(path.join(installed, "NOTICE"), "utf8"), await readFile(path.join(root, "NOTICE"), "utf8"));
-  const executable = path.join(installed, "dist/archymedes.mjs");
+  const executable = path.join(installed, "dist/friday.mjs");
   const env = { ...process.env, NO_COLOR: "1", ARCHYMEDES_CONFIG_DIR: path.join(consumer, "config"), ARCHYMEDES_AUTO_UPDATE: "off", ARCHYMEDES_FX_OFFLINE: "true" };
   const version = run(["node", executable, "--version"], consumer, env).trim();
   assert(version.includes(manifest.version), `Wrong executable version: ${version}`);
@@ -61,7 +61,7 @@ try {
   assert.match(providers, /anthropic/i);
   // The installed command: the shim, which runs the Go interface, which hands one-shot modes to the
   // bundled agent with this same Node.
-  const command = path.join(installed, "bin/archymedes.mjs");
+  const command = path.join(installed, "bin/friday.mjs");
   const goVersion = run(["node", command, "--version"], consumer, env).trim();
   assert.equal(goVersion, `archymedes ${manifest.version}`, `Go interface version: ${goVersion}`);
   const goHelp = run(["node", command, "--help"], consumer, env);
@@ -73,7 +73,7 @@ try {
   for (const at of [path.join(consumer, "node_modules"), path.join(installed, "node_modules")]) {
     await rm(path.join(at, ...platformPackage.split("/")), { recursive: true, force: true });
   }
-  assert.throws(() => createRequire(path.join(installed, "bin", "archymedes.mjs")).resolve(`${platformPackage}/package.json`), "the interface package is still installed");
+  assert.throws(() => createRequire(path.join(installed, "bin", "friday.mjs")).resolve(`${platformPackage}/package.json`), "the interface package is still installed");
   assert.match(run(["node", command, "--version"], consumer, env), new RegExp(manifest.version.replace(/\./g, "\\.")));
   assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must work without the interface");
   const alone = spawnSync("node", [command], { cwd: consumer, env, encoding: "utf8", input: "" });

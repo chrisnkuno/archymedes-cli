@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/chrisnkuno/archymedes-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
 // The project view (/files): Bubbles' tree over what git considers the project, with the selected
@@ -179,7 +179,6 @@ func (f *filesView) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "@":
 		if ok && entry.path != "" {
 			m.input.area.InsertString("@" + entry.path + " ")
-			m.input.fit()
 			return true, m.toast(toastInfo, "@"+entry.path+" added to your message")
 		}
 		return false, nil
