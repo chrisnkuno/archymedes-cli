@@ -20,7 +20,7 @@ import { readSessionModelTurns } from "./session/resumed-spend";
  * observable from inside one process, so these tests run the CLI twice against a local stub of the
  * Anthropic API and read both what the model was sent and what landed on disk.
  *
- * One-shot mode (`archymedes --resume "…"`) rather than the REPL, deliberately: it exercises the same
+ * One-shot mode (`friday --resume "…"`) rather than the REPL, deliberately: it exercises the same
  * resume path without needing a pseudo-terminal, so the assertions here are about resuming rather
  * than about terminal behaviour, which `src/pty/` already owns.
  */

@@ -52,7 +52,7 @@ describe("localized controls", () => {
 
   it("returns a localized core message, and falls back to English per key", () => {
     expect(t("ja", "help.startHere")).toBe("ここから始める");
-    expect(t("de", "doctor.header")).toContain("Archymedes");
+    expect(t("de", "doctor.header")).toContain("Friday");
     // A key with no translation for a language yields the English source, never an empty string.
     for (const language of Object.keys(CONTROL_LANGUAGES) as ControlLanguage[]) {
       expect(t(language, "tagline").length, `${language} tagline`).toBeGreaterThan(0);

@@ -39,7 +39,7 @@ const TRANSITIONS: Readonly<Record<TurnStatus, readonly TurnStatus[]>> = {
 };
 
 export function assertTurnTransition(from: TurnStatus, to: TurnStatus): void {
-  if (!TRANSITIONS[from].includes(to)) throw new Error(`Illegal Archymedes turn transition: ${from} -> ${to}`);
+  if (!TRANSITIONS[from].includes(to)) throw new Error(`Illegal Friday turn transition: ${from} -> ${to}`);
 }
 
 type DurableRuntimeEvent = Exclude<AgentRuntimeEvent, { type: "assistant_delta" }>;
@@ -145,12 +145,12 @@ async function readJournalFile(root: string, sessionId: string): Promise<{ event
   let previousHash = JOURNAL_GENESIS_HASH;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (event.protocolVersion !== ARCHYMEDES_PROTOCOL_VERSION) throw new Error(`Unsupported Archymedes protocol version ${event.protocolVersion}`);
+    if (event.protocolVersion !== ARCHYMEDES_PROTOCOL_VERSION) throw new Error(`Unsupported Friday protocol version ${event.protocolVersion}`);
     if (event.sessionId !== sessionId || event.sequence !== index + 1 || event.previousHash !== previousHash) {
-      throw new Error(`Invalid Archymedes event chain at sequence ${event.sequence}`);
+      throw new Error(`Invalid Friday event chain at sequence ${event.sequence}`);
     }
     const { hash, ...withoutHash } = event;
-    if (hash !== hashEnvelope(withoutHash)) throw new Error(`Archymedes event integrity check failed at sequence ${event.sequence}`);
+    if (hash !== hashEnvelope(withoutHash)) throw new Error(`Friday event integrity check failed at sequence ${event.sequence}`);
     previousHash = hash;
   }
   return { events, text, completeText };

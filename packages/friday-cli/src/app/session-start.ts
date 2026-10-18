@@ -69,7 +69,7 @@ export async function resumeAtStartup(context: StartContext & { carryResumedSpen
     //
     // Only when this run will actually stop at a prompt. A replay is orientation for someone
     // about to type; in front of a one-shot answer it is preamble nobody is waiting for, and
-    // `archymedes --resume "…"` from a terminal is still a one-shot even though the terminal is real.
+    // `friday --resume "…"` from a terminal is still a one-shot even though the terminal is real.
     if (interactive && !args.prompt) out.write(`${renderReplay(state.agent.snapshot(), sectionStyle(), { turns: 2 })}\n`);
   } else if (args.resume === "latest") {
     out.write(style.yellow(skippedOpen ? "The latest sessions are open in other terminals; starting a new one.\n" : "No matching session; starting a new one.\n"));
@@ -78,7 +78,7 @@ export async function resumeAtStartup(context: StartContext & { carryResumedSpen
     // identical for the first few seconds and then diverges silently — the work lands in a new
     // session while the user believes they are adding to the old one. A mistyped id is far
     // cheaper to be told about now.
-    process.stderr.write(`${style.red(`No session ${args.resume} in this project.`)} Run archymedes --sessions to list them.\n`);
+    process.stderr.write(`${style.red(`No session ${args.resume} in this project.`)} Run friday --sessions to list them.\n`);
     await state.agent.dispose();
     await stateHistory.close();
     context.exitCleanly();
@@ -98,7 +98,7 @@ export async function runOneShot(context: StartContext & {
     // A one-shot argument is an objective, not an interactive input queue. Sending a slash
     // command to the model is the costly failure mode: it spends tokens trying to interpret a
     // local control it can never execute. Fail before estimation or provider contact instead.
-    process.stderr.write(`Slash commands run inside an interactive Archymedes session. Start archymedes, then type ${prompt.trim()}.\n`);
+    process.stderr.write(`Slash commands run inside an interactive Friday session. Start archymedes, then type ${prompt.trim()}.\n`);
     await state.agent.dispose();
     await stateHistory.close();
     context.exitCleanly();

@@ -52,7 +52,7 @@ export class OpenRouterAgentTurnProvider implements AgentTurnProvider {
       // Attribution only; never a credential. Lets the app appear on OpenRouter rankings.
       defaultHeaders: {
         ...(options.httpReferer?.trim() ? { "HTTP-Referer": options.httpReferer.trim() } : {}),
-        "X-Title": options.appTitle?.trim() || "Archymedes CLI",
+        "X-Title": options.appTitle?.trim() || "Friday CLI",
       },
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
       ...(options.streamTimeouts !== undefined ? { streamTimeouts: options.streamTimeouts } : {}),
@@ -72,7 +72,7 @@ export class OpenRouterAgentTurnProvider implements AgentTurnProvider {
 function withHint(error: unknown): Error {
   const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : undefined;
   if (status === undefined) return error instanceof Error ? error : new Error(String(error));
-  const hint = status === 401 ? "OpenRouter rejected the key. Update OPENROUTER_API_KEY in archymedes settings."
+  const hint = status === 401 ? "OpenRouter rejected the key. Update OPENROUTER_API_KEY in friday settings."
     : status === 402 ? "OpenRouter account quota or key budget is exhausted. Check the key limits."
     : status === 403 ? "OpenRouter refused this model for this key. Choose another with /model."
     : status === 429 ? "OpenRouter rate limit reached. Wait before retrying."

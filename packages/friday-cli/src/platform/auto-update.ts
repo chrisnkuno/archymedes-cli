@@ -5,7 +5,7 @@ import { archymedesConfigDirectory } from "@archymedes/core/cli/memory";
 /**
  * Staying current without getting in the way.
  *
- * `archymedes update` has always existed, which means updating was something you had to remember to do —
+ * `friday update` has always existed, which means updating was something you had to remember to do —
  * so the people most likely to be running a months-old build are exactly the ones who never think
  * about it. A daily check fixes that. The hard part is not the check; it is doing it without
  * becoming the thing people disable.
@@ -154,7 +154,7 @@ export async function writeAutoUpdateState(environment: Record<string, string | 
 /** What the user sees when a newer version is found and installing is not enabled. */
 export function updateNotice(version: string, currentVersion: string): string[] {
   return [
-    `Archymedes ${version} is available — you are on ${currentVersion}.`,
+    `Friday ${version} is available — you are on ${currentVersion}.`,
     "Run /update to install it, or turn on automatic updates with /update auto.",
   ];
 }
@@ -162,7 +162,7 @@ export function updateNotice(version: string, currentVersion: string): string[] 
 /** What the user sees after an automatic install. The running process is still the old code. */
 export function installedNotice(version: string): string[] {
   return [
-    `Updated to Archymedes ${version}.`,
+    `Updated to Friday ${version}.`,
     "This session keeps running the version it started with; restart when convenient.",
   ];
 }
@@ -219,7 +219,7 @@ export async function runAutoUpdate(options: {
     // A failed install is remembered as skipped: retrying the same broken version at every launch
     // is how an update mechanism becomes something people uninstall.
     await write(environment, { ...(state ?? { lastCheckedAt: now }), lastCheckedAt: now, latestVersion: decision.version, skippedVersion: decision.version });
-    return { notice: [`Could not install Archymedes ${decision.version} automatically. Run /update to see why.`], decision };
+    return { notice: [`Could not install Friday ${decision.version} automatically. Run /update to see why.`], decision };
   }
 
   return { notice: [], decision };

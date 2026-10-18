@@ -278,7 +278,7 @@ export async function requestJevVerdict(options: {
   }
   if (!response.ok) {
     throw new JevError(response.status, response.status === 401
-      ? "TypeSafe rejected the key. Update TYPESAFE_API_KEY in archymedes settings."
+      ? "TypeSafe rejected the key. Update TYPESAFE_API_KEY in friday settings."
       : response.status === 402
         ? "TypeSafe account quota is exhausted."
         : response.status === 429

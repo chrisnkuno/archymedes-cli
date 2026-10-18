@@ -89,7 +89,7 @@ describe("action digest", () => {
 });
 
 describe("provenance in what the human is asked to approve", () => {
-  it("says nothing extra for Archymedes's own built-in tools", () => {
+  it("says nothing extra for Friday's own built-in tools", () => {
     expect(describeToolCall(call("run_command", { command: "npm test" }), tool({ name: "run_command" }))).toBe("run npm test");
     expect(describeToolCall(call("write_file", { path: "a.ts" }), tool({ name: "write_file", provenance: { kind: "built-in" } }))).toBe("write a.ts");
   });
@@ -99,7 +99,7 @@ describe("provenance in what the human is asked to approve", () => {
     const summary = describeToolCall(call("deploy", {}), mcpTool);
     expect(summary).toContain("deploy");
     expect(summary).toContain("prod-deploy");
-    expect(summary).toContain("not built into Archymedes");
+    expect(summary).toContain("not built into Friday");
   });
 
   it("marks a skill and a plugin tool too, not only MCP", () => {

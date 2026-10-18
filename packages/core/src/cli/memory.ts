@@ -45,12 +45,12 @@ export type MemoryEntry = {
 export const MEMORY_LIMITS: Record<MemoryScope, number> = { project: 6_000, user: 2_500 };
 export const DEFAULT_RECALL_CHARS = 2_200;
 
-export const MEMORY_HEADER = "# Archymedes memory";
+export const MEMORY_HEADER = "# Friday memory";
 
 const PREAMBLE = [
   MEMORY_HEADER,
   "",
-  "Durable facts Archymedes is told to remember. One per line. Edit or delete freely — this file is the",
+  "Durable facts Friday is told to remember. One per line. Edit or delete freely — this file is the",
   "record, not a cache of one.",
   "",
 ].join("\n");

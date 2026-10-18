@@ -11,7 +11,7 @@ export type CommandRunner = (
  * Archymedes's own provider credentials, read directly from the code that reads them — not a second,
  * hand-maintained list. Every one of these is something Archymedes holds on the user's behalf and a
  * spawned command has no legitimate reason to see: unlike a project's own `.env`-loaded secrets
- * (the user's own choice, made before Archymedes ever ran), these are Archymedes's, and leaking them is a
+ * (the user's own choice, made before Friday ever ran), these are Friday's, and leaking them is a
  * defect regardless of what the command was asked to do with them.
  *
  * Verified live before this existed: `runCommand({ command: "env" })` printed
@@ -32,7 +32,7 @@ export const ARCHYMEDES_CREDENTIAL_ENV_NAMES = [
 
 /**
  * Credential-shaped variable names generically — `*_TOKEN`, `*_SECRET`, and so on — for a caller
- * that wants more than "not Archymedes's own keys." Off by default: a project's own `GITHUB_TOKEN` or
+ * that wants more than "not Friday's own keys." Off by default: a project's own `GITHUB_TOKEN` or
  * `DATABASE_PASSWORD`, exported into the shell before Archymedes ever started, is the user's own choice
  * about their own environment, not a leak Archymedes is responsible for. Stripping it by default would
  * silently break whatever legitimate local command the user actually wanted `run_command` to run.
@@ -294,7 +294,7 @@ let containmentAvailability: Promise<boolean> | null = null;
  * that spawns its own detached grandchild (a dev server backgrounding a file watcher, or nothing
  * more adversarial than a script calling `spawn(..., { detached: true })` the same way this
  * codebase's own `runLocalCommand` does) puts that grandchild into a *new* process group, which a
- * group-kill of the parent's group never reaches. It survives Archymedes's cancel or timeout indefinitely.
+ * group-kill of the parent's group never reaches. It survives Friday's cancel or timeout indefinitely.
  *
  * `unshare --user --pid` costs nothing in privilege — no root, no capability, just an unprivileged
  * Linux user+PID namespace — and the kernel's own PID-namespace teardown rule closes the gap
@@ -374,7 +374,7 @@ export const runLocalCommand: CommandRunner = async (command, options) => {
       cwd: options.cwd,
       shell: throughShell,
       detached: process.platform !== "win32",
-      // Every locally spawned command gets Archymedes's own environment minus Archymedes's own credentials —
+      // Every locally spawned command gets Archymedes's own environment minus Friday's own credentials —
       // node:child_process inherits the full parent environment by default, and nothing else in
       // this function was ever going to stop that.
       env: sanitizeCommandEnvironment(process.env, { strict: options.strictEnvironment }) as NodeJS.ProcessEnv,

@@ -19,8 +19,8 @@ export const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
 /** The three lines that explain why a key is needed, before the URL. */
 export const FREE_SETUP_INTRO = [
   "Free mode runs zero-priced models through OpenRouter and never falls back to a paid one.",
-  "Until the hosted Archymedes free gateway is live, it needs your own free OpenRouter key.",
-  "Creating one is free and needs no card; Archymedes keeps it in your local settings only.",
+  "Until the hosted Friday free gateway is live, it needs your own free OpenRouter key.",
+  "Creating one is free and needs no card; Friday keeps it in your local settings only.",
 ] as const;
 
 export const FREE_PRIVACY_NOTICE = "Free models may log your prompts and code; don't send secrets. Use a paid provider for private code.";
@@ -68,7 +68,7 @@ export async function runFreeModeSetup(current: ArchymedesSettings, io: FreeSetu
     }
     const key = answer === SETTING_CANCELLED ? "" : answer.trim();
     if (!key) {
-      io.write(style.dim(`  Free mode setup cancelled. Run archymedes settings to add a key later.\n`));
+      io.write(style.dim(`  Free mode setup cancelled. Run friday settings to add a key later.\n`));
       return undefined;
     }
     io.write(style.dim(`  Checking ${maskSetting(key)} with OpenRouter…\n`));
@@ -86,7 +86,7 @@ export async function runFreeModeSetup(current: ArchymedesSettings, io: FreeSetu
     io.write(style.green(`  Key saved to ${file}. Free mode is ready${allowance ? ` (${allowance})` : ""}.\n\n`));
     return settings;
   }
-  io.write(style.dim("  Free mode setup stopped. Run archymedes settings to add a key later.\n"));
+  io.write(style.dim("  Free mode setup stopped. Run friday settings to add a key later.\n"));
   return undefined;
 }
 

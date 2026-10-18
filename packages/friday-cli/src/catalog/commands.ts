@@ -54,14 +54,14 @@ export const COMMANDS = defineCommands({
   "/providers": { description: "Which model providers are configured" },
   "/settings": { description: "Theme, code colours, simple mode, startup, free-mode savings, keys and models" },
   "/upgrade": { description: "Use your own OpenRouter API key instead of the shared free gateway" },
-  "/update": { args: "[auto|check|off]", description: "Update Archymedes now, or choose whether it updates itself" },
+  "/update": { args: "[auto|check|off]", description: "Update Friday now, or choose whether it updates itself" },
   "/voice": { args: "[audio-file]", description: "Record or transcribe an editable voice prompt" },
   "/wander": { args: "[topic|random|daily|weekly]", description: "Run a bounded research lab and grade what it finds" },
   "/jobs": { args: "[run|cancel|approve]", description: "Durable background work: list, start, cancel, or answer" },
   "/attach": { args: "<id>", description: "Watch a background job's log live" },
   "/detach": { args: "<task>", description: "Start work in the background; press Alt+B to send a running turn there" },
   "/cost": { description: "Token and cost breakdown for this session" },
-  "/balance": { args: "[amount] [currency] | clear", description: "Your Archymedes credit balance on the exchange, or a locally tracked spend limit on a direct provider" },
+  "/balance": { args: "[amount] [currency] | clear", description: "Your Friday credit balance on the exchange, or a locally tracked spend limit on a direct provider" },
   "/scan": { args: "[glob]", description: "Deterministic secret scan of the workspace, worst severity first — no model turn needed" },
   "/sessions": { description: "Pick an earlier conversation in this project (an alias for /history)" },
   "/palette": { description: "Search every command by name or by what it does" },
@@ -85,7 +85,7 @@ export const COMMANDS = defineCommands({
  * and testable — without constructing a whole registry.
  */
 /**
- * The whole catalog, one row each — for `archymedes --help`, which is read piped and grepped as often
+ * The whole catalog, one row each — for `friday --help`, which is read piped and grepped as often
  * as it is read on screen.
  *
  * `mark` puts a leading character on the rows worth learning first. It is a parameter rather than

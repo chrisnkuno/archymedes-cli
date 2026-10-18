@@ -276,8 +276,8 @@ func drawTorus(w, h int, t float64) [][]cell {
 	k1 := math.Min(float64(w)/2, float64(h)) * 0.95 * k2 / (r1 + r2)
 	a, b := t*0.9, t*0.45
 	sa, ca, sb, cb := math.Sin(a), math.Cos(a), math.Sin(b), math.Cos(b)
-	step := 0.9 / math.Max(k1, 10) // finer sampling for a bigger ring, so it never shows holes
-	for theta := 0.0; theta < 2*math.Pi; theta += step * 3 {
+	step := 0.5 / math.Max(k1, 10) // finer sampling for a bigger ring, so it never shows holes
+	for theta := 0.0; theta < 2*math.Pi; theta += step * 2 {
 		st, ct := math.Sin(theta), math.Cos(theta)
 		for phi := 0.0; phi < 2*math.Pi; phi += step {
 			sp, cp := math.Sin(phi), math.Cos(phi)
@@ -387,13 +387,17 @@ func drawTunnel(w, h int, t float64) [][]cell {
 	return grid
 }
 
-// drawJulia is a Julia set whose constant circles a point where the set stays whole, breathing in
-// and out, so the shape keeps folding into itself at every depth.
+// drawJulia is a Julia set whose constant circles Douady's rabbit, where the set stays whole and
+// thick enough to read even in a small panel, breathing in and out so it keeps folding into itself.
 func drawJulia(w, h int, t float64) [][]cell {
 	grid := blankGrid(w, h)
-	cr, ci := -0.79+0.035*math.Cos(t*0.45), 0.155+0.035*math.Sin(t*0.45)
+	cr, ci := -0.123+0.025*math.Cos(t*0.45), 0.745+0.025*math.Sin(t*0.45)
 	zoom := 1 + 0.12*math.Sin(t*0.3)
-	scale := 3.4 / zoom / math.Min(float64(w)/2, float64(h)) / 2 // the set spans about ±1.7
+	span := 3.4 // the whole set, about ±1.7
+	if math.Min(float64(w)/2, float64(h)) < 16 {
+		span = 2.3 // a small panel: closer in, where the shape is thick enough to read in cells
+	}
+	scale := span / zoom / math.Min(float64(w)/2, float64(h)) / 2
 	const limit = 64
 	for y := range h {
 		for x := range w {
@@ -409,7 +413,7 @@ func drawJulia(w, h int, t float64) [][]cell {
 				continue
 			}
 			smooth := float64(i) + 1 - math.Log(math.Log(math.Sqrt(zr*zr+zi*zi)))/math.Ln2
-			grid[y][x] = cell{v: math.Pow(math.Max(smooth, 0)/limit, 0.85)}
+			grid[y][x] = cell{v: math.Pow(math.Max(smooth, 0)/limit, 1.3)}
 		}
 	}
 	return grid

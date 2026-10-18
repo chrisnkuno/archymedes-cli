@@ -1,7 +1,7 @@
 // Package cli decides what one invocation of `archymedes` is: an interactive session the Go front
 // end draws, or anything else, which goes to the agent unchanged.
 //
-// The agent (packages/friday-cli, run as `archymedes acp` behind the UI) still owns every
+// The agent (packages/friday-cli, run as `friday acp` behind the UI) still owns every
 // non-interactive mode — `--json`, piped prompts, `doctor`, `update`, `history`, `settings` — and
 // every flag about the session itself. This package does not re-implement its parser. It only needs
 // to know which flags take a value, so that a flag's value is never mistaken for words of the

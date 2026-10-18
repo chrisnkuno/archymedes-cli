@@ -388,7 +388,7 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
       const contextLimit = 200_000;
       const outputBudget = 16_000;
       const messages: Parameters<typeof planCompaction>[0][number][] = [
-        { role: "system", content: "You are Archymedes." },
+        { role: "system", content: "You are Friday." },
         { role: "user", content: "Fix the build." },
       ];
       for (let index = 0; index < 40; index += 1) {
@@ -686,7 +686,7 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     budget: { max: 200 },
     evidence: "packages/friday-cli/src/friday.ts, tooling/build/cli-bundle.ts",
     remediation:
-      "Two mechanisms, and both are load-bearing. The bundler must keep `splitting: true` with `.mjs` chunk naming, or Bun hoists every dynamically imported subtree into the entry file and the provider SDKs execute on `archymedes --help` (entry 3.90 MB vs 0.94 MB; 0.17s vs 0.12s measured). And the launcher (dist/friday.mjs) must stay a separate tiny file that calls module.enableCompileCache() before *dynamically* importing the main bundle — a static import is hoisted above the call and silently disables it. Measure with: `bun run build:cli` then time `node dist/friday.mjs --help`.",
+      "Two mechanisms, and both are load-bearing. The bundler must keep `splitting: true` with `.mjs` chunk naming, or Bun hoists every dynamically imported subtree into the entry file and the provider SDKs execute on `friday --help` (entry 3.90 MB vs 0.94 MB; 0.17s vs 0.12s measured). And the launcher (dist/friday.mjs) must stay a separate tiny file that calls module.enableCompileCache() before *dynamically* importing the main bundle — a static import is hoisted above the call and silently disables it. Measure with: `bun run build:cli` then time `node dist/friday.mjs --help`.",
   },
 ];
 

@@ -115,7 +115,7 @@ describe("the remember tool", () => {
     await tool.execute({ text: "Migrations live in db/migrations.", scope: "project", kind: "convention" }, context);
 
     const raw = await fs.readFile(path.join(root, ".archymedes", "memory.md"), "utf8");
-    expect(raw).toContain("# Archymedes memory");
+    expect(raw).toContain("# Friday memory");
     expect(raw.split("\n").filter((line) => line.startsWith("- "))).toHaveLength(2);
     expect((await loadMemories(root, process.env)).map((entry) => entry.text)).toEqual([
       "Prefer named exports.",

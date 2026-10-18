@@ -79,7 +79,7 @@ async function acquireLock(lockFile: string): Promise<() => Promise<void>> {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
-  throw new Error("Jobs file is busy — another Archymedes process is updating it");
+  throw new Error("Jobs file is busy — another Friday process is updating it");
 }
 
 /**

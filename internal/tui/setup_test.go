@@ -42,7 +42,7 @@ func unconfigured(t *testing.T) (*Model, *fakeAgent) {
 func TestFirstRunConnectsAProviderPicksAModelFetchedFromItAndOpensTheSession(t *testing.T) {
 	m, agent := unconfigured(t)
 	s := screen(m)
-	for _, want := range []string{"Welcome to Archymedes", "Free models (OpenRouter)", "no paid account needed", "OpenAI-compatible"} {
+	for _, want := range []string{"Welcome to Friday", "Free models (OpenRouter)", "no paid account needed", "OpenAI-compatible"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("lacks %q:\n%s", want, s)
 		}

@@ -92,7 +92,7 @@ describe("connectivity doctor", () => {
   it("renders a verdict naming the failing host", () => {
     const probes = runDoctorWithFailure();
     const rendered = renderDoctor(probes, "none");
-    expect(rendered).toContain("Archymedes connectivity check");
+    expect(rendered).toContain("Friday connectivity check");
     expect(rendered).toContain("api.deepseek.com");
     expect(rendered).toContain("cannot reach its model provider");
   });

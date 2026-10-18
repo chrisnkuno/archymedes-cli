@@ -92,7 +92,7 @@ func (m *Model) openGallery(index int) tea.Cmd {
 		live: pictureurl.NewWithConfig(pictureurl.Config{
 			KittyID: kittyIDLive, Fit: picture.FitContain,
 			// Image hosts turn away Go's stock User-Agent; say who is asking.
-			UserAgent: "archymedes/" + m.opts.Version + " (+https://github.com/chrisnkuno/friday-cli)",
+			UserAgent: "friday/" + m.opts.Version + " (+https://github.com/chrisnkuno/friday-cli)",
 		}),
 	}
 	m.openWindow(g)
@@ -198,6 +198,9 @@ func (g *galleryApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if !g.offline {
 			return false, g.live.Reload()
 		}
+	case "w":
+		p := gallery.Pick(g.index)
+		return false, m.setWallpaper(p.ID, "Wallpaper: "+p.Title)
 	}
 	return false, nil
 }
@@ -217,7 +220,7 @@ func (g *galleryApp) view(m *Model) string {
 		if g.mode == modeSixel {
 			builtInContent = "" // drawn over by the Sixel picture
 		}
-		builtIn := g.pane(m, l, "built into Archymedes · 360 px", builtInContent, p, "photos/"+p.ID+".jpg")
+		builtIn := g.pane(m, l, "built into Friday · 360 px", builtInContent, p, "photos/"+p.ID+".jpg")
 		var block string
 		if l.panes == 2 {
 			live := g.pane(m, l, "live from Unsplash · "+fmt.Sprint(livePhotoWidth)+" px", g.liveContent(m, l), p, g.source(p))
@@ -264,7 +267,7 @@ func (g *galleryApp) pane(m *Model, l galleryLayout, label, content string, p ga
 }
 
 func (g *galleryApp) footer() string {
-	parts := []string{"drawn as " + g.mode.String(), "fit " + fitName(g.builtIn.Fit()), "←/→ photo", "f fit"}
+	parts := []string{"drawn as " + g.mode.String(), "fit " + fitName(g.builtIn.Fit()), "←/→ photo", "w wallpaper", "f fit"}
 	if len(g.modes()) > 1 {
 		parts = append(parts, "g how it draws")
 	}

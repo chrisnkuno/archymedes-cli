@@ -1,4 +1,4 @@
-// Package acp is the Go side of `archymedes acp`: JSON-RPC 2.0 over stdio, one message per line.
+// Package acp is the Go side of `friday acp`: JSON-RPC 2.0 over stdio, one message per line.
 //
 // The terminal front end drives the agent through the same protocol an editor uses, plus the
 // opt-in `_archymedes/event` extension that carries what ACP has no shape for (usage, retries,

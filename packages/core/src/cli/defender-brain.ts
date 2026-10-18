@@ -49,7 +49,7 @@ export class DefenderBrain {
         const replica = await this.activeCorpus();
         const sources = [replica, ...this.candidates].filter((value): value is string => Boolean(value));
         this.client = await this.connect();
-        if (!this.client) throw new Error("native Archymedes State package is unavailable on this platform");
+        if (!this.client) throw new Error("native Friday State package is unavailable on this platform");
         let lastError: unknown;
         for (const source of sources) {
           try {

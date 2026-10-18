@@ -107,7 +107,7 @@ describe("schema support is asserted, not assumed", () => {
   });
 });
 
-describe("every real Archymedes tool", () => {
+describe("every real Friday tool", () => {
   let root: string;
   const tools = () => createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), fetchImpl: (async () => new Response("ok")) as typeof fetch });
 

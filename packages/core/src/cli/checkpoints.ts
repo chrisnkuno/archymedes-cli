@@ -207,7 +207,7 @@ export class CheckpointStore {
     } catch {
       return false;
     }
-    // The user's index may track Archymedes's own state; the snapshot never includes it.
+    // The user's index may track Friday's own state; the snapshot never includes it.
     const removed = await this.git(["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ".archymedes"], { cwd: this.root, env });
     if (removed.exitCode !== 0) {
       await fs.unlink(this.indexFile).catch(() => undefined);

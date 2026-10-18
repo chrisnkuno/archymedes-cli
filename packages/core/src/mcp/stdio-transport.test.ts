@@ -120,7 +120,7 @@ describe("StdioMcpTransport", () => {
     await expect(transport.request("tools/list", {})).rejects.toThrow(/exited/);
   });
 
-  it("never sees Archymedes's own provider keys, matching what run_command already guaranteed", async () => {
+  it("never sees Friday's own provider keys, matching what run_command already guaranteed", async () => {
     const reportPath = path.join(root, "seen.json");
     const scriptPath = path.join(root, "env-server.js");
     await fs.writeFile(scriptPath, `

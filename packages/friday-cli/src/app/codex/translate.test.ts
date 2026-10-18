@@ -6,7 +6,7 @@ const ROOT = "/work/project";
 type Runtime = Extract<ArchymedesEvent, { type: "runtime" }>["event"];
 const runtimeOf = (events: ArchymedesEvent[]): Runtime[] => events.flatMap((event) => (event.type === "runtime" ? [event.event] : []));
 
-describe("Codex's stream, as Archymedes's events", () => {
+describe("Codex's stream, as Friday's events", () => {
   it("unwraps the shell Codex runs a command in", () => {
     expect(unwrapShell(`/bin/bash -lc "sed -n '1,120p' greet.py && python3 greet.py"`)).toBe("sed -n '1,120p' greet.py && python3 greet.py");
     expect(unwrapShell("/bin/bash -lc 'python3 greet.py'")).toBe("python3 greet.py");

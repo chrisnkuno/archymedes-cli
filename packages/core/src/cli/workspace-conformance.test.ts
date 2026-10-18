@@ -215,7 +215,7 @@ describe.each(backends.map((factory) => [factory]))("workspace conformance", (fa
     }
   });
 
-  it("finds Archymedes's own config under .archymedes, which the agent-facing search deliberately hides", async () => {
+  it("finds Friday's own config under .archymedes, which the agent-facing search deliberately hides", async () => {
     // The property that makes skills, hooks and plugins work off this machine at all. `.archymedes` is in
     // every backend's ignored-directory list so the *agent's* searches are not cluttered by Archymedes's
     // bookkeeping — which is right, and which also meant config discovery routed through

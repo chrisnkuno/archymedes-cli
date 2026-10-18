@@ -1,7 +1,7 @@
-// Command archymedes is the Archymedes CLI.
+// Command friday is the Friday CLI.
 //
 // The interactive session is drawn here, in Go. The agent behind it is still the TypeScript one,
-// run as `archymedes acp` and driven over the Agent Client Protocol (internal/acp), and every
+// run as `friday acp` and driven over the Agent Client Protocol (internal/acp), and every
 // non-interactive mode — `--json`, piped prompts, `doctor`, `update`, `history`, `settings` — is
 // handed to it unchanged (internal/cli decides which is which).
 package main
@@ -38,7 +38,7 @@ func run(args []string) int {
 	inv := cli.Parse(args, interactive)
 	switch {
 	case inv.Version:
-		fmt.Println("archymedes", version)
+		fmt.Println("friday", version)
 		return 0
 	case inv.Help:
 		fmt.Print(usage)
@@ -53,14 +53,14 @@ func run(args []string) int {
 
 	agent, err := agentCommand(firstNonEmpty(inv.Agent, os.Getenv("ARCHYMEDES_AGENT")), cwd)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "archymedes:", err)
+		fmt.Fprintln(os.Stderr, "friday:", err)
 		return 2
 	}
 	if inv.Passthrough {
 		return execAgent(append(agent, inv.Args...))
 	}
 	if inv.Refused != "" {
-		fmt.Fprintln(os.Stderr, "archymedes:", inv.Refused)
+		fmt.Fprintln(os.Stderr, "friday:", inv.Refused)
 		return 2
 	}
 
@@ -80,7 +80,7 @@ func run(args []string) int {
 	program := tea.NewProgram(ui)
 	ui.SetSender(program.Send)
 	if _, err := program.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "archymedes:", err)
+		fmt.Fprintln(os.Stderr, "friday:", err)
 		return 1
 	}
 	return 0
@@ -104,7 +104,7 @@ func debugLog() *log.Logger {
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "archymedes: debug log not opened:", err)
+		fmt.Fprintln(os.Stderr, "friday: debug log not opened:", err)
 		return nil
 	}
 	return tui.NewDebugLog(f)
@@ -112,7 +112,8 @@ func debugLog() *log.Logger {
 
 // agentCommand finds the TypeScript agent: an explicit command (the npm launcher sets
 // ARCHYMEDES_AGENT to the bundled one), then this repository's source run with bun (a development
-// checkout), then an installed `archymedes` that is not this binary.
+// checkout), then an installed `friday` that is not this binary. Not an installed `archymedes`: that
+// is the package before the rename, and starting its older agent fails in ways that look like setup.
 func agentCommand(explicit, cwd string) ([]string, error) {
 	if explicit = strings.TrimSpace(explicit); explicit != "" {
 		// A JSON array survives paths with spaces (`C:\Program Files\nodejs\node.exe`); the npm
@@ -129,13 +130,13 @@ func agentCommand(explicit, cwd string) ([]string, error) {
 	self, _ := os.Executable()
 	self, _ = filepath.EvalSymlinks(self)
 	for _, start := range []string{filepath.Dir(self), cwd} {
-		if entry := findUp(start, filepath.Join("packages", "archymedes-cli", "src", "friday.ts")); entry != "" {
+		if entry := findUp(start, filepath.Join("packages", "friday-cli", "src", "friday.ts")); entry != "" {
 			if bun, err := exec.LookPath("bun"); err == nil {
 				return []string{bun, "run", entry}, nil
 			}
 		}
 	}
-	if path, err := exec.LookPath("archymedes"); err == nil {
+	if path, err := exec.LookPath("friday"); err == nil {
 		if resolved, _ := filepath.EvalSymlinks(path); resolved != self {
 			return []string{path}, nil
 		}
@@ -163,13 +164,13 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-const usage = `Archymedes — a coding agent that shows its work.
+const usage = `Friday — a coding agent that shows its work.
 
 Usage:
-  archymedes [flags] [request]          start a session (with a first request, if given)
-  archymedes --json "request"           run one request headless; JSON lines on stdout
-  echo "request" | archymedes           the same, from a pipe
-  archymedes history | doctor | update | settings | acp
+  friday [flags] [request]              start a session (with a first request, if given)
+  friday --json "request"               run one request headless; JSON lines on stdout
+  echo "request" | friday               the same, from a pipe
+  friday history | doctor | update | settings | acp
 
 Session:
   --plan, -p   --build   --auto, -y   --defender        start in a mode (shift+tab cycles)

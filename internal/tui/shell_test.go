@@ -40,7 +40,7 @@ func TestWindowsOpenSwitchCloseAndKeepTheirState(t *testing.T) {
 	press(m, tea.KeyDown, 0)
 	before, _ := f.selected()
 	m.Update(fkey(1))
-	if m.activeWindow() != nil || !strings.Contains(screen(m), "Ask Archymedes") {
+	if m.activeWindow() != nil || !strings.Contains(screen(m), "Ask Friday") {
 		t.Fatal("F1 returns to Chat")
 	}
 	press(m, tea.KeyPgDown, tea.ModCtrl)

@@ -42,8 +42,8 @@ func TestOnlyParchmentIsLight(t *testing.T) {
 func TestDesignPiecesKeepTheTextAndItsWidth(t *testing.T) {
 	for _, name := range Names() {
 		th, _ := Load(name)
-		g := Gradient("Archymedes ◇", th.Primary, th.Secondary, true)
-		if ansi.Strip(g) != "Archymedes ◇" {
+		g := Gradient("Friday ◇", th.Primary, th.Secondary, true)
+		if ansi.Strip(g) != "Friday ◇" {
 			t.Fatalf("%s gradient changed the text: %q", name, ansi.Strip(g))
 		}
 		if w := ansi.StringWidth(th.Pill("build", th.ModeColor("build"))); w != len("build")+2 {

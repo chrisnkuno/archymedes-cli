@@ -196,7 +196,7 @@ export class CodexSession {
       case "tools":
         return { kind: "text", text: "Codex runs its own tools: shell commands, patches, web search and its MCP servers, inside its sandbox." };
       case "memory":
-        return { kind: "text", text: "Codex keeps its own instructions (AGENTS.md); /memory is for Archymedes's models." };
+        return { kind: "text", text: "Codex keeps its own instructions (AGENTS.md); /memory is for Friday's models." };
       default:
         return { kind: "error", text: `/${command} is not available while Codex runs this session.` };
     }
@@ -249,7 +249,7 @@ export class CodexSession {
       },
     });
     try {
-      await rpc.request("initialize", { clientInfo: { name: "archymedes", title: "Archymedes", version: "1" }, capabilities: { experimentalApi: true, requestAttestation: false } }, 120_000);
+      await rpc.request("initialize", { clientInfo: { name: "archymedes", title: "Friday", version: "1" }, capabilities: { experimentalApi: true, requestAttestation: false } }, 120_000);
       rpc.notify("initialized");
       threadId = await this.thread(rpc);
     } catch (error) {
@@ -380,7 +380,7 @@ export class CodexSession {
       case "mcpServer/elicitation/request":
         return { action: "decline", content: null };
       default:
-        throw new Error(`Archymedes does not answer ${method}; change the mode to give Codex more room.`);
+        throw new Error(`Friday does not answer ${method}; change the mode to give Codex more room.`);
     }
   }
 

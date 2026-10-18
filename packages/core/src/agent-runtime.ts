@@ -536,7 +536,7 @@ export class ProviderRequestError extends Error {
     const kind = options.kind ? ` (${options.kind.replace("_", " ")} error)` : "";
     const waited = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(1)}s of retries` : "";
     const detail = options.retrySuppressed === "output_started"
-      ? "The model connection failed after output began, so Archymedes did not retry to avoid duplicated output, charges, or tool actions."
+      ? "The model connection failed after output began, so Friday did not retry to avoid duplicated output, charges, or tool actions."
       : `The model request failed after ${options.attempts} attempt${options.attempts === 1 ? "" : "s"}${kind}${waited}.`;
     // A rate limit is a property of that model's endpoint, so the useful next step is another one.
     const advice = options.kind === "rate_limit" && !options.retrySuppressed ? " This model is rate limited right now: wait a minute, or switch with /model (on free mode, openrouter/free picks among the free models for you)." : "";

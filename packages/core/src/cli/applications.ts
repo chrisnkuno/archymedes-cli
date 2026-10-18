@@ -105,7 +105,7 @@ export class LocalApplicationSupervisor {
     if (port !== undefined) {
       if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("port must be an integer between 1 and 65535");
       if (this.list().some((application) => application.state !== "exited" && application.port === port)) {
-        throw new Error(`Archymedes already has an application on port ${port}. Stop it before starting another one.`);
+        throw new Error(`Friday already has an application on port ${port}. Stop it before starting another one.`);
       }
       if (await portIsOpen(port)) throw new Error(`Port ${port} is already in use by another process.`);
     }

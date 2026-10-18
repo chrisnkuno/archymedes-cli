@@ -142,7 +142,7 @@ describe("ClaudeSession", () => {
     expect(session.info()).toMatchObject({ provider: "claude", model: "claude-sonnet-5-5", mode: "build", workspace: "local" });
   });
 
-  it("saves each turn as an Archymedes session that knows Claude's own session id", async () => {
+  it("saves each turn as an Friday session that knows Claude's own session id", async () => {
     const { session, saved } = setup((prompt) => [...reply(`re: ${prompt}`), done("claude-abc")]);
     await session.send("Fix the failing test");
     const record = saved.at(-1)!;
@@ -151,7 +151,7 @@ describe("ClaudeSession", () => {
     expect(session.snapshot()).toMatchObject({ id: session.id, claudeSession: "claude-abc" });
   });
 
-  it("asks the person through Archymedes's approval, and keeps 'always' to this session", async () => {
+  it("asks the person through Friday's approval, and keeps 'always' to this session", async () => {
     const script: Script = () => [
       toolUse("t1", "Bash", { command: "npm test" }), { ask: { tool: "Bash", input: { command: "npm test" }, id: "t1" } }, toolDone("t1"),
       toolUse("t2", "Edit", { file_path: `${ROOT}/a.ts`, old_string: "a", new_string: "b" }), { ask: { tool: "Edit", input: { file_path: `${ROOT}/a.ts` }, id: "t2" } }, toolDone("t2"),

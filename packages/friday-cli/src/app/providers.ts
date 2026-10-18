@@ -18,7 +18,7 @@ import { fetchProviderModels, mergeModelLists } from "@archymedes/core/providers
  * The setup view: what works, what is missing, and the exact variable that fixes it.
  */
 export function renderProviders(environment: Record<string, string | undefined>, depth: ReturnType<typeof detectColorDepth>): string {
-  // The banner honours NO_COLOR; this view has to as well, or `archymedes --providers > setup.txt`
+  // The banner honours NO_COLOR; this view has to as well, or `friday --providers > setup.txt`
   // writes escape codes into the file someone is about to read.
   const paint = (text: string, apply: (value: string) => string) => (depth === "none" ? text : apply(text));
   const statuses = describeProviders(environment);
@@ -28,19 +28,19 @@ export function renderProviders(environment: Record<string, string | undefined>,
     const mark = status.configured ? paint(glyphs.check, style.green) : paint(glyphs.circleEmpty, style.dim);
     const detail = status.configured
       ? paint(`${status.model} · pricing: ${status.pricing}`, style.dim)
-      // `archymedes settings` leads: it stores the key for next time, where an exported variable lives
+      // `friday settings` leads: it stores the key for next time, where an exported variable lives
       // only as long as the shell does. The variable name still appears, for CI and containers.
-      : paint(`archymedes settings, or set ${status.missing.join(" and ")}`, style.yellow);
+      : paint(`friday settings, or set ${status.missing.join(" and ")}`, style.yellow);
     rows.push([mark, status.label, detail]);
   }
   const exaConfigured = Boolean(environment.EXA_API_KEY?.trim());
   rows.push([
     exaConfigured ? paint(glyphs.check, style.green) : paint(glyphs.circleEmpty, style.dim),
     "Exa search",
-    exaConfigured ? paint("web_search enabled", style.dim) : paint("archymedes settings, or set EXA_API_KEY", style.yellow),
+    exaConfigured ? paint("web_search enabled", style.dim) : paint("friday settings, or set EXA_API_KEY", style.yellow),
   ]);
   const lines: string[] = [table(["", "provider", "status"], rows, { depth, glyphs })];
-  lines.push("  --free uses your OPENROUTER_API_KEY directly, otherwise the Archymedes free gateway. Free capacity is rate limited; other services may charge.");
+  lines.push("  --free uses your OPENROUTER_API_KEY directly, otherwise the Friday free gateway. Free capacity is rate limited; other services may charge.");
   lines.push("  --provider openrouter uses the same OPENROUTER_API_KEY directly, for any model (paid or :free) with no zero-price cap.");
 
   const unpriced = statuses.filter((status) => status.configured && status.pricing === "unknown");

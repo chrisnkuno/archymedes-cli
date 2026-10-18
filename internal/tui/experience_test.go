@@ -64,7 +64,8 @@ func TestTheHomeLineTurnsWithThePhoto(t *testing.T) {
 	before := spark(m.photoIndex)
 	m.photoIndex++
 	// Its first words: a long line wraps inside the card.
-	fields := strings.Fields(after := spark(m.photoIndex))
+	after := spark(m.photoIndex)
+	fields := strings.Fields(after)
 	head := strings.Join(fields[:min(3, len(fields))], " ")
 	if after == before || !strings.Contains(screen(m), head) {
 		t.Fatalf("the line did not turn with the photo: %q then %q", before, after)
@@ -78,7 +79,7 @@ func TestAShortHomeScreenKeepsTheEssentials(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	s := screen(m)
-	for _, want := range []string{"A R C H Y M E D E S", "mode", strings.Fields(greeting(time.Now()))[0]} { // the greeting follows the clock
+	for _, want := range []string{"F R I D A Y", "mode", strings.Fields(greeting(time.Now()))[0]} { // the greeting follows the clock
 		if !strings.Contains(s, want) {
 			t.Errorf("a short home screen lost %q:\n%s", want, s)
 		}

@@ -62,7 +62,7 @@ export async function startupMaintenance(
 }
 
 /**
- * Installs an update from a separate `archymedes update --yes` process, for the ACP server: the
+ * Installs an update from a separate `friday update --yes` process, for the ACP server: the
  * in-process updater runs the package manager synchronously with inherited stdio, which would block
  * every session on this connection and write npm's progress onto the protocol channel.
  */

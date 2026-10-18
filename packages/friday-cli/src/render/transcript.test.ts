@@ -121,7 +121,7 @@ describe("summarizeToolResult", () => {
   it("keeps a verified preview URL whole instead of abbreviating it away", () => {
     const started = summarizeToolResult(
       "start_application",
-      "Application app-1 is running and answered HTTP at http://127.0.0.1:4173/. It will remain available while this Archymedes session is open.",
+      "Application app-1 is running and answered HTTP at http://127.0.0.1:4173/. It will remain available while this Friday session is open.",
       false,
     );
     expect(started).toBe("ready at http://127.0.0.1:4173/");

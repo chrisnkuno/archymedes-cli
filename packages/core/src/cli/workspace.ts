@@ -26,7 +26,7 @@ export type WorkspaceLimits = {
   ignoredDirectories: readonly string[];
   /**
    * Strips anything shaped like a credential (`*_TOKEN`, `*_SECRET`, ...) from a locally spawned
-   * command's environment, not only Archymedes's own known provider keys. Off by default — see
+   * command's environment, not only Friday's own known provider keys. Off by default — see
    * `sanitizeCommandEnvironment` in command.ts for why a project's own env vars are the user's
    * choice to expose, not Archymedes's to withhold, unless they opt into the stricter posture.
    */

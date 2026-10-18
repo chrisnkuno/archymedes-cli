@@ -51,7 +51,7 @@ export type ReadlineInternals = {
 /**
  * Builds the `choose` half of `SettingsPrompts` from a readline.
  *
- * Defined once and used by all three ways into settings — first run, `archymedes settings`, `/settings` —
+ * Defined once and used by all three ways into settings — first run, `friday settings`, `/settings` —
  * because a menu that navigates differently depending on how you opened it is the specific thing
  * this is meant to stop.
  */
@@ -136,7 +136,7 @@ export function createApprovalPrompt(readline: Interface, interactive: boolean, 
     // or read the next line of piped input as an answer. Denying is the only honest result — and
     // it is reported, so the run does not look like the model simply chose not to act.
     if (!interactive) {
-      out.write(`\n  ${style.yellow("!")} Archymedes needs approval to ${style.bold(summary)}, but stdin is not a terminal.\n`);
+      out.write(`\n  ${style.yellow("!")} Friday needs approval to ${style.bold(summary)}, but stdin is not a terminal.\n`);
       out.write(`    ${style.dim("Re-run with --auto to pre-approve workspace edits.")}\n`);
       return "deny_always";
     }
@@ -147,7 +147,7 @@ export function createApprovalPrompt(readline: Interface, interactive: boolean, 
     spinner?.stop();
     statusBar.clear();
     endStreamedLine();
-    out.write(`\n  ${style.yellow("?")} Archymedes wants to ${style.bold(summary)}\n`);
+    out.write(`\n  ${style.yellow("?")} Friday wants to ${style.bold(summary)}\n`);
     // What you approve is what gets executed — see the exact change before answering, not just
     // the one-line summary. Reuses the same renderer the post-write receipt already shows, built
     // straight from the call's own arguments, so nothing here can differ from what actually runs.

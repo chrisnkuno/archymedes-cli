@@ -73,7 +73,7 @@ export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "e
 
   if (args.settings) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      process.stderr.write("Archymedes settings needs an interactive terminal. Environment variables remain supported for automation.\n");
+      process.stderr.write("Friday settings needs an interactive terminal. Environment variables remain supported for automation.\n");
       return 1;
     }
     const settingsReadline = createInterface({ input: process.stdin, output: process.stdout, escapeCodeTimeout: escapeCodeTimeoutMs() });
@@ -151,7 +151,7 @@ export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "e
   }
 
   if (args.historyCommand?.kind === "resume" && process.stdin.isTTY && process.stdout.isTTY) {
-    // `archymedes history resume [id]` from a terminal starts the session it names — or, with no
+    // `friday history resume [id]` from a terminal starts the session it names — or, with no
     // id, the session picker — instead of printing a pointer to a different command.
     args.resume = args.historyCommand.id ?? "latest";
     args.resumePick = args.historyCommand.id === undefined;
@@ -162,7 +162,7 @@ export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "e
   return undefined;
 }
 
-/** `archymedes history [status|show|resume|search]`, outside any session. */
+/** `friday history [status|show|resume|search]`, outside any session. */
 async function runHistorySubcommand(command: NonNullable<ParsedArgs["historyCommand"]>, root: string, stateHistory: CliStateHistory): Promise<number> {
   const style_ = sectionStyle();
   if (command.kind === "invalid") {
@@ -184,14 +184,14 @@ async function runHistorySubcommand(command: NonNullable<ParsedArgs["historyComm
   if (command.kind === "show") {
     const record = await loadSession(root, command.id);
     if (!record) {
-      process.stderr.write(`No session ${command.id}. Run archymedes history to list them.\n`);
+      process.stderr.write(`No session ${command.id}. Run friday history to list them.\n`);
       return EXIT_CODES.usage;
     }
     out.write(`${renderReplay(record, style_, command.turns === undefined ? {} : { turns: command.turns })}\n`);
     return 0;
   }
   if (command.kind === "resume") {
-    process.stderr.write(`Use archymedes --resume${command.id ? ` ${command.id}` : ""} to continue a session.\n`);
+    process.stderr.write(`Use friday --resume${command.id ? ` ${command.id}` : ""} to continue a session.\n`);
     return EXIT_CODES.usage;
   }
   if (command.kind === "delete") {

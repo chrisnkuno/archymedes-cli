@@ -214,7 +214,7 @@ func (m *Model) composerBox() string {
 
 // windowTitle names the project and, while it matters, what the agent is doing.
 func (m *Model) windowTitle() string {
-	title := "Archymedes"
+	title := "Friday"
 	if p := m.project(); p != "" {
 		title += " · " + p
 	}
@@ -230,7 +230,7 @@ func (m *Model) windowTitle() string {
 // terminalStatus reports state to terminals that show it in a tab or dock (OSC 7501 program
 // status, and the native progress bar). Nothing here is only here: the screen says it too.
 func (m *Model) terminalStatus() (*tea.ProgramStatus, *tea.ProgressBar) {
-	status := &tea.ProgramStatus{App: "archymedes", State: tea.ProgramStateIdle}
+	status := &tea.ProgramStatus{App: "friday", State: tea.ProgramStateIdle}
 	switch {
 	case m.phase == failed:
 		status.State = tea.ProgramStateError

@@ -70,8 +70,8 @@ describe("registry checks", () => {
   });
 
   it("rejects package substitution, invalid versions, insecure registries, and HTTP failures", async () => {
-    await expect(fetchLatestVersion({ fetchImpl: async () => registryResponse("0.2.0", "other") })).rejects.toThrow("invalid Archymedes package record");
-    await expect(fetchLatestVersion({ fetchImpl: async () => registryResponse("latest") })).rejects.toThrow("invalid Archymedes package record");
+    await expect(fetchLatestVersion({ fetchImpl: async () => registryResponse("0.2.0", "other") })).rejects.toThrow("invalid Friday package record");
+    await expect(fetchLatestVersion({ fetchImpl: async () => registryResponse("latest") })).rejects.toThrow("invalid Friday package record");
     await expect(fetchLatestVersion({ environment: { ARCHYMEDES_UPDATE_REGISTRY: "http://registry.example" } })).rejects.toThrow("must use HTTPS");
     await expect(fetchLatestVersion({ fetchImpl: async () => new Response("no", { status: 503 }) })).rejects.toThrow("HTTP 503");
   });
@@ -136,7 +136,7 @@ describe("self-update workflow", () => {
     expect(args).toEqual(["add", "--global", "archymedes-cli@0.2.0"]);
     expect(options).toMatchObject({ shell: false, stdio: "inherit" });
     expect(options.cwd).not.toBe(process.cwd());
-    expect(test.stdout.join("")).toContain("Restart Archymedes");
+    expect(test.stdout.join("")).toContain("Restart Friday");
   });
 
   it("propagates installer failure and provides a safe manual retry", async () => {

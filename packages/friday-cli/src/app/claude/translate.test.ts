@@ -41,7 +41,7 @@ describe("ClaudeTranslator", () => {
     expect(outcome.text).toBe("Whole");
   });
 
-  it("shows Claude Code's tools as Archymedes's, with project-relative paths, and an edit's result as its diff", () => {
+  it("shows Claude Code's tools as Friday's, with project-relative paths, and an edit's result as its diff", () => {
     const edit = { file_path: `${ROOT}/src/app.ts`, old_string: "hello", new_string: "bye", replace_all: false };
     const { events } = turn([
       start("m1"),

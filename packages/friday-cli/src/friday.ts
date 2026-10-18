@@ -59,7 +59,7 @@ import { resumeAtStartup, runOneShot } from "./app/session-start";
  */
 
 async function main(): Promise<number> {
-  // A closed pipe (`archymedes --help | head`, `archymedes --providers | less -F`) is not an error. Without
+  // A closed pipe (`friday --help | head`, `friday --providers | less -F`) is not an error. Without
   // this, the write throws EPIPE and the CLI dies with a stack trace the user never asked for.
   process.stdout.on("error", (error: NodeJS.ErrnoException) => {
     if (error.code === "EPIPE") process.exit(0);
@@ -133,7 +133,7 @@ async function main(): Promise<number> {
   let writeRecord: ((line: string) => void) | null = null;
   if (args.json) {
     if (!args.prompt) {
-      process.stderr.write("--json runs a single turn: pass the request, for example archymedes --json \"fix the failing tests\".\n");
+      process.stderr.write("--json runs a single turn: pass the request, for example friday --json \"fix the failing tests\".\n");
       return EXIT_CODES.usage;
     }
     const realStdoutWrite = process.stdout.write.bind(process.stdout);

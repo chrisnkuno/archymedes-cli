@@ -32,7 +32,7 @@ const base = (overrides: Partial<AutoUpdateContext> = {}): AutoUpdateContext => 
   ...overrides,
 });
 
-describe("when Archymedes looks for a new version", () => {
+describe("when Friday looks for a new version", () => {
   it("checks when it has never checked, and not again until a day has passed", () => {
     expect(decideAutoUpdate(base()).action).toBe("check");
     const now = base().now!;
@@ -76,7 +76,7 @@ describe("what it does with a version it already knows about", () => {
     expect(decideAutoUpdate(base({ mode: "install", state: known("1.4.0") }))).toEqual({ action: "install", version: "1.4.0" });
   });
 
-  it("never offers a downgrade, which is the normal case while developing Archymedes itself", () => {
+  it("never offers a downgrade, which is the normal case while developing Friday itself", () => {
     // A local build ahead of the registry must not be "updated" backwards.
     expect(decideAutoUpdate(base({ currentVersion: "1.4.0", state: known("1.3.0") })).action).toBe("skip");
     expect(decideAutoUpdate(base({ currentVersion: "1.3.0", state: known("1.3.0") })).action).toBe("skip");

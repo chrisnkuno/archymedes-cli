@@ -486,7 +486,7 @@ export function describeProvenance(tool: AgentTool): string {
   const provenance = tool.provenance;
   if (!provenance || provenance.kind === "built-in") return "";
   const source = provenance.kind === "mcp" ? "MCP server" : provenance.kind;
-  return ` [from ${source} "${provenance.providerId}", not built into Archymedes]`;
+  return ` [from ${source} "${provenance.providerId}", not built into Friday]`;
 }
 
 /**

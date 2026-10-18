@@ -330,7 +330,7 @@ describe("thinkingVerb", () => {
   });
 });
 
-describe("Archymedes activity", () => {
+describe("Friday activity", () => {
   it("sweeps an arc within a fixed width so its label never jitters", () => {
     const frames = Array.from({ length: 12 }, (_unused, index) => archymedesSpinnerFrame(index));
     expect(new Set(frames).size).toBeGreaterThan(3);

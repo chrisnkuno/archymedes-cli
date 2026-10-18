@@ -245,7 +245,7 @@ describe("buildArchymedesSystemPrompt", () => {
     expect(rich).toContain("package.json scripts: test");
   });
 
-  it("names the maintainers' file and puts their instructions ahead of Archymedes's own habits", () => {
+  it("names the maintainers' file and puts their instructions ahead of Friday's own habits", () => {
     const prompt = buildArchymedesSystemPrompt(
       { root: "/repo", instructions: "Always use tabs.", instructionsFile: "ARCHYMEDES.md", layout: [], packageScripts: [], gitBranch: null },
       "build", [],

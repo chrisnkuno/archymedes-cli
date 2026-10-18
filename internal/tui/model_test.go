@@ -121,7 +121,7 @@ func (f *fakeAgent) CloseSession(_ context.Context, id string) error {
 	return nil
 }
 func (f *fakeAgent) Startup(context.Context) ([]string, error) {
-	return []string{"Archymedes 3.0.1 is available — /update installs it."}, nil
+	return []string{"Friday 3.0.1 is available — /update installs it."}, nil
 }
 func (f *fakeAgent) SetupStatus(context.Context) (acp.SetupStatus, error) {
 	return acp.SetupStatus{Configured: true, Providers: f.setupProviders}, nil
@@ -324,7 +324,7 @@ func TestApprovalHoldsTheKeyboardAndEscapeDenies(t *testing.T) {
 	}
 	m.Update(agentMsg{request()})
 	// Drawn over the transcript, with the rest of the screen still there around it.
-	if s := screen(m); !strings.Contains(s, "rm -rf build") || !strings.Contains(s, "Ask Archymedes") || !strings.Contains(s, "◇") || !strings.Contains(s, "F1") {
+	if s := screen(m); !strings.Contains(s, "rm -rf build") || !strings.Contains(s, "Ask Friday") || !strings.Contains(s, "◇") || !strings.Contains(s, "F1") {
 		t.Fatalf("dialog not composed over the screen:\n%s", s)
 	}
 	typeText(m, "x") // not a decision key: ignored, and not typed into the input either

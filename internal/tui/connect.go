@@ -597,7 +597,7 @@ func (d *connectDialog) view(m *Model) string {
 		case p.OutsideEngine():
 			about := p.About
 			if about == "" {
-				about = "Runs your own Claude Code on your Claude plan. Signing in is Claude Code's own; Archymedes never sees your account."
+				about = "Runs your own Claude Code on your Claude plan. Signing in is Claude Code's own; Friday never sees your account."
 			}
 			b.WriteString("\n" + th.Body.Render(ansi.Wrap(about, inner, "")) + "\n")
 			if len(p.Login) > 0 && !p.Configured {
@@ -652,7 +652,7 @@ func (d *connectDialog) view(m *Model) string {
 	}
 	title := "Connect a provider"
 	if d.firstRun {
-		title = "Welcome to Archymedes"
+		title = "Welcome to Friday"
 	}
 	return frame(th, title, body, width)
 }

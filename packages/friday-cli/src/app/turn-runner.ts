@@ -206,7 +206,7 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
         // A provider that never streamed never printed renderEvent's assistant-section divider
         // branch owns — this is the one other place a reply begins, so it owns the header here.
         if (!state.streamedAnswer) {
-          const label = activity.toolCalls > 0 || touchedFiles.size > 0 ? "summary" : "Archymedes";
+          const label = activity.toolCalls > 0 || touchedFiles.size > 0 ? "summary" : "Friday";
           out.write(`\n${rule(sectionStyle(), { label, tone: "accent" })}\n`);
         }
         if (result.status !== "completed" && spokenText && !state.streamedAnswer && !result.summary.includes(spokenText)) {

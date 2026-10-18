@@ -20,7 +20,7 @@ describe("provider factory", () => {
     expect(createOpenAIProvider({ OPENAI_API_KEY: "openai_test", OPENAI_MODEL: "gpt-5.6-terra" })).toBeInstanceOf(OpenAICodingModelProvider);
   });
 
-  it("selects Archymedes messaging's turn provider explicitly", () => {
+  it("selects Friday messaging's turn provider explicitly", () => {
     expect(createAgentTurnProvider({ OPENAI_API_KEY: "openai_test", OPENAI_MODEL: "gpt-5.6-terra" })).toBeUndefined();
     expect(createAgentTurnProvider({
       CODING_MODEL_PROVIDER: "openai", OPENAI_API_KEY: "openai_test", OPENAI_MODEL: "gpt-5.6-terra",

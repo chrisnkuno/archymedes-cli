@@ -9,7 +9,7 @@ const credits: CreditBalance = {
 
 describe("renderHostedBalance", () => {
   it("leads with what can be spent now", () => {
-    expect(renderHostedBalance(credits)[0]).toBe("Archymedes credits USD 4.25 available");
+    expect(renderHostedBalance(credits)[0]).toBe("Friday credits USD 4.25 available");
   });
 
   it("explains reserved credit as held rather than spent", () => {

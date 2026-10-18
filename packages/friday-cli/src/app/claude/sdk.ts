@@ -7,7 +7,7 @@ import { settingsDirectory } from "../../platform/settings";
  * The part of Anthropic's Claude Agent SDK this integration uses, and how it is found.
  *
  * The SDK is not bundled. It is Anthropic's code, "all rights reserved", so Archymedes does not
- * redistribute it: the person's machine installs it from npm (see `install.ts`) into Archymedes's
+ * redistribute it: the person's machine installs it from npm (see `install.ts`) into Friday's
  * own folder, and this file imports it from there at run time. Nothing here imports it at build
  * time, which is also what keeps it out of the bundle for everyone who never uses Claude.
  *

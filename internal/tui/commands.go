@@ -49,6 +49,7 @@ func init() {
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
 		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
+		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openOverlay(newWallpaperPicker(m)); return nil }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"key", "[provider]", "Set or replace an API key: pick a provider, paste the key", (*Model).cmdKey},
@@ -73,7 +74,7 @@ func init() {
 		{"sessions", "", "Earlier sessions in this project (same as /resume)", (*Model).cmdResume},
 		{"providers", "", "Every provider: use one, give it a key, pick its model, make it the default (alt+p)", func(m *Model, _ string) tea.Cmd { return m.runAction("providers") }},
 		{"settings", "", "Every setting, in sections, edited in place (alt+s)", func(m *Model, _ string) tea.Cmd { return m.runAction("settings") }},
-		{"update", "", "Check for a newer Archymedes and install it", func(m *Model, _ string) tea.Cmd { return m.handOff("update", "update") }},
+		{"update", "", "Check for a newer Friday and install it", func(m *Model, _ string) tea.Cmd { return m.handOff("update", "update") }},
 		{"plan", "", "Read-only: investigate and propose", func(m *Model, _ string) tea.Cmd { return m.setMode("plan") }},
 		{"build", "", "Edit with approval (the default)", func(m *Model, _ string) tea.Cmd { return m.setMode("build") }},
 		{"auto", "", "Edit and run without asking", func(m *Model, _ string) tea.Cmd { return m.setMode("auto") }},
@@ -84,8 +85,8 @@ func init() {
 		{"theme", "[name]", "Pick a theme with a live preview, or switch to one (ctrl+t)", (*Model).cmdTheme},
 		{"clear", "", "Clear the screen (the session keeps its history)", func(m *Model, _ string) tea.Cmd { m.tr.clear(); return m.animate() }},
 		{"cancel", "", "Stop the running turn (esc)", func(m *Model, _ string) tea.Cmd { return m.cancelTurn() }},
-		{"quit", "", "Leave Archymedes", func(m *Model, _ string) tea.Cmd { return m.quit() }},
-		{"exit", "", "Leave Archymedes", func(m *Model, _ string) tea.Cmd { return m.quit() }},
+		{"quit", "", "Leave Friday", func(m *Model, _ string) tea.Cmd { return m.quit() }},
+		{"exit", "", "Leave Friday", func(m *Model, _ string) tea.Cmd { return m.quit() }},
 	}
 }
 

@@ -22,7 +22,7 @@ func NewDebugLog(w io.Writer) *log.Logger {
 	}
 	return log.NewWithOptions(w, log.Options{
 		Level: log.DebugLevel, ReportTimestamp: true, TimeFormat: "15:04:05.000",
-		Prefix: "archymedes", Formatter: log.LogfmtFormatter,
+		Prefix: "friday", Formatter: log.LogfmtFormatter,
 	})
 }
 

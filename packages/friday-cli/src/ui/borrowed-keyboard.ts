@@ -6,7 +6,7 @@ import { runChooser, type ChooserItem, type ChooserPaint, type RunChooserOptions
 import { runTable, type RunTableOptions, type TableRow } from "./table";
 
 // Taking the keyboard from readline for a moment, for a menu or a table drawn at the cursor: what
-// `archymedes settings`, `history` and the theme and model lists open. Split from `shortcuts.ts`,
+// `friday settings`, `history` and the theme and model lists open. Split from `shortcuts.ts`,
 // which adds the feature keys and the full-screen surfaces on top.
 
 /** One keystroke as a borrowed-keyboard surface receives it. */

@@ -46,7 +46,7 @@ func (m *Model) cmdContinue(string) tea.Cmd {
 // which tools ran (with whether they failed), in order.
 func (m *Model) transcriptMarkdown() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Archymedes session %s\n\n", m.session.ID)
+	fmt.Fprintf(&b, "# Friday session %s\n\n", m.session.ID)
 	fmt.Fprintf(&b, "- Model: %s\n- Mode: %s\n- Project: %s\n- Exported: %s\n\n", m.session.Info.Model, m.mode, m.projectRoot(), time.Now().Format(time.RFC3339))
 	for _, it := range m.tr.items {
 		switch v := it.(type) {
@@ -54,7 +54,7 @@ func (m *Model) transcriptMarkdown() string {
 			fmt.Fprintf(&b, "## You\n\n%s\n\n", v.text)
 		case *assistantItem:
 			if text := strings.TrimSpace(v.text.String()); text != "" {
-				fmt.Fprintf(&b, "## Archymedes\n\n%s\n\n", text)
+				fmt.Fprintf(&b, "## Friday\n\n%s\n\n", text)
 			}
 		case *toolItem:
 			status := "ok"
@@ -76,7 +76,7 @@ func (m *Model) cmdExport(arg string) tea.Cmd {
 	}
 	name := strings.TrimSpace(arg)
 	if name == "" {
-		name = fmt.Sprintf("archymedes-session-%s.md", time.Now().Format("20060102-150405"))
+		name = fmt.Sprintf("friday-session-%s.md", time.Now().Format("20060102-150405"))
 	}
 	path := name
 	if !filepath.IsAbs(path) {
@@ -117,7 +117,7 @@ func (m *Model) cmdEdit(string) tea.Cmd {
 	if editor == "" {
 		return m.toast(toastWarn, "Set $EDITOR (or $VISUAL) to use /edit")
 	}
-	file, err := os.CreateTemp("", "archymedes-prompt-*.md")
+	file, err := os.CreateTemp("", "friday-prompt-*.md")
 	if err != nil {
 		return m.toast(toastWarn, "Could not create a temp file: "+err.Error())
 	}

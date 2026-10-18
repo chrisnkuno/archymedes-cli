@@ -484,7 +484,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           const output = [result.stdout.trim(), result.stderr.replace(/\n?Command exceeded its .*$/s, "").trim()].filter(Boolean).join("\n");
           return {
             content: `'${command}' was still running after ${PERSISTENT_TRIAL_MS / 1000}s, so it was stopped: it is a long-running process, not a command that finishes. `
-              + "Start it with start_application: with its port for a server (Archymedes checks it answers and returns the URL), without a port for a worker, bot or watcher."
+              + "Start it with start_application: with its port for a server (Friday checks it answers and returns the URL), without a port for a worker, bot or watcher."
               + (output ? `\n\nWhat it printed:\n${output}` : ""),
             isError: true,
             data: { command, reason: "persistent_foreground_command", stdout: result.stdout, stderr: result.stderr },
@@ -552,12 +552,12 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         if (!status.url) {
           const logs = [status.stdout.trim(), status.stderr.trim()].filter(Boolean).join("\n");
           return {
-            content: `Background process ${status.id} is running. It keeps running while this Archymedes session is open; application_status shows its logs, stop_application stops it.${logs ? `\n\nSo far it printed:\n${logs.slice(-2_000)}` : ""}`,
+            content: `Background process ${status.id} is running. It keeps running while this Friday session is open; application_status shows its logs, stop_application stops it.${logs ? `\n\nSo far it printed:\n${logs.slice(-2_000)}` : ""}`,
             data: status,
           };
         }
         return {
-          content: `Application ${status.id} is running and answered HTTP at ${status.url}. It will remain available while this Archymedes session is open.`,
+          content: `Application ${status.id} is running and answered HTTP at ${status.url}. It will remain available while this Friday session is open.`,
           data: status,
           verification: { passed: true, kind: "smoke", scope: "targeted" as const, summary: `${status.url} answered HTTP` },
         };
@@ -1311,7 +1311,7 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
   if (options.externalToolProviders && options.externalToolProviders.length > 0) {
     const builtInNames = new Set(tools.map((tool) => tool.name));
     for (const externalTool of await collectExternalTools(options.externalToolProviders)) {
-      if (builtInNames.has(externalTool.name)) throw new Error(`Tool name '${externalTool.name}' collides with a built-in Archymedes tool`);
+      if (builtInNames.has(externalTool.name)) throw new Error(`Tool name '${externalTool.name}' collides with a built-in Friday tool`);
       tools.push(externalTool);
     }
   }
@@ -1336,7 +1336,7 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
     const withValidatedArguments = async (argumentsValue: Record<string, unknown>, context: Parameters<AgentTool["execute"]>[1]) => {
       const { value, notes } = normalizeToolArguments(tool.name, schema, argumentsValue);
       const result = await execute(value, context);
-      return notes.length === 0 ? result : { ...result, content: `${result.content}\n\n[Archymedes adjusted this call: ${notes.join("; ")}.]` };
+      return notes.length === 0 ? result : { ...result, content: `${result.content}\n\n[Friday adjusted this call: ${notes.join("; ")}.]` };
     };
     const withInstructions =
       !instructions || !PATH_TOOLS.has(tool.name)

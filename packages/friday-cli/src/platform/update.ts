@@ -150,7 +150,7 @@ export async function fetchLatestVersion(options: {
     if (!response.ok) throw new Error(`Registry returned HTTP ${response.status}.`);
     const body = await response.json() as { name?: unknown; version?: unknown };
     if (body.name !== ARCHYMEDES_CLI_PACKAGE || typeof body.version !== "string" || !parseSemver(body.version)) {
-      throw new Error("Registry returned an invalid Archymedes package record.");
+      throw new Error("Registry returned an invalid Friday package record.");
     }
     return body.version;
   } finally {
@@ -175,7 +175,7 @@ export async function runSelfUpdate(options: SelfUpdateOptions = {}): Promise<Se
   const environment = options.environment ?? process.env;
   const currentVersion = options.currentVersion ?? ARCHYMEDES_CLI_VERSION;
   if (!parseSemver(currentVersion)) {
-    stderr(`Archymedes cannot update itself because its current version "${currentVersion}" is invalid.\n`);
+    stderr(`Friday cannot update itself because its current version "${currentVersion}" is invalid.\n`);
     return { status: "failed", currentVersion, code: 1 };
   }
 
@@ -185,14 +185,14 @@ export async function runSelfUpdate(options: SelfUpdateOptions = {}): Promise<Se
   } catch (error) {
     const registryHost = hostOf(environment.ARCHYMEDES_UPDATE_REGISTRY?.trim() || DEFAULT_REGISTRY);
     const diagnosis = classifyNetworkError(error, { host: registryHost, purpose: "the self-update check" });
-    stderr(`Could not check for Archymedes updates: ${diagnosis ? diagnosis.message : error instanceof Error ? error.message : String(error)}\n`);
+    stderr(`Could not check for Friday updates: ${diagnosis ? diagnosis.message : error instanceof Error ? error.message : String(error)}\n`);
     if (diagnosis?.hint) stderr(`  ${diagnosis.hint}\n`);
     return { status: "failed", currentVersion, code: 1 };
   }
 
   const precedence = compareVersions(currentVersion, latestVersion);
   if (precedence === 0) {
-    stdout(`Archymedes ${currentVersion} is already up to date.\n`);
+    stdout(`Friday ${currentVersion} is already up to date.\n`);
     return { status: "up_to_date", currentVersion, latestVersion, code: 0 };
   }
   if (precedence > 0) {
@@ -222,18 +222,18 @@ export async function runSelfUpdate(options: SelfUpdateOptions = {}): Promise<Se
   if (!options.yes) {
     const interactive = options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
     if (!interactive && !options.confirm) {
-      stderr(`Archymedes ${latestVersion} is available, but a non-interactive update needs --yes.\n`);
+      stderr(`Friday ${latestVersion} is available, but a non-interactive update needs --yes.\n`);
       stderr(`Would run: ${command.command} ${command.args.join(" ")}\n`);
       return { status: "failed", currentVersion, latestVersion, code: 1 };
     }
-    const approved = await (options.confirm ?? askForConfirmation)(`Update Archymedes ${currentVersion} → ${latestVersion} with ${manager}?`);
+    const approved = await (options.confirm ?? askForConfirmation)(`Update Friday ${currentVersion} → ${latestVersion} with ${manager}?`);
     if (!approved) {
       stdout("Update cancelled.\n");
       return { status: "declined", currentVersion, latestVersion, code: 0 };
     }
   }
 
-  stdout(`Updating Archymedes ${currentVersion} → ${latestVersion} with ${manager}…\n`);
+  stdout(`Updating Friday ${currentVersion} → ${latestVersion} with ${manager}…\n`);
   const spawn = options.spawnImpl ?? ((executable, args, spawnOptions) => spawnSync(executable, args, spawnOptions));
   let result: ReturnType<SpawnLike>;
   try {
@@ -246,16 +246,16 @@ export async function runSelfUpdate(options: SelfUpdateOptions = {}): Promise<Se
       shell: false,
     });
   } catch (error) {
-    stderr(`Archymedes update failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    stderr(`Friday update failed: ${error instanceof Error ? error.message : String(error)}\n`);
     return { status: "failed", currentVersion, latestVersion, code: 1 };
   }
   if (result.error || result.status !== 0) {
     const reason = result.error?.message ?? (result.signal ? `terminated by ${result.signal}` : `installer exited ${result.status ?? "without a status"}`);
-    stderr(`Archymedes update failed: ${reason}.\n`);
+    stderr(`Friday update failed: ${reason}.\n`);
     stderr(`You can retry manually: ${command.command} ${command.args.join(" ")}\n`);
     return { status: "failed", currentVersion, latestVersion, code: 1 };
   }
 
-  stdout(`Archymedes ${latestVersion} was installed. Restart Archymedes to use the new version.\n`);
+  stdout(`Friday ${latestVersion} was installed. Restart Friday to use the new version.\n`);
   return { status: "updated", currentVersion, latestVersion, code: 0 };
 }

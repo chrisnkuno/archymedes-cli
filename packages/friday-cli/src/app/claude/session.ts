@@ -173,7 +173,7 @@ export class ClaudeSession {
       case "diff":
         return { kind: "text", text: "Claude's edits are in Changes (F10), file by file, against the last commit." };
       case "memory":
-        return { kind: "text", text: "Claude Code keeps its own memory (CLAUDE.md files); /memory is for Archymedes's models." };
+        return { kind: "text", text: "Claude Code keeps its own memory (CLAUDE.md files); /memory is for Friday's models." };
       default:
         return { kind: "error", text: `/${command} is not available while Claude runs this session.` };
     }

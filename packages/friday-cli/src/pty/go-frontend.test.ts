@@ -125,7 +125,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     expect(exitCode).toBe(0);
     // The agent's JSON lines, not a drawn screen: the Go UI never started.
     expect(proc.output()).toContain('"type"');
-    expect(proc.output()).not.toContain("Ask Archymedes");
+    expect(proc.output()).not.toContain("Ask Friday");
   }, 120_000);
 
   it("resumes the latest session with its conversation on screen", async () => {
@@ -142,7 +142,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await second.proc.waitFor("first reply from before", { timeoutMs: 60_000 });
     const text = await second.screen.text();
     expect(text).toContain("┃ remember this request");
-    expect(text).not.toContain("A R C H Y M E D E S"); // a resumed session is not a blank one
+    expect(text).not.toContain("F R I D A Y"); // a resumed session is not a blank one
   }, 150_000);
 
   it("switches the model mid-session and the next request uses it", async () => {
@@ -225,7 +225,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     expect(text).toContain("Anthropic");
     expect(text).toContain("in use");
     proc.write("\x1b"); // esc closes it
-    await screenShows(screen, "Ask Archymedes");
+    await screenShows(screen, "Ask Friday");
     proc.write("!echo from-the-shell\r");
     await screenShows(screen, "from-the-shell");
     expect(await settle(screen)).toContain("$ echo from-the-shell");
@@ -286,7 +286,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     const { proc, screen } = boot(130, 34, [], { ARCHYMEDES_PHOTOS: "local" }); // no network in tests
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
     proc.write("\x1b[24~"); // F12
-    await screenShows(screen, "built into Archymedes");
+    await screenShows(screen, "built into Friday");
     expect(await settle(screen)).toMatch(/\d+ of \d+/); // the count follows internal/gallery
     const before = await settle(screen);
     proc.write("\x1b[C"); // →
@@ -295,7 +295,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     proc.write("f");
     await screenShows(screen, "fit cover");
     proc.write("\x1b"); // esc
-    await screenShows(screen, "Ask Archymedes");
+    await screenShows(screen, "Ask Friday");
   }, 120_000);
 
   it("draws the whole screen over the wallpaper, and still quits at once", async () => {
@@ -328,7 +328,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
       },
     });
     const screen = new VirtualScreen(proc, 100, 30);
-    await proc.waitFor("Welcome to Archymedes", { timeoutMs: 60_000 });
+    await proc.waitFor("Welcome to Friday", { timeoutMs: 60_000 });
     await proc.waitFor("Anthropic", { timeoutMs: 30_000 }); // provider rows loaded; earlier keys would be dropped
     proc.write("\x1b[B"); // Free → Claude (subscription)
     proc.write("\x1b[B"); // Claude → Codex (ChatGPT plan)
@@ -346,7 +346,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("claude-sonnet", { timeoutMs: 30_000 });
     proc.write("hi\r");
     await proc.waitFor("hello after setup", { timeoutMs: 30_000 });
-    // Saved where `archymedes settings` keeps it, so the next start needs no setup.
+    // Saved where `friday settings` keeps it, so the next start needs no setup.
     const saved = await readFile(path.join(configDir, "settings.json"), "utf8").catch(async () => readdirText(configDir));
     expect(saved).toContain("sk-ant-first-run");
   }, 150_000);

@@ -14,7 +14,7 @@ import (
 )
 
 // The Settings app (alt+s, /settings): every setting the terminal menu had, in sections, edited in
-// place. The agent owns the fields and their validation (the same ones `archymedes settings` used),
+// place. The agent owns the fields and their validation (the same ones `friday settings` used),
 // so what is accepted here is what is accepted there; a change is saved the moment it is confirmed.
 
 type settingsApp struct {

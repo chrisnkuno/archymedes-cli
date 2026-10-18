@@ -29,7 +29,7 @@ function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
     approvals: {},
     totalRwf: 0,
     messages: [
-      { role: "system", content: "you are Archymedes" },
+      { role: "system", content: "you are Friday" },
       { role: "user", content: "fix the failing tests" },
       { role: "assistant", content: "", toolCalls: [{ id: "1", name: "run_command", arguments: { command: "npm test" } }] },
       { role: "tool", content: "exit 1", toolCallId: "1", name: "run_command" },
@@ -47,7 +47,7 @@ describe("summarising a session", () => {
     expect(summarizeSession(session())).toMatchObject({ turns: 2, messages: 7, title: "fix the failing tests" });
   });
 
-  it("does not attribute Archymedes's internal verification prompts to the user", () => {
+  it("does not attribute Friday's internal verification prompts to the user", () => {
     const record = session({
       messages: [
         { role: "user", content: "fix divide" },
@@ -170,7 +170,7 @@ describe("replaying a conversation", () => {
   });
 
   it("never replays the system prompt, which is not part of the conversation", () => {
-    expect(plain(renderReplay(session(), style()))).not.toContain("you are Archymedes");
+    expect(plain(renderReplay(session(), style()))).not.toContain("you are Friday");
   });
 
   it("keeps the last N turns when asked, and says the rest was left out", () => {

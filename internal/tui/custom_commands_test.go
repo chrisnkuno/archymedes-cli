@@ -100,7 +100,7 @@ func TestRetryContinueExportAndWhere(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"## You", "build it", "## Archymedes", "Done.", "tool `run_command`: failed"} {
+	for _, want := range []string{"## You", "build it", "## Friday", "Done.", "tool `run_command`: failed"} {
 		if !strings.Contains(string(raw), want) {
 			t.Errorf("export lacks %q:\n%s", want, raw)
 		}

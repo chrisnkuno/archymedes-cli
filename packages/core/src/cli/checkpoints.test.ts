@@ -61,7 +61,7 @@ describe("CheckpointStore", () => {
     expect(git("diff", "--cached", "--name-only").trim()).toBe("staged.txt");
   });
 
-  it("keeps Archymedes's own state out of snapshots and out of a restore", async () => {
+  it("keeps Friday's own state out of snapshots and out of a restore", async () => {
     await fs.mkdir(file(".archymedes"), { recursive: true });
     await fs.writeFile(file(".archymedes/session.jsonl"), "history");
     await fs.writeFile(file("code.txt"), "v1");

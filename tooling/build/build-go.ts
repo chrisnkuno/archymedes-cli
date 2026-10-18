@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 /**
  * Builds the Go interface for every published platform and stages one npm package per binary.
  *
- *   bun run tooling/build/build-go.ts            # all six targets → artifacts/npm/cli-<platform>-<arch>
+ *   bun run tooling/build/build-go.ts            # all six targets → artifacts/npm/friday-<platform>-<arch>
  *   bun run tooling/build/build-go.ts --host     # only this machine's target (local verification)
  *
  * Go builds static binaries with cgo off, so — unlike archymedes-state — there is no glibc/musl
@@ -31,7 +31,7 @@ export const TARGETS = [
   { platform: "win32", arch: "arm64", goos: "windows", goarch: "arm64" },
 ] as const;
 
-export const packageName = (target: { platform: string; arch: string }) => `${SCOPE}/cli-${target.platform}-${target.arch}`;
+export const packageName = (target: { platform: string; arch: string }) => `${SCOPE}/friday-${target.platform}-${target.arch}`;
 
 async function main(): Promise<void> {
   const manifest = JSON.parse(await fs.readFile(path.join(CLI, "package.json"), "utf8"));
@@ -48,10 +48,10 @@ async function main(): Promise<void> {
   if (targets.length === 0) throw new Error(`No published target for ${process.platform}-${process.arch}`);
 
   for (const target of targets) {
-    const dir = path.join(OUT, `cli-${target.platform}-${target.arch}`);
+    const dir = path.join(OUT, `friday-${target.platform}-${target.arch}`);
     await fs.rm(dir, { recursive: true, force: true });
     await fs.mkdir(path.join(dir, "bin"), { recursive: true });
-    const binary = path.join(dir, "bin", target.platform === "win32" ? "archymedes.exe" : "archymedes");
+    const binary = path.join(dir, "bin", target.platform === "win32" ? "friday.exe" : "friday");
     const built = spawnSync("go", ["build", "-trimpath", "-ldflags", `-s -w -X main.version=${version}`, "-o", binary, "./cmd/friday"], {
       cwd: ROOT,
       stdio: "inherit",
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
     await fs.writeFile(path.join(dir, "package.json"), `${JSON.stringify({
       name: packageName(target),
       version,
-      description: `The Archymedes CLI interface for ${target.platform}-${target.arch}. Installed by archymedes-cli; not meant to be installed directly.`,
+      description: `The Friday CLI interface for ${target.platform}-${target.arch}. Installed by @archymedes/friday; not meant to be installed directly.`,
       license: "Apache-2.0",
       repository: manifest.repository,
       os: [target.platform],

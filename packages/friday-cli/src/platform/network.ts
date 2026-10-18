@@ -7,7 +7,7 @@ import { hostOf } from "./endpoints";
  * ENOTFOUND api.example.com`, `The operation was aborted` — which reads as "internet is
  * broken" and tells the user nothing about which endpoint failed, why, or what to do about it.
  * This classifier owns that translation so every network surface (the turn loop, the FX lookup,
- * the update check, `archymedes --doctor`) reports the same way.
+ * the update check, `friday --doctor`) reports the same way.
  *
  * A non-network error (a schema failure, a budget refusal, a tool error) returns null and the
  * caller falls back to the raw message, so this never rewrites errors that have nothing to do
@@ -65,10 +65,10 @@ const CODES: Record<NetworkErrorKind, readonly string[]> = {
 };
 
 const KIND_HINTS: Partial<Record<NetworkErrorKind, string>> = {
-  dns: "Check the base-URL setting, or run `archymedes --doctor` to test each endpoint.",
-  timeout: "Retry, or run `archymedes --doctor` to see exactly which endpoint is slow or blocked.",
-  refused: "A firewall, proxy, or the host itself is refusing the connection. Run `archymedes --doctor` to confirm.",
-  reset: "A proxy or firewall may be dropping the connection. Retry, or run `archymedes --doctor`.",
+  dns: "Check the base-URL setting, or run `friday --doctor` to test each endpoint.",
+  timeout: "Retry, or run `friday --doctor` to see exactly which endpoint is slow or blocked.",
+  refused: "A firewall, proxy, or the host itself is refusing the connection. Run `friday --doctor` to confirm.",
+  reset: "A proxy or firewall may be dropping the connection. Retry, or run `friday --doctor`.",
   unreachable: "The network cannot reach this destination — check the connection or a blocking firewall.",
   tls: "If a corporate proxy is intercepting traffic this is expected; otherwise the certificate may be misconfigured.",
 };
@@ -136,7 +136,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
   const afterAttempts = options.attempts && options.attempts > 1 ? ` after ${options.attempts} attempts` : "";
   const afterWaiting = options.waitedMs && options.waitedMs > 0 ? ` over ${(options.waitedMs / 1000).toFixed(0)}s of retries` : "";
   const duplicateRisk = options.retrySuppressed === "output_started"
-    ? " Archymedes did not retry because output had already started; retrying automatically could duplicate output, charges, or tool actions."
+    ? " Friday did not retry because output had already started; retrying automatically could duplicate output, charges, or tool actions."
     : "";
   switch (kind) {
     case "dns":
@@ -153,7 +153,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
         return {
           kind,
           message: `${purpose} timed out${afterAttempts}${afterWaiting} — ${options.detail}`,
-          hint: "Retry, or run `archymedes --doctor` to see exactly which endpoint is slow or blocked.",
+          hint: "Retry, or run `friday --doctor` to see exactly which endpoint is slow or blocked.",
         };
       }
       return {
@@ -194,13 +194,13 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
       return {
         kind,
         message: `${purpose} returned 404 Not Found — the host is reachable, but the API route or selected model does not exist.`,
-        hint: "For an OpenAI-compatible provider use a base URL ending in /v1, then choose a live model with `/model` or refresh `/models`. Run `archymedes --doctor` to verify the endpoint.",
+        hint: "For an OpenAI-compatible provider use a base URL ending in /v1, then choose a live model with `/model` or refresh `/models`. Run `friday --doctor` to verify the endpoint.",
       };
     case "authentication":
       return {
         kind,
         message: `${purpose} rejected the configured credentials (401 Unauthorized).`,
-        hint: "Open `/settings` and replace the provider API key, then run `archymedes --doctor` before retrying.",
+        hint: "Open `/settings` and replace the provider API key, then run `friday --doctor` before retrying.",
       };
     case "permission":
       return {
@@ -218,7 +218,7 @@ function diagnosisFor(kind: NetworkErrorKind, options: ClassifyOptions): Network
       return {
         kind,
         message: `${purpose} rejected the request as invalid. The selected model may not support this request or tool-calling format.`,
-        hint: "Refresh `/models`, choose a compatible model with `/model`, or run `archymedes --doctor` to verify the provider configuration.",
+        hint: "Refresh `/models`, choose a compatible model with `/model`, or run `friday --doctor` to verify the provider configuration.",
       };
     case "server_error":
       return {

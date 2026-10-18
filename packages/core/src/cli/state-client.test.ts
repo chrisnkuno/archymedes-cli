@@ -68,7 +68,7 @@ describe("ArchymedesStateClient", () => {
     await expect(ArchymedesStateClient.connect({ binary: "fake-state", processFactory })).rejects.toMatchObject({ code: "broken", message: "bad source" });
   });
 
-  it("times out a wedged sidecar instead of hanging Archymedes", async () => {
+  it("times out a wedged sidecar instead of hanging Friday", async () => {
     await expect(ArchymedesStateClient.connect({ binary: "fake-state", processFactory: () => fakeProcess(() => null), requestTimeoutMs: 30 })).rejects.toMatchObject({ code: "timeout" });
   });
 

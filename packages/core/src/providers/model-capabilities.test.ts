@@ -28,7 +28,7 @@ describe("what a model can hold and produce", () => {
     }
   });
 
-  it("treats an unknown model exactly as Archymedes did before this table existed", () => {
+  it("treats an unknown model exactly as Friday did before this table existed", () => {
     // The dangerous failure is optimism: assuming a big window for an id nobody recognises turns a
     // local decision into a provider 400 halfway through the work.
     for (const id of ["gpt-9-turbo", "llama-4", "", "   ", undefined]) {

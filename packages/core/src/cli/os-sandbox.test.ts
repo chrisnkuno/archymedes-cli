@@ -53,7 +53,7 @@ describe.skipIf(probeBubblewrap() !== undefined)("commands under bubblewrap", ()
     await expect(fs.access(path.join(outside, "x.txt"))).rejects.toThrow();
   });
 
-  it("keeps Archymedes's own state read-only inside the project", async () => {
+  it("keeps Friday's own state read-only inside the project", async () => {
     const refused = await run("echo forged > .archymedes/session.json");
     expect(refused.exitCode).not.toBe(0);
     await expect(fs.access(path.join(root, ".archymedes", "session.json"))).rejects.toThrow();

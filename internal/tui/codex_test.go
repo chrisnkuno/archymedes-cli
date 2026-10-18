@@ -15,7 +15,7 @@ func codexRow() acp.ProviderOverview {
 	return acp.ProviderOverview{
 		ID: "codex", Label: "Codex (your ChatGPT plan)", Missing: []string{"signing in to Codex (codex login)"}, Model: "default",
 		Login: []string{"/usr/local/bin/codex", "login"},
-		About: "Runs your own Codex on your ChatGPT plan. Signing in is Codex's own; Archymedes never sees your account.",
+		About: "Runs your own Codex on your ChatGPT plan. Signing in is Codex's own; Friday never sees your account.",
 	}
 }
 

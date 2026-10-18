@@ -578,8 +578,8 @@ describe("main() — branches that resolve before any interactive input is neede
     // ...and no keys leak in from the developer's own *saved settings* either. Clearing the
     // environment alone was not enough and was in fact counterproductive: the loop above deletes
     // `ARCHYMEDES_CONFIG_DIR`, which sends `loadSettings` to the real per-user config file, so
-    // "unconfigured" meant "unconfigured unless whoever runs this suite actually uses Archymedes". It
-    // passed on CI and on a fresh checkout and failed for anyone who had run `archymedes settings` —
+    // "unconfigured" meant "unconfigured unless whoever runs this suite actually uses Friday". It
+    // passed on CI and on a fresh checkout and failed for anyone who had run `friday settings` —
     // the one population most likely to be running the tests.
     process.env.ARCHYMEDES_CONFIG_DIR = await mkdtemp(path.join(os.tmpdir(), "archymedes-main-config-"));
   });
@@ -656,7 +656,7 @@ describe("main() — branches that resolve before any interactive input is neede
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
     const { code, stderr, stdout } = await run(["--cwd", tmpRoot, "/models refresh"]);
     expect(code).toBe(2);
-    expect(stderr).toContain("Slash commands run inside an interactive Archymedes session");
+    expect(stderr).toContain("Slash commands run inside an interactive Friday session");
     expect(stdout).not.toContain("Estimated:");
   });
 

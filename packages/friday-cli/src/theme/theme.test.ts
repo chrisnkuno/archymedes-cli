@@ -127,7 +127,7 @@ describe("the themes that ship", () => {
     }
   });
 
-  it("defaults to Archymedes blue, and keeps the bronze Archymedes theme", () => {
+  it("defaults to Friday blue, and keeps the bronze Friday theme", () => {
     expect(DEFAULT_THEME_NAME).toBe("archymedes-blue");
     expect(findBuiltinTheme("archymedes")).toBeDefined();
     expect(findBuiltinTheme("blueprint")).toBeDefined();

@@ -109,7 +109,7 @@ describe("the projection is derived, never authoritative", () => {
     lines[1] = JSON.stringify(tampered);
     await fs.writeFile(file, `${lines.join("\n")}\n`);
 
-    await expect(projection.rebuild("s1")).rejects.toThrow(/integrity check failed|Invalid Archymedes event chain/);
+    await expect(projection.rebuild("s1")).rejects.toThrow(/integrity check failed|Invalid Friday event chain/);
   });
 
   it("is idempotent: rebuilding twice leaves what rebuilding once left", async () => {

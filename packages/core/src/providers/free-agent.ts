@@ -223,7 +223,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
     if (health) this.health = health;
     const apiKey = options.apiKey?.trim();
     this.viaGateway = !apiKey && Boolean(options.gatewayUrl);
-    if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode is not configured: point ARCHYMEDES_FREE_GATEWAY_URL at a free gateway, or save your own OPENROUTER_API_KEY (archymedes settings). Free mode never falls back to a paid provider.");
+    if (!apiKey && !this.viaGateway) throw new FreeAccessError("Free mode is not configured: point ARCHYMEDES_FREE_GATEWAY_URL at a free gateway, or save your own OPENROUTER_API_KEY (friday settings). Free mode never falls back to a paid provider.");
     if (!isFreeModelId(options.model)) throw new FreeAccessError("Free mode accepts openrouter/free or an exact publisher/model:free ID; paid models are not allowed.");
     this.baseUrl = this.viaGateway ? `${options.gatewayUrl}/v1` : FREE_BASE_URL;
     const client = dependencies.call ? undefined : new OpenAI({

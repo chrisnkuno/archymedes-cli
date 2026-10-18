@@ -109,7 +109,7 @@ async function acquireSessionLock(lockFile: string): Promise<() => Promise<void>
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
-  throw new Error("Session is being updated by another Archymedes process");
+  throw new Error("Session is being updated by another Friday process");
 }
 
 /** Atomic, checksummed and conflict-aware: an interrupted write never replaces the last snapshot. */

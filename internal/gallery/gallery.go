@@ -125,6 +125,16 @@ func Wallpaper(n int) Photo {
 	return turns[n]
 }
 
+// ByID is the photo with id, and whether there is one.
+func ByID(id string) (Photo, bool) {
+	for _, p := range Photos {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return Photo{}, false
+}
+
 // IndexOf is p's place in Photos, for Pick; 0 when it is not listed.
 func IndexOf(p Photo) int {
 	for i, q := range Photos {

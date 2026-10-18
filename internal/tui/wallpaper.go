@@ -54,7 +54,7 @@ func (m *Model) wallpaperKeep() float64 {
 
 // wallpaper is the grid for the current photo at width×height, or nil when photos are off.
 func (m *Model) wallpaper(width, height int) *wallpaperGrid {
-	if m.opts.NoPhotos || m.opts.NoWallpaper || width <= 0 || height <= 0 {
+	if m.wallpaperOff() || width <= 0 || height <= 0 {
 		return nil
 	}
 	p := m.homePhoto()

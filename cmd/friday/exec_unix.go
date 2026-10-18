@@ -14,10 +14,10 @@ import (
 func execAgent(argv []string) int {
 	path, err := exec.LookPath(argv[0])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "archymedes:", err)
+		fmt.Fprintln(os.Stderr, "friday:", err)
 		return 127
 	}
 	err = syscall.Exec(path, argv, os.Environ())
-	fmt.Fprintln(os.Stderr, "archymedes:", err)
+	fmt.Fprintln(os.Stderr, "friday:", err)
 	return 126
 }

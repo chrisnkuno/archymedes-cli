@@ -11,7 +11,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const packageRoot = path.join(root, "packages/friday-cli");
 const artifactRoot = path.join(root, "artifacts");
 const manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
-const archive = path.join(artifactRoot, `${manifest.name}-${manifest.version}.tgz`);
+// npm's own name for a scoped package's tarball: "@scope/name" becomes "scope-name", no slash.
+const archive = path.join(artifactRoot, `${manifest.name.replace(/^@/, "").replace("/", "-")}-${manifest.version}.tgz`);
 
 function run(command: string[], cwd: string, env = process.env): string {
   const result = spawnSync(command[0], command.slice(1), {
@@ -26,7 +27,7 @@ await mkdir(artifactRoot, { recursive: true });
 run([process.execPath, "pm", "pack", "--ignore-scripts", "--filename", archive], packageRoot);
 const entries = run(["tar", "-tzf", archive], root).trim().split(/\r?\n/);
 for (const entry of entries) {
-  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|bin\/(?:archymedes\.mjs|launcher\.mjs|launcher\.d\.mts)$|dist(?:\/|$))/);
+  assert.match(entry, /^package\/(?:package\.json$|README\.md$|I18N\.md$|NOTICE$|LICENSE$|bin\/(?:friday\.mjs|launcher\.mjs|launcher\.d\.mts)$|dist(?:\/|$))/);
   assert(!entry.split("/").some((part) => ["..", ".private", ".env", ".archymedes", "node_modules"].includes(part)), `Unexpected packed path: ${entry}`);
   assert(!/\.(?:test\.[cm]?[jt]sx?|map)$/.test(entry), `Development artifact: ${entry}`);
 }
@@ -39,12 +40,12 @@ const consumer = await mkdtemp(path.join(os.tmpdir(), "archymedes-consumer-"));
 try {
   // The Go interface for this machine, staged by `tooling/build/build-go.ts --host`, installed beside
   // the CLI the way npm would install the matching optional dependency.
-  const platformPackage = `@archymedes/cli-${process.platform}-${process.arch}`;
-  const staged = path.join(artifactRoot, "npm", `cli-${process.platform}-${process.arch}`);
+  const platformPackage = `@archymedes/friday-${process.platform}-${process.arch}`;
+  const staged = path.join(artifactRoot, "npm", `friday-${process.platform}-${process.arch}`);
   assert.equal(manifest.optionalDependencies?.[platformPackage], manifest.version, `${platformPackage} must be an optional dependency at ${manifest.version}`);
-  await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true, dependencies: { "archymedes-cli": `file:${archive}`, [platformPackage]: `file:${staged}` } }));
+  await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true, dependencies: { [manifest.name]: `file:${archive}`, [platformPackage]: `file:${staged}` } }));
   run([process.execPath, "install", "--ignore-scripts"], consumer);
-  const installed = path.join(consumer, "node_modules/archymedes-cli");
+  const installed = path.join(consumer, "node_modules", manifest.name);
   const installedManifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
   assert.equal(installedManifest.version, manifest.version);
   assert.equal(installedManifest.license, "Apache-2.0");
@@ -63,13 +64,13 @@ try {
   // bundled agent with this same Node.
   const command = path.join(installed, "bin/friday.mjs");
   const goVersion = run(["node", command, "--version"], consumer, env).trim();
-  assert.equal(goVersion, `archymedes ${manifest.version}`, `Go interface version: ${goVersion}`);
+  assert.equal(goVersion, `friday ${manifest.version}`, `Go interface version: ${goVersion}`);
   const goHelp = run(["node", command, "--help"], consumer, env);
   assert(goHelp.includes("--theme") && goHelp.includes("--resume") && goHelp.includes("--json") && !goHelp.includes("\x1b"));
   assert.match(run(["node", command, "--providers"], consumer, env), /anthropic/i, "--providers must reach the agent through the interface");
   // No binary for the platform: the agent still serves non-interactive modes, and asked for the
   // interface it says why there is none — the launcher's notice, not a stand-in interface.
-  // Wherever npm put it: hoisted to the top, or nested under archymedes-cli.
+  // Wherever npm put it: hoisted to the top, or nested under the CLI package.
   for (const at of [path.join(consumer, "node_modules"), path.join(installed, "node_modules")]) {
     await rm(path.join(at, ...platformPackage.split("/")), { recursive: true, force: true });
   }

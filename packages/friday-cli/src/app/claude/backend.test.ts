@@ -66,7 +66,7 @@ describe("finding the person's Claude Code", () => {
     expect(claudeEnvironment({ ...original, ARCHYMEDES_CLAUDE_BILLING: "API" }).ANTHROPIC_API_KEY).toBe("sk-ant-x");
   });
 
-  it("finds the SDK in Archymedes's folder, or where ARCHYMEDES_CLAUDE_SDK says", () => {
+  it("finds the SDK in Friday's folder, or where ARCHYMEDES_CLAUDE_SDK says", () => {
     const { deps, entry } = machine({ sdk: true });
     expect(findSdk(deps.environment)).toBe(entry);
     expect(findSdk({ ...deps.environment, ARCHYMEDES_CLAUDE_SDK: "/elsewhere/sdk.mjs" }, (file) => file === "/elsewhere/sdk.mjs")).toBe("/elsewhere/sdk.mjs");

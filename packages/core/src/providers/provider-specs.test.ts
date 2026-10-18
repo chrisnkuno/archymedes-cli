@@ -9,7 +9,7 @@ import { PROVIDER_IDS, PROVIDER_INFO, catalogPrices, isProviderId } from "./prov
  * decide whether the rest of the system can see it at all.
  */
 
-describe("who Archymedes can talk to", () => {
+describe("who Friday can talk to", () => {
   it("describes every provider it lists, and lists every provider it describes", () => {
     expect([...PROVIDER_IDS].sort()).toEqual(Object.keys(PROVIDER_INFO).sort());
     for (const id of PROVIDER_IDS) {

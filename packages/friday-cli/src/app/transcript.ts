@@ -360,7 +360,7 @@ export function renderEvent(event: ArchymedesEvent): void {
     // to land to tell "the assistant is now speaking" apart from the tool lines and the user's own
     // request above it. Every delta after the first is the same reply continuing, not a new one.
     if (activity.awaitingFirstDelta) {
-      const label = activity.toolCalls > 0 || touchedFiles.size > 0 ? "summary" : "Archymedes";
+      const label = activity.toolCalls > 0 || touchedFiles.size > 0 ? "summary" : "Friday";
       out.write(`\n${rule(sectionStyle(), { label, tone: "accent" })}\n`);
     }
     // The model is visibly talking now, so animation yields the row to streamed Markdown.

@@ -50,7 +50,7 @@ const audits: ReliabilityAudit[] = ["linux", "darwin", "win32"].map(
   }),
 );
 
-describe("Archymedes reliability score", () => {
+describe("Friday reliability score", () => {
   it("gives fully evidenced, economical, cross-platform work 100", () => {
     expect(scoreReliability([healthy], audits, { exaScore: 100 })).toMatchObject({
       score: 100,

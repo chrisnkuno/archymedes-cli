@@ -211,7 +211,7 @@ const RULES: readonly Rule[] = [
     category: "blocked",
     label: "Open a project",
     desktop: { kind: "ui", id: "open-project" },
-    when: (s) => (s.projectOpen === false ? "Archymedes works inside a folder — open one to give it a project" : null),
+    when: (s) => (s.projectOpen === false ? "Friday works inside a folder — open one to give it a project" : null),
   },
 
   // ── recovery ──────────────────────────────────────────────────────────────────────────────────
@@ -455,7 +455,7 @@ const RULES: readonly Rule[] = [
 export function starterSuggestions(signals: SessionSignals): Suggestion[] {
   const here = signals.projectName ? `${signals.projectName}` : "this project";
   const starters: readonly { id: string; text: string; reason: string }[] = [
-    { id: "starter-tour", text: `What does ${here} do, and how is it laid out?`, reason: "the fastest way to find out whether Archymedes has understood the project" },
+    { id: "starter-tour", text: `What does ${here} do, and how is it laid out?`, reason: "the fastest way to find out whether Friday has understood the project" },
     { id: "starter-tests", text: "Run the tests and tell me what fails", reason: "reads the project and proves it can run it, without changing anything" },
     { id: "starter-risk", text: "Find the riskiest thing in this codebase", reason: "a review pass — it looks, it does not touch" },
   ];

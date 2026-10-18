@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// The `archymedes` command, as npm installs it.
+// The `friday` command, as npm installs it.
 //
 // The interface is a Go binary, shipped per platform as an optional dependency
-// (@archymedes/cli-<platform>-<arch>); launcher.mjs decides whether it is usable. The agent behind
+// (@archymedes/friday-<platform>-<arch>); launcher.mjs decides whether it is usable. The agent behind
 // it is the bundled dist/friday.mjs, run with this same Node: the binary is told where it is
 // through ARCHYMEDES_AGENT, as a JSON array so an install path with spaces survives.
 //

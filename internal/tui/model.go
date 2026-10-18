@@ -121,6 +121,11 @@ type Model struct {
 	spinning bool // a spinner tick chain is running
 	animated bool // the landing animation's tick chain is running
 	angle    float64
+	homeT    float64 // the tour drawer's scene clock, seconds; still under reduced motion
+	// tourOpen is whether the home screen's tour drawer is wanted out; tourSlide how far out it is
+	// (0 folded, 1 open), eased toward that on each tick (homedrawer.go).
+	tourOpen  bool
+	tourSlide float64
 	// The home screen's photograph (photos.go): which one, since when, and the drawings by size.
 	photoIndex int
 	photoAt    time.Time
@@ -128,6 +133,9 @@ type Model struct {
 	quitting   bool           // quit was asked for: nothing more is drawn
 	wall       *wallpaperGrid // the wallpaper for wallKey: photo, size, dimming and theme
 	wallKey    string
+	// wallChoice is the wallpaper the person picked (config.State.Wallpaper): "" takes turns, a
+	// photo id keeps that one, "off" shows the theme's ground.
+	wallChoice string
 	// The last frame laid over the wallpaper, and the result, reused while neither changes.
 	underIn, underOut string
 	underGrid         *wallpaperGrid
@@ -213,7 +221,10 @@ func New(opts Options) *Model {
 	m.keys = newKeyMap(m.keyOverrides)
 	m.photoIndex = time.Now().YearDay() // a different photo first each day
 	// Without a config directory there is nowhere to remember a welcome, so do not give one.
-	m.welcomed = opts.ConfigDir == "" || config.LoadState(opts.ConfigDir).Welcomed
+	state := config.LoadState(opts.ConfigDir)
+	m.welcomed = opts.ConfigDir == "" || state.Welcomed
+	m.wallChoice = state.Wallpaper
+	m.tourOpen = !state.TourHidden
 	m.input = newComposer(th)
 	m.scroll = newScroller()
 	m.stats = newSessionStats()
@@ -407,6 +418,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.angle += 0.06
+		if m.opts.Motion {
+			m.homeT += animInterval.Seconds()
+			m.stepTourDrawer()
+		}
 		m.turnPhoto(time.Now())
 		return m, animTick()
 	case tea.BackgroundColorMsg:
@@ -647,7 +662,7 @@ func (m *Model) submit() tea.Cmd {
 		m.queue = append(m.queue, text)
 		return nil
 	}
-	m.notice(noticeError, "The agent is not running; restart Archymedes.")
+	m.notice(noticeError, "The agent is not running; restart Friday.")
 	return nil
 }
 

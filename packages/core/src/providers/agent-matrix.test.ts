@@ -190,10 +190,10 @@ describe("Anthropic message translation", () => {
   it("lifts the system prompt out of the message list", () => {
     // The Messages API takes `system` as a top-level parameter, not a message role.
     const { system, messages } = toAnthropicMessages([
-      { role: "system", content: "You are Archymedes." },
+      { role: "system", content: "You are Friday." },
       { role: "user", content: "hello" },
     ]);
-    expect(system).toBe("You are Archymedes.");
+    expect(system).toBe("You are Friday.");
     expect(messages).toEqual([{ role: "user", content: "hello" }]);
   });
 

@@ -393,7 +393,7 @@ export function validateSetting(key: SettingKey, raw: string): string {
   }
   if (key === "ARCHYMEDES_CURRENCY") {
     const currency = value.toUpperCase();
-    if (!isCurrency(currency)) throw new Error(`${currency} is not a currency Archymedes can convert to. Leave this empty to use the one your location implies.`);
+    if (!isCurrency(currency)) throw new Error(`${currency} is not a currency Friday can convert to. Leave this empty to use the one your location implies.`);
     return currency;
   }
   return key === "MODEL_PRICE_CURRENCY" ? value.toUpperCase() : value;
@@ -517,7 +517,7 @@ export async function runSettingsMenu(current: ArchymedesSettings, prompts: Sett
         { value: { kind: "done" } as SettingsSelection, label: `${controlLabel(language, "saved")} / ${controlLabel(language, "exit")}`, pinned: true },
       ];
       const chosen = await prompts.choose({
-        title: `Archymedes ${controlLabel(language, "settings")}`,
+        title: `Friday ${controlLabel(language, "settings")}`,
         items,
         // Filterable: sixty rows is not a menu you arrow through to row fifty, and the value
         // lists already filter — the field list refusing typed queries while they do would be

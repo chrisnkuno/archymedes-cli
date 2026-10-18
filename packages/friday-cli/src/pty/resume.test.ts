@@ -51,7 +51,7 @@ describe("resuming, from the terminal", () => {
   }
 
   it("keeps the past conversation out of the way of a one-shot run", async () => {
-    // A replay is orientation for someone about to type. `archymedes --resume "…"` is not that: the
+    // A replay is orientation for someone about to type. `friday --resume "…"` is not that: the
     // answer is the output, and the transcript in front of it is noise a script has to skip.
     stub.enqueue({ kind: "text", text: "The migration lives in db/0007-add-index.sql." });
     const first = boot(["where does the migration live?"]);

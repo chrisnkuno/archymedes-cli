@@ -437,7 +437,7 @@ describe("checkpoints against a real repository", () => {
       await runGit(["init", "-q"], { cwd: repo });
       await runGit(["config", "core.autocrlf", "false"], { cwd: repo });
       await runGit(["config", "user.email", "archymedes@test"], { cwd: repo });
-      await runGit(["config", "user.name", "Archymedes"], { cwd: repo });
+      await runGit(["config", "user.name", "Friday"], { cwd: repo });
       await fs.writeFile(path.join(repo, "app.ts"), "export const port = 3000;\n");
       await runGit(["add", "-A"], { cwd: repo });
       await runGit(["commit", "-qm", "init"], { cwd: repo });
@@ -505,7 +505,7 @@ describe("checkpoints against a real repository", () => {
     try {
       await runGit(["init", "-q"], { cwd: repo });
       await runGit(["config", "user.email", "archymedes@test"], { cwd: repo });
-      await runGit(["config", "user.name", "Archymedes"], { cwd: repo });
+      await runGit(["config", "user.name", "Friday"], { cwd: repo });
       await fs.writeFile(path.join(repo, "app.ts"), "x");
       await runGit(["add", "-A"], { cwd: repo });
       await runGit(["commit", "-qm", "init"], { cwd: repo });
@@ -525,7 +525,7 @@ describe("what compaction keeps verbatim", () => {
   /** A transcript that has grown past the point where compaction is required. */
   function transcript(tail: AgentMessage[]): AgentMessage[] {
     const bulk: AgentMessage[] = [
-      { role: "system", content: "You are Archymedes." },
+      { role: "system", content: "You are Friday." },
       { role: "user", content: "Fix the failing build." },
     ];
     for (let index = 0; index < 40; index += 1) {

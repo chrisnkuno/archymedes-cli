@@ -8,7 +8,7 @@ import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
 
-describe("Archymedes settings", () => {
+describe("Friday settings", () => {
   it("uses native config locations on each desktop platform", () => {
     expect(settingsDirectory({ APPDATA: "C:\\Users\\Archymedes\\AppData\\Roaming" }, "win32")).toContain(path.join("Archymedes"));
     expect(settingsDirectory({}, "darwin")).toContain(path.join("Library", "Application Support", "Archymedes"));
@@ -400,7 +400,7 @@ describe("picking a model in the settings menu", () => {
     expect(asked).toBe(0);
   });
 
-  it("covers every provider Archymedes can be configured to use", () => {
+  it("covers every provider Friday can be configured to use", () => {
     // A provider added with its own `*_MODEL` setting and left out of this map gets a free-text
     // box and no explanation. The failure is silent, so it is pinned here rather than noticed
     // later by whoever has to type an exact id from memory.

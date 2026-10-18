@@ -23,7 +23,7 @@ func execAgent(argv []string) int {
 		return exit.ExitCode()
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "archymedes:", err)
+		fmt.Fprintln(os.Stderr, "friday:", err)
 		return 127
 	}
 	return 0

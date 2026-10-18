@@ -107,4 +107,4 @@ if (!built.success) {
 // replaced, and indexed without putting the full corpus in every model request.
 await fs.cp(DEFENDER_KNOWLEDGE, path.join(CLI, "dist", "defender-knowledge"), { recursive: true });
 const { launcher, main, bytes } = await emitCliBundle(path.join(CLI, "dist"));
-console.log(`archymedes-cli: built ${launcher} + ${path.basename(main)} (${(bytes / 1_000_000).toFixed(2)} MB)`);
+console.log(`@archymedes/friday: built ${launcher} + ${path.basename(main)} (${(bytes / 1_000_000).toFixed(2)} MB)`);

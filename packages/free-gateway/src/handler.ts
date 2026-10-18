@@ -283,7 +283,7 @@ export function createFreeGateway(config: GatewayConfig): GatewayHandler {
           authorization: `Bearer ${config.apiKey}`,
           "content-type": "application/json",
           ...(config.referer ? { "http-referer": config.referer } : {}),
-          "x-title": "Archymedes",
+          "x-title": "Friday",
         },
         body: JSON.stringify(policy.body),
         signal,

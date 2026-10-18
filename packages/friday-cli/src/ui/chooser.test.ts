@@ -413,7 +413,7 @@ describe("every menu obeys the same rules", () => {
 /**
  * The furniture around the rows — a title, a status line, a position, a legend.
  *
- * Bubbles' list can hide each of these because a list rarely owns the whole screen; Archymedes's could not,
+ * Bubbles' list can hide each of these because a list rarely owns the whole screen; Friday's could not,
  * so a caller sharing the screen had no way to get those rows back. The invariants worth holding are
  * that hiding one part hides only that part, and that a transient status behaves like a message about
  * the last keystroke rather than a permanent row.

@@ -90,6 +90,11 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 			}
 		}
 	}
+	if m.landingVisible() {
+		if cmd, ok := m.tourClick(msg); ok {
+			return cmd
+		}
+	}
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(gallery.IndexOf(m.homePhoto())) // the photo, full size
 	}

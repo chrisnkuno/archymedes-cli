@@ -37,12 +37,16 @@ func (m *Model) landingVisible() bool {
 // start on, and the requests worth trying. The photo turns every photoInterval; the line turns with
 // it. Without photos, or on a screen too small for a wallpaper, the card stands on its own.
 func (m *Model) landing(width, height int) []string {
-	card := m.homeCard(width, height)
+	// The tour drawer (homedrawer.go) takes the right edge; the card centres in what is left, so it
+	// slides over as the drawer slides in.
+	right := m.tourRight(width, height)
+	cardWidth := width - right
+	card := m.homeCard(cardWidth, height)
 	if card == nil {
-		return centre(m.homeInfo(width, height), width, height)
+		return m.withTourDrawer(centre(m.homeInfo(cardWidth, height), cardWidth, height), width, height)
 	}
-	out := centre(card, width, height)
-	if m.opts.NoPhotos || height < len(card)+1 {
+	out := m.withTourDrawer(centre(card, cardWidth, height), width, height)
+	if m.opts.NoPhotos || m.wallChoice == wallpaperNone || height < len(card)+1 {
 		return out
 	}
 	// The wallpaper is laid under the whole screen (wallpaper.go); here, what it is and who took
@@ -55,8 +59,14 @@ func (m *Model) landing(width, height int) []string {
 }
 
 // splice puts over (width cells) into row at column x, keeping the row on both sides of it.
+// A row that ends before the piece has no tail: cutting one from it anyway would copy the row's
+// zero-width escapes (click-zone markers among them) to after the piece, moving those zones there.
 func splice(row, over string, x, width int) string {
-	return ansi.Truncate(row, x, "") + strings.Repeat(" ", max(x-ansi.StringWidth(row), 0)) + over + ansi.TruncateLeft(row, x+width, "")
+	out := ansi.Truncate(row, x, "") + strings.Repeat(" ", max(x-ansi.StringWidth(row), 0)) + over
+	if ansi.StringWidth(row) > x+width {
+		out += ansi.TruncateLeft(row, x+width, "")
+	}
+	return out
 }
 
 // homeCard is the home screen's card: the mark beside what it says where there is room, in a box
@@ -121,7 +131,7 @@ func (m *Model) homeInfo(width, height int) []string {
 	}
 	sections := []section{
 		{0, fit(
-			theme.Gradient("A R C H Y M E D E S", th.Primary, th.Secondary, true)+m.versionLabel(),
+			theme.Gradient("F R I D A Y", th.Primary, th.Secondary, true)+m.versionLabel(),
 			th.Faint.Render("a coding agent that shows its work"),
 		)},
 		{2, append(fit(th.Strong.Render(greeting(time.Now()))), wrapped(th.Highlight, spark(m.photoIndex), width)...)},

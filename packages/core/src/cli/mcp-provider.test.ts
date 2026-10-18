@@ -144,7 +144,7 @@ describe("an MCP server's environment", () => {
     return scriptPath;
   }
 
-  it("never sees Archymedes's own provider keys, matching what run_command already guaranteed", async () => {
+  it("never sees Friday's own provider keys, matching what run_command already guaranteed", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-live-secret-value";
     const reportPath = path.join(root, "seen.json");
     const connection = new McpConnection({ id: "probe", command: "node", args: [await envReportingServer(reportPath)] });

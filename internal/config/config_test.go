@@ -66,3 +66,16 @@ func TestStateStartsUnwelcomedAndRemembers(t *testing.T) {
 		t.Fatal("not remembered")
 	}
 }
+
+func TestUpdateStateKeepsWhatItDoesNotTouch(t *testing.T) {
+	dir := t.TempDir()
+	if err := UpdateState(dir, func(s *State) { s.Welcomed = true }); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateState(dir, func(s *State) { s.Wallpaper = "off" }); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadState(dir); !got.Welcomed || got.Wallpaper != "off" {
+		t.Fatalf("state = %+v", got)
+	}
+}

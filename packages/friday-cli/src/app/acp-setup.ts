@@ -12,7 +12,7 @@ import { loadSettings, mergedEnvironment, saveSettings, SETTING_FIELDS, validate
  * screen cannot share that prompt, so it asks the same two questions through the protocol instead:
  * `_archymedes/setup/status` (is a provider usable, and which could be set up with one key) and
  * `_archymedes/setup/save` (check this key, save it, and use it from the next `session/new`).
- * Saving goes through the same settings file and validation as `archymedes settings`.
+ * Saving goes through the same settings file and validation as `friday settings`.
  */
 
 /** Where each key-only provider hands out keys, so the client can say where to get one. */
@@ -31,7 +31,7 @@ const KEY_URLS: Partial<Record<ProviderId, string>> = {
 export type SetupProvider = {
   id: ProviderId;
   label: string;
-  /** The one variable a key fills; absent for providers that need more than a key (set up with `archymedes settings`). */
+  /** The one variable a key fills; absent for providers that need more than a key (set up with `friday settings`). */
   keyVariable?: string;
   keyUrl?: string;
   configured: boolean;
@@ -75,7 +75,7 @@ export async function saveSetup(params: Record<string, unknown>, deps: SetupSave
   const raw = typeof params.key === "string" ? params.key.trim() : "";
   if (!isProviderId(provider)) return { ok: false, error: `Unknown provider "${provider}".` };
   const target = setupStatus(deps.environment).providers.find((candidate) => candidate.id === provider);
-  if (!target?.keyVariable) return { ok: false, error: `${PROVIDER_INFO[provider].label} needs more than a key; run archymedes settings.` };
+  if (!target?.keyVariable) return { ok: false, error: `${PROVIDER_INFO[provider].label} needs more than a key; run friday settings.` };
   if (!raw) return { ok: false, error: "The key is empty." };
 
   let key: string;

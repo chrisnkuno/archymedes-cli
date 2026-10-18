@@ -58,10 +58,19 @@ func (m *Model) photoCard(p gallery.Photo, cols, rows int) []string {
 	)
 }
 
-// homePhoto is the wallpaper now, antiquity and sci-fi in turn: it turns every photoInterval, or
-// with reduced motion stays on the day's.
+// homePhoto is the wallpaper now: the one the person picked, else antiquity and sci-fi in turn,
+// turning every photoInterval (or, with reduced motion, staying on the day's).
 func (m *Model) homePhoto() gallery.Photo {
+	if p, ok := gallery.ByID(m.wallChoice); ok {
+		return p
+	}
 	return gallery.Wallpaper(m.photoIndex)
+}
+
+// wallpaperOff is whether no photo is drawn behind the screen: turned off by the environment, or
+// "None" picked in /wallpaper.
+func (m *Model) wallpaperOff() bool {
+	return m.opts.NoPhotos || m.opts.NoWallpaper || m.wallChoice == wallpaperNone
 }
 
 // turnPhoto advances the home screen's photo when its time is up; called on the landing's tick.

@@ -109,7 +109,7 @@ export async function codexOverview(deps: CodexDependencies): Promise<ProviderOv
     model: codexModel(deps.environment),
     isDefault: codexIsDefault(deps.environment),
     fields: [],
-    about: "Runs your own Codex on your ChatGPT plan. Signing in is Codex's own; Archymedes never sees your account.",
+    about: "Runs your own Codex on your ChatGPT plan. Signing in is Codex's own; Friday never sees your account.",
     ...(readiness.executable && !readiness.ready && readiness.needs === "sign-in" ? { login: [readiness.executable, ...CODEX_LOGIN_ARGS] } : {}),
     ...(note ? { note } : {}),
   };

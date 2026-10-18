@@ -36,7 +36,7 @@ type Client struct {
 	traceM   sync.Mutex
 }
 
-// Start launches argv (for example `archymedes acp --free`) in dir and performs the handshake.
+// Start launches argv (for example `friday acp --free`) in dir and performs the handshake.
 func Start(ctx context.Context, argv []string, dir string, env []string) (*Client, error) {
 	if len(argv) == 0 {
 		return nil, errors.New("no agent command")

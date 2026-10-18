@@ -88,7 +88,7 @@ func (m *Model) welcome() {
 	}
 	m.welcomed, m.firstTurnTip = true, true
 	if m.opts.ConfigDir != "" {
-		_ = config.SaveState(m.opts.ConfigDir, config.State{Welcomed: true})
+		_ = config.UpdateState(m.opts.ConfigDir, func(s *config.State) { s.Welcomed = true })
 	}
 }
 

@@ -70,7 +70,7 @@ func matchingMentions(files []string, fragment string) []completion {
 
 func newComposer(th theme.Theme) composer {
 	area := textarea.New()
-	area.Placeholder = "Ask Archymedes · / for commands · !command runs it here"
+	area.Placeholder = "Ask Friday · / for commands · !command runs it here"
 	area.ShowLineNumbers = false
 	area.Prompt = ""
 	area.CharLimit = 0

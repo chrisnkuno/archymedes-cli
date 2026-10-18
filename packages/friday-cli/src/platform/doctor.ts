@@ -7,10 +7,10 @@ import { modelsEndpoint } from "@archymedes/core/providers/model-list";
 import type { ProviderId } from "@archymedes/core/providers/agent-matrix";
 
 /**
- * `archymedes --doctor`: probes every network endpoint the CLI depends on and reports exactly which
+ * `friday --doctor`: probes every network endpoint the CLI depends on and reports exactly which
  * one is failing, in seconds.
  *
- * The most common support report is "Archymedes says there is no internet, but the internet works."
+ * The most common support report is "Friday says there is no internet, but the internet works."
  * Usually the model API is reachable and the FX-rate CDN is not (or vice versa) — the CLI has
  * three separate network dependencies and any of them can be blocked by a corporate proxy, a
  * country-level firewall, or a flaky DNS. A doctor that tests each one separately turns that
@@ -171,7 +171,7 @@ export function renderDoctor(probes: readonly DoctorProbe[], depth: ColorDepth, 
     verdict.push(green(`  ${t(language, "doctor.allReachable")}`));
   }
   if (optionalFailures.length > 0) {
-    verdict.push(dim(`  Optional: ${optionalFailures.map((probe) => `${hostOf(probe.url)} (${probe.diagnosis?.kind ?? "failed"})`).join(", ")} — Archymedes still runs; FX costs may fall back to the provider currency.`));
+    verdict.push(dim(`  Optional: ${optionalFailures.map((probe) => `${hostOf(probe.url)} (${probe.diagnosis?.kind ?? "failed"})`).join(", ")} — Friday still runs; FX costs may fall back to the provider currency.`));
   }
 
   return [t(language, "doctor.header"), "", ...rows, "", ...verdict, ""].join("\n");

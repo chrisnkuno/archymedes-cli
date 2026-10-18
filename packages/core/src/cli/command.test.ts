@@ -32,8 +32,8 @@ describe("local command executor", () => {
   });
 
   it("preserves Windows path separators in direct argv commands", () => {
-    expect(tokenizeCommand('node C:\\Users\\Archymedes\\project\\script.js "C:\\Program Files\\Archymedes\\config.json"', "win32"))
-      .toEqual(["node", "C:\\Users\\Archymedes\\project\\script.js", "C:\\Program Files\\Archymedes\\config.json"]);
+    expect(tokenizeCommand('node C:\\Users\\Friday\\project\\script.js "C:\\Program Files\\Friday\\config.json"', "win32"))
+      .toEqual(["node", "C:\\Users\\Friday\\project\\script.js", "C:\\Program Files\\Friday\\config.json"]);
   });
 
   it("uses the explicit shell path only when syntax requires it", async () => {
@@ -120,7 +120,7 @@ describe("shell syntax by platform", () => {
 });
 
 describe("sanitizing a spawned command's environment", () => {
-  it("strips every credential Archymedes itself reads from the environment", () => {
+  it("strips every credential Friday itself reads from the environment", () => {
     const source = Object.fromEntries(ARCHYMEDES_CREDENTIAL_ENV_NAMES.map((name) => [name, "secret-value"]));
     const sanitized = sanitizeCommandEnvironment({ ...source, PATH: "/usr/bin", HOME: "/home/user" });
     for (const name of ARCHYMEDES_CREDENTIAL_ENV_NAMES) expect(sanitized).not.toHaveProperty(name);
@@ -161,7 +161,7 @@ describe("environment sanitization through a real spawned process", () => {
     process.env = { ...originalEnv };
   });
 
-  it("keeps a locally spawned command from ever seeing Archymedes's own API keys", async () => {
+  it("keeps a locally spawned command from ever seeing Friday's own API keys", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-live-secret-value";
     process.env.OPENAI_API_KEY = "sk-openai-live-secret-value";
     const result = await runLocalCommand("env", { cwd: root, timeoutMs: 5_000 });

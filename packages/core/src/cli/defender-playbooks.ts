@@ -530,7 +530,7 @@ export const LLM_AI_SECURITY_PLAYBOOK = `
 ## LLM & AI application security
 
 Aligned to the OWASP Top 10 for LLM Applications (2025) — relevant to any project that calls a
-model API, embeds a chat feature, or (like Archymedes itself) gives a model tools that can act on a
+model API, embeds a chat feature, or (like Friday itself) gives a model tools that can act on a
 codebase or a live system. An LLM blurs the line between "instructions" and "data" in a way
 traditional input validation was never built for, which is the root cause behind most of this list.
 
@@ -543,7 +543,7 @@ traditional input validation was never built for, which is the root cause behind
   the task in front of it actually needs — a tool that can write files or run commands with no
   human approval step, a broader API scope than the agent's job requires, or a chain of tool calls
   that can complete an irreversible action (a payment, a deploy, a delete) with no confirmation.
-  The mitigation that matters most here is the one Archymedes's own approval gating exists for: nothing
+  The mitigation that matters most here is the one Friday's own approval gating exists for: nothing
   effectful should run without a human in the loop, or without a narrowly scoped, explicitly
   reasoned-about exception.
 - **Insecure output handling (LLM05)**: model output written into a shell command, a database
@@ -566,7 +566,7 @@ traditional input validation was never built for, which is the root cause behind
 - **Unbounded consumption (LLM10)**: no limit on request rate, input/output token length, or
   recursive tool-call depth — a single crafted input that causes the model to loop, or a user who
   can trigger unbounded generation, turning into a cost or availability incident (this is what
-  Archymedes's own budget/spend-cap machinery exists to bound; check whether *this* project's own
+  Friday's own budget/spend-cap machinery exists to bound; check whether *this* project's own
   LLM-calling code has an equivalent).
 - **Vector and embedding weaknesses (LLM08)**: for a RAG (retrieval-augmented generation) system —
   whether the retrieval store enforces the same access control the source documents had (a

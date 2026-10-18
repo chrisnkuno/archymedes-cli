@@ -63,11 +63,11 @@ func TestTheGalleryShowsTheBuiltInPhotoBesideTheLiveOneWithCaptions(t *testing.T
 	if g.live.State() != pictureurl.StateLoaded {
 		t.Fatalf("live photo state %v, err %v", g.live.State(), g.live.Err())
 	}
-	if len(agents) == 0 || !strings.HasPrefix(agents[0], "archymedes/3.1.0") {
+	if len(agents) == 0 || !strings.HasPrefix(agents[0], "friday/3.1.0") {
 		t.Fatalf("fetched without saying who asks: %q", agents)
 	}
 	s := screen(m)
-	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Archymedes", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ photo", "Kitty:", "Sixel:"} {
+	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Friday", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ photo", "Kitty:", "Sixel:"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("Gallery lacks %q:\n%s", want, s)
 		}
@@ -112,7 +112,7 @@ func TestTheGallerySaysWhenThePhotoCannotBeFetchedAndKeepsTheBuiltInCopy(t *test
 	defer srv.Close()
 	openGalleryWith(t, m, srv)
 	s := screen(m)
-	if !strings.Contains(s, "Could not load it") || !strings.Contains(s, "built into Archymedes") {
+	if !strings.Contains(s, "Could not load it") || !strings.Contains(s, "built into Friday") {
 		t.Fatalf("a failed fetch:\n%s", s)
 	}
 }

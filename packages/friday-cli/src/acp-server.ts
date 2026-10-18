@@ -15,7 +15,7 @@ import { CODEX_PROVIDER } from "./app/codex/identity";
 import { installInChildProcess, startupMaintenance } from "./app/startup-update";
 
 /**
- * `archymedes acp` — the same agent, driven by an editor over stdio.
+ * `friday acp` — the same agent, driven by an editor over stdio.
  *
  * Nothing about a Archymedes session is terminal-shaped underneath: a turn already emits structured
  * events and already pauses on an approval that somebody else answers. What the terminal front end
@@ -61,7 +61,7 @@ export type AcpServerOptions = {
   createWorkspace?: () => Promise<{ workspace: ArchymedesWorkspace } | { error: string }>;
 };
 
-/** One `archymedes acp` process: reads until stdin closes, then disposes every live session. */
+/** One `friday acp` process: reads until stdin closes, then disposes every live session. */
 export async function runAcpServer(options: AcpServerOptions): Promise<number> {
   const warn = options.warn ?? ((message: string) => process.stderr.write(`${message}\n`));
   const send = (message: JsonRpcOutgoing) => options.write(`${JSON.stringify(message)}\n`);
@@ -169,12 +169,12 @@ export async function pumpMessages(
       } catch {
         // Unparseable input has no id to answer, so there is nobody to send an error to. Say so
         // on stderr and keep reading: one bad line must not end the session.
-        warn(`archymedes acp: ignoring unparseable message (${line.length} bytes)`);
+        warn(`friday acp: ignoring unparseable message (${line.length} bytes)`);
         continue;
       }
       if (isPrompt(parsed)) {
         const turn: Promise<void> = receive(parsed)
-          .catch((error: unknown) => warn(`archymedes acp: turn failed: ${error instanceof Error ? error.message : String(error)}`))
+          .catch((error: unknown) => warn(`friday acp: turn failed: ${error instanceof Error ? error.message : String(error)}`))
           .finally(() => inFlight.delete(turn));
         inFlight.add(turn);
       } else {

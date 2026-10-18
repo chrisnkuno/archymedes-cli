@@ -6,7 +6,7 @@ import { PROVIDER_IDS, PROVIDER_INFO, missingRequirements, providerEnvPrefix, ty
  * The CLI has exactly three network dependencies: the model API that does the work (required),
  * the daily FX-rate lookup that prices it in local currency (optional, skipped by ARCHYMEDES_FX_OFFLINE
  * or a configured rate), and the npm registry that self-update checks (optional, only reached on
- * `archymedes update`). Keeping them here means the connectivity doctor, the FX lookup and the update
+ * `friday update`). Keeping them here means the connectivity doctor, the FX lookup and the update
  * check all agree on what to call — a doctor that says an endpoint is fine while the same lookup
  * times out would be its own kind of unprofessional.
  */

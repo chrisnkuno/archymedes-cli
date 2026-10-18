@@ -4,7 +4,7 @@ import type { ArchymedesEvent } from "@archymedes/core/cli/agent";
 import { asRecord } from "./rpc";
 
 /**
- * Codex's app-server notifications, said in Archymedes's events: the ones the interface already
+ * Codex's app-server notifications, said in Friday's events: the ones the interface already
  * draws. Pure: notifications in, events out. A session feeds a turn's notifications through `feed`
  * and ends the turn with `finish`. What it keeps, which `translate.test.ts` checks:
  *

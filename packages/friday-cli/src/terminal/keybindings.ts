@@ -220,7 +220,7 @@ export const DEFAULT_BINDINGS: readonly { command: string; chords: readonly stri
   // the mnemonic. Expansion is the one action people reach for *while reading*, which is why it
   // gets a chord rather than only a typed command.
   { command: "/expand", chords: ["ctrl+o", "alt+e"], description: "Unfold the most recent folded block" },
-  { command: "/memory", chords: ["alt+n"], description: "Facts Archymedes carries between sessions" },
+  { command: "/memory", chords: ["alt+n"], description: "Facts Friday carries between sessions" },
   { command: "/history", chords: ["f5"], description: "Past conversations" },
   { command: "/slow", chords: ["alt+s"], description: "Change the spending pace" },
   // Ctrl+Tab is the conventional tab switcher and is unusable here twice over: terminals rarely

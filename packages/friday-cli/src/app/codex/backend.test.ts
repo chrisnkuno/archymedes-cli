@@ -46,7 +46,7 @@ describe("Codex as a provider", () => {
     expect(result).toMatchObject({ ok: false, error: expect.stringContaining("Install Codex") });
   });
 
-  it("keeps Archymedes's OpenAI key from Codex unless told to bill it", () => {
+  it("keeps Friday's OpenAI key from Codex unless told to bill it", () => {
     expect(codexEnvironment({ OPENAI_API_KEY: "sk", PATH: "/bin" })).toEqual({ PATH: "/bin" });
     expect(codexEnvironment({ OPENAI_API_KEY: "sk", ARCHYMEDES_CODEX_BILLING: "api" })).toMatchObject({ OPENAI_API_KEY: "sk" });
   });

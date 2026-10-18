@@ -189,7 +189,7 @@ export class BalanceWatch {
         kind,
         lines: [
           `Balance watch: only ${money(balance.amount)} remains — below the ${money(this.options.criticalBalance)} critical level.`,
-          "Archymedes checks a task's estimate before sending it. Nothing tops up automatically; use /balance when you choose.",
+          "Friday checks a task's estimate before sending it. Nothing tops up automatically; use /balance when you choose.",
         ],
       };
     }
@@ -249,7 +249,7 @@ export function renderHostedBalance(
   options: { localCurrency?: Currency } = {},
 ): string[] {
   const money = (micros: number) => formatMicros(micros, balance.currency);
-  const lines = [`Archymedes credits ${money(balance.availableMicros)} available`];
+  const lines = [`Friday credits ${money(balance.availableMicros)} available`];
 
   if (balance.promotionalMicros !== undefined && balance.promotionalMicros > 0) {
     lines.push(`Includes ${money(balance.promotionalMicros)} in promotional credit.`);
@@ -264,7 +264,7 @@ export function renderHostedBalance(
     lines.push("No credit is available, so a hosted turn cannot reserve its cap and will not start.");
   }
   // Closed-loop by design, and the user should be told so rather than discovering it at a refund.
-  lines.push("Credits are for Archymedes services; they are not transferable or withdrawable.");
+  lines.push("Credits are for Friday services; they are not transferable or withdrawable.");
   if (options.localCurrency && options.localCurrency !== balance.currency) {
     lines.push(`Shown in ${balance.currency}, the currency the exchange reserves in, not your ${options.localCurrency} display currency.`);
   }

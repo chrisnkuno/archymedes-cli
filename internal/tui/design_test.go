@@ -54,12 +54,13 @@ func TestLandingShowsTheMarkThenGivesWayToTheConversation(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	s := screen(m)
-	for _, want := range []string{"◇", "A R C H Y M E D E S", "ctrl+space", "find anything"} {
+	for _, want := range []string{"◇", "F R I D A Y", "ctrl+space", "find anything"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("landing lacks %q:\n%s", want, s)
 		}
 	}
 	m.angle = 0
+	m.opts.Motion = true // with reduced motion the panel holds still (TestTheHomePanelPlaysTheTourQuietly)
 	before := screen(m)
 	m.Update(animTickMsg{})
 	if screen(m) == before {
@@ -67,7 +68,7 @@ func TestLandingShowsTheMarkThenGivesWayToTheConversation(t *testing.T) {
 	}
 	typeText(m, "hello")
 	press(m, tea.KeyEnter, 0)
-	if strings.Contains(screen(m), "A R C H Y M E D E S") {
+	if strings.Contains(screen(m), "F R I D A Y") {
 		t.Fatal("landing still shown during a conversation")
 	}
 	// Its tick chain ends by itself once the landing is gone: no repainting for nothing.

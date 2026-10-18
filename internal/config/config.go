@@ -96,14 +96,27 @@ func writeAtomic(dir, name string, data []byte) error {
 	return os.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
-// StateFile is what the interface remembers about the person using it, as opposed to settings
-// they chose: so far, only whether they have been welcomed.
+// StateFile is what the interface remembers about the person using it: whether they have been
+// welcomed, and the wallpaper they picked.
 const StateFile = "state.json"
 
 // State is the contents of StateFile.
 type State struct {
 	// Welcomed is set once the first request is sent: the home screen stops explaining itself.
 	Welcomed bool `json:"welcomed"`
+	// Wallpaper is the photo behind the screen: empty to take turns, a photo id to keep one, "off"
+	// for the theme's plain ground.
+	Wallpaper string `json:"wallpaper,omitempty"`
+	// TourHidden is set when the tour drawer on the home screen was folded away.
+	TourHidden bool `json:"tourHidden,omitempty"`
+}
+
+// UpdateState changes what change touches and keeps the rest: each field is written by a different
+// part of the interface, and none of them may wipe another's.
+func UpdateState(dir string, change func(*State)) error {
+	state := LoadState(dir)
+	change(&state)
+	return SaveState(dir, state)
 }
 
 // LoadState reads StateFile; missing or unreadable is the zero State (a first run).

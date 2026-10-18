@@ -39,7 +39,7 @@ describe("first-run setup over acp", () => {
   it("rejects what cannot be set with one key", async () => {
     const deps = { environment: {}, processEnvironment: {}, load: async () => ({}), save: async () => "/f" };
     expect(await saveSetup({ provider: "nope", key: "x" }, deps)).toMatchObject({ ok: false });
-    expect(await saveSetup({ provider: "openai-compatible", key: "x" }, deps)).toMatchObject({ ok: false, error: expect.stringContaining("archymedes settings") });
+    expect(await saveSetup({ provider: "openai-compatible", key: "x" }, deps)).toMatchObject({ ok: false, error: expect.stringContaining("friday settings") });
     expect(await saveSetup({ provider: "anthropic", key: "   " }, deps)).toMatchObject({ ok: false });
   });
 });

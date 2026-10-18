@@ -38,7 +38,7 @@ describe("toolsFromProvider", () => {
     await expect(tool.execute({ text: "x" }, { taskId: "t", runId: "r", stepId: "s" })).rejects.toThrow(/timed out/);
   });
 
-  it("rejects a tool whose schema is outside Archymedes's supported subset at registration time, not at call time", async () => {
+  it("rejects a tool whose schema is outside Friday's supported subset at registration time, not at call time", async () => {
     const unsupported: ExternalTool = { ...echoTool, name: "weird", inputSchema: { type: "object", properties: { nested: { type: "object" } } } };
     await expect(toolsFromProvider(provider("server-a", "mcp", [unsupported]))).rejects.toThrow();
   });

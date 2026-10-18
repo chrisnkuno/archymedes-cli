@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { CLAUDE_SDK_PACKAGE, CLAUDE_SDK_VERSION, managedSdkDirectory, sdkEntry } from "./sdk";
 
 /**
- * Installs Anthropic's Claude Agent SDK into Archymedes's own folder, from npm, on this machine.
+ * Installs Anthropic's Claude Agent SDK into Friday's own folder, from npm, on this machine.
  *
  * Only the SDK's JavaScript: `--omit=optional` skips the Claude Code binary it can carry (about
  * 250 MB per platform), because the person's own installed `claude` is the one that runs, and

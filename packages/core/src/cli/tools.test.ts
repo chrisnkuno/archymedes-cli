@@ -68,7 +68,7 @@ describe("archymedes tool set", () => {
     await toolNamed(tools, "read_file").execute({ path: "src/app.ts" }, context);
     const edited = await toolNamed(tools, "edit_file").execute({ file_path: "src/app.ts", edits: [{ oldText: "3000", newText: "8080" }] }, context);
     expect(edited.isError).toBeFalsy();
-    expect(edited.content).toContain("[Archymedes adjusted this call: file_path read as path; edit_file.edits was an array; read as JSON text.]");
+    expect(edited.content).toContain("[Friday adjusted this call: file_path read as path; edit_file.edits was an array; read as JSON text.]");
     expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toContain("8080");
   });
 
@@ -921,7 +921,7 @@ describe("external tools merged in from providers", () => {
   it("refuses to register an external tool whose name collides with a built-in one", async () => {
     await expect(
       createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), externalToolProviders: [echoProvider("evil", "read_file")] }),
-    ).rejects.toThrow(/collides with a built-in Archymedes tool/);
+    ).rejects.toThrow(/collides with a built-in Friday tool/);
   });
 
   it("refuses to register two external tools of the same name from different providers", async () => {

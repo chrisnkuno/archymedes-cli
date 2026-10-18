@@ -5,7 +5,7 @@ import type { ModelUsage } from "@archymedes/core/providers/model";
 import type { ApiUsage, ContentBlock, RateLimitInfo, SdkMessage } from "./sdk";
 
 /**
- * Claude Code's stream, said in Archymedes's events: the ones the interface already draws.
+ * Claude Code's stream, said in Friday's events: the ones the interface already draws.
  *
  * Pure: messages in, events out, no I/O. A session feeds every message of a turn through `feed`
  * and ends the turn with `finish`. The invariants it keeps, which `translate.test.ts` checks

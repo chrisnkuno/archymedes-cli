@@ -38,7 +38,7 @@ async function boot() {
   return { p, configDir };
 }
 
-describe("archymedes settings under a real pty", () => {
+describe("friday settings under a real pty", () => {
   it("opens as a navigable list showing each setting's current value", async () => {
     const { p } = await boot();
     const seen = p.output();
@@ -137,7 +137,7 @@ describe("archymedes settings under a real pty", () => {
   }, 90_000);
 });
 
-describe("archymedes settings outside a session", () => {
+describe("friday settings outside a session", () => {
   it("opens the full menu and cancels cleanly", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-settingscmd-"));
     const cfg = await fs.mkdtemp(path.join(os.tmpdir(), "archymedes-settingscmdcfg-"));

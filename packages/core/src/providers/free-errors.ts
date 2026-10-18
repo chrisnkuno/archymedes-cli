@@ -84,7 +84,7 @@ export function withFreeResetTime(message: string, headers: FreeAllowanceHeaders
   return `${message.replace(/\s+$/, "")}${/[.!?]$/.test(message.trim()) ? "" : "."} Allowance resets at ${reset}${inWords}.`;
 }
 
-const ADD_KEY = "add your own free OpenRouter key (archymedes settings → OpenRouter API key) to keep going";
+const ADD_KEY = "add your own free OpenRouter key (friday settings → OpenRouter API key) to keep going";
 
 /**
  * The one-line description, retryability and wait of an HTTP failure in free mode.
@@ -134,7 +134,7 @@ export function describeFreeFailure(input: {
     }
     return { message: "OpenRouter free-model rate limit reached (20 requests a minute, or the model is busy upstream). Wait a moment and retry, or pick another model with /model.", retryable: true, ...(retryAfterMs ? { retryAfterMs } : {}) };
   }
-  const message = status === 401 ? `OpenRouter rejected the key. Create a new one at ${OPENROUTER_KEYS_URL} and save it in archymedes settings (OpenRouter API key).`
+  const message = status === 401 ? `OpenRouter rejected the key. Create a new one at ${OPENROUTER_KEYS_URL} and save it in friday settings (OpenRouter API key).`
     : status === 403 ? "OpenRouter refused this free model for this key; some are limited to listed apps. Choose another with /model."
     : status === 402 ? `OpenRouter says this account or key is out of credit (402). Free models still need a balance of zero or more and a key limit not yet reached: check ${OPENROUTER_CREDITS_URL} and the key's limit at ${OPENROUTER_KEYS_URL}.`
     : status === 404 ? "This free model is no longer available. Run /models refresh or choose another with /model."

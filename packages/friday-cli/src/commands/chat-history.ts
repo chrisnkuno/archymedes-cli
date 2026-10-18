@@ -212,7 +212,7 @@ export function renderReplay(record: SessionRecord, style: SectionStyle, options
       if (!message.content.trim()) continue;
     }
     if (message.content.trim()) {
-      out.push(`${GUTTER}${paint(glyphs.star, DIM, style.depth)} ${paintAll("Archymedes", [BOLD], style.depth)}`);
+      out.push(`${GUTTER}${paint(glyphs.star, DIM, style.depth)} ${paintAll("Friday", [BOLD], style.depth)}`);
       out.push(renderMarkdown(message.content.trim(), { width: style.width, depth: style.depth, palette: style.palette }));
     }
   }
