@@ -19,7 +19,7 @@ import (
 
 // What a developer reaches for without wanting to ask the agent: run a command (!), open a file in
 // their editor (/open), start over (/new), and have the changes committed (/commit). Plus one-key
-// undo, retry and copy (keys.go).
+// undo, retry and copy (core_keys.go).
 
 // --- !command: the shell, directly ---
 

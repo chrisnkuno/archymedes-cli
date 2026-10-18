@@ -38,7 +38,7 @@ type galleryApp struct {
 	source func(gallery.Photo) string
 	// cols×rows each picture was last sized to, so a relayout that changes nothing does nothing.
 	cols, rows int
-	// How it draws (sixel.go): the mode, whether someone chose it with g, whether the terminal
+	// How it draws (desk_sixel.go): the mode, whether someone chose it with g, whether the terminal
 	// draws Sixel, what the Sixel pictures on screen were drawn for, and the fetched photos (Sixel
 	// draws them itself; pictureurl keeps its own copy for glyphs and Kitty).
 	mode    pictureMode

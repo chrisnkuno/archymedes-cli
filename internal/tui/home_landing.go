@@ -37,7 +37,7 @@ func (m *Model) landingVisible() bool {
 // start on, and the requests worth trying. The photo turns every photoInterval; the line turns with
 // it. Without photos, or on a screen too small for a wallpaper, the card stands on its own.
 func (m *Model) landing(width, height int) []string {
-	// The tour drawer (homedrawer.go) takes the right edge; the card centres in what is left, so it
+	// The tour drawer (home_drawer.go) takes the right edge; the card centres in what is left, so it
 	// slides over as the drawer slides in.
 	right := m.tourRight(width, height)
 	cardWidth := width - right
@@ -49,7 +49,7 @@ func (m *Model) landing(width, height int) []string {
 	if m.opts.NoPhotos || m.wallChoice == wallpaperNone || height < len(card)+1 {
 		return out
 	}
-	// The wallpaper is laid under the whole screen (wallpaper.go); here, what it is and who took
+	// The wallpaper is laid under the whole screen (desk_wallpaper.go); here, what it is and who took
 	// it, in the corner. A click opens it in the Gallery.
 	p := m.homePhoto()
 	credit := lipgloss.NewStyle().Foreground(m.th.Muted).Hyperlink(p.URL()).Render(ansi.Truncate(p.Title+" · by "+p.By+" · Unsplash", width-2, "…"))

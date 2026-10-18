@@ -23,7 +23,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.approval != nil {
 		if answered, choice := m.approval.handle(msg); answered && m.approval.ask != nil {
 			m.approval.ask.Answer(choice)
-			m.approval = nil
+			m.nextApproval()
 			if choice == "" {
 				return m.toast(toastInfo, "Question dismissed; the agent carries on without an answer")
 			}
@@ -31,7 +31,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		} else if answered {
 			m.approval.req.Answer(choice)
 			title := m.approval.req.ToolCall.Title
-			m.approval = nil
+			m.nextApproval()
 			if choice == "" || strings.HasPrefix(choice, "deny") {
 				return m.toast(toastWarn, "Denied: "+title)
 			}

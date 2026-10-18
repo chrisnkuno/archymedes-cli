@@ -2,6 +2,10 @@
 
 Updated: 2026-09-07. Read this before changing code. This is a working handoff, not a release certificate.
 
+> **Start with [CODEBASE.md](CODEBASE.md)**: the current map of every section (Go interface and
+> TypeScript agent), where new code goes, and the organization backlog. The history below predates
+> the Go interface (WS-6 onwards) and is kept for context.
+
 ## User intent
 
 Improve the routing intelligence, CLI capabilities, reliability, efficiency, and optimization as a coherent system. Prefer the changes with the largest end-user impact. Leave clear work for subsequent agents to continue. Preserve the public/private repository boundary.

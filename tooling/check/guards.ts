@@ -5,8 +5,18 @@ import path from "node:path";
 export const THEME_ALLOWLIST = new Set(["ansi.ts", "theme.ts"]);
 export const LARGE_FILE_LINES = 800;
 
-export type Metrics = { themeLeaks: Record<string, number>; largeFiles: Record<string, number>; layering?: Record<string, number>; duplicateHelpers?: Record<string, number>; unwired?: Record<string, number> };
-export type GuardFinding = { guard: "theme" | "size" | "layering" | "helpers" | "unwired"; file: string; baseline: number; current: number };
+export type Metrics = {
+  themeLeaks: Record<string, number>;
+  largeFiles: Record<string, number>;
+  layering?: Record<string, number>;
+  duplicateHelpers?: Record<string, number>;
+  unwired?: Record<string, number>;
+  /** Go imports against the package matrix in go-sections.json (repo-guards.ts). */
+  goLayering?: Record<string, number>;
+  /** internal/tui files outside every section (repo-guards.ts). */
+  unsectioned?: Record<string, number>;
+};
+export type GuardFinding = { guard: "theme" | "size" | "layering" | "helpers" | "unwired" | "go-layering" | "sections"; file: string; baseline: number; current: number };
 /** Section → sections it may import. A file's section is its first directory under the source root; anything else is unrestricted. */
 export type SectionRules = Record<string, readonly string[]>;
 
@@ -141,5 +151,7 @@ export function compareToBaseline(baseline: Metrics, current: Metrics): { regres
   check("layering", baseline.layering ?? {}, current.layering ?? {}, 0);
   check("helpers", baseline.duplicateHelpers ?? {}, current.duplicateHelpers ?? {}, 0);
   check("unwired", baseline.unwired ?? {}, current.unwired ?? {}, 0);
+  check("go-layering", baseline.goLayering ?? {}, current.goLayering ?? {}, 0);
+  check("sections", baseline.unsectioned ?? {}, current.unsectioned ?? {}, 0);
   return { regressions, improvements };
 }

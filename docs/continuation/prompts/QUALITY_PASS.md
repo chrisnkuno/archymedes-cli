@@ -83,6 +83,9 @@ is in `tooling/check/sections.json` (the enforced import matrix) and `docs/conti
 `text` ← `platform` ← `catalog`/`theme` ← `terminal` ← `render` ← `ui` ← `commands` ← root entry points,
 with `session` depending only on `theme`, `platform` and `text`.
 
+The Go interface's design is `tooling/check/go-sections.json` (a package matrix, and file-prefix
+sections inside `internal/tui`), described in `docs/continuation/CODEBASE.md`.
+
 Place new modules by their dependencies, not by their name. A module that fits two sections is
 usually two modules: split it, or place it by its dominant dependency and note why. Change the
 matrix only with reasons recorded in the tracker, and regenerate the map afterwards. For scopes

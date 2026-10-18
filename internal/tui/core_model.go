@@ -106,6 +106,8 @@ type Model struct {
 	tr       *transcript
 	input    composer
 	approval *approval
+	// approvals wait behind the one on screen: parallel tool calls ask at once, and each is answered.
+	approvals []*approval
 	// pendingMode is a mode chosen during a turn: the agent changes mode between turns, so it is
 	// applied the moment this one ends, before anything queued is sent.
 	pendingMode string
@@ -123,10 +125,10 @@ type Model struct {
 	angle    float64
 	homeT    float64 // the tour drawer's scene clock, seconds; still under reduced motion
 	// tourOpen is whether the home screen's tour drawer is wanted out; tourSlide how far out it is
-	// (0 folded, 1 open), eased toward that on each tick (homedrawer.go).
+	// (0 folded, 1 open), eased toward that on each tick (home_drawer.go).
 	tourOpen  bool
 	tourSlide float64
-	// The home screen's photograph (photos.go): which one, since when, and the drawings by size.
+	// The home screen's photograph (desk_photos.go): which one, since when, and the drawings by size.
 	photoIndex int
 	photoAt    time.Time
 	photoCache map[string][]string
@@ -143,11 +145,11 @@ type Model struct {
 	// and its window size in pixels (CSI 14 t), for terminals that only say that.
 	cellW, cellH   int
 	pixelW, pixelH int
-	// Sixel (sixel.go): whether the terminal draws it, and what the pictures on screen were drawn
+	// Sixel (desk_sixel.go): whether the terminal draws it, and what the pictures on screen were drawn
 	// for — all of it, and where they sit.
 	sixel                bool
 	sixelSig, sixelPlace string
-	// First-run guidance (welcome.go): whether the first request was ever sent, whether this
+	// First-run guidance (home_welcome.go): whether the first request was ever sent, whether this
 	// session sent it (its first turn ends with a tip), and how many files the project has changed.
 	welcomed       bool
 	firstTurnTip   bool
@@ -158,7 +160,7 @@ type Model struct {
 	knownFiles []string
 	scroll     scroller
 	stats      sessionStats
-	zones      zones // click targets, one manager per layer (zones.go)
+	zones      zones // click targets, one manager per layer (core_zones.go)
 	// keyOverrides are the bindings someone changed (keys.json), saved in configDir.
 	keyOverrides map[string][]string
 	// startupNote is said once the interface is up (a toast), e.g. a keys file that could not be read.
@@ -698,6 +700,7 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 		}
 	}
 	m.tools = map[string]*toolItem{}
+	m.dropApprovals()
 	m.retrying = ""
 	if msg.err != nil {
 		m.notice(noticeError, msg.err.Error())

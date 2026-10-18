@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// Clicks, resolved against BubbleZone zones (zones.go): the toasts' manager first (they float on
+// Clicks, resolved against BubbleZone zones (core_zones.go): the toasts' manager first (they float on
 // top), then the open dialog's, then the frame's — start button, tabs, dock, tool cards, and
 // whatever the focused window marks (the Stats app's bars).
 

@@ -342,6 +342,39 @@ func TestApprovalHoldsTheKeyboardAndEscapeDenies(t *testing.T) {
 	}
 }
 
+// Parallel tool calls ask together (three web searches at once): each request is answered in
+// turn, none replaced by the next, and whatever is still asking when the turn ends is refused.
+func TestParallelApprovalsQueueAndTheTurnEndRefusesLeftovers(t *testing.T) {
+	m, _ := newTestModel(t)
+	answers := map[string]string{}
+	request := func(title string) acp.PermissionRequest {
+		return acp.NewPermissionRequestForTest(acp.ToolCallRef{Title: title}, []acp.PermissionOption{
+			{OptionID: "allow", Name: "Allow"}, {OptionID: "deny", Name: "Deny"},
+		}, func(id string) { answers[title] = id })
+	}
+	for _, title := range []string{"search one", "search two", "search three", "search four"} {
+		m.Update(agentMsg{request(title)})
+	}
+	if s := screen(m); !strings.Contains(s, "search one") || !strings.Contains(s, "3 more waiting") {
+		t.Fatalf("first request not shown with the queue count:\n%s", s)
+	}
+	typeText(m, "y")
+	if s := screen(m); !strings.Contains(s, "search two") || !strings.Contains(s, "2 more waiting") {
+		t.Fatalf("second request not shown next:\n%s", s)
+	}
+	typeText(m, "n")
+	m.Update(agentMsg{acp.TurnEnded{StopReason: "cancelled"}})
+	if m.approval != nil || len(m.approvals) != 0 {
+		t.Fatal("requests outlived their turn")
+	}
+	want := map[string]string{"search one": "allow", "search two": "deny", "search three": "", "search four": ""}
+	for title, id := range want {
+		if got, ok := answers[title]; !ok || got != id {
+			t.Fatalf("%s answered %q (answered: %v), want %q", title, got, ok, id)
+		}
+	}
+}
+
 func TestQuestionTakesAnOptionATypedAnswerOrADismissal(t *testing.T) {
 	m, _ := newTestModel(t)
 	var answers []string

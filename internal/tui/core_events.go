@@ -25,10 +25,10 @@ func (m *Model) handleAgent(msg any) {
 		m.closeAssistant()
 		m.tr.add(&userItem{text: msg.Text})
 	case acp.PermissionRequest:
-		m.approval = &approval{req: msg}
+		m.queueApproval(&approval{req: msg})
 	case acp.QuestionRequest:
 		m.closeAssistant() // the question follows what was said, not inside it
-		m.approval = &approval{ask: &msg}
+		m.queueApproval(&approval{ask: &msg})
 	case acp.AgentEvent:
 		m.handleEvent(msg.Event)
 	case acp.Exited:

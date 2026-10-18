@@ -6,6 +6,7 @@ maintaining a second competing set of rules here.
 
 ## Read before editing
 
+0. [CODEBASE.md](docs/continuation/CODEBASE.md): the current section map, Go and TypeScript.
 1. [START_HERE.md](docs/continuation/START_HERE.md): repository boundaries and handoff.
 2. [WORKFLOW.md](docs/continuation/WORKFLOW.md): task tracking and rechecks.
 3. [TRACKER.md](docs/continuation/TRACKER.md): active work, ownership and evidence.

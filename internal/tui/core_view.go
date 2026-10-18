@@ -130,7 +130,7 @@ func (m *Model) composite(content string) string {
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(content)}
 	switch {
 	case m.approval != nil:
-		dialog := m.approval.view(m.th, m.width)
+		dialog := m.approval.view(m.th, m.width, len(m.approvals))
 		layers = append(layers, lipgloss.NewLayer(dialog).X(1).Y(max(1+m.transcriptHeight()-lipgloss.Height(dialog), 1)).Z(2))
 	case m.overlay != nil:
 		box := clipBlock(m.overlay.view(m), m.width, m.height-2)

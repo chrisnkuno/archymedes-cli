@@ -7,8 +7,10 @@ import { loadSession, newSessionId, saveSession, titleFromObjective, type Sessio
 import type { SessionCommandResult } from "../acp-commands";
 import type { CanUseTool, ClaudeSdk, PermissionMode, PermissionResult, PermissionUpdate, Query, SdkMessage, SdkUserMessage, WarmQuery } from "./sdk";
 import type { AskUser } from "@archymedes/core/cli/tools";
+import { loadCommandRules, type CommandRule } from "@archymedes/core/cli/command-rules";
 import { handoffPreface, markSeen, prefaceFrom } from "../handoff";
 import { CLAUDE_LABEL, CLAUDE_PROVIDER } from "./identity";
+import { screenToolUse } from "./permissions";
 import { ClaudeTranslator, describeToolUse, type ResultSummary } from "./translate";
 
 /**
@@ -53,6 +55,8 @@ export type ClaudeSessionOptions = {
   ask?: AskUser;
   save?: (record: SessionRecord) => Promise<unknown>;
   warn?: (message: string) => void;
+  /** The person's command rules (`.archymedes/rules.json`, then their own); read from disk when absent. */
+  commandRules?: () => Promise<readonly CommandRule[]>;
   /** Told the models Claude Code offers, once it has started: what the model pickers then list. */
   onModels?: (models: string[]) => void;
 };
@@ -72,6 +76,8 @@ export class ClaudeSession {
   private readonly turnIds: Array<{ id: string; title: string }> = [];
   /** Tools refused for the rest of the session ("deny from now on"). */
   private readonly refused = new Set<string>();
+  /** Read once, on the first tool that asks: rules changed mid-session apply from the next session. */
+  private rules?: Promise<readonly CommandRule[]>;
   private stderr = "";
   private disposed = false;
 
@@ -326,6 +332,9 @@ export class ClaudeSession {
   private readonly canUseTool: CanUseTool = async (toolName, input, { suggestions, toolUseID, title }) => {
     if (this.refused.has(toolName)) return { behavior: "deny", message: `${toolName} was refused for the rest of this session.` };
     if (toolName === "AskUserQuestion" && this.options.ask) return askUserQuestion(this.options.ask, input, toolUseID);
+    const screened = screenToolUse(toolName, input, this.mode, await this.commandRules());
+    if (screened?.behavior === "allow") return { behavior: "allow", updatedInput: input };
+    if (screened) return screened;
     const shown = describeToolUse(toolName, input, this.options.root);
     const decision = await this.options.approve({ toolName: shown.name, toolCallId: toolUseID, summary: title ?? toolCallTitle(shown.name, shown.args) });
     switch (decision) {
@@ -341,6 +350,11 @@ export class ClaudeSession {
         return { behavior: "deny", message: "The person refused this." };
     }
   };
+
+  private commandRules(): Promise<readonly CommandRule[]> {
+    this.rules ??= (this.options.commandRules?.() ?? loadCommandRules(this.options.root, process.env).then((loaded) => loaded.rules)).catch(() => []);
+    return this.rules;
+  }
 
   private async undo(argument: string): Promise<SessionCommandResult> {
     if (argument === "conversation") return { kind: "text", text: "Claude keeps its conversation; /undo code puts back the files it changed." };

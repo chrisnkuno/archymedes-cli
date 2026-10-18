@@ -19,7 +19,7 @@ import (
 
 // The Changes app (F10): what is different from the last commit, file by file — the list on the
 // left with each file's lines added and removed, the selected file's diff on the right with old
-// and new line numbers. b turns to the Branches view (branches.go): the branches, worktrees and
+// and new line numbers. b turns to the Branches view (app_changes_branches.go): the branches, worktrees and
 // stash. It reads git directly and never writes; it refreshes itself when a turn ends, since that
 // is when the agent's edits (and commits) land.
 

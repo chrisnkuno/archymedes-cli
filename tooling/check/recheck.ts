@@ -3,10 +3,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectMetrics, compareToBaseline, findUnwiredExports, readTree, type Metrics, type SectionRules } from "./guards";
+import { collectRepoMetrics, type GoSections } from "./repo-guards";
 
 /**
  * `bun run recheck` — the loop run after every change.
- *   guards → typecheck → tests related to changed files (unit project)
+ *   guards → typecheck → tests related to changed files (unit project) → go vet → go test of changed Go packages
  * Flags: --pty also runs every terminal test; --all runs the whole suite instead of related tests;
  * --full runs `release:check`; --update-baseline accepts current guard counts (say why in TRACKER.md);
  * --unwired lists exports no product code reaches.
@@ -27,14 +28,25 @@ function run(step: string, command: string, commandArgs: string[]): boolean {
   return ok;
 }
 
-function changedFiles(): string[] {
+function changedFiles(pattern: RegExp): string[] {
   const git = (gitArgs: string[]) => spawnSync("git", gitArgs, { cwd: REPO, encoding: "utf8" }).stdout.split("\n").filter(Boolean);
   const files = new Set([...git(["diff", "--name-only", "HEAD"]), ...git(["ls-files", "--others", "--exclude-standard"])]);
-  return [...files].filter((file) => /\.(ts|tsx)$/.test(file) && existsSync(path.join(REPO, file)));
+  return [...files].filter((file) => pattern.test(file) && existsSync(path.join(REPO, file)));
+}
+
+/** The Go packages holding changed files, as `go test` names them. */
+function changedGoPackages(): string[] {
+  return [...new Set(changedFiles(/\.go$/).map((file) => `./${path.posix.dirname(file)}`))].sort();
 }
 
 const sectionConfig = JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string; allowed: SectionRules };
 const current = collectMetrics(REPO, sectionConfig.sourceRoot, sectionConfig.allowed);
+{
+  const repo = collectRepoMetrics(REPO, JSON.parse(readFileSync(path.join(HERE, "go-sections.json"), "utf8")) as GoSections);
+  Object.assign(current.largeFiles, repo.largeFiles);
+  current.goLayering = repo.goLayering;
+  current.unsectioned = repo.unsectioned;
+}
 {
   const allow = JSON.parse(readFileSync(path.join(HERE, "unwired-allow.json"), "utf8")) as Record<string, string>;
   const sources = readTree(path.join(REPO, sectionConfig.sourceRoot));
@@ -57,7 +69,7 @@ const total = (counts: Record<string, number>) => Object.values(counts).reduce((
 results.push({
   step: "guards",
   ok: regressions.length === 0,
-  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; helper copies ${total(current.duplicateHelpers ?? {})}; unwired ${total(current.unwired ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
+  detail: `theme leaks ${total(current.themeLeaks)}; layering ${total(current.layering ?? {})}; helper copies ${total(current.duplicateHelpers ?? {})}; unwired ${total(current.unwired ?? {})}; go layering ${total(current.goLayering ?? {})}; unsectioned tui files ${total(current.unsectioned ?? {})}; ${Object.keys(current.largeFiles).length} files over the size line`,
 });
 
 let ok = regressions.length === 0;
@@ -66,12 +78,18 @@ else {
   ok = run("typecheck", "bun", ["run", "typecheck"]) && ok;
   if (args.has("--all")) ok = run("tests", "bunx", ["vitest", "run"]) && ok;
   else {
-    const changed = changedFiles();
+    const changed = changedFiles(/\.(ts|tsx)$/);
     if (changed.length === 0) results.push({ step: "tests", ok: true, detail: "no changed TypeScript files" });
     else ok = run(`unit tests related to ${changed.length} changed files`, "bunx", ["vitest", "related", "--run", "--passWithNoTests", "--project", "unit", ...changed]) && ok;
     // Terminal tests spawn the CLI as a process rather than importing it, so `related` cannot select them.
     if (args.has("--pty")) ok = run("terminal (pty) tests", "bunx", ["vitest", "run", "--project", "pty"]) && ok;
   }
+  // The Go interface: vetted whole (seconds), tested where it changed — or whole, for --all and
+  // --pty, since a terminal change is the interface's own.
+  ok = run("go vet", "go", ["vet", "./..."]) && ok;
+  const goPackages = args.has("--all") || args.has("--pty") ? ["./..."] : changedGoPackages();
+  if (goPackages.length === 0) results.push({ step: "go tests", ok: true, detail: "no changed Go files" });
+  else ok = run(`go tests (${goPackages.join(" ")})`, "go", ["test", ...goPackages]) && ok;
 }
 
 console.log("\nrecheck summary");

@@ -1,0 +1,22 @@
+{
+  "//": "The Go interface's sections. `packages`: what each internal/ package may import of the others (cmd/ may import any). `tui`: internal/tui is one package, so its sections are file prefixes; every non-test file starts with one. Tests take their file's name; tests spanning sections start with suite_. See docs/continuation/CODEBASE.md.",
+  "packages": {
+    "theme": [],
+    "acp": [],
+    "cli": [],
+    "config": [],
+    "gallery": [],
+    "project": [],
+    "render": ["theme"],
+    "tui": ["acp", "config", "gallery", "project", "render", "theme"]
+  },
+  "tui": {
+    "core": "The Bubble Tea model, its update loop and input routing: state, agent events, keys, mouse, paste, click zones, the screen's composition, the action registry, the rate-limit forecast",
+    "chat": "The Chat window: transcript and its items, the composer, approvals and questions, selection, scrolling, steering a running turn",
+    "home": "The home screen before the first message: landing card, first-run welcome, tour drawer",
+    "desk": "The desktop around the windows: top bar and dock, window shell, start menu, overlays, wallpaper and photographs, Sixel",
+    "app": "One app window each (app_<name>.go, its parts app_<name>_<part>.go): Changes, Files, Pager, Gallery, Keys, Providers, Settings, Stats, Tasks and Notifications, Tour",
+    "dialog": "Modal flows over a window: connect a provider, pick a model, resume a session, pick a wallpaper",
+    "cmd": "Slash commands: the registry, custom commands, session commands, and the commands that run git, worktrees, review, rewind, goals, dev tools and handoffs"
+  }
+}

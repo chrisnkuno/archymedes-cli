@@ -206,7 +206,7 @@ func TestFloatingBoxesFitBeforeCompositing(t *testing.T) {
 	req := acp.NewPermissionRequestForTest(acp.ToolCallRef{Title: strings.Repeat("long title ", 20)}, []acp.PermissionOption{{OptionID: "allow", Name: "Allow this action from now on"}}, func(string) {})
 	for _, width := range []int{200, 100, 50, 30, 16} {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
-		dialog := (&approval{req: req}).view(m.th, m.width)
+		dialog := (&approval{req: req}).view(m.th, m.width, 3)
 		if w := ansi.StringWidth(strings.Split(dialog, "\n")[0]); w > width-1 {
 			t.Fatalf("approval at %d is %d wide", width, w)
 		}

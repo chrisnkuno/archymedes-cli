@@ -13,7 +13,7 @@ import (
 // The two bars of the desktop. The top bar is the menu bar and the tray: the start button, a tab
 // per open window, and the session's state. The dock is the bottom row: every app with its key,
 // always visible, so nothing has to be remembered to be reached. Each part is a BubbleZone zone
-// (zones.go), so a click lands on exactly what it hits.
+// (core_zones.go), so a click lands on exactly what it hits.
 
 // dockApps are the dock's apps, in order: action id, icon, name.
 var dockApps = []struct{ id, icon, name string }{

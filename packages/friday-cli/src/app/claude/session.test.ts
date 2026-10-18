@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ArchymedesEvent } from "@archymedes/core/cli/agent";
-import type { PermissionDecision } from "@archymedes/core/cli/permissions";
+import type { ArchymedesMode, PermissionDecision } from "@archymedes/core/cli/permissions";
+import type { CommandRule } from "@archymedes/core/cli/command-rules";
 import type { SessionRecord } from "@archymedes/core/cli/session";
 import type { AcpApprovalRequest } from "@archymedes/core/cli/acp";
 import type { ClaudeOptions, ClaudeSdk, PermissionMode, PermissionResult, Query, SdkMessage, SdkUserMessage } from "./sdk";
@@ -102,7 +103,7 @@ class FakeQuery implements Query {
   close() { this.closed = true; this.output.end(); }
 }
 
-function setup(script: Script, options: { record?: SessionRecord; decisions?: PermissionDecision[]; model?: string } = {}) {
+function setup(script: Script, options: { record?: SessionRecord; decisions?: PermissionDecision[]; model?: string; mode?: ArchymedesMode; rules?: CommandRule[] } = {}) {
   const claude = new FakeClaude(script);
   const events: ArchymedesEvent[] = [];
   const saved: SessionRecord[] = [];
@@ -110,7 +111,8 @@ function setup(script: Script, options: { record?: SessionRecord; decisions?: Pe
   const decisions = [...(options.decisions ?? [])];
   const models: string[][] = [];
   const session = new ClaudeSession({
-    root: ROOT, sdk: claude.sdk, executable: "/usr/local/bin/claude", environment: { PATH: "/usr/bin" }, mode: "build",
+    root: ROOT, sdk: claude.sdk, executable: "/usr/local/bin/claude", environment: { PATH: "/usr/bin" }, mode: options.mode ?? "build",
+    commandRules: async () => options.rules ?? [],
     ...(options.model ? { model: options.model } : {}),
     ...(options.record ? { record: options.record } : {}),
     onEvent: (event) => events.push(event),
@@ -155,19 +157,57 @@ describe("ClaudeSession", () => {
     const script: Script = () => [
       toolUse("t1", "Bash", { command: "npm test" }), { ask: { tool: "Bash", input: { command: "npm test" }, id: "t1" } }, toolDone("t1"),
       toolUse("t2", "Edit", { file_path: `${ROOT}/a.ts`, old_string: "a", new_string: "b" }), { ask: { tool: "Edit", input: { file_path: `${ROOT}/a.ts` }, id: "t2" } }, toolDone("t2"),
-      toolUse("t3", "WebFetch", { url: "https://x" }), { ask: { tool: "WebFetch", input: { url: "https://x" }, id: "t3" } }, toolDone("t3"),
-      toolUse("t4", "WebFetch", { url: "https://y" }), { ask: { tool: "WebFetch", input: { url: "https://y" }, id: "t4" } }, toolDone("t4"),
+      toolUse("t3", "mcp__docs__publish", { url: "https://x" }), { ask: { tool: "mcp__docs__publish", input: { url: "https://x" }, id: "t3" } }, toolDone("t3"),
+      toolUse("t4", "mcp__docs__publish", { url: "https://y" }), { ask: { tool: "mcp__docs__publish", input: { url: "https://y" }, id: "t4" } }, toolDone("t4"),
       done(),
     ];
     const { claude, session, asked } = setup(script, { decisions: ["allow", "allow_always", "deny_always"] });
     await session.send("go");
     expect(asked.map((request) => [request.toolName, request.toolCallId, request.summary])).toEqual([
-      ["run_command", "t1", "run command: npm test"], ["edit_file", "t2", "edit file: a.ts"], ["web_fetch", "t3", "web fetch"],
+      ["run_command", "t1", "run command: npm test"], ["edit_file", "t2", "edit file: a.ts"], ["mcp__docs__publish", "t3", "mcp docs publish"],
     ]);
     expect(claude.permissions[0]).toEqual({ behavior: "allow", updatedInput: { command: "npm test" } });
     expect(claude.permissions[1]).toMatchObject({ behavior: "allow", updatedPermissions: [{ type: "addRules", destination: "session" }] });
     expect(claude.permissions[2]).toMatchObject({ behavior: "deny" });
     expect(claude.permissions[3]).toMatchObject({ behavior: "deny", message: expect.stringContaining("refused for the rest of this session") });
+  });
+
+  it("never asks about tools that change nothing, and in auto mode runs a command the safety screen passes", async () => {
+    const script: Script = () => [
+      toolUse("s1", "WebSearch", { query: "a" }), { ask: { tool: "WebSearch", input: { query: "a" }, id: "s1" } },
+      toolUse("s2", "WebSearch", { query: "b" }), { ask: { tool: "WebSearch", input: { query: "b" }, id: "s2" } },
+      toolUse("s3", "WebFetch", { url: "https://x" }), { ask: { tool: "WebFetch", input: { url: "https://x" }, id: "s3" } },
+      toolDone("s1"), toolDone("s2"), toolDone("s3"),
+      toolUse("b1", "Bash", { command: "npm test" }), { ask: { tool: "Bash", input: { command: "npm test" }, id: "b1" } }, toolDone("b1"),
+      toolUse("b2", "Bash", { command: "rm -rf /tmp/x" }), { ask: { tool: "Bash", input: { command: "rm -rf /tmp/x" }, id: "b2" } }, toolDone("b2"),
+      toolUse("b3", "Bash", { command: "ls", dangerouslyDisableSandbox: true }), { ask: { tool: "Bash", input: { command: "ls", dangerouslyDisableSandbox: true }, id: "b3" } }, toolDone("b3"),
+      done(),
+    ];
+    const { claude, session, asked } = setup(script, { mode: "auto", decisions: ["allow", "allow"] });
+    await session.send("research");
+    expect(asked.map((request) => request.toolCallId)).toEqual(["b2", "b3"]);
+    expect(claude.permissions.slice(0, 4)).toEqual([
+      { behavior: "allow", updatedInput: { query: "a" } }, { behavior: "allow", updatedInput: { query: "b" } },
+      { behavior: "allow", updatedInput: { url: "https://x" } }, { behavior: "allow", updatedInput: { command: "npm test" } },
+    ]);
+  });
+
+  it("follows the person's command rules before asking, and asks about every command in build mode", async () => {
+    const rules: CommandRule[] = [
+      { prefix: ["npm", "run", "deploy"], decision: "forbid", reason: "deploys go through CI", source: "rules.json" },
+      { prefix: ["make"], decision: "allow", source: "rules.json" },
+    ];
+    const script: Script = () => [
+      toolUse("r1", "Bash", { command: "npm run deploy" }), { ask: { tool: "Bash", input: { command: "npm run deploy" }, id: "r1" } }, toolDone("r1"),
+      toolUse("r2", "Bash", { command: "make" }), { ask: { tool: "Bash", input: { command: "make" }, id: "r2" } }, toolDone("r2"),
+      toolUse("r3", "Bash", { command: "npm test" }), { ask: { tool: "Bash", input: { command: "npm test" }, id: "r3" } }, toolDone("r3"),
+      done(),
+    ];
+    const { claude, session, asked } = setup(script, { rules, decisions: ["allow"] });
+    await session.send("ship");
+    expect(asked.map((request) => request.toolCallId)).toEqual(["r3"]);
+    expect(claude.permissions[0]).toMatchObject({ behavior: "deny", message: expect.stringContaining("deploys go through CI") });
+    expect(claude.permissions[1]).toMatchObject({ behavior: "allow" });
   });
 
   it("stops a turn by interrupting Claude Code, and closes the call that was running", async () => {

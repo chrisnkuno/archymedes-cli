@@ -17,6 +17,8 @@ Add the task before writing the code, and update the status as you go, not at th
 
 ## 2. Change in compartments
 
+Where each kind of code lives, in Go and TypeScript, is [CODEBASE.md](CODEBASE.md).
+
 - New behaviour goes in a focused module with explicit inputs, not into `friday.ts`.
 - Touching code in a large file? Extract the part you touch when that is practical.
 - Rendering takes colours from the `Palette` (`theme.ts`). Never use raw ANSI colour constants.
@@ -27,7 +29,7 @@ Add the task before writing the code, and update the status as you go, not at th
 
 | Level | Command | When | Covers |
 | --- | --- | --- | --- |
-| Quick | `bun run recheck` | After each edit batch | Guards, typecheck, unit tests related to changed files |
+| Quick | `bun run recheck` | After each edit batch | Guards, typecheck, unit tests related to changed files, `go vet`, `go test` of changed Go packages |
 | Terminal | `bun run recheck --pty` | After UI, input or layout changes | Adds the whole PTY project (about 4 minutes). PTY tests spawn the CLI, so the import graph cannot pick out related ones |
 | Release | `bun run recheck --full` | Before a commit that closes a workstream, and before publishing | `release:check`: full suite, build, package verification |
 
@@ -39,7 +41,9 @@ Add the task before writing the code, and update the status as you go, not at th
 
 - **Theme leaks:** hardcoded foreground colours (`CYAN`, `\x1b[33m`, and so on) outside `ansi.ts` and
   `theme.ts`. These ignore `/theme`.
-- **Large files:** source files over 800 lines, with their line counts.
+- **Large files:** source files over 800 lines (CLI, core and Go), with their line counts.
+- **Layering:** imports against `sections.json` (CLI) and `go-sections.json` (Go packages).
+- **Sections:** `internal/tui` files without a section prefix (`core_`, `chat_`, `app_`…).
 
 After you reduce a count, run `bun run recheck --update-baseline` to lock it in. Raising a count
 needs a written reason in the tracker entry.

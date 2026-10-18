@@ -497,6 +497,6 @@ export function acpUpdateFor(event: ArchymedesEvent): Record<string, JsonValue> 
 /** "edit src/app.ts" rather than "edit_file", which is the tool's name and not the work. */
 export function toolCallTitle(toolName: string, argumentsValue: Record<string, unknown>): string {
   const subject = ["path", "command", "pattern", "query", "task"].map((key) => argumentsValue[key]).find((value) => typeof value === "string" && value.trim());
-  const label = toolName.replace(/_/g, " ");
+  const label = toolName.replace(/_+/g, " ").trim();
   return subject ? `${label}: ${String(subject).slice(0, 120)}` : label;
 }

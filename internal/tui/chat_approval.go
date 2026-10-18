@@ -23,6 +23,38 @@ type approval struct {
 	picked map[int]bool // a multi-select question's chosen options
 }
 
+// queueApproval shows a request from the agent, or queues it behind the one on screen. Parallel
+// tool calls ask together; replacing one request with the next left the first unanswered and its
+// turn waiting for a reply that could never come.
+func (m *Model) queueApproval(a *approval) {
+	if m.approval == nil {
+		m.approval = a
+		return
+	}
+	m.approvals = append(m.approvals, a)
+}
+
+// nextApproval closes the answered request and shows the next one waiting, if any.
+func (m *Model) nextApproval() {
+	m.approval = nil
+	if len(m.approvals) > 0 {
+		m.approval, m.approvals = m.approvals[0], m.approvals[1:]
+	}
+}
+
+// dropApprovals refuses whatever is still asking when the turn ends: nothing waits on those
+// answers any more, and a dialog left over would hold the keyboard for a question already gone.
+func (m *Model) dropApprovals() {
+	for m.approval != nil {
+		if m.approval.ask != nil {
+			m.approval.ask.Answer("")
+		} else {
+			m.approval.req.Answer("")
+		}
+		m.nextApproval()
+	}
+}
+
 // shortcuts are single keys for the decisions people make most, by option id.
 var shortcuts = map[string]string{"y": "allow", "a": "allow_always", "p": "allow_pattern", "n": "deny", "N": "deny_always"}
 
@@ -143,14 +175,19 @@ func (a *approval) optionOr(id string) string {
 	return ""
 }
 
-func (a *approval) view(th theme.Theme, width int) string {
+// view draws the dialog; waiting is how many more requests are queued behind it.
+func (a *approval) view(th theme.Theme, width, waiting int) string {
 	// The box is drawn at X=1, so its total (text + padding 2 + border 2) must fit in width-1.
 	inner := max(min(width-5, 90), 8)
 	if a.ask != nil {
-		return a.questionView(th, inner)
+		return a.questionView(th, inner, waiting)
 	}
 	var b strings.Builder
-	b.WriteString(th.Title.Render("Allow this?") + "\n")
+	title := th.Title.Render("Allow this?")
+	if waiting > 0 {
+		title += th.Faint.Render(fmt.Sprintf("  %d more waiting", waiting))
+	}
+	b.WriteString(title + "\n")
 	b.WriteString(th.Body.Render(ansi.Wrap(a.req.ToolCall.Title, inner, "")) + "\n\n")
 	keyFor := map[string]string{}
 	for k, id := range shortcuts {
@@ -175,9 +212,13 @@ func (a *approval) view(th theme.Theme, width int) string {
 		Render(b.String())
 }
 
-func (a *approval) questionView(th theme.Theme, inner int) string {
+func (a *approval) questionView(th theme.Theme, inner, waiting int) string {
 	var b strings.Builder
-	b.WriteString(th.Title.Render("Question") + "\n")
+	title := th.Title.Render("Question")
+	if waiting > 0 {
+		title += th.Faint.Render(fmt.Sprintf("  %d more waiting", waiting))
+	}
+	b.WriteString(title + "\n")
 	b.WriteString(th.Body.Render(ansi.Wrap(a.ask.Question, inner, "")) + "\n\n")
 	for i, option := range a.ask.Options {
 		label := fmt.Sprintf("%d. %s", i+1, option)
