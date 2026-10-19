@@ -406,10 +406,14 @@ export class AcpConnection {
       options: acpPermissionOptions(request.pattern),
     }).catch(() => null);
     if (typeof answer !== "object" || answer === null) return "deny";
-    const outcome = answer as Record<string, unknown>;
+    // ACP's schema nests the outcome (`{ outcome: { outcome: "selected", optionId } }`), as standard
+    // clients such as Zed send it; the Go interface sends it flat (`{ outcome: "selected",
+    // selectedOptionId }`). Both are read; anything else is no consent.
+    const raw = (answer as Record<string, unknown>).outcome;
+    const outcome = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : (answer as Record<string, unknown>);
     // `cancelled` is the client saying the human went away. That is not consent either.
     if (outcome.outcome !== "selected") return "deny";
-    return decisionFromOptionId(outcome.selectedOptionId, request.pattern !== undefined);
+    return decisionFromOptionId(outcome.optionId ?? outcome.selectedOptionId, request.pattern !== undefined);
   }
 
   /** A question for the human; anything but a non-empty answer (an error, a closed client) is no answer. */

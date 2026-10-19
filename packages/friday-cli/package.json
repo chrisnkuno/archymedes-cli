@@ -1,6 +1,6 @@
 {
   "name": "@archymedes/friday",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "Friday CLI \u2014 a coding agent that shows its work. Runs against your working tree or an isolated remote sandbox, with guarded approvals, git checkpoints, and exact, measured cost accounting.",
   "keywords": [
     "cli",
@@ -46,12 +46,12 @@
     "prepublishOnly": "bun run ../../tooling/build/build-packages.ts"
   },
   "optionalDependencies": {
-    "@archymedes/friday-darwin-arm64": "3.8.0",
-    "@archymedes/friday-darwin-x64": "3.8.0",
-    "@archymedes/friday-linux-arm64": "3.8.0",
-    "@archymedes/friday-linux-x64": "3.8.0",
-    "@archymedes/friday-win32-arm64": "3.8.0",
-    "@archymedes/friday-win32-x64": "3.8.0",
+    "@archymedes/friday-darwin-arm64": "3.9.0",
+    "@archymedes/friday-darwin-x64": "3.9.0",
+    "@archymedes/friday-linux-arm64": "3.9.0",
+    "@archymedes/friday-linux-x64": "3.9.0",
+    "@archymedes/friday-win32-arm64": "3.9.0",
+    "@archymedes/friday-win32-x64": "3.9.0",
     "@archymedes/state-darwin-arm64": "0.4.0",
     "@archymedes/state-darwin-x64": "0.4.0",
     "@archymedes/state-linux-arm64-gnu": "0.4.0",

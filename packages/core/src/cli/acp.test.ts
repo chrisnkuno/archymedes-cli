@@ -170,6 +170,10 @@ describe("acp permission requests", () => {
       "archymedes-2": { outcome: "selected", selectedOptionId: "allow_always" },
       "archymedes-3": { outcome: "cancelled" },
       "archymedes-4": { outcome: "selected", selectedOptionId: "something_else" },
+      // ACP's schema shape, as standard clients (Zed) send it: the outcome nested, `optionId`.
+      "archymedes-5": { outcome: { outcome: "selected", optionId: "allow" } },
+      "archymedes-6": { outcome: { outcome: "cancelled" } },
+      "archymedes-7": { outcome: { outcome: "selected", optionId: "nonsense" } },
     };
     const sent: JsonRpcOutgoing[] = [];
     let ask: ((request: { toolName: string; summary: string; toolCallId: string }) => Promise<string>) | undefined;
@@ -190,10 +194,10 @@ describe("acp permission requests", () => {
     await connection.receive({ jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/tmp/p" } });
 
     const decisions = [];
-    for (const toolName of ["write_file", "run_command", "run_command", "write_file"]) {
+    for (const toolName of ["write_file", "run_command", "run_command", "write_file", "run_command", "run_command", "write_file"]) {
       decisions.push(await ask!({ toolName, summary: `${toolName} something`, toolCallId: "c1" }));
     }
-    expect(decisions).toEqual(["allow", "allow_always", "deny", "deny"]);
+    expect(decisions).toEqual(["allow", "allow_always", "deny", "deny", "allow", "deny", "deny"]);
 
     const request = sent.find((message) => "method" in message && message.method === "session/request_permission");
     expect(request).toMatchObject({ params: { sessionId: "sess_1", toolCall: { kind: "edit", status: "pending" } } });

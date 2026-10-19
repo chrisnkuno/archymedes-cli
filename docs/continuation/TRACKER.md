@@ -5,6 +5,10 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `friday.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## Release 3.9.0 (2026-10-19)
+WS-27 and WS-28, plus one interop fix found while checking them live: the agent read only the Go interface's flat permission answer (`{ outcome, selectedOptionId }`), so a standard ACP client answering in the schema's nested shape (`{ outcome: { outcome, optionId } }`, as Zed sends it) had every approval read as a refusal. Both are read now (`core/cli/acp.ts`, `acp.test.ts` +3 cases).
+Live on the Claude engine over ACP: auto mode ran two parallel web searches and a command with no approval asked (21 s; the reported turn hung 515 s); build mode asked for two parallel file-changing commands at once, both answered and both ran. `bun run recheck --full`: 219 files / 3,892 tests, Go, build, packed install verified; six binaries built. One flake on the first run (`TestWorktreeOpensANewSessionThereAfterTheSetupScriptAndBackReturns` under load from a concurrent live test; 5/5 alone).
+
 ## WS-28: Counting installs and updates, anonymously and hard to inflate (2026-10-19)
 User: "everytime it's downloaded it sends an anonymous cue to a counter to detect downloads and updates, so we can reliably count how many times it was downloaded" — counted at archymedes.xyz ("the site is in home directory … efficient & secure pipeline. it should not be tempered"), on by default with an easy opt-out, disclosed.
 Design: an npm `postinstall` is skipped by `--ignore-scripts`, pnpm and bun, and flagged by scanners, so the cue is sent on the first run of each new version (install = no marker yet, update = a different version). Payload `{event, version, os, arch}` only. A public CLI cannot hold a secret, so tampering is bounded server-side: strict validation (published versions only), one count per network per version per day (daily-salted IP hash, expires in 2 days, no raw IP kept), no browser origins, admin-only reads.
