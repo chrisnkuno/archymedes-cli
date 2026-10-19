@@ -9,23 +9,22 @@ is stale.
 
 ```
 Go interface (friday)                          TypeScript agent (friday acp)
-cmd/friday ──▶ internal/tui ──ACP over stdio──▶ packages/friday-cli/src/acp-server.ts
-                  │                                  │
-                  ├─ internal/acp   (client)         ├─ app/            engines and ACP handlers
-                  ├─ internal/render (markdown,      │    ├─ claude/    the person's Claude Code
-                  │   tool calls, the mark)          │    └─ codex/     the person's Codex
-                  ├─ internal/theme                  └─ @archymedes/core
-                  ├─ internal/project (git)               ├─ cli/        Friday's agent: tools,
-                  ├─ internal/config                      │              permissions, sessions
-                  └─ internal/gallery                     ├─ agent-runtime.ts  the model/tool loop
-                                                          └─ providers/  one adapter per vendor
+cmd/friday ──▶ internal/tui ──ACP over stdio──▶ packages/friday-cli/src/server/
+                  │                                  ├─ engines/   Claude Code, Codex, the contract
+                  ├─ internal/acp   (client)         ├─ setup/     provider choice, free setup
+                  ├─ internal/render (markdown,      └─ @archymedes/core
+                  │   tool calls, the mark)               ├─ cli/        Friday's agent: tools,
+                  ├─ internal/theme                       │              permissions, sessions
+                  ├─ internal/project (git)               ├─ agent-runtime.ts  the model/tool loop
+                  ├─ internal/config                      └─ providers/  one adapter per vendor
+                  └─ internal/gallery
 ```
 
 Three engines run a session: Friday's own agent (`core/cli/agent.ts` on any provider), Claude Code
-(`app/claude/`) and Codex (`app/codex/`). All three speak to the interface through the same ACP
+(`engines/claude/`) and Codex (`engines/codex/`). All three speak to the interface through the same ACP
 messages, so the interface never knows which one is running. One rule follows from that: **a mode
 means the same thing on every engine.** Friday's `PermissionPolicy.decide` (core) is the reference,
-and each engine's permission bridge (`app/claude/permissions.ts`, `app/codex/session.ts`) maps onto it.
+and each engine's permission bridge (`engines/claude/permissions.ts`, `engines/codex/session.ts`) maps onto it.
 
 ## Go: `internal/` and `cmd/`
 
@@ -74,13 +73,28 @@ call it; the app keeps only the glue.
 | `packages/free-gateway` | The free-mode gateway (server side) |
 | `packages/archymedes-state` | Rust: the rebuildable search index |
 
-`packages/friday-cli/src` is sectioned by directory, with an import matrix
-(`tooling/check/sections.json`, guard `layering`):
-`text` ← `platform` ← `catalog`/`theme` ← `terminal` ← `render` ← `ui` ← `commands` ← `app` ← root.
-`session` depends only on `theme`, `platform` and `text`. Root files are entry points
-(`friday.ts`, `acp-server.ts`, `headless.ts`). Engines live in `app/<engine>/` as
-`backend.ts` (availability, setup), `session.ts` (one session), `translate.ts` (their events → ours)
-and, for policy, a pure module such as `permissions.ts`.
+`packages/friday-cli/src` is two stacks over a shared bottom, sectioned by directory and enforced
+by an import matrix (`tooling/check/sections.json`, guard `layering`):
+
+```
+entry     friday.ts ── dispatches: --acp → server/   flags → cli/   a request → run/
+
+agent     server/   ACP for the Go interface: sessions on any engine, setup, settings, models, commands
+side        └▶ engines/  Claude Code (claude/), Codex (codex/), handoff, contract.ts (what engines implement)
+                └▶ setup/   which provider a session runs on, free-mode setup, Jev, setting choices
+
+terminal  run/      one turn from the command line (friday "request", --json), the job worker
+side        └▶ cli/      flags, --help, info and maintenance commands, prompts, themed output, exit codes
+                └▶ commands/ → ui/ → render/ → terminal/ → catalog/
+
+shared    session/  records, models, spend, history       theme/  palette roles and theme files
+bottom    platform/ config paths, settings, network, updates, i18n, currency      text/  escapes, glyphs, width
+```
+
+The agent side never imports the terminal side. That is what lets the Go interface own every pixel:
+nothing the server sends was drawn by TypeScript. An engine is `engines/<name>/` with `backend.ts`
+(availability, setup), `session.ts` (one session), `translate.ts` (its events → ours) and pure
+policy modules such as `permissions.ts`; it implements the types in `engines/contract.ts`.
 
 `packages/core/src` is not sectioned yet: `cli/` holds 59 modules side by side (see the backlog).
 
@@ -91,7 +105,9 @@ and, for policy, a pure module such as `permissions.ts`.
 | A tool for Friday's models | `core/cli/tools.ts` today (splitting it is backlog), declared with its `effect` |
 | A permission rule | `core/cli/permissions.ts`, and the same rule in each engine bridge |
 | A provider | `core/providers/<vendor>.ts`, dialect quirks in `chat-dialects.ts` |
-| An ACP method | `core/cli/acp.ts` (protocol), handler in `friday-cli/src/app/acp-*.ts`, client in `internal/acp` |
+| An ACP method | `core/cli/acp.ts` (protocol), handler in `friday-cli/src/server/`, client in `internal/acp` |
+| An engine | `friday-cli/src/engines/<name>/`, implementing `engines/contract.ts`, registered in `server/session.ts` |
+| A command-line flag | `cli/args.ts`, handled in `cli/startup-commands.ts` (exits) or `run/` (runs a turn) |
 | An app, dialog or command in the interface | `internal/tui/<prefix>_<name>.go` (above) |
 | A guard | `tooling/check/guards.ts` (CLI) or `repo-guards.ts` (core, Go), with a test and a baseline entry |
 
@@ -110,15 +126,25 @@ Each count is per file, kept in `tooling/check/baseline.json`; it may fall, neve
 `bun run recheck` also runs typecheck, the unit tests related to changed TS files, `go vet ./...`
 and `go test` for the Go packages that changed (`--all`/`--pty`: every Go package).
 
+## Tools for structural work
+
+| Tool | Does |
+| --- | --- |
+| `bun run tooling/check/remove-dead.ts` | Deletes exports nothing reaches, their tests, and what that leaves unused, in waves until none |
+| `bun run tooling/check/move-declarations.ts <from> <to> <Name>…` | Moves declarations with their comments, writes the imports, repoints every importer |
+| `python3 tooling/check/rewrite_imports.py move-files <map.json>` | `git mv` files (tests follow) and rewrites every import |
+| `python3 tooling/check/module_map.py` | Regenerates [MODULE_MAP.md](MODULE_MAP.md) from the import graph |
+
 ## Organization backlog
 
 Tracked in [TRACKER.md](TRACKER.md) under WS-27, safest first:
 
-1. **Leftovers of the TypeScript interface** (removed in WS-11): 61 exports in
-   `packages/friday-cli/src` that nothing reaches (`recheck --unwired` lists them), most of
-   `render/tui.ts`, `ui/`, `catalog/commands.ts`. They made `recheck` red before WS-27; delete
-   them after confirming each with grep, then lock the baseline.
-2. **Two wrong-way imports in `platform/`**: `settings.ts` → `theme`, `update.ts` → `terminal`.
+1. **A lean one-shot run.** `friday "request"` runs one turn, but `friday.ts` still builds the
+   old REPL's session state (forty getters and setters: tabs, wander, watch, navigation hints,
+   live models) and `run/turn-runner.ts` reads it. The target: open a session, run the turn,
+   print it (human or JSONL), exit, with the terminal stack below it cut to what that needs.
+2. **`render/tui.ts`** (928 lines): what is left after the dead code went is the shared
+   drawing kit for `cli/`; split by kind (boxes, tables, widths).
 3. **Split `core/cli/tools.ts`** (1,623 lines) into `core/cli/tools/<family>.ts`: files, search,
    commands and applications, web, planning, delegation.
 4. **Section `core/cli/`** by directory, as `friday-cli/src` is: `tools/`, `permissions/`,

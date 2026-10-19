@@ -1,8 +1,7 @@
 import type { ColorDepth } from "../text/color-depth";
-import { BOLD, DIM, paint, paintAll } from "../text/ansi";
+import { DIM, paint } from "../text/ansi";
 import { roleCode, type Palette } from "../theme/theme";
-import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
-import { visibleWidth } from "../text/text-width";
+import { UNICODE_GLYPHS } from "../text/glyphs";
 import { GUTTER, clip, panel, type SectionStyle } from "./sections";
 import { codeStyle, highlightSyntax, newSyntaxState, type SyntaxState } from "./syntax";
 
@@ -293,17 +292,4 @@ export function renderFileChange(
     hidden: block.hidden,
     full: panel(block.full.split("\n"), style, { title: `${change.kind === "edit" ? "diff" : "new file"} · ${change.path}`, badge, tone: change.kind === "edit" ? "accent" : "good" }),
   };
-}
-
-/** A one-line header for a code answer inside prose, used by the markdown renderer's fenced blocks. */
-export function fenceHeader(language: string, style: SectionStyle): string {
-  const glyphs = style.glyphs ?? UNICODE_GLYPHS;
-  const label = language ? ` ${language} ` : glyphs.boxHorizontal.repeat(4);
-  const width = Math.max(0, style.width - GUTTER.length - visibleWidth(label) - 3);
-  return `${GUTTER}${paint(glyphs.boxTopLeft + glyphs.boxHorizontal, DIM, style.depth)}${paintAll(label, [roleCode("primary", style.palette, style.depth), BOLD], style.depth)}${paint(glyphs.boxHorizontal.repeat(Math.max(0, width)), DIM, style.depth)}`;
-}
-
-/** How a diff of a file reads in one line, for the status line and for tool summaries. */
-export function describeChange(stat: { added: number; removed: number }, depth: ColorDepth, palette?: Palette): string {
-  return `${paint(`+${stat.added}`, roleCode("success", palette, depth), depth)} ${paint(`-${stat.removed}`, roleCode("error", palette, depth), depth)}`;
 }

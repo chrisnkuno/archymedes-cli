@@ -3,10 +3,10 @@ import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { runAcpServer } from "./acp-server";
-import { parseArgs } from "./app/args";
-import { resolveSessionProvider } from "./app/session-provider";
-import { configureRendering, out, renderEvent, sessionStream, style } from "./app/transcript";
+import { runAcpServer } from "./server/acp-server";
+import { parseArgs } from "./cli/args";
+import { resolveSessionProvider } from "./setup/session-provider";
+import { configureRendering, out, renderEvent, sessionStream, style } from "./cli/output";
 import { CommandUsage, type NavContext } from "./ui/navigation";
 import { ArchymedesSessionDaemon, type DaemonNotification } from "@archymedes/core/cli/daemon";
 import { type ProviderId } from "@archymedes/core/providers/agent-matrix";
@@ -14,13 +14,14 @@ import { fromUnits, formatMoney } from "@archymedes/core/money";
 import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { CostLedger } from "@archymedes/core/cli/cost";
-import { EXIT_CODES, HeadlessEmitter } from "./headless";
+import { HeadlessEmitter } from "./run/headless";
 import { PRICE_CATALOG } from "@archymedes/core/providers/price-catalog";
 import { detectColorDepth } from "./text/color-depth";
-import { escapeCodeTimeoutMs } from "./terminal/keybindings";
+import { escapeCodeTimeoutMs } from "./platform/escape-timeout";
+import { sendInstallCue } from "./platform/install-cue";
 import { resolveCurrencyPreference } from "./platform/local-currency";
 import { loadSettings, mergedEnvironment, saveSettings } from "./platform/settings";
-import { runFreeModeSetup } from "./app/free-setup";
+import { runFreeModeSetup } from "./setup/free-setup";
 import { WorkspaceController } from "./session/tabs";
 import { TabSink } from "./terminal/output";
 import { WatchRegistry } from "./terminal/job-stream";
@@ -32,22 +33,21 @@ import { resolveGlyphs } from "./text/glyphs";
 import { loadMemories, type MemoryEntry } from "./commands/memory";
 import { type PaceLevel } from "./commands/pacing";
 import { CliStateHistory } from "./session/state-history";
-import { confirmSpendingCap, createApprovalPrompt, hiddenQuestion, questionWithEscape } from "./app/prompts";
-import { readFxRates } from "./app/providers";
-import { runJobWorkerProcess } from "./app/job-launch";
-import { runInformationFlag, runMaintenanceFlag } from "./app/startup-commands";
-import { settleDisplayCurrency, type CurrencyState } from "./app/display-currency";
-import type { SessionState } from "./app/session-state";
-import { createWorkspaceFactory } from "./app/workspaces";
-import { createBalanceTracking } from "./app/balance-tracking";
-import { createClientFactory } from "./app/agent-factory";
-import type { TabPayload } from "./app/session-state";
-import { readCachedLiveModels } from "./app/live-models";
-import { createSessionHints } from "./app/session-hints";
-import { createTurnRunner } from "./app/turn-runner";
-import type { RecoverableTurn } from "./app/session-state";
-import { createSigintHandling } from "./app/interrupts";
-import { resumeAtStartup, runOneShot } from "./app/session-start";
+import { confirmSpendingCap, createApprovalPrompt, hiddenQuestion, questionWithEscape } from "./cli/prompts";
+import { readFxRates } from "./cli/providers";
+import { runJobWorkerProcess } from "./run/job-launch";
+import { runInformationFlag, runMaintenanceFlag } from "./cli/startup-commands";
+import { settleDisplayCurrency, type CurrencyState } from "./run/display-currency";
+import type { SessionState, TabPayload, RecoverableTurn } from "./run/session-state";
+import { createWorkspaceFactory } from "./run/workspaces";
+import { createBalanceTracking } from "./run/balance-tracking";
+import { createClientFactory } from "./run/agent-factory";
+import { readCachedLiveModels } from "./run/live-models";
+import { createSessionHints } from "./run/session-hints";
+import { createTurnRunner } from "./run/turn-runner";
+import { createSigintHandling } from "./run/interrupts";
+import { resumeAtStartup, runOneShot } from "./run/session-start";
+import { EXIT_CODES } from "./cli/exit-codes";
 
 /**
  * Archymedes CLI — the terminal front end.
@@ -82,6 +82,8 @@ async function main(): Promise<number> {
   const processEnvironment = process.env as Record<string, string | undefined>;
   let savedSettings = await loadSettings(processEnvironment);
   const environment = mergedEnvironment(savedSettings, processEnvironment);
+  // Once per new version, never awaited: see platform/install-cue.ts for what is sent and how to say no.
+  void sendInstallCue(environment);
   const stateHistory = new CliStateHistory(args.root, environment);
   let language = resolveControlLanguage(args.language ?? environment.ARCHYMEDES_LANGUAGE ?? environment.LANG);
   // Before anything prints. `--help`, `--providers` and `--sessions` all return long before the
@@ -102,7 +104,7 @@ async function main(): Promise<number> {
   );
   // VS Code colours and numbered code blocks unless the settings say otherwise.
   setCodeStyle(codeStyleFromEnvironment(environment));
-  const informational = runInformationFlag({ args, environment, language, earlyDepth });
+  const informational = runInformationFlag({ args, environment, language });
   if (informational !== undefined) return informational;
 
   // Before anything that could print: from here on stdout is a protocol channel, and one stray
@@ -347,7 +349,7 @@ async function main(): Promise<number> {
     headless?.agentEvent(event);
     renderEvent(event);
   };
-  /** One coordinator owns every live agent this process creates; see `app/agent-factory.ts`. */
+  /** One coordinator owns every live agent this process creates; see `run/agent-factory.ts`. */
   const daemon = new ArchymedesSessionDaemon();
   const openClient = createClientFactory({ args, environment, daemon, approvalPrompt, onNotification: handleDaemonNotification, rates, approvedBudget, state });
   // Human rendering still runs in headless mode — its output is the stderr diagnostic stream.
@@ -364,7 +366,7 @@ async function main(): Promise<number> {
   out.route(firstSink);
   let explainedTabs = false;
 
-  /** Models the providers report beyond this build's own list; see `app/live-models.ts`. */
+  /** Models the providers report beyond this build's own list; see `run/live-models.ts`. */
   let liveModels: Partial<Record<ProviderId, string[]>> = {};
   await readCachedLiveModels(environment, state);
 
@@ -378,7 +380,7 @@ async function main(): Promise<number> {
   const resumeFailure = await resumeAtStartup({ args, interactive, stateHistory, state, openClient, exitCleanly: () => exitCleanly(), carryResumedSpend });
   if (resumeFailure !== undefined) return resumeFailure;
 
-  // Ctrl-C interrupts the turn rather than the process; see `app/interrupts.ts`.
+  // Ctrl-C interrupts the turn rather than the process; see `run/interrupts.ts`.
   let turnActive = false;
   let exitRequested = false;
   let detachRequested = false;

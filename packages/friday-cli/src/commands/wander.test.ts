@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseWanderResults, wanderGradeCounts, WANDER_MARKER, WANDER_TOPIC_CATALOG } from "@archymedes/core/wander";
+import { parseWanderResults, wanderGradeCounts, WANDER_MARKER } from "@archymedes/core/wander";
 import { UNICODE_GLYPHS } from "../text/glyphs";
 import type { ExaSearchClient, ExaSearchHit } from "@archymedes/core/providers/exa";
-import { buildWanderPrompt, gatherWanderEvidence, parseWanderCommand, renderWanderResults, resolveWanderJobTopic, wanderArtifacts, wanderJobObjective } from "./wander";
+import { buildWanderPrompt, gatherWanderEvidence, renderWanderResults, wanderArtifacts } from "./wander";
 
 const hit = (overrides: Partial<ExaSearchHit> = {}): ExaSearchHit => ({
   title: "Coral bleaching thresholds",
@@ -19,40 +19,6 @@ const stubSearch = (results: ExaSearchHit[] | Error): ExaSearchClient => ({
     return { requestId: "req", results };
   },
 }) as unknown as ExaSearchClient;
-
-describe("parsing the command", () => {
-  it("takes a topic verbatim", () => {
-    expect(parseWanderCommand("/wander  how   bird navigation works ")).toEqual({ kind: "once", topic: "how bird navigation works", random: false });
-  });
-
-  it("picks a curated topic when asked for nothing in particular", () => {
-    // A bare /wander is the main way this gets used; demanding a topic first defeats the point.
-    for (const input of ["/wander", "/wander random", "/wander RANDOM"]) {
-      const parsed = parseWanderCommand(input, "seed-1");
-      expect(parsed).toMatchObject({ kind: "once", random: true });
-      expect(WANDER_TOPIC_CATALOG).toContain((parsed as { topic: string }).topic);
-    }
-  });
-
-  it("picks the same topic for the same seed", () => {
-    expect(parseWanderCommand("/wander", "seed-7")).toEqual(parseWanderCommand("/wander", "seed-7"));
-  });
-
-  it("reads a cadence, with or without a topic", () => {
-    expect(parseWanderCommand("/wander daily")).toEqual({ kind: "schedule", cadence: "daily" });
-    expect(parseWanderCommand("/wander weekly coral reefs")).toEqual({ kind: "schedule", cadence: "weekly", topic: "coral reefs" });
-    expect(parseWanderCommand("/wander daily random")).toEqual({ kind: "schedule", cadence: "daily" });
-  });
-
-  it("names the problem itself rather than failing deeper down", () => {
-    expect(parseWanderCommand(`/wander ${"x".repeat(200)}`)).toEqual({ kind: "invalid", reason: expect.stringContaining("too long") });
-  });
-
-  it("is not a wander command at all", () => {
-    expect(parseWanderCommand("/wanderlust")).toBeNull();
-    expect(parseWanderCommand("/diff")).toBeNull();
-  });
-});
 
 describe("the evidence dossier", () => {
   it("records the sources the lab is allowed to cite", async () => {
@@ -110,29 +76,6 @@ describe("the turn prompt", () => {
     // The five notebook files, plus the same consensus table as data for anything that charts it.
     expect(wanderArtifacts()).toContain("wander/RESULTS.json");
     expect(wanderArtifacts()).toHaveLength(6);
-  });
-});
-
-describe("what a durable schedule stores and resolves", () => {
-  it("writes a named topic down literally, so every occurrence explores the same thing", () => {
-    const objective = wanderJobObjective({ cadence: "daily", topic: "coral reefs" });
-    expect(resolveWanderJobTopic(objective, "any-seed")).toBe("coral reefs");
-    expect(resolveWanderJobTopic(objective, "a-different-seed")).toBe("coral reefs");
-  });
-
-  it("stores the schedule marker for a topic-less schedule, not a topic picked once", () => {
-    const objective = wanderJobObjective({ cadence: "daily" });
-    expect(objective).not.toContain("Topic:");
-    expect(WANDER_TOPIC_CATALOG).toContain(resolveWanderJobTopic(objective, "seed-a"));
-  });
-
-  it("picks a fresh topic per occurrence when the seed changes, not the same one forever", () => {
-    // The whole point of choosing "random" over naming a topic is a new curiosity each time —
-    // a seed fixed at the job's own id (constant across every firing) would defeat that.
-    const objective = wanderJobObjective({ cadence: "daily" });
-    const seeds = Array.from({ length: 20 }, (_unused, index) => `job-1:${index}`);
-    const topics = new Set(seeds.map((seed) => resolveWanderJobTopic(objective, seed)));
-    expect(topics.size).toBeGreaterThan(1);
   });
 });
 

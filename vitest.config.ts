@@ -30,6 +30,9 @@ export default defineConfig({
     ],
   },
   test: {
+    // No test run counts as an install (packages/friday-cli/src/platform/install-cue.ts), including
+    // the CLI processes the terminal tests spawn: they inherit this environment.
+    env: { ARCHYMEDES_TELEMETRY: "off" },
     // A worktree an isolated agent spawned into is a full, separate checkout of this same repo —
     // left in place, its tests double-run under a different name than vitest's defaults exclude,
     // and an in-progress worktree's half-finished code shouldn't gate this checkout's own suite

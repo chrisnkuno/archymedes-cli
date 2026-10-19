@@ -11,25 +11,29 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | Section | Purpose | May import |
 | --- | --- | --- |
 | `text/` | Escape codes, glyph sets, colour depth, visible width and clipping. Depends on nothing. | nothing |
-| `platform/` | Process and environment concerns: config paths and settings, network, endpoints, updates, doctor, i18n, currency. | `text` |
-| `catalog/` | The command registry every menu, key binding and guide reads. | `platform`, `text` |
+| `platform/` | Process and environment: config paths, settings storage and schema, network, endpoints, updates, doctor, i18n, currency. | `text` |
 | `theme/` | Palette roles and theme files; the only place colours are named. | `platform`, `text` |
-| `terminal/` | Terminal I/O and layout: screens, scroll regions, viewport, output sinks, keys and wheel input. | `catalog`, `theme`, `platform`, `text` |
-| `render/` | Pure transcript renderers: markdown, sections, code, patch and test views, charts, banner, guide text. | `terminal`, `catalog`, `theme`, `platform`, `text` |
-| `session/` | Tabs, models, fallback, spend, history and exported sessions. | `theme`, `platform`, `text` |
-| `ui/` | Interactive menus and full screens, and the fixed workspace frame. | `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
-| `commands/` | Slash-command features built from the sections below them. | `ui`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
-| `app/` | Support for the terminal entry point: argument parsing, transcript render state, launch helpers. | `commands`, `ui`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
-| root | Entry points: the terminal CLI, headless and ACP front ends, the background job worker. | anything |
+| `session/` | Session records, models, fallback, spend and history, shared by both stacks. | `theme`, `platform`, `text` |
+| `setup/` | Which provider a session runs on, free-mode setup, Jev configuration, what a setting offers to pick. | `theme`, `platform`, `text` |
+| `engines/` | Claude Code and Codex as engines, the handoff between engines, and the contract every engine implements. | `setup`, `session`, `platform`, `text` |
+| `server/` | The ACP server the Go interface talks to: sessions on any engine, setup, settings, models, commands. | `engines`, `setup`, `session`, `platform`, `text` |
+| `catalog/` | The command registry the terminal help and key bindings read. | `platform`, `text` |
+| `terminal/` | Terminal I/O and layout: screens, viewport, output sinks, keys and wheel input. | `catalog`, `theme`, `platform`, `text` |
+| `render/` | Pure text renderers: markdown, sections, code, patch and test views, charts, banner, guide text. | `terminal`, `catalog`, `theme`, `platform`, `text` |
+| `ui/` | Interactive terminal menus (settings, choosers, palette) for the commands that still run in the terminal. | `setup`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
+| `commands/` | Terminal command features built from the sections below them. | `ui`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
+| `cli/` | The friday command's flags: arguments, help, information and maintenance commands, prompts, themed output, exit codes. | `commands`, `ui`, `setup`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
+| `run/` | One turn from the command line (friday "request", --json) and the job worker. | `cli`, `commands`, `ui`, `setup`, `session`, `render`, `terminal`, `catalog`, `theme`, `platform`, `text` |
+| root | The entry point, `friday.ts`: dispatches to server/ (--acp), cli/ (flags) or run/ (one turn). | anything |
 
 ## `text`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `text/ansi.ts` | 27 | 13 | The escape codes for weight and emphasis, and the one function that decides whether to emit them. |
+| `text/ansi.ts` | 26 | 11 | The escape codes for weight and emphasis, and the one function that decides whether to emit them. |
 | `text/color-depth.ts` | 8 | 15 | What the terminal can actually render, from the environment rather than from hope. |
-| `text/glyphs.ts` | 278 | 21 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
-| `text/text-width.ts` | 62 | 11 | How many columns a string actually occupies. |
+| `text/glyphs.ts` | 278 | 18 | Every non-ASCII character Archymedes draws, in one table, with an ASCII twin for terminals that cannot |
+| `text/text-width.ts` | 62 | 9 | How many columns a string actually occupies. |
 
 ## `platform`
 
@@ -37,143 +41,170 @@ Lower sections never import higher ones. Files at the root are entry points and 
 | --- | ---: | ---: | --- |
 | `platform/auto-update.ts` | 226 | 1 | Staying current without getting in the way. |
 | `platform/defender-feed-update.ts` | 32 | 1 | Non-blocking CLI scheduler for the central Defensive Brain feed. |
-| `platform/doctor.ts` | 226 | 1 | `archymedes --doctor`: probes every network endpoint the CLI depends on and reports exactly which |
+| `platform/doctor.ts` | 226 | 1 | `friday --doctor`: probes every network endpoint the CLI depends on and reports exactly which |
 | `platform/endpoints.ts` | 73 | 5 | The network endpoints Archymedes depends on, in one place. |
-| `platform/i18n.ts` | 318 | 7 | Keyed by shortcut id, not by position. |
+| `platform/environment.ts` | 1 | 6 |  |
+| `platform/escape-timeout.ts` | 18 | 3 | How long a lone Esc byte waits for the rest of an escape sequence before it counts as the Escape |
+| `platform/i18n.ts` | 318 | 8 | Keyed by shortcut id, not by position. |
 | `platform/local-currency.ts` | 235 | 3 | The countries a location can be set to, in the sense that matters: ones we can price in. |
 | `platform/network.ts` | 330 | 4 | Turns raw fetch/undici/SDK errors into one actionable sentence. |
-| `platform/settings.ts` | 610 | 16 | A value that can be picked from a list, with the human name shown beside the stored code. |
+| `platform/settings.ts` | 428 | 19 | A value that can be picked from a list, with the human name shown beside the stored code. |
 | `platform/update.ts` | 261 | 2 | Parses the strict subset package registries use; invalid versions never reach a command line. |
-
-## `catalog`
-
-| Module | Lines | Imported by | Responsibility |
-| --- | ---: | ---: | --- |
-| `catalog/commands.ts` | 304 | 4 | The slash-command registry. |
 
 ## `theme`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `theme/theme-files.ts` | 85 | 2 | Themes that came from a file rather than from this binary. |
-| `theme/theme.ts` | 562 | 11 | Colour, as a set of named roles rather than a set of escape codes. |
+| `theme/theme.ts` | 534 | 11 | Colour, as a set of named roles rather than a set of escape codes. |
+
+## `session`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `session/delete-session.ts` | 66 | 1 | Deleting a past chat, completely. |
+| `session/location.ts` | 7 | 3 | Where a piece of work runs, and how that reads in prose. |
+| `session/models.ts` | 38 | 2 | Text models known to this build, per provider, in catalog order. |
+| `session/resumed-spend.ts` | 78 | 1 | What a session spent before this process resumed it. |
+| `session/state-history.ts` | 127 | 4 | The CLI-facing lifecycle for archymedes-state. |
+| `session/tabs.ts` | 163 | 2 | Several pieces of work in one session. |
+
+## `setup`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `setup/free-setup.ts` | 115 | 3 | Free mode without a dead end, and with its one caveat said out loud. |
+| `setup/jev.ts` | 19 | 2 | Jev (TypeSafe System One) configuration from the environment. |
+| `setup/session-provider.ts` | 20 | 3 | Restore free access before constructing any agent; an explicit provider may override it. |
+| `setup/setting-choices.ts` | 14 | 2 | The numbered settings menu (`friday settings`, and a first run without the Go interface): the |
+
+## `engines`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `engines/claude/backend.ts` | 163 | 3 | Claude as one of the Providers app's rows, and the steps that make it ready. |
+| `engines/claude/executable.ts` | 84 | 1 | The person's own Claude Code: where it is, whether they are signed in, and the environment it |
+| `engines/claude/identity.ts` | 3 | 5 | How Claude is named to the rest of Archymedes: the provider id people choose, and its label. |
+| `engines/claude/install.ts` | 41 | 3 | Installs Anthropic's Claude Agent SDK into Friday's own folder, from npm, on this machine. |
+| `engines/claude/listing.ts` | 48 | 1 | Claude in the lists the interface draws — the Providers app, the model picker, first-run setup — |
+| `engines/claude/permissions.ts` | 39 | 1 | Which of Claude Code's permission questions Friday answers itself, so Claude in a mode behaves |
+| `engines/claude/sdk.ts` | 172 | 4 | The part of Anthropic's Claude Agent SDK this integration uses, and how it is found. |
+| `engines/claude/session.ts` | 467 | 1 | One Archymedes session run by the person's own Claude Code. |
+| `engines/claude/translate.ts` | 341 | 1 | Claude Code's stream, said in Friday's events: the ones the interface already draws. |
+| `engines/codex/backend.ts` | 186 | 2 | Codex as one of the Providers app's rows: the person's own Codex CLI, signed in with their |
+| `engines/codex/fake-codex.ts` | 157 | 0 | A stand-in for `codex app-server`, for tests: answers the requests a session makes and plays a |
+| `engines/codex/identity.ts` | 3 | 4 | How Codex is named to the rest of Archymedes: the provider id people choose, and its label. |
+| `engines/codex/rpc.ts` | 158 | 3 | JSON-RPC 2.0 with `codex app-server`, one message per line on its stdin and stdout. |
+| `engines/codex/session.ts` | 432 | 1 | One Archymedes session run by the person's own Codex, through `codex app-server`. |
+| `engines/codex/translate.ts` | 281 | 1 | Codex's app-server notifications, said in Friday's events: the ones the interface already |
+| `engines/contract.ts` | 69 | 8 | What every engine (Friday's own agent, Claude Code, Codex) and the server agree on: the session |
+| `engines/handoff.ts` | 57 | 3 | Context across engines. One Archymedes session can be run by Archymedes's own agent, by the |
+
+## `server`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `server/acp-server.ts` | 196 | 1 | `friday acp` — the same agent, driven by an editor over stdio. |
+| `server/connect.ts` | 180 | 2 | Connecting a provider in one step, for a client that draws the form (the Go interface). |
+| `server/models.ts` | 88 | 1 | `_archymedes/models` for a client that draws its own model picker: every model of every provider, |
+| `server/session-commands.ts` | 136 | 1 | `/context` as a small table: each part, its share of the window, and what is left. |
+| `server/session.ts` | 347 | 2 | One ACP session, on whichever engine runs it: Archymedes's own agent (any model provider), or |
+| `server/settings.ts` | 86 | 1 | The settings menu as data, for a client that draws it (the Go interface). The fields, their |
+| `server/setup.ts` | 106 | 1 | First-run setup for a client that draws its own screens (the Go interface), over ACP. |
+| `server/startup-update.ts` | 72 | 1 | One update round, before the first prompt and never again in this session. |
+
+## `catalog`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `catalog/commands.ts` | 136 | 2 | The slash-command registry. |
 
 ## `terminal`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `terminal/job-stream.ts` | 215 | 2 | A background job's output, as something you can subscribe to instead of sit inside. |
-| `terminal/keybindings.ts` | 482 | 6 | Feature keys, and the line-editing keys they must not eat. |
-| `terminal/output.ts` | 212 | 6 | Where a line goes, decided once instead of at every write. |
+| `terminal/keybindings.ts` | 463 | 3 | Feature keys, and the line-editing keys they must not eat. |
+| `terminal/output.ts` | 200 | 6 | Where a line goes, decided once instead of at every write. |
 
 ## `render`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
 | `render/canvas.ts` | 125 | 1 | The drawing surface every chart is drawn on — Archymedes's answer to ntcharts' canvas. |
-| `render/charts.ts` | 319 | 2 | Charts, in the terminal — Archymedes's answer to ntcharts. |
-| `render/code-view.ts` | 309 | 2 | The code the agent actually wrote, shown where it happened. |
+| `render/charts.ts` | 172 | 2 | Charts, in the terminal — Archymedes's answer to ntcharts. |
+| `render/code-view.ts` | 295 | 2 | The code the agent actually wrote, shown where it happened. |
 | `render/completion-card.ts` | 48 | 1 | One compact, predictable handoff instead of several unrelated turn footers. |
-| `render/expandable.ts` | 107 | 1 | Folded blocks, and the handle that unfolds them. |
+| `render/expandable.ts` | 74 | 1 | Folded blocks, and the handle that unfolds them. |
 | `render/markdown.ts` | 306 | 3 | Markdown, rendered for a terminal. |
-| `render/routing-receipt.ts` | 130 | 1 | The hosted routing decision, shown after a turn that used the exchange. |
-| `render/sections.ts` | 249 | 12 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
+| `render/routing-receipt.ts` | 102 | 1 | The hosted routing decision, shown after a turn that used the exchange. |
+| `render/sections.ts` | 241 | 10 | The typographic system the transcript is built from: rules, headings, panels, gutters. |
 | `render/syntax.ts` | 667 | 3 | Code coloured the way most people already read code: VS Code's Dark+ and Light+ colours. |
-| `render/test-report.ts` | 372 | 1 | Test output, read as a result rather than as a wall of text. |
+| `render/test-report.ts` | 367 | 1 | Test output, read as a result rather than as a wall of text. |
 | `render/transcript.ts` | 182 | 3 | How a tool call reads in the transcript. |
-| `render/tui.ts` | 1368 | 8 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
-
-## `session`
-
-| Module | Lines | Imported by | Responsibility |
-| --- | ---: | ---: | --- |
-| `session/delete-session.ts` | 78 | 1 | Deleting a past chat, completely. |
-| `session/location.ts` | 15 | 3 | Where a piece of work runs, and how that reads in prose. |
-| `session/models.ts` | 181 | 2 | The models a session can actually switch to, and what each costs. |
-| `session/resumed-spend.ts` | 78 | 1 | What a session spent before this process resumed it. |
-| `session/state-history.ts` | 127 | 4 | The CLI-facing lifecycle for archymedes-state. |
-| `session/tabs.ts` | 302 | 2 | Several pieces of work in one session. |
+| `render/tui.ts` | 928 | 8 | The pinned status region beneath the scrolling transcript, and the pieces it is built from. |
 
 ## `ui`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `ui/borrowed-keyboard.ts` | 179 | 3 | One keystroke as a borrowed-keyboard surface receives it. |
-| `ui/chooser.ts` | 457 | 3 | One set of navigation rules, shared by every menu Archymedes shows. |
-| `ui/navigation.ts` | 522 | 6 | Finding the right command without reading all of them. |
-| `ui/palette.ts` | 269 | 2 | The command palette. |
-| `ui/table.ts` | 517 | 1 | A table you can move around in — Bubbles' `table`, as the thing `tui.ts`'s `table()` deliberately |
+| `ui/borrowed-keyboard.ts` | 159 | 3 | One keystroke as a borrowed-keyboard surface receives it. |
+| `ui/chooser.ts` | 455 | 1 | One set of navigation rules, shared by every menu Archymedes shows. |
+| `ui/navigation.ts` | 232 | 6 | The handful worth learning first. |
+| `ui/palette.ts` | 190 | 0 | The command palette. |
+| `ui/settings-menu.ts` | 201 | 2 | Renders an arrow-navigable list and resolves to the chosen value, or undefined if dismissed. |
+| `ui/table.ts` | 28 | 0 | A cell clipped and padded to exactly `width` columns, with the colour codes in it left intact. |
 
 ## `commands`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `commands/balance.ts` | 278 | 2 | `/balance` — the command grammar and everything it prints. |
+| `commands/balance.ts` | 172 | 2 | One formatter, so a quote and a header cannot disagree on how an amount reads. |
 | `commands/chat-history.ts` | 282 | 3 | Past conversations, as something you can look through rather than a list of ids. |
-| `commands/memory.ts` | 136 | 2 | The terminal half of memory: parsing `/memory` commands and drawing the result. |
-| `commands/pacing.ts` | 142 | 6 | Slow mode: spend less per turn, on purpose. |
-| `commands/wander.ts` | 222 | 2 | Wander, from the terminal. |
+| `commands/memory.ts` | 10 | 2 | The terminal half of memory: parsing `/memory` commands and drawing the result. |
+| `commands/pacing.ts` | 111 | 6 | Slow mode: spend less per turn, on purpose. |
+| `commands/wander.ts` | 153 | 2 | What the search cost, for the ledger. Absent when no search ran. |
 
-## `app`
+## `cli`
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `app/acp-commands.ts` | 155 | 3 | The session commands a drawing client asks for over `_archymedes/session/command`: the data |
-| `app/acp-connect.ts` | 191 | 2 | Connecting a provider in one step, for a client that draws the form (the Go interface). |
-| `app/acp-models.ts` | 80 | 1 | `_archymedes/models` for a client that draws its own model picker: every model of every provider, |
-| `app/acp-session.ts` | 282 | 2 | One ACP session, on whichever engine runs it: Archymedes's own agent (any model provider), or |
-| `app/acp-settings.ts` | 87 | 1 | The settings menu as data, for a client that draws it (the Go interface). The fields, their |
-| `app/acp-setup.ts` | 134 | 4 | First-run setup for a client that draws its own screens (the Go interface), over ACP. |
-| `app/agent-factory.ts` | 97 | 3 | Builds an agent for a tab. |
-| `app/args.ts` | 219 | 7 | Whether a command-line mode flag should override a resumed session's saved posture. |
-| `app/balance-tracking.ts` | 119 | 2 | The tracked account balance and the session's spend against it. |
-| `app/claude/backend.ts` | 162 | 3 | Claude as one of the Providers app's rows, and the steps that make it ready. |
-| `app/claude/executable.ts` | 84 | 1 | The person's own Claude Code: where it is, whether they are signed in, and the environment it |
-| `app/claude/identity.ts` | 3 | 5 | How Claude is named to the rest of Archymedes: the provider id people choose, and its label. |
-| `app/claude/install.ts` | 41 | 3 | Installs Anthropic's Claude Agent SDK into Archymedes's own folder, from npm, on this machine. |
-| `app/claude/listing.ts` | 48 | 1 | Claude in the lists the interface draws — the Providers app, the model picker, first-run setup — |
-| `app/claude/sdk.ts` | 172 | 4 | The part of Anthropic's Claude Agent SDK this integration uses, and how it is found. |
-| `app/claude/session.ts` | 426 | 1 | One Archymedes session run by the person's own Claude Code. |
-| `app/claude/translate.ts` | 341 | 1 | Claude Code's stream, said in Archymedes's events: the ones the interface already draws. |
-| `app/codex/backend.ts` | 185 | 2 | Codex as one of the Providers app's rows: the person's own Codex CLI, signed in with their |
-| `app/codex/fake-codex.ts` | 157 | 0 | A stand-in for `codex app-server`, for tests: answers the requests a session makes and plays a |
-| `app/codex/identity.ts` | 3 | 4 | How Codex is named to the rest of Archymedes: the provider id people choose, and its label. |
-| `app/codex/rpc.ts` | 158 | 3 | JSON-RPC 2.0 with `codex app-server`, one message per line on its stdin and stdout. |
-| `app/codex/session.ts` | 413 | 1 | One Archymedes session run by the person's own Codex, through `codex app-server`. |
-| `app/codex/translate.ts` | 281 | 1 | Codex's app-server notifications, said in Archymedes's events: the ones the interface already |
-| `app/display-currency.ts` | 129 | 1 | The currency a session reports costs in, and the exchange rates behind it. |
-| `app/free-setup.ts` | 115 | 3 | Free mode without a dead end, and with its one caveat said out loud. |
-| `app/handoff.ts` | 57 | 3 | Context across engines. One Archymedes session can be run by Archymedes's own agent, by the |
-| `app/help.ts` | 121 | 1 | The `--help` text, built after rendering is configured so its colours match the terminal. |
-| `app/interrupts.ts` | 61 | 1 | Ctrl-C interrupts the turn rather than the process, so a long tool loop can be stopped without |
-| `app/jev.ts` | 19 | 2 | Jev (TypeSafe System One) configuration from the environment. |
-| `app/job-launch.ts` | 82 | 1 | Starting the background job worker, detached or in this process. |
-| `app/live-models.ts` | 43 | 1 | Models the providers themselves report, over and above the ones this build was compiled with. |
-| `app/prompts.ts` | 285 | 4 | Questions the terminal session asks the person: tool approvals, sensitive-task and spending-cap |
-| `app/providers.ts` | 135 | 4 | Provider and price facts for the terminal session: the providers listing, FX rates from the |
-| `app/session-hints.ts` | 66 | 2 | Where this session is, for anything that has to decide what to offer next. |
-| `app/session-provider.ts` | 13 | 3 | Restore free access before constructing any agent; an explicit provider may override it. |
-| `app/session-start.ts` | 116 | 1 | The two ways a session starts somewhere other than an empty prompt: `--resume`, and a request |
-| `app/session-state.ts` | 93 | 13 | The mutable state of one interactive session, as the extracted pieces of `main()` see it. |
-| `app/startup-commands.ts` | 241 | 1 | The invocations that answer and exit before any session exists: `--help`, `--version`, |
-| `app/startup-update.ts` | 79 | 1 | One update round, before the first prompt and never again in this session. |
-| `app/transcript.ts` | 571 | 15 | The transcript renderer's session state: colour switches and the themed `style`, the output |
-| `app/turn-failure.ts` | 63 | 1 | What a turn that threw leaves behind: the recoverable-turn record, a named error with its next |
-| `app/turn-preflight.ts` | 111 | 1 | Everything a turn checks before the model is contacted: the pace's cooldown, task safety, the |
-| `app/turn-runner.ts` | 335 | 3 | One turn: the request goes to the agent, and the answer, its cost and what to do next come back |
-| `app/workspaces.ts` | 92 | 1 | Somewhere for a tab's work to happen. |
+| `cli/args.ts` | 219 | 7 | Whether a command-line mode flag should override a resumed session's saved posture. |
+| `cli/exit-codes.ts` | 25 | 4 | Terminal exit codes, stable across releases. |
+| `cli/help.ts` | 120 | 1 | The `--help` text, built after rendering is configured so its colours match the terminal. |
+| `cli/output.ts` | 523 | 14 | The transcript renderer's session state: colour switches and the themed `style`, the output |
+| `cli/prompts.ts` | 254 | 4 | Exchange rates, from configuration only. |
+| `cli/providers.ts` | 133 | 4 | Provider and price facts for the terminal session: the providers listing, FX rates from the |
+| `cli/startup-commands.ts` | 243 | 1 | The invocations that answer and exit before any session exists: `--help`, `--version`, |
+
+## `run`
+
+| Module | Lines | Imported by | Responsibility |
+| --- | ---: | ---: | --- |
+| `run/agent-factory.ts` | 100 | 3 | Builds an agent for a tab. |
+| `run/balance-tracking.ts` | 120 | 2 | The tracked account balance and the session's spend against it. |
+| `run/display-currency.ts` | 87 | 1 | The currency a session reports costs in, and the exchange rates behind it. |
+| `run/headless.ts` | 208 | 3 | Archymedes speaking to a program instead of a person. |
+| `run/interrupts.ts` | 61 | 1 | Ctrl-C interrupts the turn rather than the process, so a long tool loop can be stopped without |
+| `run/job-launch.ts` | 47 | 1 | The process a spawned job runs as. |
+| `run/job-worker.ts` | 281 | 1 | The process that actually does the work once a job has been handed to it. |
+| `run/live-models.ts` | 9 | 1 | Free: a cache hit widens completion and the picker with no request at all. A miss simply means the first `/mod |
+| `run/session-hints.ts` | 65 | 2 | Where this session is, for anything that has to decide what to offer next. |
+| `run/session-start.ts` | 130 | 1 | The two ways a session starts somewhere other than an empty prompt: `--resume`, and a request |
+| `run/session-state.ts` | 92 | 8 | The mutable state of one interactive session, as the extracted pieces of `main()` see it. |
+| `run/turn-failure.ts` | 63 | 1 | What a turn that threw leaves behind: the recoverable-turn record, a named error with its next |
+| `run/turn-preflight.ts` | 111 | 1 | Everything a turn checks before the model is contacted: the pace's cooldown, task safety, the |
+| `run/turn-runner.ts` | 336 | 3 | One turn: the request goes to the agent, and the answer, its cost and what to do next come back |
+| `run/workspaces.ts` | 93 | 1 | Somewhere for a tab's work to happen. |
 
 ## root
 
 | Module | Lines | Imported by | Responsibility |
 | --- | ---: | ---: | --- |
-| `acp-server.ts` | 191 | 1 | `archymedes acp` — the same agent, driven by an editor over stdio. |
-| `friday.ts` | 441 | 0 | Archymedes CLI — the terminal front end. |
-| `headless.ts` | 233 | 4 | Archymedes speaking to a program instead of a person. |
-| `job-worker.ts` | 297 | 1 | The process that actually does the work once a job has been handed to it. |
+| `friday.ts` | 440 | 0 | Archymedes CLI — the terminal front end. |
 
 ## Open findings
 
-- **Large files (over 800 lines):** `render/tui.ts` (1368).
+- **Large files (over 800 lines):** `render/tui.ts` (928).
 - **Duplicate escape helpers:** none.
-- **Modules with no source importer:** `app/codex/fake-codex.ts`.
+- **Modules with no source importer:** `engines/codex/fake-codex.ts`, `ui/palette.ts`, `ui/table.ts`.

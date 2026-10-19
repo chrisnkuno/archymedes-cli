@@ -239,11 +239,3 @@ export function outcomeMark(outcome: "pass" | "fail" | "skip" | "running", style
     default: return paint(glyphs.pending, toneCode("accent", style), style.depth);
   }
 }
-
-/** A left-aligned label column followed by values, for the small fact tables status views print. */
-export function keyValues(rows: readonly (readonly [string, string])[], style: SectionStyle): string {
-  const width = Math.max(0, ...rows.map(([key]) => visibleWidth(key)));
-  return rows
-    .map(([key, value]) => `${GUTTER}${paint(key.padEnd(width + 2), DIM, style.depth)}${value}`)
-    .join("\n");
-}

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { eventJournalPath } from "@archymedes/core/cli/protocol";
 import { listSessions, loadSession, saveSession, sessionDirectory, type SessionRecord } from "@archymedes/core/cli/session";
-import { deleteAllSessions, deleteSession } from "./delete-session";
+import { deleteSession } from "./delete-session";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
@@ -50,14 +50,6 @@ describe("deleting a past chat", () => {
     const root = await project();
     expect((await deleteSession(root, B)).deleted).toBe(false);
     expect((await deleteSession(root, "../escape")).deleted).toBe(false);
-  });
-
-  it("deletes everything else at once, keeping the open chat", async () => {
-    const root = await project();
-    await saveSession(record(root, A, "fix the parser"));
-    await saveSession(record(root, B, "add a health check"));
-    expect(await deleteAllSessions(root, { activeId: B })).toEqual({ deleted: 1 });
-    expect((await listSessions(root)).map((session) => session.id)).toEqual([B]);
   });
 });
 

@@ -3,7 +3,6 @@ import type { KeypressEvent } from "../terminal/keybindings";
 import type { OutputStream } from "../terminal/output";
 import { rowsOccupied } from "../render/tui";
 import { runChooser, type ChooserItem, type ChooserPaint, type RunChooserOptions } from "./chooser";
-import { runTable, type RunTableOptions, type TableRow } from "./table";
 
 // Taking the keyboard from readline for a moment, for a menu or a table drawn at the cursor: what
 // `friday settings`, `history` and the theme and model lists open. Split from `shortcuts.ts`,
@@ -75,9 +74,6 @@ export function menuRows(host: KeyboardHost): number {
 export function menuColumns(host: KeyboardHost): number {
   return host.output === process.stdout && workspaceMenu ? workspaceMenu.width() : host.output.columns ?? 80;
 }
-
-/** The fixed workspace lends its body to every picker without moving the composer. */
-export function setWorkspaceMenu(surface: typeof workspaceMenu): void { workspaceMenu = surface; }
 
 /**
  * Keys a menu received but never read, held briefly for the menu opened right after it.
@@ -160,20 +156,4 @@ export async function openChooser<T>(
     getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 4) })),
   };
   return withBorrowedKeyboard(host, self, (keys, paint) => runChooser(keys, items, paint, sized));
-}
-
-/**
- * A table over the same borrowed keyboard, returning the row the user chose.
- *
- * The height it hands the table is the terminal minus a few rows, same as every other surface here:
- * a frame sized to the whole window scrolls its own top border off the screen, and the table cannot
- * work that out for itself because a pure renderer has no business asking the process how tall it is.
- */
-export async function openTable(host: KeyboardHost, options: RunTableOptions, self?: unknown): Promise<TableRow | undefined> {
-  const sized = {
-    width: host.output.columns ?? 80,
-    ...options,
-    getSize: options.getSize ?? (() => ({ width: menuColumns(host), height: Math.max(1, menuRows(host) - 2) })),
-  };
-  return withBorrowedKeyboard(host, self, (keys, paint) => runTable(keys, paint, sized));
 }

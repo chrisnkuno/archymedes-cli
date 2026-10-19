@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
-import { clip, heading, keyValues, note, outcomeMark, panel, rule, type SectionStyle } from "./sections";
+import { clip, heading, note, outcomeMark, panel, rule, type SectionStyle } from "./sections";
 import { buildPalette, findBuiltinTheme } from "../theme/theme";
 
 const plain = (value: string) => value.replace(/\x1b\[[0-9;]*m/g, "");
@@ -62,11 +62,6 @@ describe("hierarchy", () => {
     const child = note("detail", style());
     const indent = (line: string) => line.length - line.trimStart().length;
     expect(indent(child)).toBeGreaterThan(indent(parent));
-  });
-
-  it("aligns a key/value block on one column so the values form a readable second column", () => {
-    const rendered = plain(keyValues([["short", "1"], ["much longer key", "2"]], style())).split("\n");
-    expect(rendered[0].indexOf("1")).toBe(rendered[1].indexOf("2"));
   });
 });
 

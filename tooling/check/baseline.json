@@ -1,8 +1,7 @@
 {
   "themeLeaks": {},
   "largeFiles": {
-    "packages/friday-cli/src/friday.ts": 3199,
-    "packages/friday-cli/src/render/tui.ts": 1356,
+    "packages/friday-cli/src/render/tui.ts": 928,
     "packages/core/src/agent-runtime.ts": 1587,
     "packages/core/src/cli/agent.ts": 1594,
     "packages/core/src/cli/tools.ts": 1623,
@@ -10,7 +9,7 @@
   },
   "layering": {},
   "duplicateHelpers": {},
-  "unwired": {},
   "goLayering": {},
-  "unsectioned": {}
+  "unsectioned": {},
+  "unwired": {}
 }

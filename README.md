@@ -135,6 +135,19 @@ repository contains only their client contract.
 `/balance` and `/route` are not in the Go interface yet (WS-7); `/cost` shows what a session has
 spent, and a one-shot `--json` run reports its own cost.
 
+## Install count
+
+The first time each new version runs, Friday sends one anonymous request to
+`https://archymedes.xyz/api/v1/count/` so installs and updates can be counted. It carries exactly
+`{ event: "install" | "update", version, os, arch }`: no identifier, path, project, account or
+prompt. The server keeps totals only; to count each network once per version and day it keeps a
+daily-salted hash of the address for two days, never the address itself.
+
+Turn it off with `ARCHYMEDES_TELEMETRY=off` (or **Install count** in Settings) or the standard
+`DO_NOT_TRACK=1`. It is never sent from CI or test runs, never delays startup, and is retried on
+the next run if the network is down. The code is
+[`packages/friday-cli/src/platform/install-cue.ts`](packages/friday-cli/src/platform/install-cue.ts).
+
 ## Languages
 
 The control surfaces are localized into 16 languages — `friday --language <code>` or

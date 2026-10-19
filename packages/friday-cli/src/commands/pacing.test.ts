@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ASCII_GLYPHS } from "../text/glyphs";
-import {
-  PACE_PROFILES,
-  applyPacing,
-  describePace,
-  exceedsPace,
-  paceBadge,
-  parsePaceCommand,
-  parsePaceFlag,
-  remainingCooldown,
-} from "./pacing";
-import type { SectionStyle } from "../render/sections";
-
-const plain = (value: string) => value.replace(/\x1b\[[0-9;]*m/g, "");
-const style: SectionStyle = { width: 72, depth: "none" };
+import { PACE_PROFILES, applyPacing, exceedsPace, paceBadge, parsePaceFlag, remainingCooldown } from "./pacing";
 
 describe("the profiles", () => {
   it("gets stricter, never looser, as the level rises — the property the whole feature rests on", () => {
@@ -84,43 +71,9 @@ describe("the grammar", () => {
     expect(parsePaceFlag("sideways")).toBeUndefined();
     expect(parsePaceFlag(undefined)).toBeUndefined();
   });
-
-  it("turns a bare /slow on when it is off, and reports when it is already on", () => {
-    expect(parsePaceCommand("/slow", "off")).toEqual({ kind: "set", level: "gentle" });
-    expect(parsePaceCommand("/slow", "gentle")).toEqual({ kind: "show" });
-  });
-
-  it("sets an explicit level either way", () => {
-    expect(parsePaceCommand("/slow strict", "off")).toEqual({ kind: "set", level: "strict" });
-    expect(parsePaceCommand("/pace off", "strict")).toEqual({ kind: "set", level: "off" });
-  });
-
-  it("explains a level it does not recognise", () => {
-    const parsed = parsePaceCommand("/slow sideways", "off");
-    expect(parsed?.kind).toBe("invalid");
-    expect(parsed && "reason" in parsed && parsed.reason).toContain("sideways");
-  });
-
-  it("ignores anything that is not the command", () => {
-    expect(parsePaceCommand("/slowly", "off")).toBeNull();
-    expect(parsePaceCommand("slow down", "off")).toBeNull();
-  });
 });
 
 describe("what the user is shown", () => {
-  it("names every limit the pace imposes, so it is a decision rather than a mood", () => {
-    const rendered = plain(describePace("strict", style));
-    expect(rendered).toContain("model rounds");
-    expect(rendered).toContain("tools per round");
-    expect(rendered).toContain("pause between turns");
-    expect(rendered).toContain("/slow off");
-  });
-
-  it("says only what off means, since there is nothing to list", () => {
-    const rendered = plain(describePace("off", style));
-    expect(rendered).not.toContain("model rounds");
-    expect(rendered.split("\n")).toHaveLength(1);
-  });
 
   it("badges without a character the terminal cannot draw", () => {
     expect(paceBadge("gentle", ASCII_GLYPHS)).toMatch(/^[\x00-\x7f]+$/);

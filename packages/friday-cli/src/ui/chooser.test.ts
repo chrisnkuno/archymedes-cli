@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { advanceChooser, filterItems, renderChooser, runChooser, type ChooserItem } from "./chooser";
 import { clipTo, visibleWidth } from "../text/text-width";
 import type { KeypressEvent } from "../terminal/keybindings";
-import { renderPalette } from "./palette";
 
 const plain = (value: string) => value.replace(/\x1b\[[0-9;]*m/g, "");
 const paint = { dim: (t: string) => t, cyan: (t: string) => t, green: (t: string) => t, yellow: (t: string) => t };
@@ -340,7 +339,6 @@ describe("the bugs that made menus feel broken", () => {
   });
 });
 
-
 describe("every menu obeys the same rules", () => {
   /**
    * The palette and the model picker are the same menu wearing different clothes. They each grew
@@ -353,24 +351,6 @@ describe("every menu obeys the same rules", () => {
     description: "a description long enough to run past the edge of a narrow terminal",
     hint: "hint",
   }));
-
-  it("never draws a row wider than the terminal", () => {
-    const paletteMatches = Array.from({ length: 30 }, (_unused, index) => ({
-      command: `/option-${index}-with-a-fairly-long-command`,
-      description: "a description long enough to run past the edge of a narrow terminal",
-    }));
-    for (const width of [1, 8, 19, 30, 40, 80, 120]) {
-      const frames = [
-        plain(renderChooser({ selected: 15, query: "" }, rows, { paint, width, height: 6 })),
-        renderPalette({ query: "q".repeat(40), matches: paletteMatches, selected: 15 }, { width, rows: 6 }),
-      ];
-      for (const [index, rendered] of frames.entries()) {
-        for (const line of rendered.split("\n")) {
-          expect(visibleWidth(line), `menu ${index} width ${width}: ${line}`).toBeLessThanOrEqual(width);
-        }
-      }
-    }
-  });
 
   it("always keeps the selection on screen, at either end of the list", () => {
     for (const selected of [0, 7, 15, 29]) {

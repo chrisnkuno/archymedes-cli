@@ -532,31 +532,3 @@ export function detectPreferredTheme(environment: Record<string, string | undefi
   }
   return DEFAULT_THEME_NAME;
 }
-
-export type ThemeCommand =
-  | { kind: "list" }
-  | { kind: "show" }
-  | { kind: "set"; name: string }
-  | { kind: "where" }
-  | { kind: "invalid"; reason: string };
-
-/** Parses `/theme`, `/theme list`, `/theme <name>`, `/theme where`. */
-export function parseThemeCommand(input: string): ThemeCommand | null {
-  const match = /^\/theme(?:\s+([\s\S]*))?$/.exec(input.trim());
-  if (!match) return null;
-  const rest = (match[1] ?? "").trim().replace(/\s+/g, " ");
-  if (!rest) return { kind: "show" };
-
-  const [verb, ...words] = rest.split(" ");
-  switch (verb.toLowerCase()) {
-    case "list": return { kind: "list" };
-    case "show": return { kind: "show" };
-    case "where": return { kind: "where" };
-    default:
-      // A theme name is the overwhelmingly common argument, so it needs no verb — but a name with
-      // a space in it is a typo, not a theme, and saying so beats searching for it and failing.
-      return words.length === 0
-        ? { kind: "set", name: verb }
-        : { kind: "invalid", reason: `Theme names have no spaces — did you mean /theme ${verb}?` };
-  }
-}

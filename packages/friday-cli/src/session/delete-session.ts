@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { eventJournalPath } from "@archymedes/core/cli/protocol";
-import { listSessions, sessionDirectory, sessionJournalPath } from "@archymedes/core/cli/session";
+import { sessionDirectory, sessionJournalPath } from "@archymedes/core/cli/session";
 
 /**
  * Deleting a past chat, completely.
@@ -63,16 +63,4 @@ export async function deleteSession(root: string, id: string, options: { activeI
   if (!removed.some(Boolean)) return { deleted: false, reason: `No session ${id} in this project.` };
   await clearProjection(root, id);
   return { deleted: true };
-}
-
-/** Every chat in this project except the open one. Returns how many went. */
-export async function deleteAllSessions(root: string, options: { activeId?: string } = {}): Promise<{ deleted: number }> {
-  const all = await listSessions(root, Number.MAX_SAFE_INTEGER);
-  let deleted = 0;
-  for (const session of all) {
-    if (session.id === options.activeId) continue;
-    const outcome = await deleteSession(root, session.id, options);
-    if (outcome.deleted) deleted += 1;
-  }
-  return { deleted };
 }

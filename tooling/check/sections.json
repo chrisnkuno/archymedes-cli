@@ -1,16 +1,22 @@
 {
-  "//": "Sections of packages/friday-cli/src and what each may import. A file's section is its first directory; files at the root are entry points and may import anything. See docs/continuation/MODULE_MAP.md.",
+  "//": "Sections of packages/friday-cli/src and what each may import (a file's section is its first directory; root files are entry points and may import anything). Two stacks share the bottom: the agent side (server → engines → setup) that the Go interface talks to over ACP, and the terminal side (run → cli → commands → ui → render → terminal) for one-shot runs and the commands that print. See docs/continuation/CODEBASE.md.",
   "sourceRoot": "packages/friday-cli/src",
   "allowed": {
     "text": ["text"],
     "platform": ["platform", "text"],
-    "catalog": ["catalog", "platform", "text"],
     "theme": ["theme", "platform", "text"],
+    "session": ["session", "theme", "platform", "text"],
+    "setup": ["setup", "theme", "platform", "text"],
+
+    "engines": ["engines", "setup", "session", "platform", "text"],
+    "server": ["server", "engines", "setup", "session", "platform", "text"],
+
+    "catalog": ["catalog", "platform", "text"],
     "terminal": ["terminal", "catalog", "theme", "platform", "text"],
     "render": ["render", "terminal", "catalog", "theme", "platform", "text"],
-    "session": ["session", "theme", "platform", "text"],
-    "ui": ["ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
+    "ui": ["ui", "setup", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
     "commands": ["commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
-    "app": ["app", "commands", "ui", "session", "render", "terminal", "catalog", "theme", "platform", "text"]
+    "cli": ["cli", "commands", "ui", "setup", "session", "render", "terminal", "catalog", "theme", "platform", "text"],
+    "run": ["run", "cli", "commands", "ui", "setup", "session", "render", "terminal", "catalog", "theme", "platform", "text"]
   }
 }

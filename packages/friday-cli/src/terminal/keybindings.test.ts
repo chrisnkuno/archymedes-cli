@@ -239,7 +239,7 @@ describe("mnemonic letter shortcuts", () => {
 
 describe("the Escape key's wait for an escape sequence", () => {
   it("is short by default and adjustable within sane bounds", async () => {
-    const { DEFAULT_ESCAPE_CODE_TIMEOUT_MS, escapeCodeTimeoutMs } = await import("./keybindings");
+    const { DEFAULT_ESCAPE_CODE_TIMEOUT_MS, escapeCodeTimeoutMs } = await import("../platform/escape-timeout");
     expect(escapeCodeTimeoutMs({})).toBe(DEFAULT_ESCAPE_CODE_TIMEOUT_MS);
     expect(DEFAULT_ESCAPE_CODE_TIMEOUT_MS).toBeLessThan(100);
     expect(escapeCodeTimeoutMs({ ARCHYMEDES_ESCAPE_MS: "150" })).toBe(150);

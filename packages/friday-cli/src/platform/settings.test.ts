@@ -3,7 +3,9 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PROVIDER_IDS } from "@archymedes/core/providers/agent-matrix";
-import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, sectionOf, maskSetting, mergedEnvironment, runSettingsMenu, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
+import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, sectionOf, maskSetting, mergedEnvironment, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
+import { runSettingsMenu } from "../ui/settings-menu";
+import { settingChoices } from "../setup/setting-choices";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
@@ -226,7 +228,7 @@ describe("appearance, behaviour and free-mode settings", () => {
 
   it("offers the built-in themes and accepts a theme file's name", () => {
     const theme = SETTING_FIELDS.find((field) => field.key === "ARCHYMEDES_THEME")!;
-    expect("choices" in theme && theme.choices.map((choice) => choice.value)).toContain("parchment");
+    expect(settingChoices(theme).map((choice) => choice.value)).toContain("parchment");
     expect(validateSetting("ARCHYMEDES_THEME", "Parchment")).toBe("parchment");
     expect(validateSetting("ARCHYMEDES_THEME", "my-theme")).toBe("my-theme");
     expect(() => validateSetting("ARCHYMEDES_THEME", "two words")).toThrow();

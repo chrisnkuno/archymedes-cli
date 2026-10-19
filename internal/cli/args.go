@@ -5,7 +5,7 @@
 // non-interactive mode — `--json`, piped prompts, `doctor`, `update`, `history`, `settings` — and
 // every flag about the session itself. This package does not re-implement its parser. It only needs
 // to know which flags take a value, so that a flag's value is never mistaken for words of the
-// prompt; those rules mirror parseArgs in packages/friday-cli/src/app/args.ts.
+// prompt; those rules mirror parseArgs in packages/friday-cli/src/cli/args.ts.
 package cli
 
 import (

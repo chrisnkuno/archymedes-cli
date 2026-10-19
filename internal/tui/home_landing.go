@@ -144,6 +144,8 @@ func (m *Model) homeInfo(width, height int) []string {
 			step(th, "1", "Ask about this project — "+keyLabel(m.keys.Complete.Keys())+" picks a start"),
 			step(th, "2", keyLabel(m.keys.Mode.Keys())+" sets how much it may do alone"),
 			step(th, "3", "Apps are on the dock; "+keyLabel(m.keys.Start.Keys())+" finds anything"),
+			// Said once, where a new person reads: what platform/install-cue.ts sends, and how to stop it.
+			th.Faint.Render("Counts installs anonymously (version, OS) · off: Settings or DO_NOT_TRACK=1"),
 		)})
 	} else {
 		sections = append(sections, section{3, fit(

@@ -12,15 +12,19 @@ SPEC = re.compile(r'''(?:from\s+|import\s*\(\s*|^import\s+)["'](\.{1,2}/[^"']+)[
 HELPER = re.compile(r"^(?:export\s+)?(?:const|function)\s+(RESET|BOLD|DIM|paint)\b", re.M)
 PURPOSE = {
     "text": "Escape codes, glyph sets, colour depth, visible width and clipping. Depends on nothing.",
-    "platform": "Process and environment concerns: config paths and settings, network, endpoints, updates, doctor, i18n, currency.",
-    "catalog": "The command registry every menu, key binding and guide reads.",
+    "platform": "Process and environment: config paths, settings storage and schema, network, endpoints, updates, doctor, i18n, currency.",
     "theme": "Palette roles and theme files; the only place colours are named.",
-    "terminal": "Terminal I/O and layout: screens, scroll regions, viewport, output sinks, keys and wheel input.",
-    "render": "Pure transcript renderers: markdown, sections, code, patch and test views, charts, banner, guide text.",
-    "ui": "Interactive menus and full screens, and the fixed workspace frame.",
-    "session": "Tabs, models, fallback, spend, history and exported sessions.",
-    "commands": "Slash-command features built from the sections below them.",
-    "app": "Support for the terminal entry point: argument parsing, transcript render state, launch helpers.",
+    "session": "Session records, models, fallback, spend and history, shared by both stacks.",
+    "setup": "Which provider a session runs on, free-mode setup, Jev configuration, what a setting offers to pick.",
+    "engines": "Claude Code and Codex as engines, the handoff between engines, and the contract every engine implements.",
+    "server": "The ACP server the Go interface talks to: sessions on any engine, setup, settings, models, commands.",
+    "catalog": "The command registry the terminal help and key bindings read.",
+    "terminal": "Terminal I/O and layout: screens, viewport, output sinks, keys and wheel input.",
+    "render": "Pure text renderers: markdown, sections, code, patch and test views, charts, banner, guide text.",
+    "ui": "Interactive terminal menus (settings, choosers, palette) for the commands that still run in the terminal.",
+    "commands": "Terminal command features built from the sections below them.",
+    "cli": "The friday command's flags: arguments, help, information and maintenance commands, prompts, themed output, exit codes.",
+    "run": "One turn from the command line (friday \"request\", --json) and the job worker.",
 }
 
 
@@ -83,7 +87,7 @@ lines = [
 for name, allowed in CONFIG["allowed"].items():
     others = [a for a in allowed if a != name]
     lines.append(f"| `{name}/` | {PURPOSE.get(name, '')} | {', '.join(f'`{a}`' for a in others) or 'nothing'} |")
-lines.append("| root | Entry points: the terminal CLI, headless and ACP front ends, the background job worker. | anything |")
+lines.append("| root | The entry point, `friday.ts`: dispatches to server/ (--acp), cli/ (flags) or run/ (one turn). | anything |")
 
 for name in [*CONFIG["allowed"], "root"]:
     members = [m for m in modules if section(m) == name]

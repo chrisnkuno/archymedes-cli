@@ -1,10 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setCodeStyle } from "./render/syntax";
-import { highlightCode } from "./render/code-view";
 import { renderMarkdown } from "./render/markdown";
-import { outcomeMark, toneCode } from "./render/sections";
 import { ANSI_PALETTE, buildPalette, findBuiltinTheme, roleCode } from "./theme/theme";
-import { box, renderPromptBox } from "./render/tui";
 
 const archymedes = buildPalette(findBuiltinTheme("archymedes")!, "truecolor");
 const blueprint = buildPalette(findBuiltinTheme("blueprint")!, "truecolor");
@@ -30,15 +27,6 @@ describe("theme coverage", () => {
     expect(themed).toContain(blueprint.success);
     expect(themed).not.toMatch(/\x1b\[3[0-7]m/);
     expect(renderMarkdown(text, { width: 60, depth: "truecolor" })).toContain("\x1b[36m");
-  });
-
-  it("themes boxes, the prompt bar, section tones, code and patches", () => {
-    const style = { width: 60, depth: "truecolor" as const, palette: archymedes };
-    expect(box(["hi"], { depth: "truecolor", title: "you", titleColor: "green", borderColor: "red", palette: archymedes })).toContain(archymedes.success);
-    expect(renderPromptBox({ mode: "plan", workspace: "w", depth: "truecolor", width: 60, palette: archymedes }).top).toContain(archymedes.warning);
-    expect(toneCode("bad", style)).toBe(archymedes.error);
-    expect(outcomeMark("pass", style)).toContain(archymedes.success);
-    expect(highlightCode('const s = "x";', "truecolor", archymedes)).toContain(archymedes.primary);
   });
 
 });

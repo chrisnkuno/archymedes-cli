@@ -1,40 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../text/glyphs";
+import { ASCII_GLYPHS } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
-import {
-  activityLabel,
-  box,
-  CountdownTimer,
-  formatCountdown,
-  formatStatusLine,
-  formatHeaderSegments,
-  formatTokens,
-  MarkdownStream,
-  archymedesSpinnerFrame,
-  stepProgress,
-  joinHorizontal,
-  padToWidth,
-  paginator,
-  progressBar,
-  PromptBox,
-  PROMPT_PREFIX_COLUMNS,
-  promptStatusRoom,
-  renderPromptBox,
-  ReplaceableBlock,
-  rowsOccupied,
-  scrollIndicator,
-  scrollPercent,
-  sliceToWidth,
-  sparkline,
-  Spinner,
-  Spring,
-  SpringAnimator,
-  StatusBar,
-  table,
-  thinkingVerb,
-  wrappedRemainder,
-  wrapPlain,
-} from "./tui";
+import { activityLabel, box, CountdownTimer, formatCountdown, formatStatusLine, formatTokens, MarkdownStream, archymedesSpinnerFrame, stepProgress, padToWidth, paginator, progressBar, ReplaceableBlock, rowsOccupied, sliceToWidth, Spinner, Spring, SpringAnimator, StatusBar, table, thinkingVerb, wrapPlain } from "./tui";
 
 const ESCAPE = /\x1b\[[0-9;]*m/g;
 const plain = (value: string) => value.replace(ESCAPE, "");
@@ -111,60 +78,12 @@ describe("status line", () => {
   });
 });
 
-describe("persistent header segments", () => {
-  const segments = [
-    { full: "balance 1,240 RWF left", compact: "1.2k RWF" },
-    { full: "build" },
-    { full: "$0.0120" },
-  ];
-
-  it("keeps every fact when it fits and drops from the least important end", () => {
-    expect(formatHeaderSegments(segments, 80)).toBe("balance 1,240 RWF left · build · $0.0120");
-    expect(formatHeaderSegments(segments, 30)).toBe("balance 1,240 RWF left · build");
-  });
-
-  it("uses the compact balance before surrendering the header, without overflowing", () => {
-    expect(formatHeaderSegments(segments, 10)).toBe("1.2k RWF");
-    expect(formatHeaderSegments(segments, 4)).toBe("");
-  });
-});
-
 describe("formatTokens", () => {
   it("counts exactly below a thousand and abbreviates above it", () => {
     expect(formatTokens(0)).toBe("0 tokens");
     expect(formatTokens(999)).toBe("999 tokens");
     expect(formatTokens(1_200)).toBe("1.2k tokens");
     expect(formatTokens(45_600)).toBe("45.6k tokens");
-  });
-});
-
-describe("sparkline", () => {
-  it("is empty for an empty series", () => {
-    expect(sparkline([])).toBe("");
-  });
-
-  it("scales to the series' own maximum, not an absolute one", () => {
-    expect(sparkline([0, 5, 10])).toBe(sparkline([0, 50, 100]));
-  });
-
-  it("reads flat when every value is the same", () => {
-    expect(new Set([...sparkline([3, 3, 3])]).size).toBe(1);
-  });
-
-  it("does not divide by zero when the whole series is zero", () => {
-    expect(sparkline([0, 0, 0])).toHaveLength(3);
-  });
-
-  it("rises left to right for a rising series", () => {
-    const levels = UNICODE_GLYPHS.sparkLevels;
-    const indices = [...sparkline([1, 2, 3, 4])].map((glyph) => levels.indexOf(glyph));
-    expect(indices).toEqual([...indices].sort((left, right) => left - right));
-    expect(indices[0]).toBeLessThan(indices.at(-1)!);
-  });
-
-  it("stays in the ASCII set when given the ASCII glyph set", () => {
-    const line = sparkline([1, 5, 2], ASCII_GLYPHS);
-    for (const character of line) expect(character.codePointAt(0)).toBeLessThan(128);
   });
 });
 
@@ -269,31 +188,6 @@ describe("table", () => {
   it("stays inside ASCII on an ASCII terminal", () => {
     const rendered = table(["a"], [["1"]], { depth: "none", glyphs: ASCII_GLYPHS });
     for (const character of rendered) expect(character.codePointAt(0)).toBeLessThan(128);
-  });
-});
-
-describe("scrollPercent and scrollIndicator", () => {
-  it("reports fully shown when the content already fits the viewport", () => {
-    expect(scrollPercent(0, 5, 10)).toBe(1);
-    expect(scrollIndicator(scrollPercent(0, 5, 10))).toBe("Bot");
-  });
-
-  it("reports 0 at the very first line and 1 at the last possible position", () => {
-    expect(scrollPercent(0, 100, 10)).toBe(0);
-    expect(scrollPercent(90, 100, 10)).toBe(1);
-    expect(scrollIndicator(0)).toBe("Top");
-    expect(scrollIndicator(1)).toBe("Bot");
-  });
-
-  it("rounds to a percentage in between, never showing Top or Bot for a mid-scroll position", () => {
-    const fraction = scrollPercent(45, 100, 10); // 45 / (100 - 10) = 50%
-    expect(fraction).toBeCloseTo(0.5);
-    expect(scrollIndicator(fraction)).toBe("50%");
-  });
-
-  it("clamps an out-of-range offset instead of reporting past either end", () => {
-    expect(scrollPercent(-5, 100, 10)).toBe(0);
-    expect(scrollPercent(9_999, 100, 10)).toBe(1);
   });
 });
 
@@ -874,138 +768,6 @@ describe("box", () => {
   });
 });
 
-describe("renderPromptBox", () => {
-  const fields = { mode: "build", workspace: "circuit-agent", depth: "none" as const, width: 80 };
-
-  it("draws a full-width three-row box with the mode and workspace in the header", () => {
-    const { top, prefix, bottom } = renderPromptBox(fields);
-    const [topPlain, prefixPlain, bottomPlain] = [plain(top), plain(prefix), plain(bottom)];
-    expect(topPlain).toContain("build");
-    expect(topPlain).toContain("circuit-agent");
-    // The input row is open on the right — the cursor types there — so only its four-column
-    // prefix is drawn; the borders above and below span the full width.
-    expect(prefixPlain).toBe("│ › ");
-    expect(visibleWidth(prefixPlain)).toBe(4);
-    expect(visibleWidth(topPlain)).toBe(80);
-    expect(visibleWidth(bottomPlain)).toBe(80);
-  });
-
-  it("draws the corners the active theme's border style asks for, not a fixed shape", () => {
-    expect(plain(renderPromptBox({ ...fields, borderStyle: "round" }).top)).toContain("╭");
-    expect(plain(renderPromptBox({ ...fields, borderStyle: "single" }).top)).toContain("┌");
-    expect(plain(renderPromptBox({ ...fields, borderStyle: "double" }).top)).toContain("╔");
-  });
-
-  it("clips an over-long workspace rather than overflowing the right-hand corner", () => {
-    const { top } = renderPromptBox({ ...fields, workspace: "x".repeat(500) });
-    expect(plain(top)).toContain("…");
-    expect(visibleWidth(plain(top))).toBe(80);
-  });
-
-  it("keeps every row inside the width at any width", () => {
-    for (const width of [40, 60, 80, 120]) {
-      const { top, prefix, bottom } = renderPromptBox({ ...fields, width });
-      for (const line of [top, prefix, bottom]) {
-        expect(visibleWidth(plain(line)), `width ${width}`).toBeLessThanOrEqual(width);
-      }
-    }
-  });
-
-  it("colours the border and accents only when colour was asked for", () => {
-    const none = renderPromptBox(fields);
-    const colour = renderPromptBox({ ...fields, depth: "truecolor" });
-    expect(`${none.top}${none.prefix}${none.bottom}`).not.toMatch(ESCAPE);
-    expect(`${colour.top}${colour.prefix}${colour.bottom}`).toMatch(ESCAPE);
-  });
-
-  it("accents each mode with its own colour so the permission posture reads at a glance", () => {
-    expect(renderPromptBox({ ...fields, mode: "plan", depth: "truecolor" }).top).toMatch(/\x1b\[33m/);
-    expect(renderPromptBox({ ...fields, mode: "auto", depth: "truecolor" }).top).toMatch(/\x1b\[32m/);
-    expect(renderPromptBox({ ...fields, mode: "build", depth: "truecolor" }).top).toMatch(/\x1b\[36m/);
-    expect(renderPromptBox({ ...fields, mode: "defender", depth: "truecolor" }).top).toMatch(/\x1b\[31m/);
-  });
-
-  it("carries the status line on the top border, so the bar costs no extra row", () => {
-    const { top } = renderPromptBox({ ...fields, status: "build · $0.12" });
-    expect(plain(top)).toContain("$0.12");
-    expect(visibleWidth(plain(top))).toBe(80);
-  });
-
-  it("keeps the border exactly the terminal's width whatever the status says", () => {
-    for (const status of ["", "a", "build · $0.12 · 4 tools", "x".repeat(40)]) {
-      const { top } = renderPromptBox({ ...fields, status });
-      expect(visibleWidth(plain(top)), JSON.stringify(status)).toBe(80);
-    }
-  });
-
-  it("drops the status rather than the workspace when a narrow window cannot hold both", () => {
-    // Losing the workspace would leave the bar unable to say where it is; the transcript above
-    // repeats the cost soon enough, so that is the segment worth giving up.
-    const { top } = renderPromptBox({ ...fields, width: 30, status: "a very long status indeed" });
-    expect(plain(top)).not.toContain("a very long status indeed");
-    expect(plain(top)).toContain("build");
-    expect(visibleWidth(plain(top))).toBe(30);
-  });
-
-  it("keeps a compact balance and gives up the workspace when that is the only honest fit", () => {
-    const { top } = renderPromptBox({ ...fields, workspace: "a-very-long-workspace-name", width: 30, status: "499 RWF" });
-    expect(plain(top)).toContain("499 RWF");
-    expect(plain(top)).not.toContain("a-very-long-workspace-name");
-    expect(visibleWidth(plain(top))).toBe(30);
-  });
-
-  it("draws with ASCII glyphs on a terminal that cannot render the box characters", () => {
-    const { top, prefix, bottom } = renderPromptBox({ ...fields, glyphs: ASCII_GLYPHS, status: "$0.12" });
-    for (const line of [top, bottom]) expect(visibleWidth(plain(line))).toBe(80);
-    expect(plain(prefix)).toBe("| > ");
-    expect(visibleWidth(plain(prefix))).toBe(PROMPT_PREFIX_COLUMNS);
-    expect(top).not.toContain("╭");
-  });
-
-  it("pays for the ellipsis out of the workspace's budget, not out of the border", () => {
-    // ASCII's ellipsis is three columns to Unicode's one. Clipping to the budget and appending it
-    // afterwards is what pushes a border one character past its own corner.
-    const { top } = renderPromptBox({ ...fields, workspace: "x".repeat(500), glyphs: ASCII_GLYPHS });
-    expect(plain(top)).toContain("...");
-    expect(visibleWidth(plain(top))).toBe(80);
-  });
-
-  it("draws both borders at exactly the terminal's width, for every combination that fits", () => {
-    // The invariant the whole bar rests on. A border one column over wraps onto the row below,
-    // which on a pinned footer is the input line — the bar eats the place you type. One column
-    // under leaves a ragged notch. Neither is caught by any single hand-picked example, so this
-    // sweeps the axes that interact: width against title length against status length.
-    for (const width of [20, 30, 48, 80, 120, 200]) {
-      for (const workspace of ["a", "circuit-agent", "x".repeat(60), "日本語のリポジトリ"]) {
-        for (const status of ["", "$0.12", "build · $0.12 · 4 tools · 12.3s", "y".repeat(50)]) {
-          for (const glyphs of [undefined, ASCII_GLYPHS]) {
-            const { top, bottom } = renderPromptBox({ mode: "build", workspace, depth: "none", width, status, ...(glyphs ? { glyphs } : {}) });
-            const where = `width ${width} · workspace ${workspace.length} · status ${status.length}${glyphs ? " · ascii" : ""}`;
-            expect(visibleWidth(plain(top)), where).toBe(width);
-            expect(visibleWidth(plain(bottom)), where).toBe(width);
-          }
-        }
-      }
-    }
-  });
-});
-
-describe("promptStatusRoom", () => {
-  it("reports the columns left over once the title and corners are laid out", () => {
-    const room = promptStatusRoom("build", "circuit-agent", 80);
-    // Whatever it reports must actually fit: a status of exactly that width leaves the border
-    // exactly the terminal's width, which is the property the number exists to guarantee.
-    const { top } = renderPromptBox({ mode: "build", workspace: "circuit-agent", depth: "none", width: 80, status: "x".repeat(room) });
-    expect(plain(top)).toContain("x".repeat(room));
-    expect(visibleWidth(plain(top))).toBe(80);
-  });
-
-  it("reserves for the compact title so a long workspace cannot erase the balance", () => {
-    expect(promptStatusRoom("build", "a", 80)).toBe(promptStatusRoom("build", "a".repeat(300), 80));
-    expect(promptStatusRoom("build", "x".repeat(500), 20)).toBeGreaterThanOrEqual(0);
-  });
-});
-
 describe("wrapPlain", () => {
   it("wraps at word boundaries", () => {
     expect(wrapPlain("the quick brown fox", 10)).toEqual(["the quick", "brown fox"]);
@@ -1024,125 +786,6 @@ describe("wrapPlain", () => {
     for (const line of wrapPlain("日本語のテキストがここにあります", 10)) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(10);
     }
-  });
-});
-
-describe("wrappedRemainder", () => {
-  it("returns nothing while the line still fits on its first row", () => {
-    expect(wrappedRemainder("a short line", 4, 80)).toBe("");
-    expect(wrappedRemainder("", 4, 80)).toBe("");
-  });
-
-  it("returns exactly the part that spilled onto the next row", () => {
-    // The input row starts four columns in, so at width 20 the first row holds sixteen
-    // characters and the remaining four spill over.
-    expect(wrappedRemainder("x".repeat(20), 4, 20)).toBe("x".repeat(4));
-  });
-
-  it("counts a double-width character as two columns, not one", () => {
-    // Width 12 with a four-column start leaves eight columns: 日本語日 fits, the rest wraps.
-    expect(wrappedRemainder("日本語".repeat(3), 4, 12)).toBe("本語日本語");
-  });
-
-  it("accounts for the starting column, not just the line", () => {
-    // The same line wraps sooner the further right it begins.
-    expect(wrappedRemainder("x".repeat(10), 0, 12)).toBe("");
-    expect(wrappedRemainder("x".repeat(10), 6, 12)).toBe("x".repeat(4));
-  });
-});
-
-describe("PromptBox", () => {
-  it("draws the box and parks the cursor at the start of the input row, returning the prefix", () => {
-    const { stream, writes, output } = fakeStream(60);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 60 });
-    expect(promptBox.isDrawn).toBe(false);
-
-    const prefix = promptBox.draw("build", "circuit-agent");
-    expect(plain(prefix)).toBe("│ › ");
-    expect(visibleWidth(plain(prefix))).toBe(PROMPT_PREFIX_COLUMNS);
-    expect(promptBox.isDrawn).toBe(true);
-    expect(writes).toHaveLength(3); // header row, closing border, cursor reposition
-    expect(output()).toContain("\x1b[1A\r"); // back onto the input row, column one
-  });
-
-  it("erases exactly the rows the box and the submitted line occupy, wrapping included", () => {
-    const { stream, writes } = fakeStream(80);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 80 });
-
-    promptBox.draw("build", "circuit-agent");
-    writes.length = 0;
-    promptBox.erase("");
-    expect(writes).toHaveLength(3); // input row, newline row, top border
-    for (const write of writes) expect(write).toBe("\x1b[1A\x1b[2K");
-
-    promptBox.draw("build", "circuit-agent");
-    writes.length = 0;
-    promptBox.erase("x".repeat(200)); // spills onto two further rows at width 80
-    expect(writes).toHaveLength(5);
-  });
-
-  it("erasing before anything was drawn is a safe no-op", () => {
-    const { stream, writes } = fakeStream();
-    new PromptBox(stream, { depth: "none" }).erase("");
-    expect(writes).toHaveLength(0);
-  });
-
-  it("never divides by a zero-column stream — a 0x0 pty must not spin forever", () => {
-    const { stream, writes } = fakeStream(0);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 0 });
-    promptBox.draw("build", "x");
-    writes.length = 0;
-    promptBox.erase("some text");
-    expect(writes.length).toBeGreaterThan(0);
-    expect(writes.length).toBeLessThan(100); // bounded, not an infinite erase
-  });
-
-  it("drops the closing border once, re-showing the wrapped text, and not again after", () => {
-    const { stream, writes, output } = fakeStream(60);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 60 });
-    promptBox.draw("build", "circuit-agent");
-    writes.length = 0;
-
-    promptBox.dropBorder("the remainder that wrapped");
-    expect(writes).toHaveLength(2);
-    expect(output()).toContain("\r\x1b[2K");
-    expect(output()).toContain("the remainder that wrapped");
-
-    promptBox.dropBorder("more"); // already opened — nothing further is written
-    expect(writes).toHaveLength(2);
-  });
-
-  it("ignores a dropBorder with nothing to show, or before the box exists", () => {
-    const { stream, writes } = fakeStream(60);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 60 });
-    promptBox.dropBorder("something"); // not drawn yet
-    expect(writes).toHaveLength(0);
-    promptBox.draw("build", "x");
-    writes.length = 0;
-    promptBox.dropBorder(""); // nothing wrapped
-    expect(writes).toHaveLength(0);
-  });
-
-  it("re-arms the border on the next draw, so a reopened box closes again", () => {
-    const { stream, writes } = fakeStream(60);
-    const promptBox = new PromptBox(stream, { depth: "none", columns: () => 60 });
-    promptBox.draw("build", "x");
-    promptBox.dropBorder("wrapped");
-    promptBox.erase("wrapped");
-    promptBox.draw("build", "x");
-    writes.length = 0;
-    promptBox.dropBorder("wrapped again");
-    expect(writes).toHaveLength(2); // opened again rather than staying latched open
-  });
-
-  it("paints colour only when colour was asked for", () => {
-    const bare = fakeStream(60);
-    new PromptBox(bare.stream, { depth: "none", columns: () => 60 }).draw("build", "x");
-    expect(bare.output()).not.toMatch(ESCAPE);
-
-    const painted = fakeStream(60);
-    new PromptBox(painted.stream, { depth: "truecolor", columns: () => 60 }).draw("build", "x");
-    expect(painted.output()).toMatch(ESCAPE);
   });
 });
 
@@ -1182,24 +825,6 @@ describe("padToWidth and joinHorizontal", () => {
   it("does not split an astral character in half while slicing", () => {
     // A surrogate pair cut down the middle renders as replacement characters, not a narrower emoji.
     expect(sliceToWidth("🌟🌟", 2)).toBe("🌟");
-  });
-
-  it("joins two columns to a total that never varies with either side's content", () => {
-    const narrow = joinHorizontal("a", "b", { leftWidth: 6, rightWidth: 8, separator: " | " });
-    const wide = joinHorizontal("a".repeat(50), "b".repeat(50), { leftWidth: 6, rightWidth: 8, separator: " | " });
-    expect(visibleWidth(narrow)).toBe(6 + 3 + 8);
-    expect(visibleWidth(wide)).toBe(6 + 3 + 8);
-  });
-
-  it("keeps the separator at the same column on every row — the ragged-seam bug", () => {
-    const rows = ["short", "a much longer left cell than the others", ""].map((left) =>
-      joinHorizontal(left, "preview", { leftWidth: 10, rightWidth: 12, separator: " │ " }));
-    const seams = new Set(rows.map((row) => row.indexOf("│")));
-    expect(seams.size).toBe(1);
-  });
-
-  it("defaults to a single space between the columns", () => {
-    expect(joinHorizontal("a", "b", { leftWidth: 2, rightWidth: 2 })).toBe("a  b ");
   });
 });
 

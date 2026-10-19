@@ -100,31 +100,3 @@ export function renderRoutingReceipt(receipt: RoutingReceipt, style: SectionStyl
 
   return badge ? `${out.join("\n")}\n${rule(cell, { label: badge })}` : out.join("\n");
 }
-
-/** Currency buckets keep a mixed-currency session from presenting a fictitious total. */
-export function renderRoutingSummary(receipts: readonly RoutingReceipt[], style: SectionStyle): string {
-  const glyphs = style.glyphs ?? UNICODE_GLYPHS;
-  const cell = { ...style, width: Math.max(24, style.width) };
-  const row = (text: string) => note(clip(text, cell.width - 4, glyphs), cell);
-  const buckets = new Map<string, { actual: number; estimated: number; settled: number; estimates: number }>();
-  let switches = 0;
-  let retries = 0;
-  for (const [index, receipt] of receipts.entries()) {
-    const currency = receipt.currency ?? "USD";
-    const bucket = buckets.get(currency) ?? { actual: 0, estimated: 0, settled: 0, estimates: 0 };
-    if (receipt.actualMicros !== undefined) { bucket.actual += receipt.actualMicros; bucket.settled++; }
-    if (receipt.estimatedMicros !== undefined) { bucket.estimated += receipt.estimatedMicros; bucket.estimates++; }
-    buckets.set(currency, bucket);
-    retries += receipt.retries;
-    const previous = receipts[index - 1];
-    if (previous && (previous.chosen.provider !== receipt.chosen.provider || previous.chosen.model !== receipt.chosen.model)) switches++;
-  }
-  const out = [heading("routing summary", 1, cell, "accent"), row(`${receipts.length} calls · ${retries} retries · ${switches} route switches`)];
-  for (const [currency, bucket] of buckets) {
-    out.push(row(`actual ${formatMicros(bucket.actual, currency)} (${bucket.settled} settled)`));
-    if (bucket.estimates) out.push(row(`estimated ${formatMicros(bucket.estimated, currency)} (${bucket.estimates} estimates)`));
-  }
-  const missing = receipts.filter((receipt) => receipt.actualMicros === undefined).length;
-  if (missing) out.push(row(`${missing} calls without settlement data`));
-  return out.join("\n");
-}

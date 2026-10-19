@@ -1,5 +1,5 @@
 {
   "render/guide.ts:undocumentedCommands": "Test-support API: guide.test.ts uses it to fail when a registered command has no guide topic.",
-  "app/codex/fake-codex.ts:FakeCodex": "Test-support API: a scripted codex app-server for codex/session.test.ts and acp-session.test.ts.",
-  "app/codex/fake-codex.ts:replyWith": "Test-support API: the notifications of one scripted Codex reply, for the same tests."
+  "engines/codex/fake-codex.ts:FakeCodex": "Test-support API: a scripted codex app-server for codex/session.test.ts and server/session.test.ts.",
+  "engines/codex/fake-codex.ts:replyWith": "Test-support API: the notifications of one scripted Codex reply, for the same tests."
 }

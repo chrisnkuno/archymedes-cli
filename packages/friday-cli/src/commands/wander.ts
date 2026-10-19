@@ -1,65 +1,8 @@
-import {
-  parseWanderResults,
-  wanderGradeCounts,
-  WANDER_GRADES,
-  type WanderResults,
-  buildWanderObjective,
-  buildWanderScheduleObjective,
-  isWanderRandomScheduleObjective,
-  pickWanderTopic,
-  wanderPlannerInstructions,
-  WANDER_LAB_FILES,
-  WANDER_MARKER,
-  type WanderCadence,
-} from "@archymedes/core/wander";
+import { parseWanderResults, wanderGradeCounts, WANDER_GRADES, type WanderResults, buildWanderObjective, isWanderRandomScheduleObjective, pickWanderTopic, wanderPlannerInstructions, WANDER_LAB_FILES, WANDER_MARKER } from "@archymedes/core/wander";
 import type { ExaSearchClient, ExaSearchHit } from "@archymedes/core/providers/exa";
 import type { Expense } from "@archymedes/core/cli/cost";
 import { barChart } from "../render/charts";
-import { heading, note, panel, type SectionStyle } from "../render/sections";
-
-/**
- * Wander, from the terminal.
- *
- * The protocol — the topics, the lab roles, the grading vocabulary — already lives in the core
- * package, where the hosted worker drives it. Nothing here reimplements it; this is the missing
- * connection between that protocol and a CLI that could not reach it.
- *
- * The one thing the terminal must add is evidence. The lab's rule is that it may cite only what is
- * in `wander/EVIDENCE.md`, and the sandbox has no network, so the search happens out here, once,
- * before the agent starts. Without that step the lab has nothing to ground on and every claim it
- * makes is speculation with a citation shape.
- */
-
-export type WanderCommand =
-  | { kind: "once"; topic: string; random: boolean }
-  | { kind: "schedule"; cadence: Exclude<WanderCadence, "once">; topic?: string }
-  | { kind: "invalid"; reason: string };
-
-/**
- * Parses `/wander`, `/wander <topic>`, `/wander random`, `/wander daily [topic]`.
- *
- * A bare `/wander` picks a curated topic rather than erroring, because the command is for the times
- * someone wants to explore *something* and asking them to name it first defeats the point.
- */
-export function parseWanderCommand(input: string, seed = `${Date.now()}`): WanderCommand | null {
-  const match = /^\/wander(?:\s+([\s\S]*))?$/.exec(input.trim());
-  if (!match) return null;
-  const rest = (match[1] ?? "").trim().replace(/\s+/g, " ");
-
-  if (!rest || rest.toLowerCase() === "random") return { kind: "once", topic: pickWanderTopic(seed), random: true };
-
-  const scheduled = /^(daily|weekly)(?:\s+([\s\S]+))?$/i.exec(rest);
-  if (scheduled) {
-    const cadence = scheduled[1].toLowerCase() as Exclude<WanderCadence, "once">;
-    const topic = scheduled[2]?.trim();
-    return { kind: "schedule", cadence, ...(topic && topic.toLowerCase() !== "random" ? { topic } : {}) };
-  }
-
-  // Guard the shape the objective builder enforces anyway, so the message names the problem rather
-  // than surfacing a length error from three layers down.
-  if (rest.length > 140) return { kind: "invalid", reason: "Topic is too long — keep it under 140 characters." };
-  return { kind: "once", topic: rest, random: false };
-}
+import { heading, panel, type SectionStyle } from "../render/sections";
 
 export type WanderEvidence = {
   markdown: string;
@@ -153,18 +96,6 @@ export function buildWanderPrompt(topic: string, evidencePath: string = WANDER_L
 /** The files a completed lab should have produced, for reporting what actually landed. */
 export function wanderArtifacts(): string[] {
   return Object.values(WANDER_LAB_FILES);
-}
-
-/**
- * What a durable Wander job stores as its objective.
- *
- * A named topic is written down literally, so every occurrence of a daily "coral reefs" job keeps
- * exploring coral reefs. A schedule with no topic stores the schedule marker itself rather than a
- * topic picked once at creation time — the point of "random" is a fresh curiosity each occurrence,
- * and picking once up front would make every future run explore whatever today happened to pick.
- */
-export function wanderJobObjective(command: { cadence: Exclude<WanderCadence, "once">; topic?: string }): string {
-  return command.topic ? `${WANDER_MARKER} ${command.topic}` : buildWanderScheduleObjective(command.cadence);
 }
 
 /**

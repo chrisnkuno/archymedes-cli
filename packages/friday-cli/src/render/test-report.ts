@@ -42,11 +42,6 @@ export type TestReport = {
   durationMs?: number;
 };
 
-/** Symbols runners use for a passing / failing / skipped case, Unicode and ASCII forms alike. */
-const PASS_MARK = /^[\s|]*(?:✓|✔|√|PASS(?:ED)?|ok)\s/;
-const FAIL_MARK = /^[\s|]*(?:✕|✗|×|❯|FAIL(?:ED)?|not ok)\s/;
-const SKIP_MARK = /^[\s|]*(?:↓|-|○|SKIP(?:PED)?|s)\s/;
-
 function toMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const match = /^([\d.]+)\s*(ms|s|m)$/.exec(value.trim());

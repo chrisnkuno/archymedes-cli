@@ -24,7 +24,7 @@ flowchart TD
 | Module | Responsibility | Start reading |
 | --- | --- | --- |
 | Interface | The Go desktop: chat, apps, dialogs, commands, approvals | `internal/tui` (sections by file prefix) — see [CODEBASE.md](CODEBASE.md) |
-| Agent server | ACP server, engines (Friday, Claude Code, Codex), setup | `packages/friday-cli/src/acp-server.ts`, `src/app/`; import rules in [MODULE_MAP.md](MODULE_MAP.md) |
+| Agent server | ACP server, engines (Friday, Claude Code, Codex), setup | `packages/friday-cli/src/server/`, `engines/`, `setup/`; import rules in [MODULE_MAP.md](MODULE_MAP.md) |
 | Application agent | Workspace setup, permissions, session persistence, checkpoints | `packages/core/src/cli/agent.ts` |
 | Bounded runtime | Model/tool loop, cancellation, budgets, retry limits, verification | `packages/core/src/agent-runtime.ts` |
 | Provider adapters | Translate common agent requests into provider APIs | `packages/core/src/providers/` |

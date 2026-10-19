@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RoutingReceipt } from "@archymedes/core/providers/routing-receipt";
-import { formatMicros, renderRoutingReceipt, renderRoutingSummary } from "./routing-receipt";
+import { formatMicros, renderRoutingReceipt } from "./routing-receipt";
 import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
 import { buildPalette, builtinThemes, findBuiltinTheme } from "../theme/theme";
@@ -82,16 +82,6 @@ describe("renderRoutingReceipt", () => {
       }
     }
   });
-});
-
-
-it("summarizes currencies independently and discloses missing settlements", () => {
-  const rendered = renderRoutingSummary([receipt, { ...receipt, currency: "EUR", actualMicros: 200 }, { ...receipt, actualMicros: undefined, chosen: { provider: "other", model: "m" } }], style);
-  expect(rendered).toContain("3 calls · 3 retries · 1 route switches");
-  expect(rendered).toContain("actual USD 0.0098 (1 settled)");
-  expect(rendered).toContain("actual EUR 0.0002 (1 settled)");
-  expect(rendered).toContain("1 calls without settlement data");
-  for (const line of renderRoutingSummary([receipt], { ...style, width: 24 }).split("\n")) expect(visibleWidth(line)).toBeLessThanOrEqual(24);
 });
 
 it("marks only the selected provider when multiple providers host the same model", () => {

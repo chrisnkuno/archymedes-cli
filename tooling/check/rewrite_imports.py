@@ -14,7 +14,7 @@ Both are behaviour-free and idempotent enough to rerun after a partial failure.
 import json, os, re, subprocess, sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SRC = os.path.join(REPO, "packages", "archymedes-cli", "src")
+SRC = os.path.join(REPO, __import__("json").load(open(os.path.join(os.path.dirname(__file__), "sections.json")))["sourceRoot"])
 EXTRA_ROOTS = [os.path.join(REPO, "tooling", "dev")]
 SPECIFIER = re.compile(r'''((?:from\s+|import\s*\(\s*|vi\.mock\(\s*|^import\s+)["'])(\.{1,2}/[^"']+)(["'])''', re.M)
 NAMED_IMPORT = re.compile(r'''import\s+(type\s+)?\{([^}]*)\}\s+from\s+["'](\.{1,2}/[^"']+)["'];?[ \t]*\n?''')

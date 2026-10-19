@@ -1,20 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BUILTIN_THEME_SOURCES,
-  DEFAULT_THEME_NAME,
-  NO_COLOR_PALETTE,
-  buildPalette,
-  builtinThemes,
-  colorCode,
-  detectPreferredTheme,
-  findBuiltinTheme,
-  parseColor,
-  parseThemeCommand,
-  parseThemeSource,
-  rainbowHex,
-  rainbowText,
-  rgbTo256,
-} from "./theme";
+import { BUILTIN_THEME_SOURCES, DEFAULT_THEME_NAME, NO_COLOR_PALETTE, buildPalette, builtinThemes, colorCode, detectPreferredTheme, findBuiltinTheme, parseColor, parseThemeSource, rainbowHex, rainbowText, rgbTo256 } from "./theme";
 
 describe("reading colours", () => {
   it("takes both hex forms and expands the short one", () => {
@@ -191,32 +176,6 @@ describe("choosing a theme for the terminal", () => {
     expect(detectPreferredTheme({})).toBe("archymedes-blue");
     expect(detectPreferredTheme({ COLORFGBG: "15;0" })).toBe("archymedes-blue");
     expect(detectPreferredTheme({ COLORFGBG: "nonsense" })).toBe("archymedes-blue");
-  });
-});
-
-describe("the /theme grammar", () => {
-  it("shows the current theme on a bare command", () => {
-    expect(parseThemeCommand("/theme")).toEqual({ kind: "show" });
-  });
-
-  it("takes a name with no verb, which is how it will nearly always be typed", () => {
-    expect(parseThemeCommand("/theme chalkboard")).toEqual({ kind: "set", name: "chalkboard" });
-  });
-
-  it("keeps list and where as verbs", () => {
-    expect(parseThemeCommand("/theme list")).toEqual({ kind: "list" });
-    expect(parseThemeCommand("/theme where")).toEqual({ kind: "where" });
-  });
-
-  it("says so rather than searching for a name that cannot exist", () => {
-    const parsed = parseThemeCommand("/theme blue print");
-    expect(parsed?.kind).toBe("invalid");
-    expect(parsed && "reason" in parsed && parsed.reason).toContain("blue");
-  });
-
-  it("ignores anything that is not the command", () => {
-    expect(parseThemeCommand("/themes")).toBeNull();
-    expect(parseThemeCommand("theme chalkboard")).toBeNull();
   });
 });
 

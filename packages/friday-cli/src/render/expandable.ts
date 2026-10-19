@@ -68,40 +68,7 @@ export class ExpandableStore {
   }
 }
 
-export type ExpandCommand =
-  | { kind: "list" }
-  | { kind: "last" }
-  | { kind: "all" }
-  | { kind: "one"; id: number }
-  | { kind: "invalid"; reason: string };
-
-/**
- * `/expand`, `/expand 3`, `/expand last`, `/expand all`, `/expand list`.
- *
- * Bare `/expand` means the most recent fold, because that is what the word means when someone says
- * it out loud while looking at a screen — the alternative, making them read a number off the line
- * above, is a lookup step for the overwhelmingly common case.
- */
-export function parseExpandCommand(input: string): ExpandCommand | null {
-  const match = /^\/expand(?:\s+(.*))?$/.exec(input.trim());
-  if (!match) return null;
-  const argument = (match[1] ?? "").trim().toLowerCase();
-  if (argument === "" || argument === "last") return { kind: "last" };
-  if (argument === "all") return { kind: "all" };
-  if (argument === "list" || argument === "ls") return { kind: "list" };
-  if (/^\d+$/.test(argument)) return { kind: "one", id: Number(argument) };
-  return { kind: "invalid", reason: `/expand takes a number, "last", "all", or "list" — not "${argument}".` };
-}
-
 /** The one-line offer printed under a folded block. */
 export function expandHint(id: number, hidden: number, depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS): string {
   return paint(`${glyphs.collapsed} ${hidden} more line${hidden === 1 ? "" : "s"} hidden ${glyphs.middot} /expand ${id}`, DIM, depth);
-}
-
-/** The index `/expand list` prints: what is foldable right now, and how much each is hiding. */
-export function renderExpandableList(entries: readonly Expandable[], depth: ColorDepth, glyphs: GlyphSet = UNICODE_GLYPHS): string {
-  if (entries.length === 0) return paint("  nothing folded in this session yet", DIM, depth);
-  return entries
-    .map((entry) => `  ${paint(`[${entry.id}]`, DIM, depth)} ${entry.label} ${paint(`${glyphs.middot} ${entry.hidden} hidden line${entry.hidden === 1 ? "" : "s"}`, DIM, depth)}`)
-    .join("\n");
 }

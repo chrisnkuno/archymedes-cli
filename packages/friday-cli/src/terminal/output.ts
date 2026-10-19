@@ -198,15 +198,3 @@ export class OutputRouter implements OutputStream {
     return this.target.rows;
   }
 }
-
-/**
- * What a tab missed, ready to print when it comes back.
- *
- * Returns lines rather than a joined string so the caller decides the separator and can prefix each
- * one; `dropped` is reported so a replay can admit to being partial instead of implying the tab
- * began where the replay does.
- */
-export function replayLines(log: LineLog, count: number): { lines: string[]; dropped: number; omitted: number } {
-  const lines = log.tail(count);
-  return { lines, dropped: log.dropped, omitted: Math.max(0, log.size - lines.length) };
-}

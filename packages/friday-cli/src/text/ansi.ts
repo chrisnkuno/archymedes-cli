@@ -14,7 +14,6 @@ export const BOLD = "\x1b[1m";
 export const DIM = "\x1b[2m";
 export const ITALIC = "\x1b[3m";
 export const STRIKE = "\x1b[9m";
-export const REVERSE = "\x1b[7m";
 
 /** Paints `text` unless the destination cannot show colour, in which case the code is dropped. */
 export function paint(text: string, code: string, depth: ColorDepth): string {

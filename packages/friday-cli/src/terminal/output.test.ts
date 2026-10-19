@@ -1,13 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  DEFAULT_SCROLLBACK_LINES,
-  LineLog,
-  OutputRouter,
-  TabSink,
-  replayLines,
-  terminalStream,
-  type OutputStream,
-} from "./output";
+import { DEFAULT_SCROLLBACK_LINES, LineLog, OutputRouter, TabSink, terminalStream, type OutputStream } from "./output";
 
 function recorder(): OutputStream & { written: string[]; text: string } {
   const written: string[] = [];
@@ -177,22 +169,5 @@ describe("routing", () => {
     router.route(sink);
     expect(router.current).toBe(sink);
     expect(router.columns).toBe(80);
-  });
-});
-
-describe("replaying what a tab missed", () => {
-  it("returns the tail and says how much was left above it", () => {
-    const log = new LineLog();
-    log.write("a\nb\nc\nd\n");
-    expect(replayLines(log, 2)).toEqual({ lines: ["c", "d"], dropped: 0, omitted: 2 });
-  });
-
-  it("admits when the beginning is gone rather than implying the tab started there", () => {
-    const log = new LineLog(2);
-    log.write("a\nb\nc\n");
-    const replay = replayLines(log, 10);
-    expect(replay.lines).toEqual(["b", "c"]);
-    expect(replay.dropped).toBe(1);
-    expect(replay.omitted).toBe(0);
   });
 });

@@ -1,6 +1,4 @@
-import { BOLD, DIM, paint, paintAll } from "../text/ansi";
 import { UNICODE_GLYPHS, type GlyphSet } from "../text/glyphs";
-import { GUTTER, keyValues, toneCode, type SectionStyle } from "../render/sections";
 
 /**
  * Slow mode: spend less per turn, on purpose.
@@ -79,19 +77,6 @@ export function parsePaceFlag(value: string | undefined): PaceLevel | undefined 
   return undefined;
 }
 
-export type PaceCommand = { kind: "show" } | { kind: "set"; level: PaceLevel } | { kind: "invalid"; reason: string };
-
-/** `/slow`, `/slow strict`, `/slow off`. Bare `/slow` toggles into gentle from off, and reports otherwise. */
-export function parsePaceCommand(input: string, current: PaceLevel): PaceCommand | null {
-  const match = /^\/(?:slow|pace)(?:\s+(\S+))?$/.exec(input.trim());
-  if (!match) return null;
-  if (match[1] === undefined) return current === "off" ? { kind: "set", level: "gentle" } : { kind: "show" };
-  const level = parsePaceFlag(match[1]);
-  return level
-    ? { kind: "set", level }
-    : { kind: "invalid", reason: `/slow takes "on", "strict", or "off" — not "${match[1]}".` };
-}
-
 /** The runtime budgets for a pace, merged over whatever the caller was already passing. */
 export function applyPacing<T extends Record<string, number>>(base: T, level: PaceLevel): T & PaceProfile["budgets"] {
   return { ...base, ...profileFor(level).budgets };
@@ -123,20 +108,4 @@ export function exceedsPace(
 export function paceBadge(level: PaceLevel, glyphs: GlyphSet = UNICODE_GLYPHS): string {
   if (level === "off") return "";
   return `${glyphs.paused} ${profileFor(level).label}`;
-}
-
-/** What `/slow` prints: the pace, what it changes, and how to leave it. */
-export function describePace(level: PaceLevel, style: SectionStyle): string {
-  const profile = profileFor(level);
-  const glyphs = style.glyphs ?? UNICODE_GLYPHS;
-  const head = `${GUTTER}${paintAll(profile.label, [toneCode("accent", style), BOLD], style.depth)} ${paint(glyphs.middot, DIM, style.depth)} ${paint(profile.description, DIM, style.depth)}`;
-  if (level === "off") return head;
-  const rows: [string, string][] = [
-    ["model rounds", String(profile.budgets.maxIterations ?? "runtime default")],
-    ["tools per round", String(profile.budgets.maxToolCallsPerTurn ?? "runtime default")],
-    ["reply ceiling", `${(profile.budgets.maxOutputTokens ?? 0).toLocaleString()} tokens`],
-    ["pause between turns", profile.cooldownMs > 0 ? `${Math.round(profile.cooldownMs / 1_000)}s` : "none"],
-    ["confirm turns above", profile.confirmAboveTokens ? `${profile.confirmAboveTokens.toLocaleString()} estimated tokens` : "never"],
-  ];
-  return [head, keyValues(rows, style), `${GUTTER}${paint("/slow off returns to full speed", toneCode("warn", style), style.depth)}`].join("\n");
 }

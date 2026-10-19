@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTabCommand, renderTabStrip, SEQUENTIAL_TABS_NOTE, WorkspaceController } from "./tabs";
+import { WorkspaceController } from "./tabs";
 
 const controller = (titles: string[] = ["archymedes"]) => {
   const workspace = new WorkspaceController<{ name: string }>();
@@ -111,55 +111,6 @@ describe("unread work", () => {
   });
 });
 
-describe("the strip", () => {
-  it("stays out of the way until there is more than one tab", () => {
-    expect(renderTabStrip(controller().views())).toBe("");
-  });
-
-  it("marks the active tab, running work and unread turns", () => {
-    const workspace = controller(["refactor", "tests", "docs"]);
-    workspace.activate(1);
-    workspace.started(2);
-    workspace.finished(3, "idle");
-
-    const strip = renderTabStrip(workspace.views());
-    expect(strip).toContain("[1 refactor]");
-    expect(strip).toContain("2●tests");
-    expect(strip).toContain("3•docs");
-  });
-
-  it("truncates rather than wrapping onto a second row", () => {
-    const workspace = controller(["aaaaaaaaaa", "bbbbbbbbbb", "cccccccccc"]);
-    expect(renderTabStrip(workspace.views(), { width: 20 })).toHaveLength(20);
-  });
-});
-
-describe("parsing", () => {
-  it("reads every form", () => {
-    expect(parseTabCommand("/tab")).toEqual({ kind: "list" });
-    expect(parseTabCommand("/tabs")).toEqual({ kind: "list" });
-    expect(parseTabCommand("/tab new")).toEqual({ kind: "new" });
-    expect(parseTabCommand("/tab new  fix   the   build ")).toEqual({ kind: "new", title: "fix the build" });
-    expect(parseTabCommand("/tab next")).toEqual({ kind: "next" });
-    expect(parseTabCommand("/tab prev")).toEqual({ kind: "previous" });
-    expect(parseTabCommand("/tab close")).toEqual({ kind: "close" });
-    expect(parseTabCommand("/tab close 3")).toEqual({ kind: "close", id: 3 });
-    expect(parseTabCommand("/tab 2")).toEqual({ kind: "select", id: 2 });
-    expect(parseTabCommand("/tab rename api work")).toEqual({ kind: "rename", title: "api work" });
-  });
-
-  it("explains what it did not understand", () => {
-    expect(parseTabCommand("/tab sideways")).toMatchObject({ kind: "invalid", reason: expect.stringContaining("sideways") });
-    expect(parseTabCommand("/tab close x")).toMatchObject({ kind: "invalid", reason: expect.stringContaining("not a tab number") });
-    expect(parseTabCommand("/tab rename")).toMatchObject({ kind: "invalid" });
-  });
-
-  it("is not a tab command", () => {
-    expect(parseTabCommand("/table")).toBeNull();
-    expect(parseTabCommand("/diff")).toBeNull();
-  });
-});
-
 /**
  * The sequential limit, stated where people meet it.
  *
@@ -169,16 +120,6 @@ describe("parsing", () => {
  * an ambiguous sentence in the terminal into a wrong one.
  */
 describe("saying that only the front tab runs", () => {
-  it("names the alternative rather than only stating the limit", () => {
-    // "Tabs are sequential" leaves someone holding a problem. Naming /detach hands them the answer.
-    expect(SEQUENTIAL_TABS_NOTE).toMatch(/only the tab in front runs/);
-    expect(SEQUENTIAL_TABS_NOTE).toContain("/detach");
-  });
-
-  it("stays one line, since it is printed into a transcript beside real output", () => {
-    expect(SEQUENTIAL_TABS_NOTE).not.toContain("\n");
-    expect(SEQUENTIAL_TABS_NOTE.length).toBeLessThanOrEqual(120);
-  });
 
   it("is what the controller actually does: switching away leaves the other tab exactly as it was", () => {
     const tabs = new WorkspaceController<{ turns: number }>();

@@ -1,15 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  condenseDiff,
-  describeChange,
-  diffLines,
-  diffStat,
-  highlightCode,
-  languageOf,
-  renderCode,
-  renderDiff,
-  renderFileChange,
-} from "./code-view";
+import { condenseDiff, diffLines, diffStat, highlightCode, languageOf, renderCode, renderDiff, renderFileChange } from "./code-view";
 import { ASCII_GLYPHS } from "../text/glyphs";
 import { visibleWidth } from "../text/text-width";
 import type { SectionStyle } from "./sections";
@@ -177,9 +167,5 @@ describe("labels", () => {
     expect(languageOf("main.py")).toBe("python");
     expect(languageOf("Dockerfile")).toBe("dockerfile");
     expect(languageOf("notes")).toBe("text");
-  });
-
-  it("summarises a change as the two numbers people actually read", () => {
-    expect(plain(describeChange({ added: 3, removed: 1 }, "none"))).toBe("+3 -1");
   });
 });

@@ -1,13 +1,11 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Interface } from "node:readline/promises";
-import { visibleWidth } from "./text/text-width";
-import { readFxRates, renderProviders } from "./app/providers";
-import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit } from "./app/prompts";
-import { configureRendering, renderEvent, renderUserMessage } from "./app/transcript";
-import { parseArgs } from "./app/args";
-import { EXIT_CODES } from "./headless";
+import { readFxRates, renderProviders } from "./cli/providers";
+import { confirmSensitiveTask, confirmSpendingCap, createApprovalPrompt, isReadlineExit } from "./cli/prompts";
+import { configureRendering, renderEvent } from "./cli/output";
+import { parseArgs } from "./cli/args";
+import { EXIT_CODES } from "./cli/exit-codes";
 
-const ESCAPE = /\x1b\[[0-9;]*m/g;
 const plain = (value: string) => value.replace(/\[[0-9;]*m/g, "");
 
 /** Captures every `process.stdout.write` call as plain (colour-stripped) strings. */
@@ -206,45 +204,6 @@ describe("exchange rates", () => {
     expect(readFxRates({ ARCHYMEDES_FX_FROM: "USD", ARCHYMEDES_FX_TO: "EGP", ARCHYMEDES_FX_RATE: "48.5", ARCHYMEDES_FX_ASOF: "2026-08-08" })[0]).toEqual({
       from: "USD", to: "EGP", rate: 48.5, asOf: "2026-08-08", source: "ARCHYMEDES_FX_RATE",
     });
-  });
-});
-
-describe("the message echoed into the transcript", () => {
-  it("labels the bubble with the speaker and keeps the text inside it", () => {
-    const rendered = plain(renderUserMessage("ship the release", "none", 40));
-    const [top, ...rest] = rendered.split("\n");
-    expect(top).toContain("you");
-    expect(rest.join(" ")).toContain("ship the release");
-  });
-
-  it("wraps a long message rather than letting one line run past the border", () => {
-    const rendered = plain(renderUserMessage("word ".repeat(60).trim(), "none", 40));
-    const lines = rendered.split("\n");
-    expect(lines.length).toBeGreaterThan(3); // top border, several body rows, bottom border
-    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
-  });
-
-  it("stays inside the width it is given, at any width and for any message", () => {
-    // The bubble is printed into the transcript region of a pinned screen. A line wider than the
-    // terminal wraps, which scrolls the region by a row the caller did not account for.
-    for (const width of [20, 40, 80, 120]) {
-      for (const text of ["hi", "a".repeat(300), "日本語のメッセージです", "one two three four five six seven"]) {
-        for (const line of renderUserMessage(text, "none", width).split("\n")) {
-          expect(visibleWidth(plain(line)), `width ${width}`).toBeLessThanOrEqual(width);
-        }
-      }
-    }
-  });
-
-  it("emits colour only when colour was asked for", () => {
-    expect(renderUserMessage("hello", "none", 40)).not.toMatch(ESCAPE);
-    expect(renderUserMessage("hello", "truecolor", 40)).toMatch(ESCAPE);
-  });
-
-  it("draws the corners the active theme's border style asks for, not a fixed shape", () => {
-    expect(renderUserMessage("hi", "none", 40, undefined, "round")).toContain("╭");
-    expect(renderUserMessage("hi", "none", 40, undefined, "single")).toContain("┌");
-    expect(renderUserMessage("hi", "none", 40, undefined, "double")).toContain("╔");
   });
 });
 

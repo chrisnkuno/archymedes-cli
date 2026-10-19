@@ -2,25 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  addMemory,
-  clearMemories,
-  forgetMemory,
-  formatMemoryFile,
-  loadMemories,
-  memoryFile,
-  memoryPromptBlock,
-  parseMemoryCommand,
-  parseMemoryFile,
-  recallMemories,
-  replaceMemory,
-  renderMemories,
-  validateMemoryText,
-} from "./memory";
-import type { SectionStyle } from "../render/sections";
-
-const plain = (value: string) => value.replace(/\x1b\[[0-9;]*m/g, "");
-const style: SectionStyle = { width: 72, depth: "none" };
+import { addMemory, clearMemories, forgetMemory, formatMemoryFile, loadMemories, memoryFile, memoryPromptBlock, parseMemoryFile, recallMemories, replaceMemory, validateMemoryText } from "./memory";
 
 let root: string;
 let home: string;
@@ -166,80 +148,5 @@ describe("what the model is told", () => {
     expect(validateMemoryText("safe\u200Blooking")).toMatch(/invisible/i);
     expect(validateMemoryText("this repo uses bun")).toBeNull();
     expect(validateMemoryText("x".repeat(801))).toMatch(/under 800/i);
-  });
-});
-
-describe("the /memory grammar", () => {
-  it("takes # as the shorthand for remembering something about this project", () => {
-    expect(parseMemoryCommand("# we use bun, not npm")).toEqual({ kind: "add", scope: "project", text: "we use bun, not npm", memoryKind: "fact", pinned: false });
-  });
-
-  it("leaves a markdown heading alone — ## is prose, not a command", () => {
-    expect(parseMemoryCommand("## Section")).toBeNull();
-  });
-
-  it("lists on a bare /memory", () => {
-    expect(parseMemoryCommand("/memory")).toEqual({ kind: "list" });
-    expect(parseMemoryCommand("/memory list")).toEqual({ kind: "list" });
-  });
-
-  it("accepts the scope flag on either side of the verb, because both get typed", () => {
-    expect(parseMemoryCommand("/memory add --user I like terse answers"))
-      .toEqual({ kind: "add", scope: "user", text: "I like terse answers", memoryKind: "fact", pinned: false });
-    expect(parseMemoryCommand("/memory --user add I like terse answers"))
-      .toEqual({ kind: "add", scope: "user", text: "I like terse answers", memoryKind: "fact", pinned: false });
-  });
-
-  it("defaults to the project, where most remembered facts belong", () => {
-    expect(parseMemoryCommand("/memory add we use bun")).toMatchObject({ scope: "project" });
-  });
-
-  it("takes a number to forget, and refuses a word", () => {
-    expect(parseMemoryCommand("/memory forget 2")).toEqual({ kind: "forget", scope: "project", index: 2 });
-    expect(parseMemoryCommand("/memory forget bun")).toMatchObject({ kind: "invalid" });
-  });
-
-  it("treats an unrecognised verb as the fact itself, rather than as an error", () => {
-    expect(parseMemoryCommand("/memory we deploy on Fridays"))
-      .toEqual({ kind: "add", scope: "project", text: "we deploy on Fridays", memoryKind: "fact", pinned: false });
-  });
-
-  it("supports typed core memories, topical recall and unique replacement", () => {
-    expect(parseMemoryCommand("/memory add --core --kind decision keep Convex"))
-      .toMatchObject({ kind: "add", pinned: true, memoryKind: "decision", text: "keep Convex" });
-    expect(parseMemoryCommand("/memory recall payment ledger")).toEqual({ kind: "recall", query: "payment ledger" });
-    expect(parseMemoryCommand("/memory replace Friday => Tuesday"))
-      .toEqual({ kind: "replace", scope: "project", oldText: "Friday", newText: "Tuesday" });
-  });
-
-  it("points at the files when asked where they are", () => {
-    expect(parseMemoryCommand("/memory where")).toEqual({ kind: "where" });
-  });
-
-  it("ignores anything that is not the command", () => {
-    expect(parseMemoryCommand("/memorydump")).toBeNull();
-    expect(parseMemoryCommand("remember this")).toBeNull();
-  });
-});
-
-describe("the /memory view", () => {
-  it("shows both scopes, numbered the way /memory forget takes them", () => {
-    const rendered = plain(renderMemories(
-      [
-        { scope: "project", index: 1, text: "uses bun", kind: "convention", pinned: false },
-        { scope: "user", index: 1, text: "prefers terse answers", kind: "preference", pinned: true },
-      ],
-      style,
-      { project: "/repo/.archymedes/memory.md", user: "/home/x/memory.md" },
-    ));
-    expect(rendered).toContain("project memory");
-    expect(rendered).toContain("your memory");
-    expect(rendered).toContain("1. uses bun");
-    expect(rendered).toContain("1. prefers terse answers");
-  });
-
-  it("teaches the way in when a scope is empty, rather than showing a blank heading", () => {
-    const rendered = plain(renderMemories([], style, { project: "p", user: "u" }));
-    expect(rendered).toContain("/memory add");
   });
 });

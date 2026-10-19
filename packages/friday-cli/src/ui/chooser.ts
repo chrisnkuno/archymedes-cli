@@ -74,8 +74,6 @@ export function chromeOf(chrome: ChooserChrome | undefined): Required<ChooserChr
   return { ...ALL_CHROME, ...chrome };
 }
 
-export const INITIAL_CHOOSER_STATE: ChooserState = { selected: 0, query: "" };
-
 /**
  * Items matching the query, best first. Pinned items survive filtering, at the end.
  *

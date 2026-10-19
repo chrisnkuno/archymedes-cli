@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../catalog/commands";
-import { visibleWidth } from "../text/text-width";
-import { advanceChooser, filterItems, renderChooser, windowStart, type ChooserItem } from "./chooser";
-import { advancePalette, rankPaletteEntries, renderPalette, type PaletteEntry } from "./palette";
-import { advanceTable, renderTable, type TableRow } from "./table";
+import { advanceChooser, filterItems, windowStart, type ChooserItem } from "./chooser";
+import { advancePalette, rankPaletteEntries, type PaletteEntry } from "./palette";
 import { DEFAULT_BINDINGS, parseChord, chordId, resolveBindings, type KeypressEvent } from "../terminal/keybindings";
 import { SETTING_FIELDS, maskSetting, validateSetting, type SettingKey } from "../platform/settings";
-import type { ModelCatalog } from "../session/models";
 
 /**
  * Invariants: properties that hold for *every* valid input, not just the examples in other tests.
@@ -48,8 +45,6 @@ const PALETTE_ENTRIES: PaletteEntry[] = [
   { command: "/diff", description: "what changed" },
   { command: "/model", args: "<name>", description: "switch model" },
 ];
-
-const TABLE_ROWS: TableRow[] = [["a", "1"], ["b", "2"], ["c", "3"]];
 
 function inRange(selected: number, length: number): boolean {
   return Number.isInteger(selected) && selected >= 0 && selected <= Math.max(0, length - 1);
@@ -102,28 +97,6 @@ describe("menu selection invariants", () => {
       }
     }
   });
-
-  it("table: selection stays in range and Enter resolves inside the rows", () => {
-    const states = [
-      { selected: 0, focused: true },
-      { selected: 99, focused: true },
-      { selected: 0, focused: false },
-    ];
-    for (const start of states) {
-      for (const input of KEY_CORPUS) {
-        const step = advanceTable({ ...start }, TABLE_ROWS, input);
-        expect(inRange(step.state.selected, TABLE_ROWS.length), `table ${JSON.stringify(input)} from ${JSON.stringify(start)}`).toBe(true);
-        if (step.done?.index !== undefined) {
-          expect(step.done.index).toBeLessThan(TABLE_ROWS.length);
-        }
-      }
-      for (const input of KEY_CORPUS) {
-        const step = advanceTable({ selected: 5, focused: true }, [], input);
-        expect(step.state.selected).toBe(0);
-        if (step.done) expect(step.done.index).toBeUndefined();
-      }
-    }
-  });
 });
 
 describe("windowing invariants", () => {
@@ -145,25 +118,6 @@ describe("windowing invariants", () => {
     }
   });
 
-});
-
-describe("render width invariants", () => {
-  const widths = [1, 2, 5, 6, 7, 8, 9, 20, 40, 80, 200];
-  const paint = { dim: (s: string) => s, cyan: (s: string) => s, green: (s: string) => s, yellow: (s: string) => s };
-
-  it("no renderer ever emits a row wider than the terminal", () => {
-    for (const width of widths) {
-      for (const line of renderChooser({ selected: 2, query: "a" }, CHOOSER_ITEMS, { width, paint }).split("\n")) {
-        expect(visibleWidth(line), `chooser w=${width}`).toBeLessThanOrEqual(width);
-      }
-      for (const line of renderPalette(
-        { query: "mo", matches: rankPaletteEntries(PALETTE_ENTRIES, "mo"), selected: 5 },
-        { width },
-      ).split("\n")) {
-        expect(visibleWidth(line), `palette w=${width}`).toBeLessThanOrEqual(width);
-      }
-    }
-  });
 });
 
 describe("filter invariants", () => {
@@ -240,6 +194,7 @@ describe("settings validation invariants", () => {
     ARCHYMEDES_EDITOR_AUTOSAVE: ["on", "off"],
     ARCHYMEDES_TOKEN_SAVER: ["on", "off"],
     ARCHYMEDES_TOKEN_METER: ["on", "off"],
+    ARCHYMEDES_TELEMETRY: ["on", "off"],
     ARCHYMEDES_KEYS: ["/diff=alt+d"],
     ARCHYMEDES_WEB_SEARCH: ["auto", "duckduckgo", "off"],
     OPENAI_MODEL: ["gpt-5.6-terra"],
