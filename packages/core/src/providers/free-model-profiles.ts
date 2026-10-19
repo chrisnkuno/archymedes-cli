@@ -15,7 +15,7 @@
  * its fit: the profile may be stale, and the person asked for it.
  *
  * Rows are measurements with a date, not opinions. A model not listed here is `unmeasured`, unless
- * its id names a chat-sized parameter count, which makes it `small` on the id alone.
+ * its id names a chat-sized parameter count, which makes it chat-sized on the id alone.
  */
 import { isSmallModel } from "./free-catalog";
 
@@ -74,7 +74,7 @@ export const FREE_ROUTABLE_TIER = 2;
  * Where the router puts a model: lower goes first, and `null` means the router never picks it.
  *
  * A tier is above recent health: a slow model answers every request in the end, which is a perfect
- * success rate that still costs a minute a turn, and a small one answers "hello" without error all
+ * success rate that still costs a minute a turn, and a chat-sized one answers "hello" without error all
  * day. Neither may outrank a fast, capable model that happened to be refused once. A busy model is
  * kept as a fallback: its refusals are quick, so the router moves past one in a second.
  */
