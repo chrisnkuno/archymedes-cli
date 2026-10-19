@@ -5,6 +5,9 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `friday.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## Release 3.10.0 (2026-10-19)
+WS-29: read-only commands run unasked and in parallel, auto mode asks only about risk, one bad call no longer voids a batch, tool calls shown while the model writes them, a sharper grep, numbered reads, edits as a real array, and a working loop in the system prompt. `@archymedes/friday` and the six platform packages at 3.10.0.
+
 ## WS-31: Friday in other languages (2026-10-19, todo)
 User: "let's make it multi lingual by adding other languages include jp, kr, cn, spanish and so on".
 
