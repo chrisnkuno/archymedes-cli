@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { unavailableToolMessage } from "./agent-runtime";
 import { aliasTarget, normalizeToolName, resolveToolCall } from "./tool-aliases";
+import { unavailableToolMessage } from "./tool-call-feedback";
 
 const ALL = new Set(["read_file", "list_files", "glob_files", "grep_files", "write_file", "edit_file", "run_command", "web_search", "web_fetch", "todo_write"]);
 const resolve = (name: string, args: unknown, available: ReadonlySet<string> = ALL) => resolveToolCall({ id: "c1", name, arguments: args }, available);

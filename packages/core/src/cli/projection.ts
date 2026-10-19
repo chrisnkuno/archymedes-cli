@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { eventJournalPath, readEventJournal, type ArchymedesEventEnvelope, type ArchymedesProtocolPayload } from "./protocol";
+import { eventJournalPath, readEventJournal, type ArchymedesProtocolPayload } from "./protocol";
 
 /**
  * A queryable view of the event journal, derived and disposable.

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { agentMessagePromptParts, BoundedAgentRuntime, isContextOverflow, repeatedFailureHint, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
+import { agentMessagePromptParts, BoundedAgentRuntime, isContextOverflow, compactedToolResult, isRetryableProviderError, ProviderRequestError, providerFailureKind, providerRetryAfterMs, providerRetryDelayMs, RETRY_POLICIES, type AgentModelRequest, type AgentModelTurn, type AgentRuntimeEvent, type AgentTool, type ToolResultArtifactStore } from "./agent-runtime";
 import type { RoutingReceipt } from "./providers/routing-receipt";
+import { repeatedFailureHint } from "./tool-call-feedback";
 
 const usage = { inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
 const prices = { inputRatePerMillion: 1_610, outputRatePerMillion: 9_660 };
@@ -321,7 +322,8 @@ describe("bounded agent runtime", () => {
     it.each([
       ["missing id", [{ id: "", name: "read_file", arguments: {} }]],
       ["duplicate id", [{ id: "same", name: "read_file", arguments: {} }, { id: "same", name: "read_file", arguments: {} }]],
-      ["non-object arguments", [{ id: "bad-args", name: "read_file", arguments: "{}" }]],
+      // Unparseable text: that call alone is answered with what was wrong ("{}" as text is read as {}).
+      ["non-object arguments", [{ id: "bad-args", name: "read_file", arguments: "{path: oops" }]],
     ])("repairs %s without executing the malformed call", async (_label, malformedCalls) => {
       const value = harness([
         turn({ finishReason: "tool_calls", toolCalls: malformedCalls }),
@@ -330,7 +332,7 @@ describe("bounded agent runtime", () => {
       ], [readTool]);
       const result = await value.runtime.execute(baseRequest);
       expect(result).toMatchObject({ status: "completed", toolCallsExecuted: 1 });
-      expect(value.requests[1].messages.at(-1)?.content).toContain("malformed");
+      expect(value.requests[1].messages.at(-1)?.content).toMatch(/malformed|not a JSON object/);
     });
 
     it("recovers a declared tool turn with no calls, then allows a normal answer", async () => {
@@ -1156,7 +1158,6 @@ describe("what a nudge costs", () => {
   });
 });
 
-
 it("backs off exponentially with jitter, honours retry-after up to 60s, and honors explicit terminal errors", () => {
   const even = () => 0.5;
   expect(providerRetryDelayMs({ retryAfterMs: 2000 }, 0, even)).toBe(2000);
@@ -1412,5 +1413,87 @@ describe("what a model that keeps failing is told", () => {
   it("keeps the old advice for anything else", () => {
     expect(repeatedFailureHint("read_file", 2, 0, "ENOENT")).toMatch(/list_files/);
     expect(repeatedFailureHint("read_file", 1, 0, "ENOENT")).toBeNull();
+  });
+});
+
+describe("smooth tool calling (WS-29)", () => {
+  const readOnlyAware = (log: string[]): AgentTool => ({
+    name: "run_command", description: "Run", inputSchema: {}, capabilityId: "workspace.terminal", effect: "workspace", requiresApproval: true, parallelSafe: false,
+    effectFor: (args) => (String(args.command).startsWith("git status") || String(args.command).startsWith("ls") ? "none" : "workspace"),
+    async execute(args) {
+      log.push(`start ${args.command}`);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      log.push(`end ${args.command}`);
+      return { content: "ok" };
+    },
+  });
+
+  it("runs read-only commands without asking, side by side, and asks for none of them to be verified", async () => {
+    const log: string[] = [];
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "a", name: "run_command", arguments: { command: "git status" } }, { id: "b", name: "run_command", arguments: { command: "ls src" } }] }),
+      turn({ content: "Looked." }),
+    ], [readOnlyAware(log)], false); // every approval would be refused
+    const result = await value.runtime.execute(baseRequest);
+    expect(result.status).toBe("completed");
+    expect(log.slice(0, 2)).toEqual(["start git status", "start ls src"]); // overlapped
+    expect(value.events.filter((event) => event.type === "tool_call").map((event) => (event as { effect: string }).effect)).toEqual(["none", "none"]);
+  });
+
+  it("still asks before a command that changes something", async () => {
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [{ id: "a", name: "run_command", arguments: { command: "npm install" } }] }),
+    ], [readOnlyAware([])], false);
+    expect((await value.runtime.execute(baseRequest)).status).toBe("needs_approval");
+  });
+
+  it("answers an unknown tool on its own and runs the rest of the batch", async () => {
+    const read: AgentTool = { name: "read_file", description: "Read", inputSchema: {}, capabilityId: "workspace.files", effect: "none", requiresApproval: false, parallelSafe: true, async execute() { return { content: "contents" }; } };
+    const value = harness([
+      turn({ finishReason: "tool_calls", toolCalls: [
+        { id: "a", name: "read_file", arguments: { path: "a.ts" } },
+        { id: "b", name: "read_files", arguments: { path: "b.ts" } },
+        { id: "c", name: "read_file", arguments: "{\"path\": \"c.ts\"}" },
+      ] }),
+      turn({ content: "Done." }),
+    ], [read]);
+    const result = await value.runtime.execute(baseRequest);
+    expect(result).toMatchObject({ status: "completed", toolCallsExecuted: 2 });
+    const answers = value.requests[1].messages.filter((message) => message.role === "tool");
+    expect(answers).toHaveLength(3);
+    expect(answers.find((message) => message.role === "tool" && message.toolCallId === "b")?.content).toMatch(/no tool named "read_files".*read_file/s);
+    expect(answers.filter((message) => message.content === "contents")).toHaveLength(2);
+  });
+});
+
+describe("tool calls while they are written (WS-29.3)", () => {
+  it("reads a path or command out of arguments still streaming in", async () => {
+    const { composingSubject } = await import("./agent-runtime");
+    expect(composingSubject('{"path": "src/app.ts", "content": "imp')).toBe("src/app.ts");
+    expect(composingSubject('{"command": "npm test -- --grep \\"a b\\""')).toBe('npm test -- --grep "a b"');
+    expect(composingSubject('{"path": "src/ap')).toBeUndefined();
+  });
+
+  it("reports a streaming call by name and subject, without journaling every fragment", async () => {
+    const events: AgentRuntimeEvent[] = [];
+    const runtime = new BoundedAgentRuntime({
+      model: {
+        async complete(request) {
+          if (events.some((event) => event.type === "tool_result")) return turn({ content: "Written." });
+          for (const text of ['{"pa', '{"path": "a.ts"', '{"path": "a.ts", "content": "x', '{"path": "a.ts", "content": "xy"}']) {
+            request.onToolCallProgress?.({ index: 0, name: "write_file", argumentsText: text });
+          }
+          return turn({ finishReason: "tool_calls", toolCalls: [{ id: "w", name: "write_file", arguments: { path: "a.ts", content: "xy" } }] });
+        },
+      },
+      tools: [{ name: "write_file", description: "Write", inputSchema: {}, capabilityId: "workspace.files", effect: "workspace", requiresApproval: false, parallelSafe: false, async execute() { return { content: "ok", verification: { passed: true, kind: "tests", scope: "targeted", summary: "x" } }; } }],
+      prices,
+      control: { async heartbeat() {}, async isCancellationRequested() { return false; }, async isToolCallApproved() { return true; }, async persistEvent(event) { events.push(event); } },
+    });
+    await runtime.execute(baseRequest);
+    const composed = events.filter((event) => event.type === "tool_compose");
+    // The name, then the subject once it streamed in; the rest is within the reporting interval.
+    expect(composed.map((event) => (event as { subject?: string }).subject)).toEqual([undefined, "a.ts"]);
+    expect(composed[0]).toMatchObject({ toolName: "write_file", index: 0 });
   });
 });

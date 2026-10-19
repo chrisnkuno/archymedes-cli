@@ -2,27 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  applyTextEdits,
-  editTextFile,
-  editTextFileWithEdits,
-  FileReadTracker,
-  parseEditArguments,
-  parseGitignore,
-  parseRipgrepJsonLine,
-  ripgrepArguments,
-  DEFAULT_WORKSPACE_LIMITS,
-  globToRegExp,
-  globWorkspace,
-  grepWorkspace,
-  looksBinary,
-  readBinaryFile,
-  walkWorkspace,
-  readTextFile,
-  resolveInWorkspace,
-  writeTextFile,
-  WorkspaceViolation,
-} from "./workspace";
+import { applyTextEdits, withoutLineNumbers, editTextFile, editTextFileWithEdits, FileReadTracker, parseEditArguments, parseGitignore, DEFAULT_WORKSPACE_LIMITS, globToRegExp, globWorkspace, looksBinary, readBinaryFile, walkWorkspace, readTextFile, resolveInWorkspace, writeTextFile, WorkspaceViolation } from "./workspace";
+import { parseRipgrepJsonLine, ripgrepArguments, grepWorkspace } from "./workspace-grep";
 
 let root: string;
 
@@ -364,5 +345,19 @@ describe("ripgrep", () => {
     const viaJs = await grepWorkspace(root, "value", { ripgrep: null });
     expect(viaMissingBinary).toEqual(viaJs);
     expect(viaJs.length).toBeGreaterThan(0);
+  });
+});
+
+describe("edits pasted with read_file's line numbers (WS-29.4)", () => {
+  it("removes the numbers from oldText and newText, and says so", () => {
+    const result = applyTextEdits("a\nconst b = 1;\nc\n", [{ oldText: "2\tconst b = 1;", newText: "2\tconst b = 2;" }], "f.ts");
+    expect(result.content).toBe("a\nconst b = 2;\nc\n");
+    expect(result.notes?.[0]).toMatch(/line numbers/);
+  });
+
+  it("leaves text that only looks numbered on some lines alone", () => {
+    expect(withoutLineNumbers("1\tone\ntwo")).toBeNull();
+    expect(withoutLineNumbers("plain")).toBeNull();
+    expect(withoutLineNumbers("  9\tx\n\n 10\ty")).toBe("x\n\ny");
   });
 });

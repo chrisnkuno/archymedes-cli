@@ -659,11 +659,11 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     // Warm-cache, measured by this probe. Cold, the same search was 401ms before these changes and
     // 93ms after — the structural win is in the remediation, this number is the regression guard.
     baseline: { value: 14, on: "2026-08-22" },
-    evidence: "archymedes-cli/workspace.ts grepWorkspace",
+    evidence: "archymedes-cli/workspace-grep.ts grepWorkspace",
     remediation:
       "Three things got it here and any of them regressing shows up as this number: generated directories excluded from ignoredDirectories (coverage/ alone was 30% of every byte read), files read concurrently rather than one at a time, and a raw Buffer.indexOf prefilter that rules a file out before decoding it into a line array (~3x the file's size, allocated and thrown away).",
     measure: async ({ root }) => {
-      const { grepWorkspace } = await import("./workspace");
+      const { grepWorkspace } = await import("./workspace-grep");
       await grepWorkspace(root, "compactionUrgency", {});
       // The best of several, stopping once one is well inside the budget: load on the machine (a
       // parallel test run) inflates a sample but not every sample, while a real regression is slow

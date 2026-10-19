@@ -13,12 +13,13 @@ import { applyCuts, declaredNames, isExported, namedImports, parse, removeUnused
  *   moved code uses (those must already be exported), then loses whatever it does not use;
  * - every importer of a moved name — the source included — imports it from the target instead.
  *
- * Follow with `bun run recheck`.
+ * `MOVE_SOURCE_ROOT=packages/core/src` runs the same move inside core. Follow with `bun run recheck`.
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
-const SOURCE_ROOT = (JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string }).sourceRoot;
+// `MOVE_SOURCE_ROOT=packages/core/src` moves within core instead of the CLI's sections.
+const SOURCE_ROOT = process.env.MOVE_SOURCE_ROOT ?? (JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string }).sourceRoot;
 const SOURCE = path.join(REPO, SOURCE_ROOT);
 
 const [fromArgument, toArgument, ...names] = process.argv.slice(2);

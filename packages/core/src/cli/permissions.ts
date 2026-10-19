@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AgentTool, AgentToolCall } from "../agent-runtime";
+import { callEffect, type AgentTool, type AgentToolCall } from "../agent-runtime";
 import { assessToolSafety, type SafetyAssessment } from "./safety";
 import { judgeCommand, type CommandRule } from "./command-rules";
 import type { JevJudge, JevToolCheck } from "./jev";
@@ -408,11 +408,16 @@ export class PermissionLedger {
     if (ruled?.decision === "allow" && this.mode !== "defender") return "approved";
     // A run outside the command sandbox is the person's call, every time.
     const mustAsk = ruled?.decision === "ask" || (tool.name === "run_command" && (call.arguments as Record<string, unknown> | undefined)?.escalate === true);
+    // A call that changes nothing (`git status`, `rg`, `ls` through run_command) is a read, in every mode.
+    if (!mustAsk && callEffect(tool, (call.arguments ?? {}) as Record<string, unknown>) === "none") return "approved";
     // Auto mode is an ergonomics feature, not a blanket trust grant. Inspect the exact command,
     // path and content before taking its fast path; credentials, production configuration and
     // high-impact commands remain explicit human decisions.
     const safety = assessToolSafety(call, tool);
     if (!mustAsk && this.mode === "auto" && tool.effect === "workspace" && !safety.sensitive) return "approved";
+    // An MCP tool its server marks read-only (a docs lookup, a search) is not a risk worth a dialog
+    // in auto mode; one that changes something out there still is.
+    if (this.mode === "auto" && tool.effect === "external" && tool.readOnlyHint === true) return "approved";
 
     if (this.legacyDeniedTools.has(tool.name)) return "denied";
     const action = actionDigest(call, tool);

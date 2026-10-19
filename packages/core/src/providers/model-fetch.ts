@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { PROVIDER_INFO, missingRequirements, type ProviderId } from "./provider-specs";
+import { missingRequirements, type ProviderId } from "./provider-specs";
 import { isConversationalModel, modelsEndpoint, parseModelsResponse } from "./model-list";
 import { fetchFreeCatalog } from "./free-catalog-fetch";
 import { freeAccess, type FreeCatalog } from "./free-catalog";
@@ -159,7 +159,6 @@ export async function loadLiveModels(
   }
   return { models, fromCache: false, errors: results.filter((result) => result.error) };
 }
-
 
 /**
  * The provider ids worth asking: those with a key present.

@@ -1,27 +1,11 @@
 import path from "node:path";
 import type { InteractiveCodingSandboxProvider } from "../providers/contracts";
 import { listSandboxFiles, searchSandboxText } from "../sandbox-search";
-import {
-  DEFAULT_WORKSPACE_LIMITS,
-  displayPath,
-  editTextFile,
-  globToRegExp,
-  globWorkspace,
-  grepWorkspace,
-  looksBinary,
-  nearestLineHint,
-  readBinaryFile,
-  readTextFile,
-  walkWorkspace,
-  writeTextFile,
-  WorkspaceViolation,
-  type GrepMatch,
-  type ReadResult,
-  type WorkspaceLimits,
-} from "./workspace";
+import { DEFAULT_WORKSPACE_LIMITS, displayPath, editTextFile, globToRegExp, globWorkspace, looksBinary, nearestLineHint, readBinaryFile, readTextFile, walkWorkspace, writeTextFile, WorkspaceViolation, type ReadResult, type WorkspaceLimits } from "./workspace";
 import { hasShellSyntax, runLocalCommand, tokenizeCommand, type CommandRunner } from "./command";
 import type { CommandSandbox } from "./os-sandbox";
 import { LocalApplicationSupervisor, type ApplicationStatus, type StartApplicationRequest } from "./applications";
+import { grepWorkspace, type GrepMatch, type GrepOptions } from "./workspace-grep";
 export { hasShellSyntax, tokenizeCommand } from "./command";
 
 /**
@@ -58,7 +42,7 @@ export interface ArchymedesWorkspace {
   editFile(path: string, oldText: string, newText: string, options?: { replaceAll?: boolean }): Promise<{ path: string; replacements: number }>;
   list(prefix: string, depth: number): Promise<string[]>;
   glob(pattern: string): Promise<string[]>;
-  grep(query: string, options?: { include?: string; regex?: boolean }): Promise<GrepMatch[]>;
+  grep(query: string, options?: GrepOptions): Promise<GrepMatch[]>;
   /** `escalated`: this one run was allowed outside the command sandbox by the person. */
   runCommand(command: string, timeoutMs: number, signal?: AbortSignal, options?: { escalated?: boolean }): Promise<{ exitCode: number; stdout: string; stderr: string }>;
   /** The OS sandbox commands run under, where the backend has one (the local workspace). */
@@ -167,7 +151,7 @@ export class LocalWorkspace implements ArchymedesWorkspace {
     return files.sort();
   }
 
-  grep(query: string, options: { include?: string; regex?: boolean } = {}): Promise<GrepMatch[]> {
+  grep(query: string, options: GrepOptions = {}): Promise<GrepMatch[]> {
     return grepWorkspace(this.root, query, { ...options, limits: this.limits });
   }
 
@@ -356,7 +340,7 @@ abstract class SandboxWorkspace implements ArchymedesWorkspace {
     return (await this.allFiles()).filter((file) => matcher.test(file)).sort().slice(0, 500);
   }
 
-  async grep(query: string, options: { include?: string; regex?: boolean } = {}): Promise<GrepMatch[]> {
+  async grep(query: string, options: GrepOptions = {}): Promise<GrepMatch[]> {
     return searchSandboxText({
       sandbox: this.options.sandbox,
       sandboxId: this.options.sandboxId,
@@ -364,6 +348,8 @@ abstract class SandboxWorkspace implements ArchymedesWorkspace {
       query,
       includeMatcher: options.include ? globToRegExp(options.include) : undefined,
       regex: options.regex,
+      ignoreCase: options.ignoreCase,
+      ...(options.maxResults ? { maxMatches: options.maxResults } : {}),
       ignoredDirectories: this.limits.ignoredDirectories,
     });
   }

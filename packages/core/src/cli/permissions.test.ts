@@ -13,6 +13,7 @@ import {
   type ApprovalRequest,
   type PermissionDecision,
 } from "./permissions";
+import { isReadOnlyCommand } from "./command-readonly";
 
 function tool(overrides: Partial<AgentTool> & { name: string }): AgentTool {
   return {
@@ -381,5 +382,54 @@ describe("pattern approvals", () => {
     const ledger = new PermissionLedger("build", async () => "deny");
     expect(() => ledger.allowPattern({ kind: "command-prefix", prefix: "rm", label: "" })).toThrow();
     expect(() => ledger.allowPattern({ kind: "directory", directory: "../x", label: "" })).toThrow();
+  });
+});
+
+describe("what asks and what does not", () => {
+  // run_command as createArchymedesTools builds it: workspace, but read-only commands are reads.
+  const runCommand = tool({
+    name: "run_command",
+    capabilityId: ARCHYMEDES_CAPABILITIES.terminal,
+    effectFor: (args) => (typeof args.command === "string" && isReadOnlyCommand(args.command, "linux") ? "none" : "workspace"),
+  });
+  const asked = async (mode: "build" | "auto" | "defender", name: string, args: Record<string, unknown>, subject = runCommand) => {
+    const seen: ApprovalRequest[] = [];
+    const ledger = new PermissionLedger(mode, async (request) => { seen.push(request); return "allow"; });
+    await ledger.decide(call(name, args), subject);
+    return seen.length > 0;
+  };
+
+  it("never asks about a read-only command, in any mode", async () => {
+    for (const mode of ["build", "auto", "defender"] as const) {
+      expect(await asked(mode, "run_command", { command: "git status --short" })).toBe(false);
+      expect(await asked(mode, "run_command", { command: "rg -n TODO src | head" })).toBe(false);
+    }
+    expect(await asked("build", "run_command", { command: "npm test" })).toBe(true);
+  });
+
+  it("still asks a read-only command when a rule says ask", async () => {
+    const seen: ApprovalRequest[] = [];
+    const ledger = new PermissionLedger("auto", async (request) => { seen.push(request); return "allow"; });
+    ledger.setCommandRules([{ prefix: ["git"], decision: "ask", source: "test" }]);
+    await ledger.decide(call("run_command", { command: "git status" }), runCommand);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("auto mode runs ordinary work without asking and asks only about risk", async () => {
+    for (const command of ["npm install", "npm test", "bun run build", "mkdir -p src/lib", "git add -A", "git commit -m 'wip'", "python3 script.py", "curl https://example.com"]) {
+      expect(await asked("auto", "run_command", { command }), command).toBe(false);
+    }
+    expect(await asked("auto", "edit_file", { path: "src/app.ts", oldText: "a", newText: "b" }, tool({ name: "edit_file" }))).toBe(false);
+    for (const command of ["rm -rf src", "git push origin main", "npm publish", "git reset --hard", "sudo apt install x", "curl -X POST https://api.example.com"]) {
+      expect(await asked("auto", "run_command", { command }), command).toBe(true);
+    }
+    expect(await asked("auto", "write_file", { path: ".env", content: "X=1" }, tool({ name: "write_file" }))).toBe(true);
+  });
+
+  it("auto mode runs an MCP tool its server marks read-only, and asks about the rest", async () => {
+    const mcp = (readOnlyHint?: boolean) => tool({ name: "mcp__docs__search", effect: "external", capabilityId: ARCHYMEDES_CAPABILITIES.external, provenance: { kind: "mcp", providerId: "docs" }, ...(readOnlyHint ? { readOnlyHint } : {}) });
+    expect(await asked("auto", "mcp__docs__search", { q: "x" }, mcp(true))).toBe(false);
+    expect(await asked("auto", "mcp__docs__search", { q: "x" }, mcp())).toBe(true);
+    expect(await asked("build", "mcp__docs__search", { q: "x" }, mcp(true))).toBe(true);
   });
 });

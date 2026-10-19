@@ -293,7 +293,9 @@ describe("lean (token saver) system prompt", () => {
     for (const mode of ["plan", "build", "auto", "defender"] as const) {
       const full = buildArchymedesSystemPrompt(context, mode, toolNames);
       const lean = buildArchymedesSystemPrompt(context, mode, toolNames, undefined, undefined, { lean: true });
-      expect(lean.length, mode).toBeLessThan(full.length * (mode === "defender" ? 0.75 : 0.4));
+      // 0.4 until WS-29.5, when the full prompt itself was cut by a quarter (7,329 → 5,604 characters
+      // in build mode); lean stayed the same size, so it is now about half of a shorter whole.
+      expect(lean.length, mode).toBeLessThan(full.length * (mode === "defender" ? 0.75 : 0.55));
       expect(lean, mode).toContain(`${mode.toUpperCase()} mode`);
       expect(lean, mode).toContain("Available tools: read_file, edit_file");
     }
@@ -326,5 +328,25 @@ describe("lean (token saver) system prompt", () => {
     expect(buildArchymedesSystemPrompt(long, "build", toolNames)).toContain("x".repeat(6_000));
     expect(capInstructions("  short  ")).toBe("short");
     expect(capInstructions("abcdef", 3, "X.md")).toBe("abc\n\n[Truncated to 3 of 6 characters to save tokens. Read X.md with read_file for the rest when it matters to the task.]");
+  });
+});
+
+describe("how Friday operates (WS-29.5)", () => {
+  const context = { root: "/project", instructions: null, instructionsFile: null, layout: [], packageScripts: [], gitBranch: null };
+
+  it("states the loop and which tool does which job", () => {
+    const prompt = buildArchymedesSystemPrompt(context, "build", ["read_file", "grep_files", "edit_file", "run_command"]);
+    for (const step of ["1. Orient.", "2. Change.", "3. Verify.", "4. Report"]) expect(prompt, step).toContain(step);
+    expect(prompt).toContain("read_file rather than cat");
+    expect(prompt).toContain("Read-only commands (git status, git diff, ls, rg) run without asking");
+    expect(prompt).toContain("the turn stops there");
+  });
+
+  it("says nothing about the shell to a mode that has none", () => {
+    expect(buildArchymedesSystemPrompt(context, "plan", ["read_file", "grep_files"])).not.toContain("rather than cat");
+  });
+
+  it("tells auto mode that only risky actions ask", () => {
+    expect(buildArchymedesSystemPrompt(context, "auto", ["run_command"])).toContain("only risky actions still ask");
   });
 });

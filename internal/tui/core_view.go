@@ -84,12 +84,37 @@ func (m *Model) body(height int) []string {
 	if !m.thinking() || height < 3 || !m.tr.following() {
 		return m.tr.window(ctx, height)
 	}
-	line := m.spin.View() + " " + theme.Gradient("thinking…", m.th.Primary, m.th.Secondary, false) +
+	label := "thinking…"
+	if m.composing != nil {
+		label = composingLabel(m.composing.ToolName, m.composing.Subject, m.composing.Chars)
+	}
+	line := m.spin.View() + " " + theme.Gradient(label, m.th.Primary, m.th.Secondary, false) +
 		m.th.Faint.Render(" "+elapsed(time.Since(m.turnStart)))
 	if m.retrying != "" {
 		line = m.retryLine()
 	}
 	return append(m.tr.window(ctx, height-2), "", ansi.Truncate(line, width, "…"))
+}
+
+// composingLabel says what the model is writing before the call exists: "writing src/app.ts · 4.2k
+// chars" for a long write, "preparing: npm test" for a command. The tool card replaces it on arrival.
+func composingLabel(tool, subject string, chars int) string {
+	verbs := map[string]string{"write_file": "writing", "edit_file": "editing", "read_file": "reading", "run_command": "preparing:",
+		"grep_files": "searching", "glob_files": "finding", "start_application": "starting", "web_fetch": "fetching", "web_search": "searching the web for"}
+	verb, ok := verbs[tool]
+	if !ok {
+		verb = "preparing " + strings.Join(strings.FieldsFunc(tool, func(r rune) bool { return r == '_' }), " ")
+	}
+	label := verb
+	if subject != "" {
+		label += " " + subject
+	} else if ok {
+		label += " …"
+	}
+	if (tool == "write_file" || tool == "edit_file") && chars >= 1_000 {
+		label += " · " + compact(chars) + " chars"
+	}
+	return label
 }
 
 func newRetryBar(th theme.Theme) progress.Model {

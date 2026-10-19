@@ -69,7 +69,11 @@ func (m *Model) handleEvent(ev acp.Event) {
 
 func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 	switch ev.Type {
+	case "tool_compose":
+		ev := ev
+		m.composing = &ev
 	case "tool_call":
+		m.composing = nil
 		m.closeAssistant()
 		m.stats.tool(ev.ToolName)
 		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments, started: time.Now()}
@@ -83,6 +87,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			t.finish(ev.Content, ev.IsError)
 		}
 	case "model_turn":
+		m.composing = nil
 		// One model call's text is one block: the next call's reply (a verification pass, say) is
 		// a new paragraph, not a continuation glued onto this one.
 		m.closeAssistant()

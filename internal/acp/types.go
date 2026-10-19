@@ -100,6 +100,9 @@ type RuntimeEvent struct {
 	MaxAttempts int    `json:"maxAttempts"`
 	DelayMs     int    `json:"delayMs"`
 	Reason      string `json:"reason"`
+	// tool_compose: a call the model is still writing; Subject is its path or command once streamed
+	Subject string `json:"subject"`
+	Chars   int    `json:"chars"`
 	// runtime_stop
 	Status  string `json:"status"`
 	Summary string `json:"summary"`

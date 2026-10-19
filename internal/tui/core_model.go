@@ -187,6 +187,8 @@ type Model struct {
 	turnUsage usageTotals
 	usage     usageTotals
 	retrying  string
+	// composing is the tool call the model is writing right now, shown in place of "thinking…".
+	composing *acp.RuntimeEvent
 	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
 	retryStart  time.Time
 	retryDelay  time.Duration
@@ -676,7 +678,7 @@ func (m *Model) send(text string) tea.Cmd {
 	m.welcome()
 	m.stopScroll()
 	m.tr.toBottom()
-	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying = busy, time.Now(), usageTotals{}, nil, ""
+	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying, m.composing = busy, time.Now(), usageTotals{}, nil, "", nil
 	agent, id := m.agent, m.session.ID
 	return tea.Batch(func() tea.Msg {
 		// A finished turn arrives in the agent's stream (acp.TurnEnded); only a failure comes back here.

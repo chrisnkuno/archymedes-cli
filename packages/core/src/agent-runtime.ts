@@ -104,8 +104,9 @@ export type ModelAllowance = {
 export type AgentOutputKind = "text" | "reasoning" | "tool_call";
 
 /** How hard the model should think, where the provider's model supports being told. */
-import { aliasTarget, resolveToolCall } from "./tool-aliases";
+import { resolveToolCall } from "./tool-aliases";
 import { isShallowToolError, type EffortSignals, type ToolOutcome } from "./effort-policy";
+import { repeatedFailureHint, unavailableToolMessage } from "./tool-call-feedback";
 
 export type ThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -113,6 +114,8 @@ export type ThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "
 export function providerEffort(effort: ThinkingEffort): Exclude<ThinkingEffort, "minimal"> {
   return effort === "minimal" ? "low" : effort;
 }
+
+export type ToolCallProgress = { index: number; name: string; argumentsText: string };
 
 export type AgentModelRequest = {
   /** One logical model call: reused across transport retries, replaced for the next iteration. */
@@ -141,6 +144,13 @@ export type AgentModelRequest = {
    * simply never calls it, and text deltas alone are then the signal, as before.
    */
   onOutputProgress?: (kind: AgentOutputKind) => void;
+  /**
+   * Called as a tool call streams in: which call (`index` within the turn), its name once known, and
+   * its arguments as received so far (incomplete JSON). Lets a front end show "writing src/app.ts"
+   * while a long write_file is still being generated, instead of a "thinking" line that looks frozen.
+   * Optional; a provider that does not stream tool calls never calls it.
+   */
+  onToolCallProgress?: (progress: ToolCallProgress) => void;
   /**
    * How hard the model should think about this particular request.
    *
@@ -265,6 +275,17 @@ export type AgentTool = AgentToolDefinition & {
   requiresApproval: boolean;
   parallelSafe: boolean;
   provenance?: ToolProvenance;
+  /**
+   * An external tool whose provider declares it only reads (MCP's `readOnlyHint`). Self-reported, so
+   * it stays `external` and asks in build mode; auto mode takes the provider at its word.
+   */
+  readOnlyHint?: boolean;
+  /**
+   * This call's effect, when it can be lower than the tool's: `run_command` with `git status` is a
+   * read, not a workspace change. Only ever lowers (to `none`); an answer above `effect` is ignored.
+   * A call whose effect is `none` needs no approval and may run beside other reads.
+   */
+  effectFor?(argumentsValue: Record<string, unknown>): ToolEffect;
   execute(argumentsValue: Record<string, unknown>, context: AgentToolContext): Promise<AgentToolResult>;
 };
 
@@ -280,6 +301,9 @@ export type AgentRuntimeEvent =
   // happens rather than only what happened. The result alone cannot carry this: by the time it
   // arrives the interesting part — which file, which command — is already over.
   | { type: "tool_call"; toolCallId: string; toolName: string; effect: ToolEffect; arguments: Record<string, unknown> }
+  // A tool call the model is still writing: its name, what it is about once that has streamed in
+  // (a path, a command), and how much of it has arrived. Live only — never journaled.
+  | { type: "tool_compose"; iteration: number; index: number; toolName: string; subject?: string; chars: number }
   // `content` is truncated to fit the context budget and is written for the model; `data` is the
   // same result as values, untruncated, for a consumer that needs to act on it rather than read it.
   // `artifact` is present when the result was too large for the transcript and was written to a
@@ -363,101 +387,10 @@ export type AgentRuntimeResult = {
   routingReceipts?: RoutingReceipt[];
 };
 
-/**
- * What to tell a model that keeps failing the same way. The error already says what went wrong; what
- * a small model lacks is the instruction to stop guessing and look, and where to look depends on
- * the failure: "list the files" is no help to a call whose arguments have the wrong shape, or to a
- * command that only needed longer to run.
- */
-export function repeatedFailureHint(toolName: string, failures: number, missingPathStreak: number, error = "", inputSchema?: unknown): string | null {
-  if (failures >= 2) {
-    if (/must be (a|an) |has no parameter|requires \w+|arguments must be/.test(error)) {
-      const parameters = describeParameters(inputSchema);
-      return `This exact ${toolName} call has now failed ${failures} times on its arguments. Do not send it again unchanged.${parameters ? ` ${toolName} takes: ${parameters}.` : ""}`;
-    }
-    if (/limit and was killed/.test(error)) {
-      return `This command has now been stopped ${failures} times for running too long. Run it with a larger timeoutSeconds, or a smaller piece of the work at a time.`;
-    }
-    return `This exact ${toolName} call has now failed ${failures} times. Do not send it again unchanged: change the arguments, or run list_files with path "." to see what is really in the project.`;
-  }
-  if (missingPathStreak >= 3) {
-    return "Several paths in a row did not exist. Stop guessing paths: run list_files with path \".\" (or glob_files with \"**/*\") and use only names it returns.";
-  }
-  return null;
-}
-
-/** A tool's parameters in a line: `path (string, required), offset (integer)`. */
-function describeParameters(schema: unknown): string {
-  const { properties = {}, required = [] } = (schema ?? {}) as { properties?: Record<string, { type?: string }>; required?: string[] };
-  return Object.entries(properties)
-    .map(([name, property]) => `${name} (${property.type ?? "any"}${required.includes(name) ? ", required" : ""})`)
-    .join(", ");
-}
-
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
 const MAX_VERIFICATION_NUDGES = 1;
 /** Different unavailable tools in a row the model may ask for before the run stops. Asking for the same one twice running still stops it at once. */
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 3;
-
-/**
- * The tools most like a name the model invented: shared words in the name ("search" → web_search),
- * the word in a tool's description ("search" → grep_files, "Search file contents…"), then near-misses
- * in spelling ("read_files" → read_file). At most two, best first.
- */
-export function suggestTools(name: string, tools: ReadonlyArray<{ name: string; description: string }>): string[] {
-  const words = name.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2);
-  const scored = tools.map((tool) => {
-    const own = tool.name.toLowerCase();
-    const ownWords = own.split(/[^a-z0-9]+/);
-    const description = tool.description.toLowerCase();
-    let score = 0;
-    for (const word of words) {
-      if (ownWords.includes(word)) score += 3;
-      else if (own.includes(word)) score += 2;
-      else if (new RegExp(`\\b${word}`).test(description)) score += 1;
-    }
-    if (score === 0 && editDistance(name.toLowerCase(), own) <= 2) score = 2;
-    return { name: tool.name, score };
-  });
-  return scored.filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 2).map((entry) => entry.name);
-}
-
-function editDistance(a: string, b: string): number {
-  if (Math.abs(a.length - b.length) > 2) return 3;
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i += 1) {
-    const current = [i];
-    for (let j = 1; j <= b.length; j += 1) {
-      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    previous = current;
-  }
-  return previous[b.length];
-}
-
-/** What the model is told when it asks for a tool it cannot use: which case it is, and what to use. */
-export function unavailableToolMessage(name: string, exists: boolean, available: ReadonlyArray<{ name: string; description: string; inputSchema?: unknown }>): string {
-  const names = available.map((tool) => tool.name);
-  const closest = suggestTools(name, available);
-  // Only when the habit has one reading here: "search" could be the web or the files, and saying
-  // it is grep_files would send a web question to grep.
-  const target = exists ? undefined : aliasTarget(name, new Set(names));
-  const tool = target && closest.every((candidate) => candidate === target) ? available.find((candidate) => candidate.name === target) : undefined;
-  if (tool) {
-    const schema = tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] } | undefined;
-    const parts = [
-      schema?.required?.length ? `needs ${schema.required.join(" and ")}` : "",
-      schema?.properties && Object.keys(schema.properties).length ? `accepts ${Object.keys(schema.properties).join(", ")}` : "",
-    ].filter(Boolean);
-    const detail = parts.length ? ` It ${parts.join("; it ")}.` : "";
-    return `"${name}" is ${target} here, but this call did not carry what ${target} needs.${detail} Call ${target} with those arguments.`;
-  }
-  const head = exists
-    ? `${name} is not allowed in this run (the current mode does not include it).`
-    : `There is no tool named "${name}".`;
-  const hint = closest.length > 0 ? ` The closest: ${closest.join(" or ")}.` : "";
-  return `${head}${hint} Tools you can call: ${names.join(", ")}. Use one of them, or answer without a tool.`;
-}
 /**
  * Whether a provider refused a request for being longer than the model can hold.
  *
@@ -793,7 +726,31 @@ export function validateHistory(history: readonly AgentMessage[]): void {
   if (pending.size > 0) throw new Error("Runtime history ends with unresolved tool calls");
 }
 
+/** What one call does: the tool's declared effect, or less when the tool can tell from the arguments. */
+export function callEffect(tool: AgentTool, argumentsValue: Record<string, unknown>): ToolEffect {
+  if (tool.effect === "none" || !tool.effectFor) return tool.effect;
+  try {
+    return tool.effectFor(argumentsValue) === "none" ? "none" : tool.effect;
+  } catch {
+    return tool.effect;
+  }
+}
+
+/** A call's arguments as an object, reading JSON text when that is what arrived (one meaning, so no turn is lost). */
+/** The first complete `path`/`command`/… string in arguments still streaming in, for a live label. */
+export function composingSubject(argumentsText: string): string | undefined {
+  const match = /"(path|file_path|command|pattern|query|url|id)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(argumentsText);
+  if (!match) return undefined;
+  try { return (JSON.parse(`"${match[2]}"`) as string).slice(0, 160); } catch { return match[2].slice(0, 160); }
+}
+
+/** How often a growing tool call is reported while it streams, past its name and subject. */
+const COMPOSE_EVENT_INTERVAL_MS = 400;
+
 function normalizeArguments(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value === "string") {
+    try { value = JSON.parse(value.trim() || "{}"); } catch { return undefined; }
+  }
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
@@ -1196,12 +1153,25 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         // Any streamed output (text, reasoning or a tool-call fragment) makes the attempt visible
         // and billed; only an attempt that produced nothing at all may be sent again.
         let emittedOutput = false;
+        // Per streamed call: what was last reported, so a fragment only becomes an event when the
+        // name or subject first appears, or every COMPOSE_EVENT_INTERVAL_MS while it grows.
+        const composing = new Map<number, { name: string; subject?: string; at: number }>();
         const attemptRequest: AgentModelRequest = {
           ...modelRequest,
           onTextDelta: modelRequest.onTextDelta
             ? (text) => { emittedOutput = true; modelRequest.onTextDelta!(text); }
             : undefined,
           onOutputProgress: (kind) => { emittedOutput = true; modelRequest.onOutputProgress?.(kind); },
+          onToolCallProgress: ({ index, name, argumentsText }) => {
+            emittedOutput = true;
+            if (!name) return;
+            const last = composing.get(index);
+            const subject = last?.subject ?? composingSubject(argumentsText);
+            const now = Date.now();
+            if (last && last.name === name && last.subject === subject && now - last.at < COMPOSE_EVENT_INTERVAL_MS) return;
+            composing.set(index, { name, subject, at: now });
+            void this.dependencies.control.persistEvent({ type: "tool_compose", iteration, index, toolName: name, ...(subject ? { subject } : {}), chars: argumentsText.length });
+          },
         };
         try {
           turn = await this.dependencies.model.complete(attemptRequest);
@@ -1347,55 +1317,68 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       }
       if (toolCallsExecuted + turn.toolCalls.length > request.maxToolCalls) return stop("iteration_limit", "Run reached its tool-call budget.", iteration);
 
+      // Only a missing or repeated id voids the turn: a result has to name the call it answers.
       const seenCallIds = new Set<string>();
-      const malformed = turn.toolCalls.find((call) => {
+      const badId = turn.toolCalls.find((call) => {
         if (!call.id.trim() || seenCallIds.has(call.id)) return true;
         seenCallIds.add(call.id);
-        return !normalizeArguments(call.arguments);
+        return false;
       });
-      if (malformed) {
+      if (badId) {
         if (recoverToolTurn(
-          `Your previous tool-call response was malformed (the ${JSON.stringify(malformed.name).slice(0, 80)} call); no tools were executed.`,
-          "Retry with a unique non-empty id for every call and a JSON object for every arguments value, for example {\"path\": \"src/a.ts\"}: double quotes, no trailing commas, no code fences.",
+          `Your previous tool-call response was malformed (the ${JSON.stringify(badId.name).slice(0, 80)} call had a missing or repeated id); no tools were executed.`,
+          "Retry with a unique non-empty id for every call.",
         )) continue;
         return stop("failed", "Model repeatedly returned malformed tool calls.", iteration);
       }
 
-      const unavailable = turn.toolCalls.find((call) => {
+      /**
+       * A call that cannot run is answered on its own; the rest of the batch runs.
+       *
+       * One unknown tool name or one unparseable arguments value used to void the whole batch, so a
+       * turn of five good reads and one typo did nothing, and the model had to send all six again.
+       * Now the bad call gets an error saying exactly what was wrong with it, the good ones run, and
+       * the next turn only has to fix the one that failed — what Claude Code and Codex do.
+       */
+      const rejected = new Map<string, string>();
+      const unavailableNames: string[] = [];
+      for (const call of turn.toolCalls) {
         const tool = this.toolsByName.get(call.name);
-        return !tool || !capabilities.has(tool.capabilityId);
-      });
-      if (unavailable) {
+        if (!tool || !capabilities.has(tool.capabilityId)) {
+          unavailableNames.push(call.name);
+          rejected.set(call.id, unavailableToolMessage(call.name, this.toolsByName.has(call.name), tools));
+        } else if (!normalizeArguments(call.arguments)) {
+          const shown = typeof call.arguments === "string" ? call.arguments.slice(0, 160) : JSON.stringify(call.arguments ?? null).slice(0, 160);
+          rejected.set(call.id, `This ${call.name} call was not run: its arguments were not a JSON object (got ${shown}). Send it again with a JSON object, for example {"path": "src/a.ts"}: double quotes, no trailing commas, no code fences.`);
+        }
+      }
+      if (unavailableNames.length > 0) {
         // Fails closed when the model insists (the same tool twice running) or keeps inventing tools
-        // (three in a row); an occasional wrong name in a long run is corrected and the run goes on.
-        if (unavailable.name === lastUnavailable || unavailableToolRecoveries >= MAX_UNAVAILABLE_TOOL_RECOVERIES) {
-          return stop("failed", `Tool ${unavailable.name} is outside the run capability scope.`, iteration);
+        // (three rounds in a row); an occasional wrong name in a long run is corrected and the run goes on.
+        const insisted = unavailableNames.find((name) => name === lastUnavailable);
+        if (insisted || unavailableToolRecoveries >= MAX_UNAVAILABLE_TOOL_RECOVERIES) {
+          return stop("failed", `Tool ${insisted ?? unavailableNames[0]} is outside the run capability scope.`, iteration);
         }
         unavailableToolRecoveries += 1;
-        lastUnavailable = unavailable.name;
-        lastOutcomes = [{ tool: unavailable.name, isError: true, shallow: true }]; // the next call only has to pick a real tool
-        messages.push({ role: "assistant", content: turn.content, toolCalls: turn.toolCalls });
-        for (const call of turn.toolCalls) {
-          messages.push({
-            role: "tool",
-            toolCallId: call.id,
-            name: call.name,
-            internal: true,
-            content: call.id === unavailable.id
-              ? unavailableToolMessage(call.name, this.toolsByName.has(call.name), tools)
-              : "This batch was not executed because another call was unavailable. Retry any still-needed available call separately.",
-          });
-        }
-        continue;
+        lastUnavailable = unavailableNames[0];
+      } else {
+        unavailableToolRecoveries = 0; // a valid round: the next wrong name starts a fresh count
+        lastUnavailable = "";
       }
+      // Nothing in the turn could run: bounded like any other unusable turn, so it cannot loop.
+      if (rejected.size === turn.toolCalls.length && unavailableNames.length === 0 && toolTurnRecoveries >= MAX_TOOL_TURN_RECOVERIES) {
+        return stop("failed", "Model repeatedly returned malformed tool calls.", iteration);
+      }
+      if (rejected.size === turn.toolCalls.length && unavailableNames.length === 0) toolTurnRecoveries += 1;
 
-      unavailableToolRecoveries = 0; // a valid round: the next wrong name starts a fresh count
-      lastUnavailable = "";
-      const prepared: Array<{ call: AgentToolCall; tool: AgentTool; argumentsValue: Record<string, unknown> }> = [];
+      const prepared: Array<{ call: AgentToolCall; tool: AgentTool; argumentsValue: Record<string, unknown>; effect: ToolEffect }> = [];
       for (const call of turn.toolCalls) {
+        if (rejected.has(call.id)) continue;
         const tool = this.toolsByName.get(call.name)!;
         const argumentsValue = normalizeArguments(call.arguments)!;
-        if (tool.requiresApproval) {
+        const effect = callEffect(tool, argumentsValue);
+        // A call that changes nothing (a read-only command) is not the person's to approve.
+        if (tool.requiresApproval && effect !== "none") {
           const approval = await this.dependencies.control.isToolCallApproved(call, tool);
           if (approval !== true && approval !== "approved") {
             return approval === "denied"
@@ -1403,19 +1386,31 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
               : stop("needs_approval", `Tool ${call.name} requires approval before execution.`, iteration);
           }
         }
-        prepared.push({ call, tool, argumentsValue });
+        prepared.push({ call, tool, argumentsValue, effect });
       }
 
       messages.push({ role: "assistant", content: turn.content, toolCalls: turn.toolCalls });
-      const runOne = async ({ call, tool, argumentsValue }: (typeof prepared)[number]) => {
-        if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) return { call, tool, result: { content: "Tool execution cancelled before start.", isError: true } as AgentToolResult };
+      lastOutcomes = [];
+      for (const call of turn.toolCalls) {
+        const reason = rejected.get(call.id);
+        if (reason === undefined) continue;
+        messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: reason });
+        totalToolResultChars += reason.length;
+        // Seen in the interface as a failed call, the way it happened, not silently dropped.
+        const args = normalizeArguments(call.arguments) ?? {};
+        await this.dependencies.control.persistEvent({ type: "tool_call", toolCallId: call.id, toolName: call.name, effect: "none", arguments: args });
+        await this.dependencies.control.persistEvent({ type: "tool_result", toolCallId: call.id, toolName: call.name, isError: true, effect: "none", content: reason });
+        lastOutcomes.push({ tool: call.name, isError: true, shallow: true }); // a mistake to correct, not a failure to think about
+      }
+      const runOne = async ({ call, tool, argumentsValue, effect }: (typeof prepared)[number]) => {
+        if (request.signal?.aborted || await this.dependencies.control.isCancellationRequested()) return { call, tool, effect, result: { content: "Tool execution cancelled before start.", isError: true } as AgentToolResult };
         // Announced before the work, not after: a read of a large file or a long-running command
         // is exactly the moment a person needs to know what is being waited on.
-        await this.dependencies.control.persistEvent({ type: "tool_call", toolCallId: call.id, toolName: call.name, effect: tool.effect, arguments: argumentsValue });
+        await this.dependencies.control.persistEvent({ type: "tool_call", toolCallId: call.id, toolName: call.name, effect, arguments: argumentsValue });
         try {
-          return { call, tool, result: await tool.execute(argumentsValue, { ...request, toolCallId: call.id }) };
+          return { call, tool, effect, result: await tool.execute(argumentsValue, { ...request, toolCallId: call.id }) };
         } catch (error) {
-          return { call, tool, result: { content: error instanceof Error ? error.message : "Tool execution failed", isError: true } as AgentToolResult };
+          return { call, tool, effect, result: { content: error instanceof Error ? error.message : "Tool execution failed", isError: true } as AgentToolResult };
         }
       };
       /**
@@ -1438,15 +1433,17 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
        * The gain is small locally — a file read is sub-millisecond — and large on a remote
        * backend, where every call is a network round trip to an E2B or Docker sandbox.
        */
+      // A read-only command is as safe to overlap as a file read: it was judged to change nothing.
+      const concurrentCall = (item: (typeof prepared)[number]) => item.effect === "none" && (item.tool.parallelSafe || item.tool.effect !== "none");
       const groups: (typeof prepared)[] = [];
       for (const item of prepared) {
-        const concurrent = item.tool.parallelSafe && item.tool.effect === "none";
+        const concurrent = concurrentCall(item);
         const last = groups.at(-1);
-        const lastIsConcurrent = last !== undefined && last[0].tool.parallelSafe && last[0].tool.effect === "none";
+        const lastIsConcurrent = last !== undefined && concurrentCall(last[0]);
         if (concurrent && lastIsConcurrent) last.push(item);
         else groups.push([item]);
       }
-      const results: Array<{ call: AgentToolCall; tool: AgentTool; result: AgentToolResult }> = [];
+      const results: Array<{ call: AgentToolCall; tool: AgentTool; effect: ToolEffect; result: AgentToolResult }> = [];
       for (const group of groups) {
         if (group.length === 1) results.push(await runOne(group[0]));
         else results.push(...await Promise.all(group.map(runOne)));
@@ -1468,8 +1465,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       const incoming = Math.min(iterationCharBudget, results.reduce((sum, { result }) => sum + Math.min((result.content || " ").length, request.maxToolResultChars) + (result.images?.length ?? 0) * IMAGE_CHAR_ESTIMATE, 0));
       if (totalToolResultChars + incoming > request.maxTotalToolResultChars) await compactOlderToolResults(iteration, incoming);
 
-      lastOutcomes = [];
-      for (const { call, tool, result } of results) {
+      for (const { call, tool, effect: plannedEffect, result } of results) {
         toolCallsExecuted += 1;
         const remaining = request.maxTotalToolResultChars - totalToolResultChars;
         const budget = Math.max(0, Math.min(request.maxToolResultChars, remaining, iterationCharBudget - iterationChars));
@@ -1547,7 +1543,7 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           missingPathStreak = 0;
         }
         messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
-        const effect = tool.effect === "external" ? "external" : result.effect ?? tool.effect;
+        const effect = tool.effect === "external" ? "external" : result.effect ?? plannedEffect;
         if (!result.isError && effect === "workspace") {
           workspaceNeedsVerification = true;
           greenSinceEdit = false;

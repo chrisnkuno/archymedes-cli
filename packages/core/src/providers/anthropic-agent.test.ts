@@ -27,6 +27,20 @@ describe("Anthropic stream progress and deadlines", () => {
     expect(response.content).toContainEqual({ type: "tool_use", id: "t", name: "read_file", input: { path: "a" } });
   });
 
+  it("reports each tool_use block as it grows, by name", async () => {
+    const seen: Array<{ index: number; name: string; argumentsText: string }> = [];
+    await collectAnthropicStream(events([
+      { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "t", name: "write_file" } },
+      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{\"path\":" } },
+      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "\"a.ts\"}" } },
+    ]), undefined, undefined, (progress) => seen.push(progress));
+    expect(seen).toEqual([
+      { index: 1, name: "write_file", argumentsText: "" },
+      { index: 1, name: "write_file", argumentsText: "{\"path\":" },
+      { index: 1, name: "write_file", argumentsText: "{\"path\":\"a.ts\"}" },
+    ]);
+  });
+
   it("reports a silent stream as a timeout rather than the SDK's abort error", async () => {
     vi.useFakeTimers();
     try {

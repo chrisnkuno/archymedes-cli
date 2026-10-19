@@ -1,4 +1,4 @@
-import type { AgentImage, AgentMessage, AgentModelTurn, AgentOutputKind } from "../agent-runtime";
+import type { AgentImage, AgentMessage, AgentModelTurn, AgentOutputKind, ToolCallProgress } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { parseRoutingReceipt } from "./routing-receipt";
 
@@ -264,6 +264,8 @@ export async function collectChatStream(
   onTextDelta?: (text: string) => void,
   /** Reports every piece of model output, including reasoning and tool-call fragments. */
   onOutputProgress?: (kind: AgentOutputKind) => void,
+  /** Each tool call as it grows: its index, its name once known, its arguments so far. */
+  onToolCallProgress?: (progress: ToolCallProgress) => void,
 ): Promise<ChatResponse> {
   let id = "";
   let model = "";
@@ -293,11 +295,13 @@ export async function collectChatStream(
       // Truthiness, not nullish coalescing: providers send `"name": ""` and `"id": null` on the
       // continuation fragments, and `??` treats the empty string as a real value — which silently
       // erased the tool's name and made every streamed call fail as "outside the capability scope".
-      calls.set(fragment.index, {
+      const next = {
         id: fragment.id || existing.id,
         name: fragment.function?.name || existing.name,
         args: existing.args + (fragment.function?.arguments ?? ""),
-      });
+      };
+      calls.set(fragment.index, next);
+      onToolCallProgress?.({ index: fragment.index, name: next.name, argumentsText: next.args });
     }
   }
 

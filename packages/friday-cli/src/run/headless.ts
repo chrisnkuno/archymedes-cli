@@ -195,6 +195,8 @@ export class HeadlessEmitter {
       this.emit("steered", { iteration: safe.iteration, count: safe.count });
       return;
     }
+    // A call still being written is a live label for an interface, not a record for a JSONL reader.
+    if (safe.type === "tool_compose") return;
     this.emit("runtime_stop", { status: safe.status, summary: safe.summary });
   }
 

@@ -1,5 +1,6 @@
 import type { AgentTool } from "@archymedes/core/agent-runtime";
 import { forbiddenMessage, judgeCommand, type CommandRule } from "@archymedes/core/cli/command-rules";
+import { isReadOnlyCommand } from "@archymedes/core/cli/command-readonly";
 import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { assessToolSafety } from "@archymedes/core/cli/safety";
 
@@ -12,6 +13,7 @@ import { assessToolSafety } from "@archymedes/core/cli/safety";
  *   three searches at once each waited on a dialog;
  * - the person's command rules speak first: forbid refuses with the rule's reason, allow runs
  *   (except in defender mode, which looks at every change), ask always asks;
+ * - a read-only command (`git status`, `rg`, `ls`; see `command-readonly.ts`) never asks;
  * - auto mode runs a command without asking when Friday's safety screen finds nothing sensitive
  *   (credentials, destructive, external, financial, privacy, production, security). Edits are
  *   already Claude Code's own `acceptEdits`. A command leaving Claude Code's sandbox always asks.
@@ -34,6 +36,8 @@ export function screenToolUse(toolName: string, input: Record<string, unknown>, 
   if (ruled?.decision === "forbid") return { behavior: "deny", message: forbiddenMessage(command, ruled) };
   if (ruled?.decision === "allow" && mode !== "defender") return { behavior: "allow" };
   if (ruled?.decision === "ask" || input.dangerouslyDisableSandbox === true) return undefined;
+  // `git status`, `rg`, `ls`: a read in every mode, as in Friday's own engine (`command-readonly.ts`).
+  if (isReadOnlyCommand(command)) return { behavior: "allow" };
   if (mode === "auto" && !assessToolSafety({ id: "", name: "run_command", arguments: { command } }, RUN_COMMAND).sensitive) return { behavior: "allow" };
   return undefined;
 }

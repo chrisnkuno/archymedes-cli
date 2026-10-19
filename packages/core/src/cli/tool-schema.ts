@@ -25,9 +25,12 @@
 
 export type ScalarType = "string" | "integer" | "boolean";
 
+/** An array item that is an object of scalars, such as one of edit_file's `edits`. */
+export type ObjectItemSchema = { type: "object"; properties: Record<string, { type: ScalarType; description?: string }>; required?: string[]; additionalProperties?: false };
+
 export type PropertySchema =
   | { type: ScalarType; description?: string }
-  | { type: "array"; items: { type: ScalarType }; description?: string };
+  | { type: "array"; items: { type: ScalarType } | ObjectItemSchema; description?: string };
 
 export type ToolInputSchema = {
   type: "object";
@@ -65,6 +68,13 @@ export function assertSupportedSchema(toolName: string, schema: unknown): assert
     const type = property.type;
     if (type === "array") {
       const items = property.items;
+      if (isPlainObject(items) && items.type === "object") {
+        const fields = isPlainObject(items.properties) ? items.properties : null;
+        if (!fields || Object.values(fields).some((field) => !isPlainObject(field) || !["string", "integer", "boolean"].includes(field.type as string))) {
+          throw new Error(`Tool ${toolName} property ${name} must declare object items of scalar fields`);
+        }
+        continue;
+      }
       if (!isPlainObject(items) || !["string", "integer", "boolean"].includes(items.type as string)) {
         throw new Error(`Tool ${toolName} property ${name} must declare scalar array items`);
       }
@@ -206,9 +216,20 @@ export function normalizeToolArguments(toolName: string, schema: ToolInputSchema
       continue;
     }
     if (property.type === "array") {
+      const itemSchema = property.items;
+      if (itemSchema.type === "object") {
+        // The array as JSON text (an older edit_file shape models still send): one reading.
+        let list: unknown = value;
+        if (typeof list === "string") {
+          try { list = JSON.parse(list); } catch { throw new ToolArgumentError(`${toolName}.${key} must be an array of objects`); }
+        }
+        const items = Array.isArray(list) ? list : [list];
+        present[key] = items.map((item, index) => objectItem(itemSchema, item, `${toolName}.${key}[${index}]`, notes));
+        continue;
+      }
       // A lone item where an array is declared (`complete: 2` for `complete: [2]`): one meaning.
       const items = Array.isArray(value) ? value : [value];
-      present[key] = items.map((item, index) => scalar(property.items.type, item, `${toolName}.${key}[${index}]`, notes));
+      present[key] = items.map((item, index) => scalar(itemSchema.type, item, `${toolName}.${key}[${index}]`, notes));
       continue;
     }
     present[key] = scalar(property.type, value, `${toolName}.${key}`, notes);
@@ -218,6 +239,27 @@ export function normalizeToolArguments(toolName: string, schema: ToolInputSchema
     if (!(key in present)) throw new ToolArgumentError(`${toolName} requires ${key}`);
   }
   return { value: present, notes };
+}
+
+/** One object in an array of objects: its fields checked like top-level ones, synonyms included. */
+function objectItem(schema: ObjectItemSchema, item: unknown, label: string, notes: string[]): Record<string, unknown> {
+  if (!isPlainObject(item)) throw new ToolArgumentError(`${label} must be an object`);
+  const out: Record<string, unknown> = {};
+  for (const [given, value] of Object.entries(item)) {
+    let key = given;
+    if (!schema.properties[key]) {
+      const meant = Object.entries(PARAMETER_SYNONYMS).find(([target, synonyms]) => schema.properties[target] && synonyms.includes(given) && !(target in item));
+      if (!meant) throw new ToolArgumentError(`${label} has no field "${given}". It accepts: ${Object.keys(schema.properties).join(", ")}.`);
+      key = meant[0];
+      notes.push(`${label}.${given} read as ${key}`);
+    }
+    if (value === undefined || value === null) continue;
+    out[key] = scalar(schema.properties[key].type, value, `${label}.${key}`, notes);
+  }
+  for (const key of schema.required ?? []) {
+    if (!(key in out)) throw new ToolArgumentError(`${label} requires ${key}`);
+  }
+  return out;
 }
 
 /** A declared scalar, repaired when it has one reading, refused when it has none. */

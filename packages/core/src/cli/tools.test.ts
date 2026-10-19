@@ -7,7 +7,7 @@ import { LocalWorkspace } from "./backends";
 import { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import type { ToolProvider } from "./tool-providers";
-import { classifyVerification, commandTimeout, MAX_COMMAND_TIMEOUT_MS, createArchymedesTools, runsInlineAssertion, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
+import { classifyVerification, commandTimeout, numberLines, MAX_COMMAND_TIMEOUT_MS, createArchymedesTools, runsInlineAssertion, isRefusedCommand, looksLikeVerification, missingProgram, TodoList } from "./tools";
 
 let root: string;
 const context = { taskId: "t", runId: "r", stepId: "s" };
@@ -68,7 +68,8 @@ describe("archymedes tool set", () => {
     await toolNamed(tools, "read_file").execute({ path: "src/app.ts" }, context);
     const edited = await toolNamed(tools, "edit_file").execute({ file_path: "src/app.ts", edits: [{ oldText: "3000", newText: "8080" }] }, context);
     expect(edited.isError).toBeFalsy();
-    expect(edited.content).toContain("[Friday adjusted this call: file_path read as path; edit_file.edits was an array; read as JSON text.]");
+    // An array is what edits is now declared as, so only the renamed path is worth a note.
+    expect(edited.content).toContain("[Friday adjusted this call: file_path read as path.]");
     expect(await fs.readFile(path.join(root, "src", "app.ts"), "utf8")).toContain("8080");
   });
 
@@ -869,7 +870,7 @@ describe("nested instructions surfaced through the real tool wiring", () => {
   it("does not append anything when no instructions exist, or when instructions were not configured", async () => {
     const withTracker = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), instructions: new NestedInstructionTracker(new LocalWorkspace(root)) });
     const plain = await toolNamed(withTracker, "read_file").execute({ path: "src/app.ts" }, context);
-    expect(plain.content).toBe("export const port = 3000;\n");
+    expect(plain.content).toBe("1\texport const port = 3000;");
 
     const withoutTracker = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() });
     const untracked = await toolNamed(withoutTracker, "read_file").execute({ path: "src/app.ts" }, context);
@@ -970,7 +971,7 @@ describe("hooks wired through the real tool wrapping", () => {
   it("runs with no hook directory present — behaves exactly as if hooks were never configured", async () => {
     const tools = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), hooks: HookRegistry.local(new LocalWorkspace(root)) });
     const result = await toolNamed(tools, "read_file").execute({ path: "src/app.ts" }, context);
-    expect(result.content).toBe("export const port = 3000;\n");
+    expect(result.content).toBe("1\texport const port = 3000;");
   });
 });
 
@@ -1080,8 +1081,6 @@ describe("runsWrittenScript", () => {
   });
 });
 
-import { repeatedFailureHint } from "../agent-runtime";
-
 describe("repeatedFailureHint", () => {
   it("is silent for a first failure", () => expect(repeatedFailureHint("read_file", 1, 1)).toBeNull());
   it("tells a model off for repeating the same failing call", () => {
@@ -1130,6 +1129,7 @@ describe("calls models really sent", () => {
 });
 
 import { isLikelyPersistentCommand } from "./tools";
+import { repeatedFailureHint } from "../tool-call-feedback";
 
 describe("persistent-command detection", () => {
   it("does not mistake -w for a watch flag on ordinary programs (a model counting words was refused 8 times)", () => {
@@ -1140,6 +1140,81 @@ describe("persistent-command detection", () => {
   it("still catches watchers and dev servers", () => {
     for (const command of ["tsc -w", "vitest --watch", "npm run dev", "jest --watch src", "nodemon -w src app.js", "npx webpack -w"]) {
       expect(isLikelyPersistentCommand(command), command).toBe(true);
+    }
+  });
+});
+
+describe("grep_files finds what a model asks for (WS-29.4)", () => {
+  let root: string;
+  let grep: AgentTool;
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "friday-grep-"));
+    await fs.mkdir(path.join(root, "src", "lib"), { recursive: true });
+    await fs.writeFile(path.join(root, "src", "lib", "a.ts"), "one\nconst Port = 1;\nthree\nfour\nfive\nport again\n");
+    await fs.writeFile(path.join(root, "src", "b.ts"), "export const port = 2;\n");
+    await fs.writeFile(path.join(root, "notes.md"), "port in prose\n");
+    grep = toolNamed(await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() }), "grep_files");
+  });
+  afterEach(() => fs.rm(root, { recursive: true, force: true }));
+  const run = async (args: Record<string, unknown>) => (await grep.execute(args, context)).content;
+
+  it("reads a bare include glob at any depth, as ripgrep does", async () => {
+    const found = await run({ query: "port", include: "*.ts" });
+    expect(found).toContain("src/b.ts:1:");
+    expect(found).toContain("src/lib/a.ts:6:");
+    expect(found).not.toContain("notes.md");
+  });
+
+  it("searches only under path, which may also name a file", async () => {
+    expect(await run({ query: "port", path: "src/lib" })).toBe("src/lib/a.ts:6: port again");
+    expect(await run({ query: "port", path: "src/b.ts" })).toBe("src/b.ts:1: export const port = 2;");
+  });
+
+  it("matches without case when asked", async () => {
+    expect(await run({ query: "port", path: "src/lib", ignoreCase: true })).toContain("src/lib/a.ts:2: const Port = 1;");
+  });
+
+  it("lists files or counts per file", async () => {
+    expect(await run({ query: "port", output: "files" })).toBe("3 files\nnotes.md\nsrc/b.ts\nsrc/lib/a.ts");
+    expect(await run({ query: "port", output: "count", ignoreCase: true })).toContain("src/lib/a.ts: 2");
+  });
+
+  it("shows context lines the way rg -C does", async () => {
+    expect(await run({ query: "Port", path: "src/lib", context: 1 })).toBe("src/lib/a.ts\n1- one\n2: const Port = 1;\n3- three");
+  });
+
+  it("says when it stopped at the limit, and what to do", async () => {
+    expect(await run({ query: "port", limit: 1, ignoreCase: true })).toMatch(/More matches than the 1 shown/);
+  });
+
+  it("says how to widen a search that found nothing", async () => {
+    expect(await run({ query: "PORT" })).toMatch(/No matches\. .*ignoreCase/);
+  });
+});
+
+describe("read_file numbers its lines (WS-29.4)", () => {
+  it("numbers from the first line shown, without numbering the trailing newline", () => {
+    expect(numberLines("a\nb\n")).toBe("1\ta\n2\tb");
+    expect(numberLines("x\ny", 41)).toBe("41\tx\n42\ty");
+    expect(numberLines("")).toBe("");
+  });
+});
+
+describe("edit_file edits (WS-29.4)", () => {
+  it("takes edits as a real array, the old JSON text, or with other tools' field names", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "friday-edits-"));
+    try {
+      await fs.writeFile(path.join(root, "a.ts"), "one\ntwo\n");
+      const edit = toolNamed(await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList() }), "edit_file");
+      const asArray = await edit.execute({ path: "a.ts", edits: [{ oldText: "one", newText: "1" }, { oldText: "two", newText: "2" }] }, context);
+      expect(asArray.content).toBe("Edited a.ts (2 replacements).");
+      await edit.execute({ path: "a.ts", edits: JSON.stringify([{ oldText: "1", newText: "uno" }]) }, context);
+      const renamed = await edit.execute({ path: "a.ts", edits: [{ old_string: "2", new_string: "dos" }] }, context);
+      expect(renamed.content).toMatch(/old_string read as oldText/);
+      expect(await fs.readFile(path.join(root, "a.ts"), "utf8")).toBe("uno\ndos\n");
+      await expect(edit.execute({ path: "a.ts", edits: [{ oldText: "uno" }] }, context)).rejects.toThrow(/requires newText/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
     }
   });
 });

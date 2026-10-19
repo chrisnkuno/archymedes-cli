@@ -1,3 +1,4 @@
+import { escapeRegExp } from "./cli/workspace";
 import type { InteractiveCodingSandboxProvider } from "./providers/contracts";
 
 /**
@@ -25,6 +26,7 @@ export type SandboxSearchOptions = {
   /** Glob limiting which files are searched, matched against workspace-relative paths. */
   includeMatcher?: RegExp;
   regex?: boolean;
+  ignoreCase?: boolean;
   maxMatches?: number;
   /** Cap on files read in the fallback path, since each one is a round trip. */
   maxFilesRead?: number;
@@ -59,7 +61,8 @@ export async function searchSandboxText(options: SandboxSearchOptions): Promise<
 
   const args = ["--line-number", "--no-heading", "--color=never"];
   if (!options.regex) args.push("--fixed-strings");
-  args.push(query, root);
+  if (options.ignoreCase) args.push("--ignore-case");
+  args.push("--regexp", query, root);
 
   const result = await sandbox.runCommand(sandboxId, { program: "rg", args, cwd: root, timeoutMs: 30_000 });
   if (result.exitCode === RIPGREP_MISSING) return searchByReading(options);
@@ -86,7 +89,9 @@ export async function searchSandboxText(options: SandboxSearchOptions): Promise<
 async function searchByReading(options: SandboxSearchOptions): Promise<SandboxGrepMatch[]> {
   const { sandbox, sandboxId, root, query } = options;
   const maxMatches = options.maxMatches ?? 200;
-  const matcher = options.regex ? new RegExp(query) : null;
+  const matcher = options.regex || options.ignoreCase
+    ? new RegExp(options.regex ? query : escapeRegExp(query), options.ignoreCase ? "i" : "")
+    : null;
   const matches: SandboxGrepMatch[] = [];
 
   const files = await listSandboxFiles(sandbox, sandboxId, root, options.ignoredDirectories);

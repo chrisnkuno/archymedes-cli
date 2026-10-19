@@ -14,6 +14,8 @@ export type ExternalTool = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** The provider says this tool only reads (MCP's `readOnlyHint`). Auto mode runs it without asking. */
+  readOnly?: boolean;
   invoke(argumentsValue: Record<string, unknown>): Promise<{ content: string; isError?: boolean }>;
 };
 
@@ -59,6 +61,7 @@ export async function toolsFromProvider(provider: ToolProvider, timeoutMs = DEFA
       requiresApproval: true,
       parallelSafe: false,
       provenance,
+      ...(externalTool.readOnly ? { readOnlyHint: true } : {}),
       async execute(argumentsValue) {
         const result = await Promise.race([
           externalTool.invoke(argumentsValue),

@@ -11,7 +11,6 @@ import { isFindDelete, isRecursiveForceRemoval, tokenizeCommand } from "./comman
 import type { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import { ARCHYMEDES_CAPABILITIES } from "./permissions";
-import { COMBINED_SECRET_PATTERN, findSecretsInLine, SEVERITY_RANK, type SecretFinding } from "./secret-scan";
 import { assertSupportedSchema, normalizeToolArguments, type ToolInputSchema } from "./tool-schema";
 import type { ToolProvider } from "./tool-providers";
 import { collectExternalTools } from "./tool-providers";
@@ -20,8 +19,13 @@ import { addMemory, type MemoryKind, type MemoryScope } from "./memory";
 import { compute, ComputeError } from "./compute";
 import { forbiddenMessage, judgeCommand, type CommandRule } from "./command-rules";
 import { looksSandboxDenied, SANDBOX_ESCALATION_NOTE } from "./os-sandbox";
-import { displayPath, resolveInWorkspace, applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
+import { isReadOnlyCommand } from "./command-readonly";
+
+import { applyTextEdits, fileReadTrackerFor, parseEditArguments } from "./workspace";
 import { createExtraTools } from "./tools-extra";
+import { searchTools } from "./tools-search";
+import { optionalInteger, optionalStringArray, requiredString } from "./tool-args";
+export { listPrefix, scanWorkspaceForSecrets, type PlacedSecretFinding } from "./tools-search";
 
 /**
  * Archymedes CLI's tool set.
@@ -158,25 +162,6 @@ export type DelegateResult = { report: string; status: string; iterations: numbe
  */
 export type DelegateRunner = (task: string, options?: { readOnly?: boolean }) => Promise<DelegateResult>;
 
-function requiredString(value: unknown, name: string): string {
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
-  return value;
-}
-
-function optionalInteger(value: unknown, name: string): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!Number.isInteger(value) || (value as number) < 1) throw new Error(`${name} must be a positive integer`);
-  return value as number;
-}
-
-/** An all-empty array reads as "no filter", not as a filter matching nothing. */
-function optionalStringArray(value: unknown, name: string): string[] | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) throw new Error(`${name} must be an array of strings`);
-  const cleaned = (value as string[]).map((entry) => entry.trim()).filter(Boolean);
-  return cleaned.length > 0 ? cleaned : undefined;
-}
-
 /**
  * Commands that end a session's worth of work in one keystroke. Refused rather than approved.
  *
@@ -193,46 +178,19 @@ const REFUSED_COMMAND_PATTERNS = [
   />\s*\/dev\/sd[a-z]/,
   /:\(\)\s*\{.*\|.*&\s*\}\s*;/,
 ];
-const LIST_ENTRY_CAP = 400;
-const GLOB_SHOWN = 150;
 
-/**
- * The root-relative, slash-separated prefix a `list_files` path means.
- *
- * Models routinely send an absolute path (`/home/me/project`), `./src/` or `.`; the listing compares
- * against root-relative entries, so an unnormalised absolute path matched nothing and came back as
- * "No entries." Local workspaces resolve it properly (and refuse a path outside the root); remote
- * ones only get the lexical clean-up, since their filesystem is not this machine's.
- */
-export function listPrefix(raw: string, localRoot: string | null): string {
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed === ".") return "";
-  if (localRoot !== null) {
-    const relative = displayPath(localRoot, resolveInWorkspace(localRoot, trimmed));
-    return relative === "." ? "" : relative;
-  }
-  return trimmed.replace(/^(\.\/)+/, "").replace(/\/+$/, "");
+/** `12\ttext` per line, from `first`. A file's trailing newline does not become a numbered empty line. */
+export function numberLines(content: string, first = 1): string {
+  if (content === "") return "";
+  const lines = content.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines.map((line, index) => `${first + index}\t${line}`).join("\n");
 }
 
 export function isRefusedCommand(command: string): boolean {
   return REFUSED_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
     || isRecursiveForceRemoval(command)
     || isFindDelete(command);
-}
-
-export type PlacedSecretFinding = SecretFinding & { path: string; line: number };
-
-/**
- * The `scan_secrets` tool's own logic, exported so a UI surface (`friday.ts`'s `/scan`) can run the
- * identical scan directly — without spending a model turn, and without the two ever drifting into
- * scanning slightly different things. Sorted worst-first: a findings list a person reads top to
- * bottom should read most-consequential first, the same convention `DEFENDER_PLAYBOOKS`' own
- * category ordering already follows.
- */
-export async function scanWorkspaceForSecrets(workspace: Pick<ArchymedesWorkspace, "grep">, include?: string): Promise<PlacedSecretFinding[]> {
-  const matches = await workspace.grep(COMBINED_SECRET_PATTERN.source, { regex: true, include });
-  const findings = matches.flatMap((match) => findSecretsInLine(match.text).map((finding) => ({ path: match.path, line: match.line, ...finding })));
-  return findings.sort((left, right) => SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity]);
 }
 
 export async function createArchymedesTools(options: ArchymedesToolOptions): Promise<AgentTool[]> {
@@ -248,7 +206,7 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
   const tools: AgentTool[] = [
     {
       name: "read_file",
-      description: "Read a UTF-8 text file (config/env files included; never repeat secret values). Prefer whole files; offset/limit for very large ones.",
+      description: "Read a UTF-8 text file (config/env files included; never repeat secret values). Lines come numbered (`12<tab>text`); the numbers are not in the file. Prefer whole files; offset/limit for very large ones.",
       inputSchema: {
         type: "object",
         properties: {
@@ -276,112 +234,14 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
         else await workspace.readFile(filePath).then((whole) => tracker.record(whole.path, whole.content), () => undefined);
         const header = result.truncated ? `${result.path} (lines ${result.startLine}-${result.startLine + result.content.split("\n").length - 1} of ${result.totalLines})\n` : "";
         return {
-          content: `${header}${result.content}`,
+          // Numbered, as cat -n would: the model can cite `file.ts:42`, page with offset, and see
+          // where a match sits without counting. edit_file strips the numbers if they are pasted back.
+          content: `${header}${numberLines(result.content, result.startLine)}`,
           data: { path: result.path, startLine: result.startLine, totalLines: result.totalLines, truncated: result.truncated },
         };
       },
     },
-    {
-      name: "list_files",
-      description: "List files and directories under a path in the project.",
-      inputSchema: {
-        type: "object",
-        properties: { path: { type: "string" }, depth: { type: "integer", description: "Directory levels to descend. Default 2." } },
-        additionalProperties: false,
-      },
-      capabilityId: ARCHYMEDES_CAPABILITIES.read,
-      effect: "none",
-      requiresApproval: false,
-      parallelSafe: true,
-      async execute(args) {
-        const prefix = listPrefix(typeof args.path === "string" ? args.path : "", workspace.kind === "local" ? workspace.label : null);
-        const entries = await workspace.list(prefix, optionalInteger(args.depth, "depth") ?? 2);
-        // Name the path in the empty case: "No entries." for a directory that was never there reads
-        // as an empty project, and a model that believes that stops looking.
-        if (entries.length === 0) {
-          return { content: prefix ? `${prefix} is empty, ignored, or does not exist. Paths are relative to the project root; list "." to see the top level.` : "No entries. The project root is empty (or everything in it is ignored).", data: { entries } };
-        }
-        const capped = entries.length >= LIST_ENTRY_CAP;
-        return { content: capped ? `${entries.join("\n")}\n[Listing capped at ${LIST_ENTRY_CAP} entries; list a subdirectory or lower depth to see the rest.]` : entries.join("\n"), data: { entries, truncated: capped } };
-      },
-    },
-    {
-      name: "glob_files",
-      description: "Find files whose path matches a glob, e.g. 'src/**/*.ts' or '**/*.{js,ts}'. Optional path limits it to one directory (the pattern is then relative to it).",
-      inputSchema: { type: "object", properties: { pattern: { type: "string" }, path: { type: "string", description: "Directory to search in. Default: project root." } }, required: ["pattern"], additionalProperties: false },
-      capabilityId: ARCHYMEDES_CAPABILITIES.read,
-      effect: "none",
-      requiresApproval: false,
-      parallelSafe: true,
-      async execute(args) {
-        const directory = listPrefix(typeof args.path === "string" ? args.path : "", workspace.kind === "local" ? workspace.label : null);
-        const pattern = requiredString(args.pattern, "pattern").replace(/^(\.\/)+/, "");
-        const matches = await workspace.glob(directory ? `${directory}/${pattern}` : pattern);
-        if (matches.length === 0) {
-          return { content: directory ? `No files matched ${pattern} under ${directory}. Try "**/*" there, or list_files on it.` : "No files matched.", data: { matches } };
-        }
-        // A long list costs more context than it is worth and a model cannot act on 500 names;
-        // show a screenful and say how to narrow.
-        const shown = matches.slice(0, GLOB_SHOWN);
-        const more = matches.length - shown.length;
-        const note = more > 0 ? `\n[${more} more matched. Narrow it: pass path for one directory, or a more specific pattern.]` : "";
-        return { content: shown.join("\n") + note, data: { matches, truncated: more > 0 } };
-      },
-    },
-    {
-      name: "grep_files",
-      description: "Search file contents. Fixed-string by default; set regex true for a pattern. Filter files with the include glob.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: { type: "string" },
-          include: { type: "string", description: "Glob limiting which files are searched." },
-          regex: { type: "boolean" },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      },
-      capabilityId: ARCHYMEDES_CAPABILITIES.read,
-      effect: "none",
-      requiresApproval: false,
-      parallelSafe: true,
-      async execute(args) {
-        const matches = await workspace.grep(requiredString(args.query, "query"), {
-          include: typeof args.include === "string" ? args.include : undefined,
-          regex: args.regex === true,
-        });
-        if (matches.length === 0) return { content: "No matches.", data: { matches: [] } };
-        return {
-          content: matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join("\n"),
-          data: { matches: matches.map((match) => ({ path: match.path, line: match.line, text: match.text })) },
-        };
-      },
-    },
-    {
-      name: "scan_secrets",
-      description: "Scan files for likely hardcoded credentials (keys, tokens, passwords). Values are masked in the output.",
-      inputSchema: {
-        type: "object",
-        properties: { include: { type: "string", description: "Glob limiting which files are scanned, e.g. 'src/**'." } },
-        additionalProperties: false,
-      },
-      capabilityId: ARCHYMEDES_CAPABILITIES.read,
-      effect: "none",
-      requiresApproval: false,
-      parallelSafe: true,
-      async execute(args) {
-        const include = typeof args.include === "string" ? args.include : undefined;
-        const findings = await scanWorkspaceForSecrets(workspace, include);
-        if (findings.length === 0) {
-          return { content: "No likely secrets found by pattern in the scanned files.", data: { findings: [] } };
-        }
-        const content = findings.map((finding) => `${finding.path}:${finding.line}: [${finding.severity}] ${finding.kind} — ${finding.masked}`).join("\n");
-        return {
-          content: `${findings.length} possible secret${findings.length === 1 ? "" : "s"} found by pattern, worst first — verify each; a pattern match is a lead, not proof.\n${content}`,
-          data: { findings },
-        };
-      },
-    },
+    ...searchTools(workspace),
     {
       name: "write_file",
       description: "Create a file or replace its entire contents. For changing part of an existing file, use edit_file instead.",
@@ -414,7 +274,16 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
           oldText: { type: "string" },
           newText: { type: "string" },
           replaceAll: { type: "boolean" },
-          edits: { type: "string", description: "JSON array of {oldText, newText, replaceAll?}." },
+          edits: {
+            type: "array",
+            description: "Several changes to this file instead of oldText/newText: applied in order, all or nothing.",
+            items: {
+              type: "object",
+              properties: { oldText: { type: "string" }, newText: { type: "string" }, replaceAll: { type: "boolean" } },
+              required: ["oldText", "newText"],
+              additionalProperties: false,
+            },
+          },
         },
         required: ["path"],
         additionalProperties: false,
@@ -461,6 +330,13 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
       effect: "workspace",
       requiresApproval: true,
       parallelSafe: false,
+      // `git status`, `rg`, `ls`: nothing to approve and nothing to verify. A rule that says ask, or
+      // a run outside the sandbox, is still the person's call whatever the command.
+      effectFor(args) {
+        if (typeof args.command !== "string" || (sandboxed && args.escalate === true)) return "workspace";
+        if (judgeCommand(options.commandRules ?? [], args.command)?.decision === "ask") return "workspace";
+        return isReadOnlyCommand(args.command, workspace.commandPlatform) ? "none" : "workspace";
+      },
       async execute(args, context) {
         const command = requiredString(args.command, "command");
         // Refused, not merely gated: these destroy work that no checkpoint can return, and a
@@ -503,7 +379,8 @@ export async function createArchymedesTools(options: ArchymedesToolOptions): Pro
             data: { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, missingProgram: missing },
           };
         }
-        const kind = classifyVerification(command)
+        // Reading proves nothing: `cat tests/app.test.ts` mentions tests and runs none.
+        const kind = isReadOnlyCommand(command, workspace.commandPlatform) ? null : classifyVerification(command)
           ?? (runsWrittenScript(command, writtenFiles) ? "smoke" : null)
           ?? (runsInlineAssertion(command) ? "tests" : null);
         const rejectedVerification = kind && result.exitCode === 0 ? rejectedVerificationReason(command, result) : null;
@@ -1351,9 +1228,14 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
             const note = NestedInstructionTracker.render(await instructions.discover(touchedPath));
             return note ? { ...result, content: `${result.content}${note}` } : result;
           };
-    if (!hooks) return { ...tool, execute: withInstructions };
+    // The effect is judged on the same repaired arguments the call will run with (`cmd` read as `command`).
+    const effectFor = tool.effectFor
+      ? (argumentsValue: Record<string, unknown>) => tool.effectFor!(normalizeToolArguments(tool.name, schema, argumentsValue).value)
+      : undefined;
+    if (!hooks) return { ...tool, ...(effectFor ? { effectFor } : {}), execute: withInstructions };
     return {
       ...tool,
+      ...(effectFor ? { effectFor } : {}),
       // Outermost: hooks see the same validated arguments and final content (including any
       // nested-instruction note) that everything else in the pipeline already agreed on.
       async execute(argumentsValue, context) {

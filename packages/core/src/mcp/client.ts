@@ -66,6 +66,7 @@ export class McpToolProvider implements ToolProvider {
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      ...(tool.readOnly ? { readOnly: true } : {}),
       invoke: (argumentsValue) => this.connection.callTool(tool.name, argumentsValue),
     }));
   }

@@ -104,6 +104,7 @@ policy modules such as `permissions.ts`; it implements the types in `engines/con
 | --- | --- |
 | A tool for Friday's models | `core/cli/tools.ts` today (splitting it is backlog), declared with its `effect` |
 | A permission rule | `core/cli/permissions.ts`, and the same rule in each engine bridge |
+| A command that should run unasked (it only reads) | `core/cli/command-readonly.ts` (read by run_command's `effectFor`, `PermissionLedger.decide` and the Claude bridge) |
 | A provider | `core/providers/<vendor>.ts`, dialect quirks in `chat-dialects.ts` |
 | An ACP method | `core/cli/acp.ts` (protocol), handler in `friday-cli/src/server/`, client in `internal/acp` |
 | An engine | `friday-cli/src/engines/<name>/`, implementing `engines/contract.ts`, registered in `server/session.ts` |

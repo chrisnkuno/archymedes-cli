@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider } from "../agent-runtime";
+import type { AgentMessage, AgentModelRequest, AgentModelTurn, AgentOutputKind, AgentTurnProvider, ToolCallProgress } from "../agent-runtime";
 import { providerEffort } from "../agent-runtime";
 import type { ModelUsage } from "./model";
 import { capabilitiesFor, type ModelCapabilities } from "./model-capabilities";
@@ -49,6 +49,8 @@ export async function collectAnthropicStream(
   onTextDelta?: (text: string) => void,
   /** Reports every piece of model output, including thinking and tool-input fragments. */
   onOutputProgress?: (kind: AgentOutputKind) => void,
+  /** Each tool_use block as it grows: its index, its name, its input JSON so far. */
+  onToolCallProgress?: (progress: ToolCallProgress) => void,
 ): Promise<AnthropicResponse> {
   let id = "";
   let model = "";
@@ -68,7 +70,10 @@ export async function collectAnthropicStream(
     } else if (event.type === "content_block_start") {
       const start = event as Extract<AnthropicStreamEvent, { type: "content_block_start" }>;
       blocks.set(start.index, { type: start.content_block.type, id: start.content_block.id, name: start.content_block.name, text: "", json: "" });
-      if (start.content_block.type === "tool_use") onOutputProgress?.("tool_call");
+      if (start.content_block.type === "tool_use") {
+        onOutputProgress?.("tool_call");
+        onToolCallProgress?.({ index: start.index, name: start.content_block.name ?? "", argumentsText: "" });
+      }
     } else if (event.type === "content_block_delta") {
       const delta = event as Extract<AnthropicStreamEvent, { type: "content_block_delta" }>;
       const block = blocks.get(delta.index);
@@ -81,6 +86,7 @@ export async function collectAnthropicStream(
       if (delta.delta.type === "input_json_delta" && delta.delta.partial_json) {
         block.json += delta.delta.partial_json;
         onOutputProgress?.("tool_call");
+        onToolCallProgress?.({ index: delta.index, name: block.name ?? "", argumentsText: block.json });
       }
       if (delta.delta.type === "thinking_delta") onOutputProgress?.("reasoning");
     } else if (event.type === "message_delta") {
@@ -347,7 +353,7 @@ export class AnthropicAgentTurnProvider implements AgentTurnProvider {
     try {
       const raw = await deadline.race(this.call(body, deadline.signal));
       response = Symbol.asyncIterator in Object(raw)
-        ? await collectAnthropicStream(deadline.wrap(raw as AsyncIterable<AnthropicStreamEvent>), request.onTextDelta, request.onOutputProgress)
+        ? await collectAnthropicStream(deadline.wrap(raw as AsyncIterable<AnthropicStreamEvent>), request.onTextDelta, request.onOutputProgress, request.onToolCallProgress)
         : (raw as AnthropicResponse);
     } catch (error) {
       if (deadline.timedOut) throw deadline.timedOut;

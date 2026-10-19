@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "../agent-runtime";
-import { isOpenRouterBaseUrl, toWireMessages, usageOf, usesOpenRouterCacheControl, withOpenRouterCacheControl } from "./openai-compatible";
+import { collectChatStream, isOpenRouterBaseUrl, toWireMessages, usageOf, usesOpenRouterCacheControl, withOpenRouterCacheControl } from "./openai-compatible";
 
 const png = (path: string) => ({ path, mediaType: "image/png" as const, data: "AAAA" });
 
@@ -86,5 +86,20 @@ describe("OpenRouter prompt caching", () => {
       usage: { prompt_tokens: 1000, completion_tokens: 10, total_tokens: 1010, prompt_tokens_details: { cached_tokens: 800, cache_write_tokens: 150 } },
     });
     expect(usage).toMatchObject({ inputTokens: 1000, cachedInputTokens: 800, cacheWriteTokens: 150 });
+  });
+});
+
+describe("collectChatStream tool-call progress", () => {
+  it("reports each call as its fragments arrive, the name kept from the first", async () => {
+    async function* chunks() {
+      yield { choices: [{ delta: { tool_calls: [{ index: 0, id: "c", function: { name: "run_command", arguments: "" } }] } }] };
+      yield { choices: [{ delta: { tool_calls: [{ index: 0, id: null, function: { name: "", arguments: "{\"command\": \"ls\"}" } }] } }] };
+    }
+    const seen: Array<{ index: number; name: string; argumentsText: string }> = [];
+    await collectChatStream(chunks() as never, undefined, undefined, (progress) => seen.push(progress));
+    expect(seen).toEqual([
+      { index: 0, name: "run_command", argumentsText: "" },
+      { index: 0, name: "run_command", argumentsText: "{\"command\": \"ls\"}" },
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DockerSandboxProvider, type ProcessRunner } from "./docker";
 
 function fakeRunner(byArgv: (argv: string[]) => { exitCode: number; stdout: string; stderr: string } | undefined) {

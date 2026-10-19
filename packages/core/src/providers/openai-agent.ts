@@ -102,7 +102,7 @@ export class OpenAIAgentTurnProvider implements AgentTurnProvider {
       const response = await deadline.race(this.call(body, deadline.signal));
       return turnFromChatResponse(
         Symbol.asyncIterator in Object(response)
-          ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), request.onTextDelta, request.onOutputProgress)
+          ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), request.onTextDelta, request.onOutputProgress, request.onToolCallProgress)
           : (response as ChatResponse),
       );
     } catch (error) {

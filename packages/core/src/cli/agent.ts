@@ -1103,7 +1103,7 @@ export class ArchymedesAgent {
               });
             }
             this.options.onEvent?.({ type: "runtime", event });
-            if (event.type !== "assistant_delta") {
+            if (event.type !== "assistant_delta" && event.type !== "tool_compose") { // live only, not history
               await this.journal.append(
                 { type: "runtime", turnId, event: runtimeEventForJournal(event) },
                 { durable: event.type === "tool_call" && event.effect !== "none" },

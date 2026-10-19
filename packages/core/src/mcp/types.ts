@@ -39,6 +39,8 @@ export type McpToolDefinition = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** `annotations.readOnlyHint` without `destructiveHint`: the server says the tool only reads. */
+  readOnly?: boolean;
 };
 
 /** The parsed result of one `tools/call` — text content plus the server's own error flag. */

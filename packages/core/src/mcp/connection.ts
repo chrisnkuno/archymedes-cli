@@ -57,11 +57,12 @@ export class McpConnection {
     if (this.closedError) throw this.closedError;
     await this.initialize();
     this.toolsPromise ??= (async () => {
-      const result = await this.transport.request("tools/list", {}) as { tools?: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> };
+      const result = await this.transport.request("tools/list", {}) as { tools?: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown>; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }> };
       return (result.tools ?? []).map((tool) => ({
         name: tool.name,
         description: tool.description ?? "",
         inputSchema: tool.inputSchema ?? { type: "object", additionalProperties: false },
+        ...(tool.annotations?.readOnlyHint === true && tool.annotations.destructiveHint !== true ? { readOnly: true } : {}),
       }));
     })().catch((error) => {
       // A failed listing must not be cached: the next turn should try again rather than inherit

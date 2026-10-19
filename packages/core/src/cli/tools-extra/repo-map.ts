@@ -1,8 +1,9 @@
 import type { AgentTool } from "../../agent-runtime";
 import { ARCHYMEDES_CAPABILITIES } from "../permissions";
-import { grepWorkspace } from "../workspace";
+
 import { boundedInteger, directoryPrefix, oneOf, optionalString, requiredString, resolvedLimits, type ExtraToolOptions } from "./shared";
 import { SymbolIndex, type CodeSymbol, type FileSymbols } from "./symbols";
+import { grepWorkspace } from "../workspace-grep";
 
 export const REPO_MAP_DEFAULT_CHARS = 12_000;
 export const REPO_MAP_MAX_CHARS = 60_000;

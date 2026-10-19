@@ -69,7 +69,7 @@ describe("tool results carry their facts as data", () => {
       expect(ran.data).toMatchObject({ command: "npm test", exitCode: 2, stdout: "1 failed", stderr: "boom", verificationKind: "tests" });
 
       const matches = await toolNamed(tools, "grep_files").execute({ query: "goodbye" }, context);
-      expect(matches.data).toEqual({ matches: [{ path: "a.txt", line: 1, text: "goodbye" }] });
+      expect(matches.data).toEqual({ matches: [{ path: "a.txt", line: 1, text: "goodbye" }], truncated: false });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

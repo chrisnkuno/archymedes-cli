@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toUnits, priceUsage } from "../money";
-import { priceUnits, selectPrice, tokenPricesAt, validatePriceRecord } from "../pricing";
+import { tokenPricesAt, validatePriceRecord } from "../pricing";
 import { PRICE_CATALOG, UNPRICED_PROVIDERS } from "./price-catalog";
 
 describe("the catalog as a whole", () => {
@@ -24,7 +24,6 @@ describe("the catalog as a whole", () => {
     const duplicates = [...seen.entries()].filter(([, count]) => count > 1);
     expect(duplicates).toEqual([]);
   });
-
 
   it("reports OpenAI, OpenRouter and generic openai-compatible as unpriced", () => {
     expect(UNPRICED_PROVIDERS).toContain("openai");

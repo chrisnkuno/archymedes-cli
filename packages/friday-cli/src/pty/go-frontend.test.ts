@@ -78,8 +78,9 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     return { proc, screen: new VirtualScreen(proc, cols, rows) };
   }
 
+  // `tee` writes (here to /dev/null), so it asks; a bare `echo` is read-only and would not.
   it("streams a turn, asks before running a command, and runs it once allowed", async () => {
-    stub.enqueue({ kind: "tool_call", toolName: "run_command", input: { command: "echo hello-from-go" }, text: "I'll run a command." });
+    stub.enqueue({ kind: "tool_call", toolName: "run_command", input: { command: "echo hello-from-go | tee /dev/null" }, text: "I'll run a command." });
     stub.enqueue({ kind: "text", text: "The command printed **hello-from-go**.", chunkSize: 6, chunkDelayMs: 10 });
     const { proc, screen } = boot();
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 }); // the model chip: the session is open
@@ -92,7 +93,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
 
     await proc.waitFor(/── done/, { timeoutMs: 30_000 });
     const text = await screen.text();
-    expect(text).toMatch(/run command +echo hello-from-go · exit 0/);
+    expect(text).toMatch(/run command +echo hello-from-go \| tee \/dev\/null · exit 0/);
     expect(text).toContain("The command printed hello-from-go.");
     expect(text).not.toContain("Allow this?");
   }, 120_000);

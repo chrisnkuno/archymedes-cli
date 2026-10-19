@@ -449,7 +449,7 @@ export class FreeAgentTurnProvider implements AgentTurnProvider {
       throw error;
     }
     const body = Symbol.asyncIterator in Object(response)
-      ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), onTextDelta, onOutputProgress) : response as ChatResponse;
+      ? await collectChatStream(deadline.wrap(response as AsyncIterable<ChatStreamChunk>), onTextDelta, onOutputProgress, request.onToolCallProgress) : response as ChatResponse;
     const parsed = turnFromChatResponse(body);
     // Free models often send almost-JSON arguments; unambiguous ones are repaired here, and the
     // rest reach the runtime unchanged, which asks the model to resend them.
