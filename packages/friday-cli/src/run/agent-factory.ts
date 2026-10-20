@@ -9,6 +9,7 @@
  */
 import { ArchymedesAgent } from "@archymedes/core/cli/agent";
 import { reasoningFromEnvironment } from "@archymedes/core/effort-policy";
+import { testFirstFromEnvironment } from "@archymedes/core/verification-gate";
 import { createLspEditDiagnostics } from "@archymedes/core/cli/edit-diagnostics";
 import { LocalWorkspace, type ArchymedesWorkspace } from "@archymedes/core/cli/backends";
 import type { ArchymedesDaemonClient, ArchymedesSessionDaemon, DaemonNotification } from "@archymedes/core/cli/daemon";
@@ -76,6 +77,7 @@ export function createClientFactory(options: {
       onExpense: (expense) => state.ledger.recordExpense(expense),
       onEvent,
       jev: jevOptionsFromEnvironment(environment),
+      testFirst: testFirstFromEnvironment(environment),
       ...(reasoningFromEnvironment(environment) ? { reasoning: reasoningFromEnvironment(environment) } : {}),
       afterEdit: editDiagnostics,
     }), record);

@@ -9,6 +9,7 @@ import { listSessions, loadSession, type SessionRecord } from "@archymedes/core/
 import { forkSession } from "@archymedes/core/cli/session-fork";
 import { acquireSessionLease, sessionHolder, type SessionLease } from "@archymedes/core/cli/session-lease";
 import { reasoningFromEnvironment } from "@archymedes/core/effort-policy";
+import { testFirstFromEnvironment } from "@archymedes/core/verification-gate";
 import { createExaClient } from "@archymedes/core/providers/exa";
 import { createWebSearch } from "@archymedes/core/providers/web-search";
 import { runSessionCommand } from "./session-commands";
@@ -203,6 +204,7 @@ async function claudeEngine(context: SessionContext, record: SessionRecord | und
     root: context.root, ...start, mode, record,
     ...(model && model !== "default" ? { model } : {}),
     onEvent: context.onEvent, approve: context.approve, ...(context.ask ? { ask: context.ask } : {}), warn: context.warn, onModels: learnClaudeModels,
+    testFirst: testFirstFromEnvironment(context.environment),
   });
   // Claude Code starts while the sign-in is checked: the two take about the same time.
   const [auth, failed] = await Promise.all([signedIn, session.open().then(() => undefined, (error: unknown) => error)]);
@@ -265,6 +267,7 @@ async function archymedesEngine(
       ...(context.ask ? { ask: context.ask } : {}),
       onEvent,
       jev: jevOptionsFromEnvironment(environment),
+      testFirst: testFirstFromEnvironment(environment),
       ...(reasoningFromEnvironment(environment) ? { reasoning: reasoningFromEnvironment(environment) } : {}),
       // Language-server diagnostics appended to each edit result, as in the terminal session.
       afterEdit: acpEditDiagnostics(root, workspace, environment),

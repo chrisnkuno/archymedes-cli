@@ -69,6 +69,7 @@ export const ARCHYMEDES_EVENTS_VERSION = 1;
 
 /** One event as the extension sends it, or `null` for what the standard channel already carries. */
 export function archymedesEventForClient(event: ArchymedesEvent): ArchymedesEvent | null {
+  if (event.type === "subagent") return { ...event, event: runtimeEventForJournal(event.event) as typeof event.event };
   if (event.type !== "runtime") return event;
   if (event.event.type === "assistant_delta") return null;
   return { type: "runtime", event: runtimeEventForJournal(event.event) };
@@ -128,7 +129,7 @@ export function acpToolKind(toolName: string): "read" | "edit" | "delete" | "mov
   if (/^(glob_files|grep_files|scan_secrets)$/.test(toolName)) return "search";
   if (/^(run_command|start_application|application_status|stop_application|run_tests|verify|typecheck|lint)$/.test(toolName)) return "execute";
   if (/^(web_search|deep_research|web_fetch)$/.test(toolName)) return "fetch";
-  if (/^(todo_write|todo_read|remember|delegate_task)$/.test(toolName)) return "think";
+  if (/^(todo_write|todo_read|remember|delegate_task|delegate_readonly_task)$/.test(toolName)) return "think";
   return "other";
 }
 

@@ -106,6 +106,18 @@ type RuntimeEvent struct {
 	// runtime_stop
 	Status  string `json:"status"`
 	Summary string `json:"summary"`
+	// test_first: where a test-first run is
+	State *TestFirstState `json:"state"`
+}
+
+// TestFirstState is how far a test-first run has come: tests written, seen failing (Red), code
+// changed, tests passing since (Green), a static check passing since (Checked).
+type TestFirstState struct {
+	Tests   []string `json:"tests"`
+	Code    []string `json:"code"`
+	Red     bool     `json:"red"`
+	Green   bool     `json:"green"`
+	Checked bool     `json:"checked"`
 }
 
 // Event is one ArchymedesEvent from the extension channel.
@@ -125,8 +137,12 @@ type Event struct {
 	Checkpoint json.RawMessage `json:"checkpoint"`
 	// steering_unread: messages a turn accepted but ended before reading
 	Messages []string `json:"messages"`
-	// rules_problems: command rules left out, each with why
+	// rules_problems: command rules (and agent roles) left out, each with why
 	Problems []string `json:"problems"`
+	// subagent: Event is one of a sub-agent's own runtime events, under the delegation call
+	// ParentToolCallID, run in role Agent
+	ParentToolCallID string `json:"parentToolCallId"`
+	Agent            string `json:"agent"`
 }
 
 // PermissionOption is one choice the agent offers for an approval.

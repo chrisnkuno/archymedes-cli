@@ -2,10 +2,9 @@
   "themeLeaks": {},
   "largeFiles": {
     "packages/friday-cli/src/render/tui.ts": 928,
-    "packages/core/src/agent-runtime.ts": 1587,
-    "packages/core/src/cli/agent.ts": 1594,
-    "packages/core/src/cli/tools.ts": 1623,
-    "packages/core/src/cli/workspace.ts": 964
+    "packages/core/src/agent-runtime.ts": 1552,
+    "packages/core/src/cli/agent.ts": 1518,
+    "packages/core/src/cli/tools.ts": 1453
   },
   "layering": {},
   "duplicateHelpers": {},

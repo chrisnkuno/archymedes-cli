@@ -1,3 +1,4 @@
+import { testFirstFromEnvironment } from "@archymedes/core/verification-gate";
 import os from "node:os";
 import { ArchymedesAgent, type ArchymedesEvent } from "@archymedes/core/cli/agent";
 import type { ApprovalPrompt } from "@archymedes/core/cli/permissions";
@@ -190,6 +191,7 @@ export async function runJobWorkerOnce(deps: JobWorkerDeps): Promise<JobWorkerOu
       approve,
       workspace,
       search: deps.search,
+      testFirst: testFirstFromEnvironment(deps.environment ?? process.env),
       afterEdit: editDiagnosticsFor(deps, workspace),
       onEvent: (event) => {
         const step = stepJobLog(logState, event);

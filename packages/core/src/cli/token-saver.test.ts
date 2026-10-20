@@ -63,6 +63,10 @@ describe("lean tool set", () => {
     expect(has("where is parseConfig defined?", "find_symbol")).toBe(true);
     expect(has("remember that we use pnpm", "remember")).toBe(true);
     expect(has("run these in parallel with sub-agents", "delegate_task")).toBe(true);
+    // A request spanning the codebase brings the read-only sub-agent, not the writing one.
+    expect(has("how does auth work across the codebase?", "delegate_readonly_task")).toBe(true);
+    expect(has("how does auth work across the codebase?", "delegate_task")).toBe(false);
+    expect(has("fix the typo in README.md", "delegate_readonly_task")).toBe(false);
     expect(has("anything", "todo_read")).toBe(false);
   });
 

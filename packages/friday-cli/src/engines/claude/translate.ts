@@ -17,8 +17,9 @@ import type { ApiUsage, ContentBlock, RateLimitInfo, SdkMessage } from "./sdk";
  * - Every tool call is answered exactly once, after it was announced. A call still open when the
  *   turn ends (an interrupt, a crash) is closed as failed, so no card spins forever.
  * - A turn ends with exactly one `runtime_stop`, and nothing follows it.
- * - Only the main conversation is shown. A sub-agent's own messages (`parent_tool_use_id` set)
- *   are its work, reported through its tool call.
+ * - Only the main conversation is shown as text. A sub-agent's own messages (`parent_tool_use_id`
+ *   set) are its work, reported through its tool call; its tool calls and their outcomes go out as
+ *   `subagent` events under that call, so its card shows the work as it happens.
  *
  * Tool calls are shown under Archymedes's names where one means the same thing (`Edit` is
  * `edit_file`, its `file_path` a project-relative `path`), so they draw as the cards people
@@ -47,6 +48,8 @@ const WRITES = new Set(["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]);
 
 /** How much of one tool result is kept in the event: enough to read, never a megabyte. */
 export const MAX_RESULT_CHARS = 20_000;
+/** A sub-agent's tool result is shown as a line under its card: this much is enough. */
+const SUBAGENT_RESULT_CHARS = 240;
 
 export type TodoItem = { text: string; status: string };
 
@@ -73,6 +76,8 @@ export class ClaudeTranslator {
   private streamed = new Set<string>();
   private call?: { id: string; model: string; usage: ApiUsage; toolCalls: number };
   private open = new Map<string, { name: string; input: Record<string, unknown> }>();
+  /** Sub-agents' calls still running, by id, with the name they are shown under. */
+  private childOpen = new Map<string, string>();
   private text: string[] = [];
   private ended = false;
 
@@ -189,7 +194,7 @@ export class ClaudeTranslator {
   }
 
   private assistant(message: Extract<SdkMessage, { type: "assistant" }>): ArchymedesEvent[] {
-    if (message.parent_tool_use_id) return [];
+    if (message.parent_tool_use_id) return this.subagentCalls(message.parent_tool_use_id, message.message.content ?? []);
     const events: ArchymedesEvent[] = [];
     const streamed = this.streamed.has(message.message.id);
     for (const block of message.message.content ?? []) {
@@ -220,7 +225,8 @@ export class ClaudeTranslator {
   }
 
   private user(message: Extract<SdkMessage, { type: "user" }>): ArchymedesEvent[] {
-    if (message.parent_tool_use_id || typeof message.message.content === "string") return [];
+    if (typeof message.message.content === "string") return [];
+    if (message.parent_tool_use_id) return this.subagentResults(message.parent_tool_use_id, message.message.content);
     const events: ArchymedesEvent[] = [];
     for (const block of message.message.content) {
       if (block.type !== "tool_result") continue;
@@ -233,6 +239,46 @@ export class ClaudeTranslator {
       events.push(runtime({ type: "tool_result", toolCallId: result.tool_use_id, toolName: call.name, isError, effect: "none", content }));
     }
     return events;
+  }
+
+  /** A sub-agent's tool calls, under the Task call that started it. */
+  private subagentCalls(parent: string, content: ContentBlock[]): ArchymedesEvent[] {
+    const events: ArchymedesEvent[] = [];
+    for (const block of content) {
+      if (block.type !== "tool_use") continue;
+      const use = block as Extract<ContentBlock, { type: "tool_use" }>;
+      if (!use.id || this.childOpen.has(use.id)) continue;
+      const shown = describeToolUse(use.name, isRecord(use.input) ? use.input : {}, this.root);
+      this.childOpen.set(use.id, shown.name);
+      events.push(this.subagent(parent, {
+        type: "tool_call", toolCallId: use.id, toolName: shown.name,
+        effect: WRITES.has(use.name) ? "workspace" : use.name.startsWith("Web") ? "external" : "none",
+        arguments: shown.args,
+      }));
+    }
+    return events;
+  }
+
+  /** What a sub-agent's calls returned: whether they failed and how they begin, not the whole output. */
+  private subagentResults(parent: string, content: ContentBlock[]): ArchymedesEvent[] {
+    const events: ArchymedesEvent[] = [];
+    for (const block of content) {
+      if (block.type !== "tool_result") continue;
+      const result = block as Extract<ContentBlock, { type: "tool_result" }>;
+      const name = this.childOpen.get(result.tool_use_id);
+      if (!name) continue;
+      this.childOpen.delete(result.tool_use_id);
+      events.push(this.subagent(parent, {
+        type: "tool_result", toolCallId: result.tool_use_id, toolName: name, isError: result.is_error === true, effect: "none",
+        content: resultText(result.content).slice(0, SUBAGENT_RESULT_CHARS),
+      }));
+    }
+    return events;
+  }
+
+  private subagent(parent: string, event: Extract<ArchymedesEvent, { type: "subagent" }>["event"]): ArchymedesEvent {
+    const role = this.open.get(parent)?.input.subagent_type;
+    return { type: "subagent", parentToolCallId: parent, agent: typeof role === "string" && role ? role : "general", event };
   }
 
   /** The model call in progress, reported once with its usage. */

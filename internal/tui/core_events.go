@@ -58,7 +58,9 @@ func (m *Model) handleEvent(ev acp.Event) {
 		}
 		m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation: %d → %d messages.", ev.MessagesBefore, ev.MessagesAfter))
 	case "rules_problems":
-		m.notice(noticeWarn, "Some command rules were left out:\n"+strings.Join(ev.Problems, "\n"))
+		m.notice(noticeWarn, "Some command rules or agent roles were left out:\n"+strings.Join(ev.Problems, "\n"))
+	case "subagent":
+		m.handleSubagent(ev)
 	case "steering_unread":
 		// The turn ended before reading these: they go first in the queue, as turns of their own.
 		m.queue = append(slices.Clone(ev.Messages), m.queue...)
@@ -121,6 +123,8 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		}
 		m.retrying = fmt.Sprintf("retry %d/%d: %s", ev.NextAttempt, ev.MaxAttempts, ev.Reason)
 		m.retryStart, m.retryDelay = time.Now(), time.Duration(ev.DelayMs)*time.Millisecond
+	case "test_first":
+		m.testFirst = ev.State
 	case "context_shrunk":
 		// The model said the conversation was too long; the agent made it shorter and carried on.
 		what := "old tool output shortened"

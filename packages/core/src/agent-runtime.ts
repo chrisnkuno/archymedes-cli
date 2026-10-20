@@ -2,6 +2,7 @@
  * Provider-neutral bounded tool loop: accounts for every prompt-bearing part, enforces money and
  * iteration limits, executes approved tools, and keeps oversized results out of the transcript.
  */
+import { VerificationGate, type TestFirstState } from "./verification-gate";
 import { addPart, affordableOutputTokensFor, newPartTotals, priceActualModelUsage, tokenEstimateFrom, type ModelPriceCatalog } from "./model-cost";
 import type { ModelUsage } from "./providers/model";
 import type { ModelCapabilities } from "./providers/model-capabilities";
@@ -220,7 +221,7 @@ export type ToolEffect = "none" | "workspace" | "external";
  */
 export type VerificationKind = "check" | "tests" | "smoke" | "behavior";
 
-export const EVIDENCE_RANK: Record<VerificationKind, number> = { check: 1, tests: 2, smoke: 3, behavior: 4 };
+export { EVIDENCE_RANK } from "./verification-gate";
 
 export type VerificationEvidence = { passed: boolean; kind?: VerificationKind; scope: "targeted" | "full"; summary: string };
 
@@ -316,6 +317,8 @@ export type AgentRuntimeEvent =
   | { type: "context_shrunk"; iteration: number; step: number }
   | { type: "tool_name"; iteration: number; toolCallId: string; requested: string; resolved?: string }
   | { type: "steered"; iteration: number; count: number }
+  // Where a test-first run is (tests written, seen failing, code, green, checked); on each change.
+  | { type: "test_first"; state: TestFirstState }
   | { type: "runtime_stop"; status: AgentRuntimeResult["status"]; summary: string };
 
 export type AgentRuntimeControl = {
@@ -365,6 +368,8 @@ export type AgentRuntimeRequest = AgentToolContext & {
    * decides to stop, after which a sender is told it is too late and sends a new turn instead.
    */
   steering?: SteeringChannel;
+  /** Build test first: tests, then code, then light static analysis (verification-gate.ts). */
+  testFirst?: boolean;
 };
 
 /** Words for a run in progress, from the person watching it (see `AgentRuntimeRequest.steering`). */
@@ -388,7 +393,6 @@ export type AgentRuntimeResult = {
 };
 
 /** How many times a turn is sent back to the model to verify before the gate gives up and stops. */
-const MAX_VERIFICATION_NUDGES = 1;
 /** Different unavailable tools in a row the model may ask for before the run stops. Asking for the same one twice running still stops it at once. */
 const MAX_UNAVAILABLE_TOOL_RECOVERIES = 3;
 /**
@@ -502,20 +506,6 @@ const MAX_LENGTH_CONTINUATIONS = 3;
  */
 const LENGTH_CONTINUATION_NUDGE =
   "Your previous message hit the output token limit and was cut off mid-answer. Continue from exactly where it stopped — do not repeat what you already wrote, and do not restart. If you were part-way through a tool call, send that tool call again from the beginning, since the truncated one was discarded. If the remaining work does not fit in one reply, do the part that fits and keep each reply shorter.";
-
-const VERIFICATION_NUDGE =
-  "You changed the workspace but ended the turn without running anything that verifies it. Run the smallest relevant existing test, check, or smoke command and report the real result. Add a regression test only when the change would otherwise be unprotected. If this project genuinely has nothing relevant to run, say so explicitly instead of stopping silently.";
-
-/**
- * Sent when the only evidence was a build, typecheck or lint.
- *
- * A passing compile is real but says nothing about behaviour, and accepting it as proof is how an
- * agent reports success for code that type-checks and does the wrong thing. This asks once for
- * executed tests; it does not hard-fail, because a compile *is* evidence and some changes have no
- * behaviour to assert.
- */
-const TEST_EVIDENCE_NUDGE =
-  "That build/typecheck passing shows the code compiles, not that it behaves correctly. Run the smallest relevant existing test or smoke command for the changed behaviour and report the real result. Add a regression test only when the change would otherwise be unprotected. If the change genuinely has no behaviour to assert (documentation, formatting, configuration), say so explicitly and stop.";
 
 const TRANSIENT_PROVIDER_CODES = new Set([
   "ABORT_ERR",
@@ -951,18 +941,12 @@ export class BoundedAgentRuntime {
     /** Every tool result this run added, by transcript position, so older ones can be compacted in-turn. */
     const runToolResults: RunToolResult[] = [];
     let inTurnCompactions = 0;
-    let workspaceNeedsVerification = false;
-    let verificationNudges = 0;
+    const gate = new VerificationGate(request.testFirst === true);
     let unavailableToolRecoveries = 0;
     let lastUnavailable = "";
     let toolTurnRecoveries = 0;
     // Truncated turns resumed so far in this run, capped by `MAX_LENGTH_CONTINUATIONS`.
     let lengthContinuations = 0;
-    // Strongest evidence seen for the workspace changes in this run, as a rung on `EVIDENCE_RANK`,
-    // and which escalations the model has already been asked for. Each is asked at most once: a
-    // model that answers "this change has nothing to assert" must be able to finish.
-    let strongestEvidence = 0;
-    let askedForTestEvidence = false;
     // One per model call the hosted exchange routed; stays empty for direct/BYOK providers.
     const routingReceipts: RoutingReceipt[] = [];
     // Measured once per part, not once per iteration: `messages` only ever grows inside this loop,
@@ -1268,29 +1252,18 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
       if (turn.finishReason === "stop") {
         const summary = turn.content.trim() || "Model completed without a summary.";
         messages.push({ role: "assistant", content: summary });
-        if (workspaceNeedsVerification && verificationNudges < MAX_VERIFICATION_NUDGES) {
-          // Drive the loop back to the model instead of handing the gap to the human: the agent
-          // still has budget and the tools to close it itself, so make it, rather than merely
-          // reporting that it didn't. The nudge cap keeps this bounded by the same iteration and
-          // tool-call budgets as everything else — a model that never verifies still terminates.
-          verificationNudges += 1;
-          messages.push({ role: "user", content: VERIFICATION_NUDGE, internal: true });
-          continue;
-        }
-        // One rung at a time up `EVIDENCE_RANK`, each asked at most once. Compile-only evidence is
-        // accepted in the end, but not before asking for executed tests; unit tests are accepted in
-        // the end, but not before asking for one exercise of the assembled program. Both stop at
-        // asking, because both answers ("nothing to assert", "nothing to assemble") are sometimes
-        // the truth, and a gate that cannot be satisfied honestly is a gate that gets worked around.
-        if (strongestEvidence === EVIDENCE_RANK.check && !askedForTestEvidence) {
-          askedForTestEvidence = true;
-          messages.push({ role: "user", content: TEST_EVIDENCE_NUDGE, internal: true });
+        // Drive the loop back to the model instead of handing a gap to the human: the agent still
+        // has the budget and the tools to close it itself. Each request is made at most once, so a
+        // model that never verifies still terminates (see verification-gate.ts).
+        const nudge = gate.beforeFinish();
+        if (nudge) {
+          messages.push({ role: "user", content: nudge, internal: true });
           continue;
         }
         // Something the person said while this answer was being written: answer that too. Only
         // microtasks run between this take and the close in `stop`, and a message arrives on I/O.
         if (await steer(iteration)) continue;
-        return workspaceNeedsVerification
+        return gate.unverified
           // The gate must lead — this is not a success, and a reader skimming the ledger has to see
           // that first. But replacing the summary outright threw away the only account of what the
           // run actually did, which is the thing a person needs in order to decide what to do next.
@@ -1542,10 +1515,11 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
         } else {
           missingPathStreak = 0;
         }
-        messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         const effect = tool.effect === "external" ? "external" : result.effect ?? plannedEffect;
+        const gateNote = gate.record({ toolName: call.name, arguments: call.arguments, effect, isError: result.isError ?? false, verification: result.verification, data: result.data });
+        if (gateNote) content = `${content}\n\n${gateNote}`;
+        messages.push({ role: "tool", content, toolCallId: call.id, name: call.name, ...(images ? { images } : {}) });
         if (!result.isError && effect === "workspace") {
-          workspaceNeedsVerification = true;
           greenSinceEdit = false;
           // The workspace changed: running the same failing command again (the tests, after a fix) is
           // now the right move, not a repeat, so earlier failures stop counting against it.
@@ -1558,14 +1532,9 @@ ${compactedToolResult(entry.name, 0, undefined, images)}`
           ...(!result.isError && result.verification?.passed && result.verification.kind ? { verified: result.verification.kind } : {}),
         });
         if (!result.isError && result.verification?.passed && result.verification.kind !== "check") greenSinceEdit = true;
-        if (!result.isError && result.verification?.passed) {
-          workspaceNeedsVerification = false;
-          // Unclassified evidence reads as `check`: the weaker claim is the safe one to infer.
-          // Kept as a maximum so a later weak check cannot demote what a stronger run established —
-          // running the linter after the e2e suite is not a reason to ask for the e2e suite again.
-          strongestEvidence = Math.max(strongestEvidence, EVIDENCE_RANK[result.verification.kind ?? "check"]);
-        }
         await this.dependencies.control.persistEvent({ type: "tool_result", toolCallId: call.id, toolName: call.name, isError: result.isError ?? false, effect, content, ...(result.data ? { data: result.data } : {}), ...(artifact ? { artifact } : {}) });
+        const testFirst = gate.takeState();
+        if (testFirst) await this.dependencies.control.persistEvent({ type: "test_first", state: testFirst });
       }
       const failedInSubstance = lastOutcomes.some((outcome) => outcome.isError && !outcome.shallow);
       consecutiveFailures = failedInSubstance ? consecutiveFailures + 1 : 0;

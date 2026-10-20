@@ -11,6 +11,8 @@ import { isFindDelete, isRecursiveForceRemoval, tokenizeCommand } from "./comman
 import type { HookRegistry } from "./hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
 import { ARCHYMEDES_CAPABILITIES } from "./permissions";
+import { delegationTools, type DelegateRunner, type SubagentProfile } from "./subagents";
+export type { DelegateResult, DelegateRunner } from "./subagents";
 import { assertSupportedSchema, normalizeToolArguments, type ToolInputSchema } from "./tool-schema";
 import type { ToolProvider } from "./tool-providers";
 import { collectExternalTools } from "./tool-providers";
@@ -141,6 +143,8 @@ export type ArchymedesToolOptions = {
    * tool" rule `search` already follows.
    */
   delegate?: DelegateRunner;
+  /** The roles `delegate` can run (subagents.ts); the built-in ones when absent. */
+  subagentProfiles?: readonly SubagentProfile[];
   /**
    * Puts a question to the person and waits for the answer, when a client that can show one is
    * attached (the Go interface). Absent this — a headless run, an editor that never opted in —
@@ -154,13 +158,6 @@ export type UserQuestion = { question: string; options: string[]; multiSelect: b
 
 /** The person's answer, or null when they dismissed the question (or the client went away). */
 export type AskUser = (question: UserQuestion) => Promise<string | null>;
-
-export type DelegateResult = { report: string; status: string; iterations: number; toolCallsExecuted: number };
-/**
- * `readOnly` runs the sub-agent in plan mode with only the parallel-safe, effect-free tools, so
- * several can run at once (see `delegate_readonly_task`).
- */
-export type DelegateRunner = (task: string, options?: { readOnly?: boolean }) => Promise<DelegateResult>;
 
 /**
  * Commands that end a session's worth of work in one keystroke. Refused rather than approved.
@@ -1126,56 +1123,7 @@ Written to ${scope === "project" ? ".archymedes/memory.md" : result.file} — th
     },
   });
 
-  if (options.delegate) {
-    const delegate = options.delegate;
-    tools.push({
-      name: "delegate_task",
-      description:
-        "Hand an independent, fully describable sub-task to a bounded sub-agent (your tools and mode, no further delegation) and get its final report. Not for your own main thread of work.",
-      inputSchema: {
-        type: "object",
-        properties: { task: { type: "string", description: "Self-contained brief; the sub-agent has no memory of this conversation." } },
-        required: ["task"],
-        additionalProperties: false,
-      },
-      capabilityId: ARCHYMEDES_CAPABILITIES.planning,
-      effect: "none",
-      requiresApproval: false,
-      // Not parallel-safe despite effect:"none": it can run for many iterations and is expensive
-      // to run concurrently with anything else in the same batch.
-      parallelSafe: false,
-      async execute(args) {
-        const task = requiredString(args.task, "task");
-        const result = await delegate(task);
-        const note = result.status === "completed" ? "" : `\n\n[sub-agent ended: ${result.status}, ${result.iterations} iteration(s), ${result.toolCallsExecuted} tool call(s)]`;
-        return { content: `${result.report}${note}` };
-      },
-    });
-    tools.push({
-      name: "delegate_readonly_task",
-      description:
-        "Like delegate_task but read/research only, so several emitted together run in parallel.",
-      inputSchema: {
-        type: "object",
-        properties: { task: { type: "string", description: "Self-contained brief." } },
-        required: ["task"],
-        additionalProperties: false,
-      },
-      capabilityId: ARCHYMEDES_CAPABILITIES.planning,
-      effect: "none",
-      requiresApproval: false,
-      // Parallel-safe because the runner gives this sub-agent plan mode and only the tools that
-      // are themselves effect-free and parallel-safe: no approval prompt can fire, nothing is
-      // written, and each run reserves its own share of the turn's budget before it starts.
-      parallelSafe: true,
-      async execute(args) {
-        const task = requiredString(args.task, "task");
-        const result = await delegate(task, { readOnly: true });
-        const note = result.status === "completed" ? "" : `\n\n[read-only sub-agent ended: ${result.status}, ${result.iterations} iteration(s), ${result.toolCallsExecuted} tool call(s)]`;
-        return { content: `${result.report}${note}` };
-      },
-    });
-  }
+  if (options.delegate) tools.push(...delegationTools(options.delegate, options.subagentProfiles));
 
   // Repo map, symbol lookup, git and notebook tools read the host disk directly, so they are only
   // offered for a local workspace; `LocalWorkspace.label` is its root.

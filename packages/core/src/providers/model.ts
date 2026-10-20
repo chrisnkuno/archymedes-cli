@@ -88,3 +88,18 @@ export type GenerateCodingPlanOptions = {
 export interface CodingModelProvider {
   generateCodingPlan(request: CodingPlanRequest, options?: GenerateCodingPlanOptions): Promise<CodingPlanResult>;
 }
+
+export function emptyModelUsage(): ModelUsage {
+  return { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
+}
+
+export function addModelUsage(left: ModelUsage, right: ModelUsage): ModelUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    totalTokens: left.totalTokens + right.totalTokens,
+    cachedInputTokens: left.cachedInputTokens + right.cachedInputTokens,
+    cacheWriteTokens: left.cacheWriteTokens + right.cacheWriteTokens,
+    reasoningTokens: left.reasoningTokens + right.reasoningTokens,
+  };
+}

@@ -148,6 +148,15 @@ export class HeadlessEmitter {
       this.emit("jev_review", { outcome: event.outcome, probability: event.probability, reason: event.reason });
       return;
     }
+    if (event.type === "subagent") {
+      // A sub-agent's calls, under the delegation call that started it: what it did, not its output.
+      const inner = runtimeEventForJournal(event.event);
+      const base = { parentToolCallId: event.parentToolCallId, agent: event.agent };
+      if (inner.type === "tool_call") this.emit("subagent_tool_call", { ...base, toolCallId: inner.toolCallId, tool: inner.toolName, arguments: inner.arguments });
+      else if (inner.type === "tool_result") this.emit("subagent_tool_result", { ...base, toolCallId: inner.toolCallId, tool: inner.toolName, isError: inner.isError });
+      else if (inner.type === "model_turn") this.emit("subagent_model_turn", { ...base, model: inner.model, usage: inner.usage });
+      return;
+    }
     if (event.type !== "runtime") return;
     const runtime = event.event;
     if (runtime.type === "assistant_delta") {
@@ -197,6 +206,10 @@ export class HeadlessEmitter {
     }
     // A call still being written is a live label for an interface, not a record for a JSONL reader.
     if (safe.type === "tool_compose") return;
+    if (safe.type === "test_first") {
+      this.emit("test_first", safe.state);
+      return;
+    }
     this.emit("runtime_stop", { status: safe.status, summary: safe.summary });
   }
 

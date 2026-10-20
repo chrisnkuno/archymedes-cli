@@ -8,6 +8,7 @@ import { defenderPlaybookIndex } from "./defender-playbooks";
 import { describeEnvironment, type EnvironmentReport } from "./environment";
 import type { ArchymedesMode } from "./permissions";
 import { TOKEN_SAVER_INSTRUCTION_CHARS } from "./token-saver";
+import { delegationGuidance } from "./subagents";
 
 /**
  * What Archymedes knows before it reads a single file.
@@ -178,7 +179,7 @@ const LEAN_MODE_GUIDANCE: Record<ArchymedesMode, string> = {
  * policy in short form. Dropped: the long testing curriculum, the deploy walkthrough and the
  * scheduling essays — useful guidance, but each paid for again on every request of a rationed day.
  */
-function leanRules(toolNames: readonly string[]): string {
+function leanRules(toolNames: readonly string[], testFirst = false): string {
   const has = (name: string) => toolNames.includes(name);
   return [
     "How to work:",
@@ -187,7 +188,9 @@ function leanRules(toolNames: readonly string[]): string {
     ...(has("run_command") ? ["- Files go through the file tools, not the shell (read_file, grep_files, glob_files, edit_file); run_command is for builds, tests, scripts and git."] : []),
     "- Keep tool output small: search before reading and read only the line ranges you need. Never re-read a file or range already in this conversation; use what you have.",
     "- Make each change with one targeted edit_file call covering the whole change in that region, not a series of small edits.",
-    "- Verify by running the project's own tests or checks and report the real result. Never describe an outcome you did not observe; a passing build is not a test.",
+    testFirst
+      ? "- Test first: before the code, write clean tests that define done (invariants over edge inputs, one per requested rule, one of the assembled thing) and see them fail; then the smallest code that passes them, never weakening a test; then the project's own typecheck/lint on what you changed. Report the real results; docs and config skip the tests."
+      : "- Verify by running the project's own tests or checks and report the real result. Never describe an outcome you did not observe; a passing build is not a test.",
     "- Requests are rationed: every turn resends the whole conversation, so finish in as few turns as the task allows.",
     "- Put independent tool calls in the same turn: read several files at once, run several searches at once, edit different files together. Wait for a result only when the next call depends on it.",
     ...(has("todo_write") ? ["- For multi-step work call todo_write once, and update it alongside real work, never as a turn of its own."] : []),
@@ -195,6 +198,7 @@ function leanRules(toolNames: readonly string[]): string {
     ...(has("compute") ? ["- Numbers in your answer (percentages, totals, conversions) go through the compute tool."] : []),
     "- An error is information about the problem, not a reason to retry the same thing.",
     ...(has("start_application") ? ["- Report an app as running only after start_application verifies it is reachable."] : []),
+    ...[delegationGuidance(toolNames, true)].filter(Boolean),
     "- Never deploy or publish without the user's explicit yes, and never work around a missing credential with an interactive login.",
   ].join("\n");
 }
@@ -229,6 +233,27 @@ function workingLoop(toolNames: readonly string[]): string {
       + (has("edit_file") ? " Prefer edit_file over write_file for existing files; never reproduce a whole file to change part of it, and put several changes to one file in one edit_file call (edits)." : ""),
     "3. Verify. Run the project's own tests or checks and report the real result. Never describe an outcome you did not observe. When you change existing behaviour, first write or identify the test that fails for the old behaviour and passes for the new one.",
     "4. Report what changed, what you ran and what it showed (see How to answer).",
+  ].join("\n");
+}
+
+/**
+ * The working loop when building test first (the default while building; `testFirst`): the tests
+ * that define done come before the code, and a light static pass closes it. It replaces both the
+ * plain loop and the testing section, whose three levels it carries as step 2, so the prompt costs
+ * about what it did.
+ */
+function testFirstLoop(toolNames: readonly string[]): string {
+  const has = (name: string) => toolNames.includes(name);
+  return [
+    "How to work: test first. Every code change runs this loop:",
+    "1. Orient. Search and read what the task touches, several files in one turn; search for a symbol's uses before you alter it. Use what is already in this conversation rather than reading it again.",
+    "2. Tests first. Before the code, write the tests that define done, in the project's own runner, cheapest first. INVARIANTS: properties that hold for every valid input (round-trips, bounds and ordering, idempotence, the errors that must happen), over empty, single, maximum, duplicate, malformed and unicode inputs. BEHAVIOURAL: one assertion per requested rule, on real output. FUNCTIONAL: one test of the assembled thing (render the entry point, request the route, run the CLI and assert output and exit code). Keep them clean: one behaviour per test, named for what it proves, deterministic, no mocking the code under test, seconds not minutes. Run them and see them fail for the right reason; a bug fix starts with the test that reproduces it.",
+    "3. Code. The smallest change that makes them pass, matching the surrounding code: naming, structure, idioms, comment density."
+      + (has("edit_file") ? " Prefer edit_file over write_file for existing files and put several changes to one file in one call (edits)." : "")
+      + " Never weaken, skip or delete a test to get green; if a test was wrong, fix it and say why.",
+    "4. Static analysis, light: the project's own typecheck, linter or vet on what you changed; fix what it reports in your code. Install nothing for it.",
+    "5. Report the tests you wrote, that they failed and then passed, and the check's result (see How to answer). Never describe an outcome you did not observe.",
+    "Docs, configuration and changes with nothing to assert skip steps 2 and 4: say so in one line.",
   ].join("\n");
 }
 
@@ -276,10 +301,12 @@ export function buildArchymedesSystemPrompt(
   toolNames: string[],
   workspace?: ArchymedesWorkspace,
   environment?: EnvironmentReport,
-  options: { lean?: boolean } = {},
+  options: { lean?: boolean; testFirst?: boolean } = {},
 ): string {
   const remote = workspace?.kind === "e2b";
   const lean = options.lean === true;
+  // Test first only where code gets written: plan cannot write, and defender's fixes follow its own playbooks.
+  const testFirst = options.testFirst === true && (mode === "build" || mode === "auto");
   // A lean prompt (token saver) keeps every rule that changes what the agent may do, in short form;
   // see `leanRules`. The environment, project and defender sections below are shared by both.
   const sections: string[] = lean ? [
@@ -287,7 +314,7 @@ export function buildArchymedesSystemPrompt(
       ? "You are Friday, a coding agent working in an isolated remote sandbox. Files you create exist only in that sandbox, not on the user's machine, and the sandbox is destroyed when the session ends."
       : "You are Friday, a coding agent working in a real project on the user's machine. Your changes are real and immediately visible to them.",
     LEAN_MODE_GUIDANCE[mode],
-    leanRules(toolNames),
+    leanRules(toolNames, testFirst),
     LEAN_SAFETY,
     "Answer directly: what you did, what it produced, what you left undone and why. Reference code as `path/to/file.ts:42`.",
     `Available tools: ${toolNames.join(", ")}.`,
@@ -299,9 +326,10 @@ export function buildArchymedesSystemPrompt(
       ? "You are Friday, a coding agent working in an isolated remote sandbox. Files you create exist only in that sandbox, not on the user's machine, and the sandbox is destroyed when the session ends."
       : "You are Friday, a coding agent working in a real project on the user's machine. Your changes are real and immediately visible to them.",
     MODE_GUIDANCE[mode],
-    workingLoop(toolNames),
+    testFirst ? testFirstLoop(toolNames) : workingLoop(toolNames),
     choosingTools(toolNames),
-    TESTING,
+    ...[delegationGuidance(toolNames)].filter(Boolean),
+    ...(testFirst ? [] : [TESTING]),
     ...(toolNames.includes("deploy_app") ? [DEPLOYING] : []),
     [
       "Risk-based safety:",

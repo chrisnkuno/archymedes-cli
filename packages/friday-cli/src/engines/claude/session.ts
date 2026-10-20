@@ -1,3 +1,4 @@
+import { TEST_FIRST_BRIEF } from "@archymedes/core/verification-gate";
 import { randomUUID } from "node:crypto";
 import type { AgentRuntimeResult } from "@archymedes/core/agent-runtime";
 import { toolCallTitle, type AcpApprovalRequest, type JsonValue } from "@archymedes/core/cli/acp";
@@ -60,6 +61,8 @@ export type ClaudeSessionOptions = {
   commandRules?: () => Promise<readonly CommandRule[]>;
   /** Told the models Claude Code offers, once it has started: what the model pickers then list. */
   onModels?: (models: string[]) => void;
+  /** Build test first (`ARCHYMEDES_TEST_FIRST`): Claude Code is told the same order of work Friday follows. */
+  testFirst?: boolean;
 };
 
 type Turn = { resolve: (result: Pick<AgentRuntimeResult, "status" | "summary">) => void; prompt: string; cancelled: boolean; steers: string[] };
@@ -262,7 +265,7 @@ export class ClaudeSession {
         enableFileCheckpointing: true,
         // Claude Code's own system prompt, tools and project instructions (CLAUDE.md): this is
         // Claude Code doing the work, not a model under Archymedes's prompt.
-        systemPrompt: { type: "preset", preset: "claude_code" },
+        systemPrompt: { type: "preset", preset: "claude_code", ...(this.options.testFirst ? { append: TEST_FIRST_BRIEF } : {}) },
         ...(resume ? { resume } : {}),
         stderr: (data) => { this.stderr = (this.stderr + data).slice(-4_000); },
       },

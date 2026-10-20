@@ -193,6 +193,7 @@ type Model struct {
 	text *i18n.Catalog
 	// composing is the tool call the model is writing right now, shown in place of "thinking…".
 	composing *acp.RuntimeEvent
+	testFirst *acp.TestFirstState // this turn's test-first progress; nil until a test or code is written
 	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
 	retryStart  time.Time
 	retryDelay  time.Duration
@@ -683,7 +684,7 @@ func (m *Model) send(text string) tea.Cmd {
 	m.welcome()
 	m.stopScroll()
 	m.tr.toBottom()
-	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying, m.composing = busy, time.Now(), usageTotals{}, nil, "", nil
+	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying, m.composing, m.testFirst = busy, time.Now(), usageTotals{}, nil, "", nil, nil
 	agent, id := m.agent, m.session.ID
 	return tea.Batch(func() tea.Msg {
 		// A finished turn arrives in the agent's stream (acp.TurnEnded); only a failure comes back here.
@@ -713,7 +714,7 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 		m.notice(noticeError, msg.err.Error())
 	}
 	if msg.err == nil || msg.stop != "" {
-		m.tr.add(&turnItem{stopReason: msg.stop, usage: m.turnUsage, seconds: time.Since(m.turnStart).Seconds()})
+		m.tr.add(&turnItem{stopReason: msg.stop, usage: m.turnUsage, seconds: time.Since(m.turnStart).Seconds(), testFirst: m.testFirst})
 	}
 	if m.phase == failed {
 		return reread

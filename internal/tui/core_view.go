@@ -81,19 +81,31 @@ func (m *Model) body(height int) []string {
 		return m.landing(width, height)
 	}
 	ctx := renderCtx{th: m.th, md: m.md, width: width, expanded: m.expanded, root: m.projectRoot(), zones: m.zones.frame}
-	if !m.thinking() || height < 3 || !m.tr.following() {
+	if !m.tr.following() {
 		return m.tr.window(ctx, height)
 	}
-	label := m.text.T("chat.thinking")
-	if m.composing != nil {
-		label = composingLabel(m.composing.ToolName, m.composing.Subject, m.composing.Chars)
+	// Live lines under the transcript: where a test-first run is, then what the agent is doing
+	// while nothing else on screen moves. The thinking line stays last (see steadyLines).
+	var live []string
+	if m.phase == busy && m.testFirst != nil {
+		live = append(live, ansi.Truncate(testFirstStepper(m.th, *m.testFirst), width, "…"))
 	}
-	line := m.spin.View() + " " + theme.Gradient(label, m.th.Primary, m.th.Secondary, false) +
-		m.th.Faint.Render(" "+elapsed(time.Since(m.turnStart)))
-	if m.retrying != "" {
-		line = m.retryLine()
+	if m.thinking() {
+		label := m.text.T("chat.thinking")
+		if m.composing != nil {
+			label = composingLabel(m.composing.ToolName, m.composing.Subject, m.composing.Chars)
+		}
+		line := m.spin.View() + " " + theme.Gradient(label, m.th.Primary, m.th.Secondary, false) +
+			m.th.Faint.Render(" "+elapsed(time.Since(m.turnStart)))
+		if m.retrying != "" {
+			line = m.retryLine()
+		}
+		live = append(live, ansi.Truncate(line, width, "…"))
 	}
-	return append(m.tr.window(ctx, height-2), "", ansi.Truncate(line, width, "…"))
+	if len(live) == 0 || height < len(live)+2 {
+		return m.tr.window(ctx, height)
+	}
+	return append(append(m.tr.window(ctx, height-len(live)-1), ""), live...)
 }
 
 // composingLabel says what the model is writing before the call exists: "writing src/app.ts · 4.2k

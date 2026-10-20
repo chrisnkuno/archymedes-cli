@@ -103,7 +103,7 @@ class FakeQuery implements Query {
   close() { this.closed = true; this.output.end(); }
 }
 
-function setup(script: Script, options: { record?: SessionRecord; decisions?: PermissionDecision[]; model?: string; mode?: ArchymedesMode; rules?: CommandRule[] } = {}) {
+function setup(script: Script, options: { record?: SessionRecord; decisions?: PermissionDecision[]; model?: string; mode?: ArchymedesMode; rules?: CommandRule[]; testFirst?: boolean } = {}) {
   const claude = new FakeClaude(script);
   const events: ArchymedesEvent[] = [];
   const saved: SessionRecord[] = [];
@@ -119,6 +119,7 @@ function setup(script: Script, options: { record?: SessionRecord; decisions?: Pe
     approve: async (request) => { asked.push(request); return decisions.shift() ?? "deny"; },
     save: async (record) => { saved.push(structuredClone(record)); },
     onModels: (list) => models.push(list),
+    ...(options.testFirst !== undefined ? { testFirst: options.testFirst } : {}),
   });
   return { claude, session, events, saved, asked, models };
 }
@@ -142,6 +143,15 @@ describe("ClaudeSession", () => {
     expect(stops(events)).toHaveLength(2);
     expect(models).toEqual([["default", "opus"]]);
     expect(session.info()).toMatchObject({ provider: "claude", model: "claude-sonnet-5-5", mode: "build", workspace: "local" });
+  });
+
+  it("tells Claude Code to build test first when that is on, on top of its own prompt", async () => {
+    const { claude, session } = setup((prompt) => [...reply(`re: ${prompt}`), done()], { testFirst: true });
+    await session.open();
+    const prompt = (claude.startups[0] as { systemPrompt: { preset: string; append?: string } }).systemPrompt;
+    expect(prompt.preset).toBe("claude_code");
+    expect(prompt.append).toMatch(/Build test first/);
+    expect(prompt.append).toMatch(/static analysis/);
   });
 
   it("saves each turn as an Friday session that knows Claude's own session id", async () => {

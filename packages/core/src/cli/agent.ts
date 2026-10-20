@@ -7,12 +7,12 @@ import path from "node:path";
 import { access } from "node:fs/promises";
 import { agentMessagePromptParts, BoundedAgentRuntime, type SteeringChannel, type AgentMessage, type AgentRuntimeEvent, type AgentRuntimeResult, type AgentTool, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
 import { affordableOutputTokens, approximateInputTokens, priceActualModelUsage, type ModelPriceCatalog } from "../model-cost";
-import type { ModelUsage } from "../providers/model";
+import { addModelUsage, emptyModelUsage, type ModelUsage } from "../providers/model";
 import type { ExaSearchClient } from "../providers/exa";
 import type { WebSearchBackend } from "../providers/web-search";
 import { CheckpointStore, type Checkpoint, type GitRunner } from "./checkpoints";
 import { capabilitiesForMode, PermissionLedger, type ApprovalPrompt, type ArchymedesMode } from "./permissions";
-import { loadMemories, memoryPromptBlock, recallMemories, recalledMemoryKey } from "./memory";
+import { archymedesConfigDirectory, loadMemories, memoryPromptBlock, recallMemories, recalledMemoryKey } from "./memory";
 import { probeEnvironment, type EnvironmentReport } from "./environment";
 import { buildArchymedesSystemPrompt, collectProjectContext, type ProjectContext } from "./prompt";
 import { assertTurnTransition, EventJournal, readEventJournal, runtimeEventForJournal, type TurnStatus } from "./protocol";
@@ -41,7 +41,8 @@ import { goalJudgePrompt, parseGoalVerdict, type GoalVerdict } from "./goal";
 import { describeReviewTarget, parseReview, parseReviewTarget, reviewPatch, reviewPrompt, reviewTranscript, type ReviewResult } from "./review";
 import type { HookGateOutcome } from "../hooks";
 import { NestedInstructionTracker } from "./nested-instructions";
-import { createArchymedesTools, scanWorkspaceForSecrets, TodoList, type DelegateResult, type DelegateRunner, type PlacedSecretFinding, type TodoItem, type AskUser } from "./tools";
+import { createArchymedesTools, scanWorkspaceForSecrets, TodoList, type PlacedSecretFinding, type TodoItem, type AskUser } from "./tools";
+import { DELEGATION_TOOLS, loadSubagentProfiles, Subagents, type SubagentEvent } from "./subagents";
 import type { Expense } from "./cost";
 import { predictAgentUsage, type AgentCostPrediction } from "./cost";
 import { LocalWorkspace, type ArchymedesWorkspace } from "./backends";
@@ -102,6 +103,12 @@ export type ArchymedesAgentOptions = {
    */
   reasoning?: "auto" | ThinkingEffort;
   /**
+   * Build test first: tests that define done, then the code, then light static analysis, in the
+   * prompt and held by the runtime's gate (verification-gate.ts). Applies in build and auto mode;
+   * on unless false (`ARCHYMEDES_TEST_FIRST=off`).
+   */
+  testFirst?: boolean;
+  /**
    * Called after a successful `edit_file`/`write_file` with the edited path; whatever it returns
    * is appended to that tool result as "Diagnostics after edit:", so the model sees an error it
    * just introduced. Bounded by `EDIT_DIAGNOSTICS_TIMEOUT_MS` and fail-open: a hook that throws,
@@ -111,8 +118,6 @@ export type ArchymedesAgentOptions = {
   afterEdit?: (path: string) => Promise<string | undefined>;
 };
 
-/** The two delegation tools; neither is ever offered to the sub-agent it creates. */
-const DELEGATION_TOOLS = new Set(["delegate_task", "delegate_readonly_task"]);
 const EDIT_DIAGNOSTIC_TOOLS = new Set(["edit_file", "write_file"]);
 export const EDIT_DIAGNOSTICS_TIMEOUT_MS = 3_000;
 const EDIT_DIAGNOSTICS_MAX_LINES = 20;
@@ -175,7 +180,9 @@ export type ArchymedesEvent =
    * re-invoked once with the evidence attached. Bounded by one correction
    * per turn, so a judge that always says blocked cannot loop.
    */
-  | { type: "jev-review"; outcome: string; probability: number; reason: string };
+  | { type: "jev-review"; outcome: string; probability: number; reason: string }
+  /** A delegated sub-agent's own calls and usage, under the delegation call that started it. */
+  | SubagentEvent;
 
 export type ArchymedesBudgets = {
   maxIterations: number;
@@ -289,15 +296,8 @@ export class ArchymedesAgent {
   private journal: EventJournal;
   private activeTurnId: string | null = null;
   private activeTransition: ((to: TurnStatus, durable?: boolean) => Promise<void>) | null = null;
-  /** What `delegate_task` sub-runs have spent this turn — folded into the turn's own total once it finishes. See `createDelegateRunner`. */
-  private delegatedRwf = 0;
-  /**
-   * Reserved by delegations still running. Read-only delegations run concurrently, and each one
-   * sizes its reservation from what is left; without subtracting what siblings already hold, two
-   * started together would each see the whole remainder and could jointly reserve twice it.
-   */
-  private delegatedInFlightRwf = 0;
-  private delegatedUsage: ModelUsage = emptyModelUsage();
+  /** The delegation tools' sub-agents: their roles, and what they spent this turn. See subagents.ts. */
+  private readonly subagents: Subagents;
   private readonly defenderBrain: DefenderBrain;
   /** Jev second-opinion configuration, normalized: undefined means the judge is off. Never persisted — the key lives in memory alone. */
   private readonly jev: NonNullable<ArchymedesAgentOptions["jev"]> | undefined;
@@ -348,6 +348,11 @@ export class ArchymedesAgent {
     void this.loadEnvironment();
   }
 
+  /** Whether a run in `mode` builds test first: only where code is written, and unless switched off. */
+  private testFirst(mode: ArchymedesMode): boolean {
+    return this.options.testFirst !== false && (mode === "build" || mode === "auto");
+  }
+
   private loadEnvironment(): Promise<EnvironmentReport | undefined> {
     this.environment ??= probeEnvironment(this.workspace);
     return this.environment.catch(() => undefined);
@@ -384,6 +389,20 @@ export class ArchymedesAgent {
     };
     this.journal = new EventJournal(options.root, this.session.id);
     this.recovery = new HostedRecoveryStore(options.root, this.session.id);
+    this.subagents = new Subagents({
+      mode: () => this.options.mode,
+      model: (label) => this.recovery.wrap(this.options.model, () => this.session, this.options.prices, label),
+      prices: options.prices,
+      artifacts: this.artifacts,
+      systemPrompt: async (mode, toolNames) => buildArchymedesSystemPrompt(this.context ?? await collectProjectContext(this.options.root), mode, toolNames, this.workspace, await this.loadEnvironment(), { lean: this.options.model.tokenSaver === true, testFirst: this.testFirst(mode) }),
+      testFirst: (mode) => this.testFirst(mode),
+      budgets: () => this.budgets,
+      isCancelled: () => this.cancelled,
+      approve: (call, tool) => this.permissions.decide(call, tool),
+      signal: () => this.turnAbort?.signal,
+      sessionId: () => this.session.id,
+      emit: (event) => this.options.onEvent?.(event),
+    });
     // A blank key counts as absent: half-configuration degrades to off, not to a failure.
     this.jev = options.jev && options.jev.apiKey.trim() ? options.jev : undefined;
     this.permissions = new PermissionLedger(options.mode, async (request) => {
@@ -641,7 +660,7 @@ export class ArchymedesAgent {
   async inspectTools(): Promise<{ tools: AgentTool[]; hooks: { preToolUse: string[]; postToolUse: string[] }; providerIds: string[] }> {
     const context = await collectProjectContext(this.options.root);
     const externalTooling = await this.loadExternalTooling();
-    const delegate = this.createDelegateRunner(context, () => this.budgets.maxRwf);
+    const delegate = this.subagents.runner(() => this.budgets.maxRwf);
     const tools = await createArchymedesTools({
       workspace: this.workspace,
       todos: this.todoList,
@@ -730,7 +749,7 @@ export class ArchymedesAgent {
   private async prospectiveParts(objective: string): Promise<{ systemPrompt: string; toolSchemas: string; toolCount: number; history: AgentMessage[] }> {
     const context = await collectProjectContext(this.options.root);
     const externalTooling = await this.loadExternalTooling();
-    const delegate = this.createDelegateRunner(context, () => this.budgets.maxRwf);
+    const delegate = this.subagents.runner(() => this.budgets.maxRwf);
     const tools = await createArchymedesTools({
       workspace: this.workspace,
       todos: this.todoList,
@@ -756,7 +775,7 @@ export class ArchymedesAgent {
     );
     const scoped = tokenSaver ? leanToolset(profiled, this.options.mode, objective) : profiled;
     delegate.setTools(scoped.filter((tool) => !DELEGATION_TOOLS.has(tool.name)));
-    const systemPrompt = buildArchymedesSystemPrompt(context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: tokenSaver });
+    const systemPrompt = buildArchymedesSystemPrompt(context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: tokenSaver, testFirst: this.testFirst(this.options.mode) });
     const toolSchemas = JSON.stringify(scoped.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })));
     const history = (tokenSaver ? stubEarlierToolResults(this.messages) : this.messages).filter((message) => message.role !== "system");
     return { systemPrompt, toolSchemas, toolCount: scoped.length, history };
@@ -811,92 +830,6 @@ export class ArchymedesAgent {
   async turnPatch(index: number): Promise<string> {
     await this.pendingCheckpoint;
     return this.checkpoints.turnPatch(index);
-  }
-
-  /**
-   * Builds the closure `delegate_task` calls to run one bounded sub-agent.
-   *
-   * The sub-agent's own tool list is not known yet when this closure is created — it is the
-   * outer tool list, once built, minus `delegate_task` itself. `setTools` is called once that list
-   * exists; `execute` is only ever invoked later, during the run, by which point it always has. The
-   * indirection is what keeps this to one `createArchymedesTools` call instead of two.
-   *
-   * Depth is bounded structurally, not by a counter: the sub-agent's tool set never includes
-   * `delegate_task`, so it cannot spawn a further sub-agent no matter what it is asked to do.
-   *
-   * `readOnly` (the `delegate_readonly_task` tool) runs the sub-agent in plan mode with only the
-   * tools that are effect-free *and* parallel-safe — the same test the runtime applies before it
-   * runs calls concurrently. Such a sub-agent never reaches the approval gate (effect-free tools
-   * are approved without asking), never writes, and never touches the shared todo list, which is
-   * what makes several of them safe to run at once. Their budget reservations account for each
-   * other through `delegatedInFlightRwf`.
-   *
-   * Approval, cancellation and mode are all inherited from the parent session — the same
-   * `PermissionLedger`, so every effectful call inside the sub-agent is gated exactly as it would
-   * be if the top-level agent had called it directly, and cancelling the parent turn stops it too.
-   * What is not inherited is live event streaming: a sub-agent's own tool calls are not pushed to
-   * `onEvent`, so the transcript shows `delegate_task` as one call with one final report, not a
-   * nested play-by-play.
-   */
-  private createDelegateRunner(context: ProjectContext, remainingRwf: () => number): { runner: DelegateRunner; setTools: (tools: AgentTool[]) => void } {
-    let subTools: AgentTool[] = [];
-    const capabilities = capabilitiesForMode(this.options.mode);
-    const readOnlyCapabilities = capabilities.filter((id) => capabilitiesForMode("plan").includes(id));
-    const runner: DelegateRunner = async (task: string, runOptions?: { readOnly?: boolean }): Promise<DelegateResult> => {
-      const readOnly = runOptions?.readOnly === true;
-      const tools = readOnly
-        ? subTools.filter((tool) => tool.effect === "none" && tool.parallelSafe && readOnlyCapabilities.includes(tool.capabilityId))
-        : subTools;
-      const systemPrompt = buildArchymedesSystemPrompt(context, readOnly ? "plan" : this.options.mode, tools.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: this.options.model.tokenSaver === true });
-      // Never more than half of whatever is left of the turn's own budget on one delegation, so a
-      // model that delegates several times in a row cannot spend the whole turn's budget on the
-      // first one and leave nothing for the rest of its own work. What concurrent siblings have
-      // already reserved is not "left".
-      const reservation = Math.max(0, Math.min(remainingRwf() - this.delegatedInFlightRwf, this.budgets.maxRwf / 2));
-      this.delegatedInFlightRwf += reservation;
-      try {
-        const runtime = new BoundedAgentRuntime({
-          model: this.recovery.wrap(this.options.model, () => this.session, this.options.prices, `delegate:${randomUUID()}`),
-          tools,
-          prices: this.options.prices,
-          artifacts: this.artifacts,
-          control: {
-            heartbeat: async () => {},
-            isCancellationRequested: async () => this.cancelled,
-            isToolCallApproved: (call, tool) => this.permissions.decide(call, tool),
-            persistEvent: async () => {},
-          },
-        });
-        const result = await runtime.execute({
-          taskId: `${this.session.id}_delegate`,
-          runId: this.session.id,
-          stepId: `delegate_${randomUUID()}`,
-          objective: task,
-          history: [],
-          systemPrompt,
-          allowedCapabilityIds: readOnly ? readOnlyCapabilities : capabilities,
-          maxIterations: Math.min(15, this.budgets.maxIterations),
-          maxToolCalls: Math.min(40, this.budgets.maxToolCalls),
-          maxToolCallsPerTurn: this.budgets.maxToolCallsPerTurn,
-          maxToolResultChars: this.budgets.maxToolResultChars,
-          maxTotalToolResultChars: this.budgets.maxTotalToolResultChars,
-          maxOutputTokens: this.budgets.maxOutputTokens,
-          // A delegated sub-task is the textbook cheap-effort case: it is bounded, self-contained and
-          // reports back in prose. Lower effort also means fewer, more consolidated tool calls and
-          // less preamble, which is most of what a sub-agent's cost actually is.
-          effort: "low",
-          modelReservationRwf: reservation,
-          safetyIdentifier: `archymedes_cli_${this.session.id}_delegate`.slice(0, 64),
-          signal: this.turnAbort?.signal,
-        });
-        this.delegatedRwf += result.actualModelRwf;
-        this.delegatedUsage = addModelUsage(this.delegatedUsage, result.usage);
-        return { report: result.summary, status: result.status, iterations: result.iterations, toolCallsExecuted: result.toolCallsExecuted };
-      } finally {
-        this.delegatedInFlightRwf -= reservation;
-      }
-    };
-    return { runner, setTools: (tools) => { subTools = tools; } };
   }
 
   /**
@@ -966,17 +899,20 @@ export class ArchymedesAgent {
       // `delegate_task` reserves against what is left of *this turn's* budget once compaction (below)
       // has taken its share — known only after this point, so the callback reads it through a
       // variable set once it is, rather than the closure capturing today's zero forever.
-      this.delegatedRwf = 0;
-      this.delegatedUsage = emptyModelUsage();
+      this.subagents.startTurn();
       let compactionActualRwf = 0;
-      const delegate = this.createDelegateRunner(this.context, () => Math.max(0, this.budgets.maxRwf - compactionActualRwf - this.delegatedRwf));
+      const delegate = this.subagents.runner(() => Math.max(0, this.budgets.maxRwf - compactionActualRwf - this.subagents.spent.rwf));
+      // Read every turn, like the command rules below: a role added between turns is there for the next.
+      const roles = await loadSubagentProfiles(this.workspace, archymedesConfigDirectory(process.env));
+      this.subagents.profiles = roles.profiles;
 
       const externalTooling = await this.loadExternalTooling();
       // Read every turn: a rule written between turns applies to the next one.
       const commandRules = await loadCommandRules(this.options.root, process.env);
       this.permissions.setCommandRules(commandRules.rules);
-      const problems = commandRules.problems.join("\n");
-      if (problems && problems !== this.reportedRuleProblems) this.options.onEvent?.({ type: "rules_problems", problems: commandRules.problems });
+      const ruleProblems = [...commandRules.problems, ...roles.problems];
+      const problems = ruleProblems.join("\n");
+      if (problems && problems !== this.reportedRuleProblems) this.options.onEvent?.({ type: "rules_problems", problems: ruleProblems });
       this.reportedRuleProblems = problems;
       const tools = await createArchymedesTools({
         workspace: this.workspace,
@@ -989,6 +925,7 @@ export class ArchymedesAgent {
         externalToolProviders: externalTooling?.providers,
         hooks: externalTooling?.hooks,
         delegate: delegate.runner,
+        subagentProfiles: roles.profiles,
         memoryRoot: this.options.root,
         defenderBrain: this.defenderBrain,
         commandRules: commandRules.rules,
@@ -1030,7 +967,7 @@ export class ArchymedesAgent {
        * The memory itself is just as useful attached to the turn that asked for it, where it costs
        * a cache miss on nothing but itself.
        */
-      const systemPrompt = buildArchymedesSystemPrompt(this.context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: tokenSaver });
+      const systemPrompt = buildArchymedesSystemPrompt(this.context, this.options.mode, scoped.map((tool) => tool.name), this.workspace, await this.loadEnvironment(), { lean: tokenSaver, testFirst: this.testFirst(this.options.mode) });
       const memoryBlock = memoryPromptBlock(recalled);
       const attached = await attachMentionedImages(this.workspace, objective);
       const requested = objectiveWithImageProblems(objective, attached.problems);
@@ -1141,10 +1078,12 @@ export class ArchymedesAgent {
         safetyIdentifier: `archymedes_cli_${this.session.id}`.slice(0, 64),
         signal: turnAbort.signal,
         steering,
+        testFirst: this.testFirst(this.options.mode),
       });
 
-      const combinedUsage = addModelUsage(compaction.usage, addModelUsage(result.usage, this.delegatedUsage));
-      const combinedRwf = compaction.actualRwf + result.actualModelRwf + this.delegatedRwf;
+      const delegated = this.subagents.spent;
+      const combinedUsage = addModelUsage(compaction.usage, addModelUsage(result.usage, delegated.usage));
+      const combinedRwf = compaction.actualRwf + result.actualModelRwf + delegated.rwf;
       // Post-turn hooks run after the answer exists and cannot change it — a non-zero exit only
       // appends a warning to the summary, exactly as a post-tool-use hook appends one to a result.
       const hookWarnings = await this.runPostTurn(objective, result);
@@ -1545,21 +1484,6 @@ export class ArchymedesAgent {
       openTodos: this.todoList.list().filter((item) => item.status !== "done").map((item) => item.text),
     };
   }
-}
-
-function emptyModelUsage(): ModelUsage {
-  return { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
-}
-
-function addModelUsage(left: ModelUsage, right: ModelUsage): ModelUsage {
-  return {
-    inputTokens: left.inputTokens + right.inputTokens,
-    outputTokens: left.outputTokens + right.outputTokens,
-    totalTokens: left.totalTokens + right.totalTokens,
-    cachedInputTokens: left.cachedInputTokens + right.cachedInputTokens,
-    cacheWriteTokens: left.cacheWriteTokens + right.cacheWriteTokens,
-    reasoningTokens: left.reasoningTokens + right.reasoningTokens,
-  };
 }
 
 function runtimeStatusToTurnStatus(status: AgentRuntimeResult["status"]): TurnStatus {

@@ -102,7 +102,8 @@ async function fixedRequestTokens(root: string, mode: "build" | "plan" | "defend
   const allowed = capabilitiesForMode(mode);
   const scoped = tools.filter((tool) => allowed.includes(tool.capabilityId));
   const schemas = JSON.stringify(scoped.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })));
-  const prompt = buildArchymedesSystemPrompt(context, mode, scoped.map((tool) => tool.name));
+  // Test first is the default while building (verification-gate.ts), so that is the prompt measured.
+  const prompt = buildArchymedesSystemPrompt(context, mode, scoped.map((tool) => tool.name), undefined, undefined, { testFirst: true });
   return tokensOf(prompt) + tokensOf(schemas);
 }
 
@@ -309,7 +310,10 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     // edit_file `edits`), taking the request to ~8,000. Every tool description and parameter text was
     // then cut to the essentials (8,007 -> 6,464); what remains is ~2,700 of system prompt plus a
     // minimal schema per tool, so the new budget is the measured cost with ~2% headroom, not slack.
-    budget: { min: 2_000, max: 6_600 },
+    // Raised to 6,850 on 2026-10-20 (WS-32): sub-agent roles and the rule for when to delegate
+    // (~260 tokens; built-in roles described once, in the prompt, not again in each schema) took
+    // the measured cost from ~6,440 to 6,699. The guidance is what makes delegation happen unasked.
+    budget: { min: 2_000, max: 6_850 },
     baseline: { value: 4_546, on: "2026-08-22" },
     evidence: "archymedes-cli/prompt.ts, archymedes-cli/tools.ts",
     remediation:

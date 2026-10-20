@@ -75,6 +75,20 @@ describe("ClaudeTranslator", () => {
     expect(shown.filter((event) => event.type === "tool_result")).toHaveLength(1);
   });
 
+  it("shows a sub-agent's tool calls under its Task call, with its role, without their output", () => {
+    const { events } = turn([
+      assistant("m1", [{ type: "tool_use", id: "task", name: "Task", input: { description: "look around", subagent_type: "Explore" } }]),
+      assistant("m2", [{ type: "tool_use", id: "inner", name: "Read", input: { file_path: "/repo/src/app.ts" } }], "task"),
+      toolResult("inner", "x".repeat(5_000), true, "task"),
+      toolResult("task", "Found it."),
+    ]);
+    const sub = events.filter((event) => event.type === "subagent") as Array<Extract<ArchymedesEvent, { type: "subagent" }>>;
+    expect(sub.map((event) => [event.parentToolCallId, event.agent, event.event.type])).toEqual([["task", "Explore", "tool_call"], ["task", "Explore", "tool_result"]]);
+    expect(sub[0].event).toMatchObject({ toolName: "read_file" });
+    expect(sub[1].event).toMatchObject({ isError: true });
+    expect((sub[1].event as { content: string }).content.length).toBeLessThanOrEqual(240);
+  });
+
   it("reports each model call once with its usage, cache included in input", () => {
     const { events, translator } = turn([start("m1"), delta("a"), usage(7), stop, start("m2"), usage(3), stop]);
     const calls = runtimeEvents(events).filter((event) => event.type === "model_turn") as Array<{ responseId: string; usage: ReturnType<typeof modelUsage> }>;

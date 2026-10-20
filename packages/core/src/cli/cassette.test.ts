@@ -143,8 +143,10 @@ describe("a whole agent turn, recorded and replayed", () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  // The recorded turn is edit → npm test → done: what is pinned is replay fidelity, not how Friday
+  // builds, so test first's extra requests (verification-gate.test.ts) are left out of the recording.
   const agentWith = (model: AgentTurnProvider) => new ArchymedesAgent({
-    root, model, prices, mode: "build",
+    root, model, prices, mode: "build", testFirst: false,
     approve: async () => "allow",
     workspace: new LocalWorkspace(root, undefined, async () => ({ exitCode: 0, stdout: "1 passed", stderr: "" })),
     git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),
@@ -195,7 +197,7 @@ describe("a whole agent turn, recorded and replayed", () => {
 
     const events: string[] = [];
     const replayed = new ArchymedesAgent({
-      root, model: new ReplayTurnProvider(parseCassette(serializeCassette(recorder.cassette()))), prices, mode: "build",
+      root, model: new ReplayTurnProvider(parseCassette(serializeCassette(recorder.cassette()))), prices, mode: "build", testFirst: false,
       approve: async () => "allow",
       workspace: new LocalWorkspace(root, undefined, async () => ({ exitCode: 0, stdout: "1 passed", stderr: "" })),
       git: async () => ({ exitCode: 1, stdout: "", stderr: "not a repo" }),

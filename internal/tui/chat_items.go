@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/render"
 	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
@@ -101,7 +102,8 @@ type toolItem struct {
 	result         string
 	open           bool // this card's output shown in full (a click), independent of ctrl+o
 	denied         bool
-	started, ended time.Time // for the task manager
+	started, ended time.Time    // for the task manager
+	sub            *subagentRun // a delegation call's sub-agent, once it has done something
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -125,7 +127,15 @@ func (t *toolItem) render(ctx renderCtx) []string {
 		glyph = th.OK.Render("✓")
 		summary = render.LinkURLs(th.Faint, render.SummarizeToolResult(t.name, t.result, false))
 	}
-	pill := th.SoftPill(strings.ReplaceAll(t.name, "_", " "), accent)
+	label := strings.ReplaceAll(t.name, "_", " ")
+	if delegationTools[t.name] {
+		// A sub-agent is named by its role ("explore"), and its header counts what it has done.
+		label = "agent · " + subagentRole(t)
+		if !t.isError {
+			summary = th.Faint.Render(subagentSummary(t))
+		}
+	}
+	pill := th.SoftPill(label, accent)
 	room := max(ctx.width-ansi.StringWidth(pill)-ansi.StringWidth(summary)-6, 8)
 	detail := render.TruncateMiddle(render.DescribeToolCall(t.name, t.args), room)
 	head := glyph + " " + pill
@@ -140,6 +150,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	head += th.Faint.Render(" · ") + summary
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
 	expanded := ctx.expanded || t.open
+	if delegationTools[t.name] {
+		lines = append(lines, subagentActivity(ctx, t, expanded)...)
+	}
 	if t.done && showsOutput(t, expanded) {
 		limit := 6
 		if expanded {
@@ -218,6 +231,7 @@ type turnItem struct {
 	stopReason string
 	usage      usageTotals
 	seconds    float64
+	testFirst  *acp.TestFirstState // how the turn's test-first run ended, when it had one
 }
 
 func (t *turnItem) render(ctx renderCtx) []string {
@@ -230,6 +244,9 @@ func (t *turnItem) render(ctx renderCtx) []string {
 	// A rule across the width with the turn's numbers set into it; the rule fades from the
 	// primary colour into the ground, so the end of a turn is visible without being loud.
 	label := fmt.Sprintf(" %s · %.1fs · %s in · %s out ", reason, t.seconds, compact(t.usage.input), compact(t.usage.output))
+	if t.testFirst != nil {
+		label += "· " + testFirstSummary(*t.testFirst) + " "
+	}
 	label = ansi.Truncate(label, max(ctx.width-4, 1), "…")
 	style := ctx.th.Faint
 	from := ctx.th.Primary

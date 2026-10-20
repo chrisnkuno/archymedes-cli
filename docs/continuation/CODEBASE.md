@@ -104,6 +104,8 @@ policy modules such as `permissions.ts`; it implements the types in `engines/con
 | You are adding | Put it in |
 | --- | --- |
 | A tool for Friday's models | `core/cli/tools.ts` today (splitting it is backlog), declared with its `effect` |
+| A sub-agent role | Built in: `BUILT_IN_SUBAGENTS` in `core/cli/subagents.ts` (and a line in `delegationGuidance`); a project's own: `.archymedes/agents/<name>.md` |
+| What a run must show before it may finish (evidence, test first) | `core/src/verification-gate.ts`; the order of work it holds is also in `prompt.ts` (`testFirstLoop`) |
 | A permission rule | `core/cli/permissions.ts`, and the same rule in each engine bridge |
 | A command that should run unasked (it only reads) | `core/cli/command-readonly.ts` (read by run_command's `effectFor`, `PermissionLedger.decide` and the Claude bridge) |
 | A provider | `core/providers/<vendor>.ts`, dialect quirks in `chat-dialects.ts` |

@@ -58,6 +58,11 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+const TEST_FIRST_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — tests that define done, then the code, then a light static check (default)" },
+  { value: "off", label: "Off — verify with whatever the change needs" },
+];
+
 const SANDBOX_CHOICES: readonly SettingChoice[] = [
   { value: "off", label: "Off — commands run as you would run them (default)" },
   { value: "on", label: "On — writes only in the project and /tmp, no network; a way out is asked for each time" },
@@ -162,6 +167,8 @@ export const SETTING_FIELDS = [
   // people want to make separately is whether Archymedes may replace itself without being asked.
   { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
   { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: ON_OFF_CHOICES },
+  // On by default: writing the tests first is how Friday builds, and the setting is the way out.
+  { key: "ARCHYMEDES_TEST_FIRST", label: "Build test first — tests, then code, then static analysis", choices: TEST_FIRST_CHOICES },
   { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
   { key: "ARCHYMEDES_SANDBOX", label: "Command sandbox (Linux, bubblewrap): commands write only to the project and /tmp", choices: SANDBOX_CHOICES },
@@ -372,8 +379,8 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && !OUTSIDE_ENGINE_IDS.includes(value.toLowerCase())) throw new Error(`Choose one of: ${[...PROVIDER_IDS, ...OUTSIDE_ENGINE_IDS].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
-  if (key === "ARCHYMEDES_JEV" && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
-  if (key === "ARCHYMEDES_JEV") return value.toLowerCase();
+  if ((key === "ARCHYMEDES_JEV" || key === "ARCHYMEDES_TEST_FIRST") && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
+  if (key === "ARCHYMEDES_JEV" || key === "ARCHYMEDES_TEST_FIRST") return value.toLowerCase();
   if (key === "ARCHYMEDES_FALLBACK_MODEL" && value.toLowerCase() !== "ask") {
     const match = /^([a-z-]+)[:/]\S+$/i.exec(value);
     if (!match || !isProviderId(match[1].toLowerCase())) {

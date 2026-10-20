@@ -85,6 +85,9 @@ const ON_REQUEST: ReadonlyArray<{ tools: readonly string[]; when: RegExp }> = [
   { tools: ["repo_map", "find_symbol"], when: /\b(?:symbol|definition|references?|callers?|architecture|overview|structure|map|where is)\b/i },
   { tools: ["remember"], when: /\b(?:remember|memori[sz]e|forget|note that)\b/i },
   { tools: ["delegate_task", "delegate_readonly_task"], when: /\b(?:delegate|sub-?agents?|in parallel)\b/i },
+  // A request that spans the codebase is where a read-only sub-agent pays for itself: its reading
+  // stays out of this conversation, which a lean session cannot afford to fill.
+  { tools: ["delegate_readonly_task"], when: /\b(?:across|throughout|everywhere|whole|entire|codebase|every (?:file|module|package)|all (?:the )?(?:files|modules|packages|usages|callers)|audit|architecture|how does .+ work)\b/i },
   { tools: ["application_status"], when: /\b(?:app|application|server|preview|port)\b.*\b(?:running|status|up|reachable)\b/i },
   // Pure bookkeeping: `todo_write` already returns the list it wrote.
   { tools: ["todo_read"], when: /(?!)/ },

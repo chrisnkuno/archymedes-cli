@@ -173,6 +173,7 @@ describe("settings validation invariants", () => {
     ANTHROPIC_BASE_URL: ["https://api.anthropic.com", "http://localhost:8080/v1/"],
     OPENROUTER_API_KEY: ["sk-or-secret"],
     ARCHYMEDES_JEV: ["on", "OFF"],
+    ARCHYMEDES_TEST_FIRST: ["on", "OFF"],
     MODEL_INPUT_PER_MILLION: ["1.5", "0"],
     MODEL_OUTPUT_PER_MILLION: ["9.99", "0"],
     MODEL_CACHED_INPUT_PER_MILLION: ["0.25"],
