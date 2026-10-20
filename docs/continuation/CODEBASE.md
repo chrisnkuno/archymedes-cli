@@ -36,10 +36,11 @@ Packages, and what each may import (`tooling/check/go-sections.json`, guard `go-
 | `acp` | The ACP client: frames, requests, the event stream | — |
 | `config` | The interface's own state.json and keys.json | — |
 | `gallery` | Photographs and their credits | — |
+| `i18n` | The interface's words per language (`locales/<lang>.json`, English fallback); see [LANGUAGES.md](LANGUAGES.md) | — |
 | `project` | Git: status, diffs, branches, worktrees | — |
 | `cli` | Arguments and pass-through to the agent | — |
 | `render` | Markdown, tool-call cards, the mark | `theme` |
-| `tui` | The interface | all of the above |
+| `tui` | The interface (its words through `m.text.T(key)`) | all of the above |
 | `cmd/friday` | Wiring | anything |
 
 `internal/tui` is one Go package (every app hangs off `*Model`), so its sections are **file

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/friday-cli/internal/acp"
+	"github.com/chrisnkuno/friday-cli/internal/i18n"
 )
 
 // The Settings app (alt+s, /settings): every setting the terminal menu had, in sections, edited in
@@ -302,6 +304,9 @@ func (m *Model) settingSaved(msg settingSavedMsg) tea.Cmd {
 	}
 	s.editing, s.err = false, ""
 	s.input.Blur()
+	if msg.key == "ARCHYMEDES_LANGUAGE" {
+		m.text = i18n.Load(i18n.Resolve(msg.result.Value, os.Getenv)) // the next frame speaks it
+	}
 	if s.list != nil {
 		for i := range s.list.Rows {
 			if s.list.Rows[i].Key == msg.key {

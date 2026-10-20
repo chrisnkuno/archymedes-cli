@@ -5,6 +5,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/i18n"
 	"github.com/chrisnkuno/friday-cli/internal/render"
 	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
@@ -187,6 +189,8 @@ type Model struct {
 	turnUsage usageTotals
 	usage     usageTotals
 	retrying  string
+	// text is the interface's words in the person's language (ARCHYMEDES_LANGUAGE, else the locale).
+	text *i18n.Catalog
 	// composing is the tool call the model is writing right now, shown in place of "thinking…".
 	composing *acp.RuntimeEvent
 	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
@@ -223,6 +227,7 @@ func New(opts Options) *Model {
 		m.keyOverrides = overrides
 	}
 	m.keys = newKeyMap(m.keyOverrides)
+	m.text = i18n.Load(i18n.Resolve(config.Setting(opts.ConfigDir, "ARCHYMEDES_LANGUAGE"), os.Getenv))
 	m.photoIndex = time.Now().YearDay() // a different photo first each day
 	// Without a config directory there is nowhere to remember a welcome, so do not give one.
 	state := config.LoadState(opts.ConfigDir)

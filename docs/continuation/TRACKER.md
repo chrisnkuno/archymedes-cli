@@ -8,26 +8,33 @@ has 5,100 lines and `tui.ts` has 1,364.
 ## Release 3.10.0 (2026-10-19)
 WS-29: read-only commands run unasked and in parallel, auto mode asks only about risk, one bad call no longer voids a batch, tool calls shown while the model writes them, a sharper grep, numbered reads, edits as a real array, and a working loop in the system prompt. `@archymedes/friday` and the six platform packages at 3.10.0.
 
-## WS-31: Friday in other languages (2026-10-19, todo)
-User: "let's make it multi lingual by adding other languages include jp, kr, cn, spanish and so on".
+## WS-31: Friday in other languages (2026-10-19)
+User: "let's make it multi lingual by adding other languages include jp, kr, cn, spanish and so on". Design: [LANGUAGES.md](LANGUAGES.md).
 
 | ID | Task | Status | Files | Evidence |
 | --- | --- | --- | --- | --- |
-| WS-31.1 | Design: what is translated (Go interface strings, agent messages, setup, the welcome/tour) and what is not (tool names, protocol, model output); one catalog format both stacks read; language chosen from settings, falling back to `LANG`; CJK width in the Go layout | todo (design first) | `platform/i18n` (exists in TS), `internal/` (new catalog) | |
-| WS-31.2 | Languages: Japanese, Korean, Simplified Chinese, Spanish first; then Traditional Chinese, Portuguese, French, German | todo | | |
-| WS-31.3 | The agent answers in the person's language unless asked otherwise (one line in the system prompt) | todo | `core/cli/prompt.ts` | |
+| WS-31.1 | Design: what is translated and what is not, one JSON catalog for Go and TS, plurals, language order (setting → env → English), guards, translation review | done | `docs/continuation/LANGUAGES.md` | Found: `ARCHYMEDES_LANGUAGE` exists but only TS reads it; ~320 Go literals; width already via `ansi.StringWidth` (37 places, 2 `len()` to check) |
+| WS-31.2 | L1: `internal/i18n` (loader, `T`, plurals, fallback); the Go interface reads `ARCHYMEDES_LANGUAGE` | done | `internal/i18n/` (new; `go-sections.json` row), `internal/config` (`Setting`), `core_model.go`, `app_settings.go`, `core_view.go` | `i18n_test.go` (fallback key by key, placeholders, en/es vs ja/ko/zh plurals, setting → LC_ALL → LC_MESSAGES → LANG → en, every catalog only translates English's keys with the same placeholders); `TestTheInterfaceSpeaksTheLanguageChosenInSettings` (Settings → ja switches at once); `suite_main_test.go` pins tests to English. One key so far (`chat.thinking`, drafts in ja/ko/zh/es); the rest is L2. Windows' user locale is not read yet (env only) |
+| WS-31.3 | L2: extract strings by section, with a literal-count guard that only falls | todo | `internal/tui/` | |
+| WS-31.4 | L3: TS screen messages from the same catalog | todo | `packages/` | |
+| WS-31.5 | L4: ja, ko, zh, es + glossary + per-locale render suite | todo | `internal/i18n/locales/` | |
+| WS-31.6 | L5–L6: reply-language prompt line, the site, speaker review, then zh-Hant, pt, fr, de | todo | | |
 
-## WS-30: Friday from a phone — a web app over E2B with lasting sessions (2026-10-19, todo)
-User: "let's connect phones via web app that has e2b wired and runs friday in it, maintains login session and etc so we can remotely run tasks etc".
+## WS-30: Friday from a phone — a web app over E2B with lasting sessions (2026-10-19)
+User: "let's connect phones via web app that has e2b wired and runs friday in it, maintains login session and etc so we can remotely run tasks etc". Design: [REMOTE.md](REMOTE.md). Decided by the user: hosted (Friday's keys, so keys never enter a sandbox), GitHub App sign-in, Cloudflare on archymedes.xyz, cloud sessions first.
 
 | ID | Task | Status | Files | Evidence |
 | --- | --- | --- | --- | --- |
-| WS-30.1 | Design: architecture (web app ↔ server ↔ Friday agent in an E2B sandbox over ACP), auth and lasting login, where sessions and provider keys live, cost and sandbox lifetime, how a phone pairs to a desktop session | todo (design first) | new package | |
-| WS-30.2 | Web app (mobile-first): sign in, start or resume a session, chat with streamed tool calls, approve/deny, ask_user answers | todo | | |
-| WS-30.3 | Server: sessions persisted across sandbox restarts, E2B lifecycle (create, pause, resume), the agent run as `friday acp` inside it | todo | | |
-| WS-30.4 | Remote tasks: queue a task, notify when done (push), review the diff, open a PR | todo | | |
+| WS-30.1 | Design: Friday runs whole inside the sandbox; the bridge dials out to a per-session Durable Object; model proxy (free gateway's rules, paid models, spend per user); GitHub App tokens per command; D1 schema; caps; security model; milestones | done | `docs/continuation/REMOTE.md` | |
 | WS-30.5 | Sessions that last days or weeks (E2B docs, read 2026-10-19): create with `lifecycle: { onTimeout: 'pause' }` (the default is kill); a paused sandbox is kept indefinitely (no TTL) with memory and processes, and `Sandbox.connect(id)` resumes it in ~1 s (pausing costs ~4 s per GiB of RAM). Running time is capped (Pro 24 h, Hobby 1 h) and resets on pause/resume, so pause between tasks. Store the sandbox id + Friday session id per user; `Sandbox.list({ query: { state: ['paused'] } })` lists them; metadata on create tags the owner. Pause can return 503 `ServiceBusyError`: retry. Services in the sandbox are unreachable while paused (reconnect ACP after resume). Snapshots (`createSnapshot`, `Sandbox.create(snapshotId)`) outlive a deleted sandbox: a backup and a "fork this session" | todo | | docs.e2b.dev/sandbox/persistence, SDK reference `Sandbox` |
 | WS-30.6 | Git on the go: clone the person's repo into the sandbox with a token (GitHub OAuth app or fine-grained PAT), commit/push a branch, open a PR. E2B's `sandbox.git` (clone/pull/push with `username`+`password` token, `configureUser`, `dangerouslyAuthenticate` credential helper) is **deprecated** — use `sandbox.commands.run('git …')` with the token passed per command (never stored in `.git/config`, since the agent can read the sandbox's disk). Pull on resume so desktop and phone stay on the same branch | todo | | docs.e2b.dev/sandbox/git-integration |
+| WS-30.7 | M0 spikes: E2B from a Worker; a template with Friday; the bridge through pause/resume | todo | `~/archymedes-site/workers/app/`, `friday bridge` | |
+| WS-30.8 | M1 sign-in (GitHub App), devices, invite flag, repo list | todo | | |
+| WS-30.9 | M2 sessions + relay + read-only phone view | todo | | |
+| WS-30.10 | M3 full chat (approvals, questions, modes, replay) | todo | | |
+| WS-30.11 | M4 push + PR | todo | | |
+| WS-30.12 | M5 model proxy, caps, kill switch | todo | | |
+| WS-30.13 | M6 PWA + Web Push | todo | | |
 
 ## WS-29: Tool calling as smooth as Claude Code or Codex (2026-10-19)
 User: "tool calling is functional but it still does not feel as smooth as the other cli like claude code or codex … give better tools and better rationale to how the agent will operate". Audit of Friday's own engine found five frictions; each is one task.

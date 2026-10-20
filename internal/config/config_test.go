@@ -79,3 +79,17 @@ func TestUpdateStateKeepsWhatItDoesNotTouch(t *testing.T) {
 		t.Fatalf("state = %+v", got)
 	}
 }
+
+func TestSettingReadsOneValueFromTheAgentsSettings(t *testing.T) {
+	dir := t.TempDir()
+	if Setting(dir, "ARCHYMEDES_LANGUAGE") != "" {
+		t.Fatal("no file is no value")
+	}
+	os.WriteFile(filepath.Join(dir, SettingsFile), []byte(`{"ARCHYMEDES_LANGUAGE": "ko", "N": 3}`), 0o600)
+	if got := Setting(dir, "ARCHYMEDES_LANGUAGE"); got != "ko" {
+		t.Fatalf("got %q", got)
+	}
+	if Setting(dir, "N") != "" || Setting("", "ARCHYMEDES_LANGUAGE") != "" {
+		t.Fatal("a non-string value, or no directory, is no value")
+	}
+}

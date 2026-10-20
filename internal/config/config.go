@@ -45,6 +45,27 @@ func Default() string {
 	return Dir(os.Getenv, home, runtime.GOOS)
 }
 
+// SettingsFile is the agent's settings (packages/friday-cli/src/platform/settings.ts): flat keys
+// to string values. The interface only reads it, for what it needs before the agent is up.
+const SettingsFile = "settings.json"
+
+// Setting is one value from settings.json, "" when it, the file or the directory is missing.
+func Setting(dir, key string) string {
+	if dir == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(dir, SettingsFile))
+	if err != nil {
+		return ""
+	}
+	var values map[string]any
+	if json.Unmarshal(data, &values) != nil {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return value
+}
+
 // KeysFile holds only the bindings someone changed: action id → keys.
 const KeysFile = "keys.json"
 

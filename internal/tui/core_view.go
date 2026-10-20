@@ -84,7 +84,7 @@ func (m *Model) body(height int) []string {
 	if !m.thinking() || height < 3 || !m.tr.following() {
 		return m.tr.window(ctx, height)
 	}
-	label := "thinking…"
+	label := m.text.T("chat.thinking")
 	if m.composing != nil {
 		label = composingLabel(m.composing.ToolName, m.composing.Subject, m.composing.Chars)
 	}

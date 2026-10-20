@@ -41,3 +41,15 @@ func TestAToolCallBeingWrittenIsShownUntilItArrives(t *testing.T) {
 		t.Fatal("a finished model call leaves nothing composing")
 	}
 }
+
+func TestTheInterfaceSpeaksTheLanguageChosenInSettings(t *testing.T) {
+	m, _ := newTestModel(t)
+	if got := m.text.T("chat.thinking"); got != "thinking…" {
+		t.Fatalf("English by default: %q", got)
+	}
+	m.openWindow(newSettingsApp(m))
+	m.settingSaved(settingSavedMsg{key: "ARCHYMEDES_LANGUAGE", result: acp.SettingsSetResult{OK: true, Value: "ja", IsSet: true}})
+	if got := m.text.T("chat.thinking"); got != "考え中…" {
+		t.Fatalf("after choosing ja: %q", got)
+	}
+}

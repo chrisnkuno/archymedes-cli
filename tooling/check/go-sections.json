@@ -6,9 +6,10 @@
     "cli": [],
     "config": [],
     "gallery": [],
+    "i18n": [],
     "project": [],
     "render": ["theme"],
-    "tui": ["acp", "config", "gallery", "project", "render", "theme"]
+    "tui": ["acp", "config", "gallery", "i18n", "project", "render", "theme"]
   },
   "tui": {
     "core": "The Bubble Tea model, its update loop and input routing: state, agent events, keys, mouse, paste, click zones, the screen's composition, the action registry, the rate-limit forecast",
