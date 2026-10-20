@@ -63,6 +63,15 @@ describe("lean tool set", () => {
     expect(has("where is parseConfig defined?", "find_symbol")).toBe(true);
     expect(has("remember that we use pnpm", "remember")).toBe(true);
     expect(has("run these in parallel with sub-agents", "delegate_task")).toBe(true);
+    // Several things asked at once, or a whole repository, bring the read-only sub-agent too.
+    expect(has("Answer three questions: (1) how does the server pick options? (2) how does the bridge redial? (3) how does auto mode decide?", "delegate_readonly_task")).toBe(true);
+    expect(has("How does auth work? And how does billing work?", "delegate_readonly_task")).toBe(true);
+    expect(has("summarize this repository", "delegate_readonly_task")).toBe(true);
+    expect(has("1. read a.ts\n2. read b.ts and compare", "delegate_readonly_task")).toBe(true);
+    // A single narrow question is a lookup for the main agent, not a delegation.
+    expect(has("what is the default port in server.ts?", "delegate_readonly_task")).toBe(false);
+    expect(has("why does parse() return null here?", "delegate_readonly_task")).toBe(false);
+    expect(has("fix the typo on line 3", "delegate_readonly_task")).toBe(false);
     // A request spanning the codebase brings the read-only sub-agent, not the writing one.
     expect(has("how does auth work across the codebase?", "delegate_readonly_task")).toBe(true);
     expect(has("how does auth work across the codebase?", "delegate_task")).toBe(false);

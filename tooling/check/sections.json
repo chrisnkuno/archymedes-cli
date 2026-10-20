@@ -11,6 +11,9 @@
     "engines": ["engines", "setup", "session", "platform", "text"],
     "server": ["server", "engines", "setup", "session", "platform", "text"],
 
+    "bridge": ["bridge", "platform", "text"],
+    "account": ["account", "platform", "text"],
+
     "catalog": ["catalog", "platform", "text"],
     "terminal": ["terminal", "catalog", "theme", "platform", "text"],
     "render": ["render", "terminal", "catalog", "theme", "platform", "text"],

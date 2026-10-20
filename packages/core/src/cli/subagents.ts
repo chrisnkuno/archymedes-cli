@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { BoundedAgentRuntime, type AgentRuntimeEvent, type AgentTool, type AgentToolCall, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
+import { BoundedAgentRuntime, type AgentMessage, type AgentRuntimeEvent, type AgentTool, type AgentToolCall, type AgentTurnProvider, type ThinkingEffort } from "../agent-runtime";
 import type { ModelPriceCatalog } from "../model-cost";
 import { addModelUsage, emptyModelUsage, type ModelUsage } from "../providers/model";
 import type { WorkspaceArtifactStore } from "./artifacts";
@@ -63,18 +63,30 @@ const NEVER_DELEGATED = new Set([...DELEGATION_TOOLS, "todo_write", "todo_read",
 
 const WRITE_TOOLS = ["write_file", "edit_file", "notebook_edit"];
 
+/**
+ * What a read-only role needs and no more. Every turn of a sub-agent re-sends its tool schemas, and
+ * measured against a real model an explorer carried git, compute and a todo list it never called:
+ * a few thousand tokens a turn for nothing. A smaller set is also fewer wrong turns.
+ */
+const SEARCH_TOOLS = ["read_file", "list_files", "glob_files", "grep_files", "repo_map", "find_symbol"] as const;
+
+/** The discipline that matters most to a sub-agent's cost, said once for every read-only role. */
+const READ_ONCE = "Read each file once, whole (read_file returns up to 2000 lines) and put several searches or reads in one turn. Never re-read a file or a range you already have: it is in your conversation above.";
+
 export const BUILT_IN_SUBAGENTS: readonly SubagentProfile[] = [
   {
     name: "explore",
     description: "find where/how something works (files, symbols, callers); one area each, several at once",
     readOnly: true,
     instructions: [
-      "You are an exploration sub-agent. Search wide first (grep_files, glob_files, find_symbol, repo_map), several searches in one turn, then read only the parts that answer the brief.",
+      "You are an exploration sub-agent. Search wide first (grep_files, glob_files, find_symbol, repo_map), several searches in one turn, then read only the files that answer the brief.",
+      READ_ONCE,
       "Every claim cites path:line. Say what you looked for and did not find, so the reader knows it is absent rather than missed. Stop as soon as the brief is answered.",
     ].join("\n"),
     effort: "low",
-    maxIterations: 20,
-    maxToolCalls: 60,
+    maxIterations: 10,
+    maxToolCalls: 30,
+    tools: SEARCH_TOOLS,
     source: "built-in",
   },
   {
@@ -83,11 +95,13 @@ export const BUILT_IN_SUBAGENTS: readonly SubagentProfile[] = [
     readOnly: true,
     instructions: [
       "You are a planning sub-agent. Read the code the change touches and the code that calls it, then write the plan: each step names the file and the function, in the order to do them.",
+      READ_ONCE,
       "Name the risks (callers that break, behaviour that changes, tests that must change) and how to verify the whole change. Prefer the smallest change that does what the brief asks; follow the conventions already in the code.",
     ].join("\n"),
     effort: "medium",
-    maxIterations: 20,
-    maxToolCalls: 60,
+    maxIterations: 12,
+    maxToolCalls: 36,
+    tools: SEARCH_TOOLS,
     source: "built-in",
   },
   {
@@ -96,11 +110,13 @@ export const BUILT_IN_SUBAGENTS: readonly SubagentProfile[] = [
     readOnly: true,
     instructions: [
       "You are a review sub-agent. You did not write this code; check it rather than trust it. Look at the change (git_diff) and at what calls it.",
+      READ_ONCE,
       "Report only real defects: a concrete input or state, and the wrong result it produces, with path:line. No style notes, no praise, no speculation you have not checked. If you find nothing, say so plainly.",
     ].join("\n"),
     effort: "medium",
-    maxIterations: 20,
-    maxToolCalls: 60,
+    maxIterations: 12,
+    maxToolCalls: 36,
+    tools: [...SEARCH_TOOLS, "git_diff", "git_status", "git_log", "git_show"],
     source: "built-in",
   },
   {
@@ -135,9 +151,26 @@ export const BUILT_IN_SUBAGENTS: readonly SubagentProfile[] = [
 /** The default role for each delegation tool, when the call names none. */
 const DEFAULT_ROLE = { readOnly: "explore", writable: "general" } as const;
 
+/**
+ * How much of one tool result, and of all of them, a sub-agent may keep in front of it.
+ *
+ * A lean (free-mode) session caps a tool result at 3 000 characters, and every sub-agent inherited that:
+ * measured on a real model, a 28 000-character file took a dozen windowed reads (each one a whole model
+ * turn re-sending the conversation), and two of three reports came back saying they were partial because
+ * the file was truncated. The cap suits a long main conversation; a sub-agent's conversation is short and
+ * its own, so it gets room to read a file in a few pieces instead of many. The floor only raises a lean
+ * limit: a session with larger limits keeps them.
+ */
+const SUBAGENT_RESULT_CHARS = 9_000;
+const SUBAGENT_TOTAL_RESULT_CHARS = 54_000;
+
+/** Said to a sub-agent that ended on its budget, so that what it found is not thrown away with it. */
+const WRAP_UP = "You have run out of steps. Do not call any tool. Write your report now from what you have already found: the answer so far first (say what is still unknown), then the evidence as path:line.";
+
 const REPORT_CONTRACT = [
   "You have no memory of the conversation that sent you: the brief below is everything you know, and your final message is the only thing the agent that sent you will see.",
-  "Write that message as a report: the answer or outcome first, then the evidence (path:line, commands with their exit codes), then anything you could not do and why. No preamble, and no narration of the steps you took.",
+  "Write that message as a report of at most about 400 words: the answer or outcome first, then the evidence (path:line, commands with their exit codes), then anything you could not do and why. No preamble, and no narration of the steps you took.",
+  "You have a limited number of steps. If you are running short, stop searching and report what you have found so far: a partial answer is useful, an empty one is not.",
 ].join("\n");
 
 const AGENTS_DIRECTORY = ".archymedes/agents";
@@ -187,8 +220,8 @@ export function parseSubagentFile(displayPath: string, raw: string): SubagentPro
     readOnly,
     instructions: match[2].trim(),
     effort,
-    maxIterations: bounded("maxiterations", readOnly ? 20 : 25, 40),
-    maxToolCalls: bounded("maxtoolcalls", readOnly ? 60 : 80, 150),
+    maxIterations: bounded("maxiterations", readOnly ? 12 : 25, 40),
+    maxToolCalls: bounded("maxtoolcalls", readOnly ? 36 : 80, 150),
     ...(tools && tools.length > 0 ? { tools } : {}),
     source: displayPath,
   };
@@ -247,7 +280,7 @@ export function delegationGuidance(toolNames: readonly string[], lean = false): 
   const writable = toolNames.includes("delegate_task");
   if (!readOnly && !writable) return "";
   if (lean) {
-    return "- Sub-agents: delegate only broad searches (delegate_readonly_task, several at once, one area each) or a fully specified independent piece; do one- or two-call work yourself.";
+    return "- Sub-agents: delegate only broad searches (delegate_readonly_task, several at once, one area each) or a fully specified independent piece; do one- or two-call work yourself, and do not repeat a sub-agent's search: use its report.";
   }
   return [
     "Sub-agents (only their report enters your context; the brief is all they know: goal, area, what you know, what to report):",
@@ -256,8 +289,67 @@ export function delegationGuidance(toolNames: readonly string[], lean = false): 
       "- plan before a change across files you have not read; review after substantial edits, then fix what it finds before reporting done.",
     ] : []),
     ...(writable ? ["- delegate_task: general for an independent, fully specified piece while you do the rest; verify to run the checks."] : []),
-    "- Do one- or two-call lookups yourself, and check a report's claims before relying on them.",
+    "- Do one- or two-call lookups yourself. Use a report as given: do not repeat its search, check only the one claim you will rely on.",
   ].join("\n");
+}
+
+/**
+ * Stops a sub-agent re-reading what it already has.
+ *
+ * Measured against a real model: one sub-agent read the same 470-line file 22 times in windows, another
+ * 15; the main agent did the same in a solo run. Each repeat is a model turn and a result that adds
+ * nothing. A repeat whose lines are all inside what an earlier read returned is answered with where the
+ * lines are, not with the lines again. Per run: a sub-agent is short, never compacts its transcript, so
+ * what it read is still in front of it.
+ */
+export function withoutRepeatedReads(tools: readonly AgentTool[]): AgentTool[] {
+  const covered = new Map<string, Array<[number, number]>>();
+  const totals = new Map<string, number>();
+  const merge = (ranges: Array<[number, number]>, range: [number, number]): Array<[number, number]> => {
+    const all = [...ranges, range].sort((a, b) => a[0] - b[0]);
+    const out: Array<[number, number]> = [];
+    for (const [from, to] of all) {
+      const last = out[out.length - 1];
+      if (last && from <= last[1] + 1) last[1] = Math.max(last[1], to);
+      else out.push([from, to]);
+    }
+    return out;
+  };
+  const isCovered = (ranges: Array<[number, number]> | undefined, from: number, to: number): boolean => (ranges ?? []).some(([a, b]) => a <= from && b >= to);
+  return tools.map((tool) => {
+    if (tool.name !== "read_file") return tool;
+    return {
+      ...tool,
+      async execute(args, context) {
+        const path = typeof args.path === "string" ? args.path : "";
+        const offset = typeof args.offset === "number" && args.offset >= 1 ? Math.floor(args.offset) : 1;
+        const limit = typeof args.limit === "number" && args.limit >= 1 ? Math.floor(args.limit) : undefined;
+        const total = totals.get(path);
+        // A request with no limit means "to the end": only repeated when the end is known and covered.
+        const to = limit !== undefined ? offset + limit - 1 : total;
+        if (path && to !== undefined && isCovered(covered.get(path), offset, Math.min(to, total ?? to))) {
+          const have = covered.get(path)!.find(([a, b]) => a <= offset && b >= Math.min(to, total ?? to))!;
+          return { content: `[Already in this conversation: ${path} lines ${have[0]}-${have[1]}, from your earlier read_file result above. A second read adds nothing: use those lines, or grep_files to find something else.]`, data: { path, repeated: true } };
+        }
+        const result = await tool.execute(args, context);
+        if (!result.isError && typeof result.content === "string") {
+          const numbered = [...result.content.matchAll(/^(\d+)\t/gm)].map((match) => Number(match[1]));
+          if (numbered.length > 0) {
+            const data = result.data as { path?: unknown; totalLines?: unknown; truncated?: unknown } | undefined;
+            // A read that was not cut short reached the end of the file. The tool counts a file's trailing
+            // newline as one more line than it numbers, so the end is taken from its own total.
+            const reachedEnd = data?.truncated === false && typeof data.totalLines === "number";
+            const range: [number, number] = [numbered[0], reachedEnd ? Math.max(numbered[numbered.length - 1], data.totalLines as number) : numbered[numbered.length - 1]];
+            for (const key of new Set([path, typeof data?.path === "string" ? data.path : path])) {
+              covered.set(key, merge(covered.get(key) ?? [], range));
+              if (typeof data?.totalLines === "number") totals.set(key, data.totalLines);
+            }
+          }
+        }
+        return result;
+      },
+    };
+  });
 }
 
 /** What a sub-agent did, for the tool result the main agent reads. */
@@ -411,7 +503,7 @@ export class Subagents {
     const mode = host.mode();
     const capabilities = capabilitiesForMode(mode);
     const readOnlyCapabilities = capabilities.filter((id) => capabilitiesForMode("plan").includes(id));
-    const tools = toolsForSubagent(profile, parentTools, readOnlyCapabilities);
+    const tools = withoutRepeatedReads(toolsForSubagent(profile, parentTools, readOnlyCapabilities));
     const base = await host.systemPrompt(profile.readOnly ? "plan" : mode, tools.map((tool) => tool.name));
     const systemPrompt = [base, profile.instructions, REPORT_CONTRACT].filter(Boolean).join("\n\n");
     const budgets = host.budgets();
@@ -442,29 +534,50 @@ export class Subagents {
           persistEvent: async (event) => emit(event),
         },
       });
-      const result = await runtime.execute({
+      const request = {
         taskId: `${host.sessionId()}_delegate`,
         runId: host.sessionId(),
         stepId: `delegate_${randomUUID()}`,
         objective: task,
-        history: [],
+        history: [] as AgentMessage[],
         systemPrompt,
         allowedCapabilityIds: profile.readOnly ? readOnlyCapabilities : capabilities,
         maxIterations: Math.min(profile.maxIterations, budgets.maxIterations),
         maxToolCalls: Math.min(profile.maxToolCalls, budgets.maxToolCalls),
         maxToolCallsPerTurn: budgets.maxToolCallsPerTurn,
-        maxToolResultChars: budgets.maxToolResultChars,
-        maxTotalToolResultChars: budgets.maxTotalToolResultChars,
+        maxToolResultChars: Math.max(budgets.maxToolResultChars, SUBAGENT_RESULT_CHARS),
+        maxTotalToolResultChars: Math.max(budgets.maxTotalToolResultChars, SUBAGENT_TOTAL_RESULT_CHARS),
         maxOutputTokens: budgets.maxOutputTokens,
         effort: profile.effort,
         modelReservationRwf: reservation,
         safetyIdentifier: `archymedes_cli_${host.sessionId()}_delegate`.slice(0, 64),
         signal: host.signal(),
         testFirst: !profile.readOnly && host.testFirst?.(mode) === true,
-      });
+      };
+      const result = await runtime.execute(request);
       this.spentRwf += result.actualModelRwf;
       this.usage = addModelUsage(this.usage, result.usage);
-      return { report: result.summary, status: result.status, iterations: result.iterations, toolCallsExecuted: result.toolCallsExecuted };
+      let report = result.summary;
+      // Ended on its budget: it has read for all those steps and says nothing. One last call, with no
+      // tools to call, over everything it read, asks for what it found. Without this the work is lost
+      // and the main agent does it again: measured, a 20-step sub-agent returned only its step count.
+      const left = reservation - result.actualModelRwf;
+      if (result.status === "iteration_limit" && result.messages.length > 0 && left > 0 && !host.isCancelled()) {
+        const wrapUp = await new BoundedAgentRuntime({
+          model: host.model(`delegate:${randomUUID()}`), tools: [], prices: host.prices, artifacts: host.artifacts,
+          control: { heartbeat: async () => {}, isCancellationRequested: async () => host.isCancelled(), isToolCallApproved: async () => false, persistEvent: async (event) => emit(event) },
+        }).execute({
+          ...request, stepId: `delegate_${randomUUID()}`, objective: WRAP_UP,
+          history: result.messages.filter((message) => message.role !== "system"),
+          maxIterations: 1, maxToolCalls: 1, modelReservationRwf: left,
+        }).catch(() => undefined);
+        if (wrapUp) {
+          this.spentRwf += wrapUp.actualModelRwf;
+          this.usage = addModelUsage(this.usage, wrapUp.usage);
+          if (wrapUp.status === "completed" && wrapUp.summary.trim()) report = wrapUp.summary;
+        }
+      }
+      return { report, status: result.status, iterations: result.iterations, toolCallsExecuted: result.toolCallsExecuted };
     } finally {
       this.inFlightRwf -= reservation;
     }

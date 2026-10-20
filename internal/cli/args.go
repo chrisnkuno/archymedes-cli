@@ -45,7 +45,7 @@ var interactiveRefused = map[string]string{
 }
 
 // subcommands are the agent's own verbs; each is a non-interactive mode.
-var subcommands = []string{"acp", "update", "settings", "history", "doctor"}
+var subcommands = []string{"acp", "bridge", "login", "logout", "account", "keys", "update", "settings", "history", "doctor"}
 
 // passthroughFlags put the agent in a mode that is not a terminal session.
 var passthroughFlags = []string{"--acp", "--json", "--headless", "--doctor", "--update", "--check-update", "--settings", "--providers", "--sessions", "--estimate"}

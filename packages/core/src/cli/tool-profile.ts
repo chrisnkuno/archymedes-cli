@@ -7,7 +7,10 @@ import type { AgentTool } from "../agent-runtime";
 
 export type ToolProfile = "chat" | "read" | "full";
 
-const MUTATING = /\b(create|write|edit|change|modify|fix|implement|build|install|delete|remove|rename|move|run|test|commit|push|deploy|publish|send|continue|resume|update|add|refactor|replace|rewrite|append|insert|generate|format|upgrade|bump|revert|patch|migrate|scaffold|save|set up|setup)\b/i;
+// The everyday ways to ask for a change. A verb missing here sends the request to the read-only
+// profile, where the agent cannot do what was asked ("make a file", "put a spinner in app.tsx"), so the
+// list errs wide: offering a write tool to a question costs a few tokens, withholding it fails the task.
+const MUTATING = /\b(create|write|edit|change|modify|fix|implement|build|install|delete|remove|rename|move|run|test|commit|push|deploy|publish|send|continue|resume|update|add|refactor|replace|rewrite|append|insert|generate|format|upgrade|bump|revert|patch|migrate|scaffold|save|set up|setup|make|put|convert|clean|tidy|configure|enable|disable|extract|split|merge|apply|adjust|tweak|improve|optimi[sz]e|simplify|introduce|swap|wire|hook up|integrate|inline|dedupe|deduplicate|wrap|pull out|break up|turn into|hook)\b/i;
 const REPOSITORY_READING = /\b(review|inspect|audit|analy[sz]e|diagnose|explain|find|locate|search|read|why|error|bug|code|repo(?:sitory)?|project|file|folder|function|class|test|diff)\b/i;
 const DIRECT_CHAT = /^(?:hi|hello|hey|thanks|thank you|who are you|what can you do)[.!?\s]*$/i;
 const EXACT_REPLY = /\b(?:reply|respond|say|output)\s+with\s+(?:exactly|only)\b/i;

@@ -48,6 +48,13 @@ func TestEverythingElsePassesThroughUnchanged(t *testing.T) {
 		{[]string{"--json", "fix", "it"}, true, []string{"--json", "fix", "it"}},
 		{[]string{"fix", "it"}, false, []string{"fix", "it"}}, // piped or redirected
 		{[]string{"doctor", "--report"}, true, []string{"doctor", "--report"}},
+		// The process a cloud sandbox runs: never an interactive session, whatever the terminal.
+		{[]string{"bridge"}, true, []string{"bridge"}},
+		// A Friday account on this computer: commands that print and exit, never a session.
+		{[]string{"login"}, true, []string{"login"}},
+		{[]string{"keys", "push", "openai"}, true, []string{"keys", "push", "openai"}},
+		{[]string{"account"}, true, []string{"account"}},
+		{[]string{"logout"}, true, []string{"logout"}},
 		{[]string{"history", "list"}, true, []string{"history", "list"}},
 		{[]string{"update", "--check"}, true, []string{"update", "--check"}},
 		{[]string{"acp", "--free"}, true, []string{"acp", "--free"}},

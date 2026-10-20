@@ -74,7 +74,7 @@ export function tokenSaverBudgets(capabilities: ModelCapabilities): Pick<Archyme
  * that brings it back. A tool's schema is resent on every request whether or not it is called, and
  * these are the long-described, rarely-called ones.
  */
-const ON_REQUEST: ReadonlyArray<{ tools: readonly string[]; when: RegExp }> = [
+const ON_REQUEST: ReadonlyArray<{ tools: readonly string[]; when: RegExp | ((objective: string) => boolean) }> = [
   { tools: ["web_search", "web_fetch"], when: /\b(?:web|internet|online|google|look\s*up|search\s+for|latest|news|docs?|documentation|url|website|release notes|changelog|advisory|cve)\b|https?:\/\//i },
   { tools: ["deep_research"], when: /\bresearch\b/i },
   { tools: ["deploy_app"], when: /\b(?:deploy|publish|vercel|render\.com|hosting|go live)\b/i },
@@ -85,13 +85,31 @@ const ON_REQUEST: ReadonlyArray<{ tools: readonly string[]; when: RegExp }> = [
   { tools: ["repo_map", "find_symbol"], when: /\b(?:symbol|definition|references?|callers?|architecture|overview|structure|map|where is)\b/i },
   { tools: ["remember"], when: /\b(?:remember|memori[sz]e|forget|note that)\b/i },
   { tools: ["delegate_task", "delegate_readonly_task"], when: /\b(?:delegate|sub-?agents?|in parallel)\b/i },
-  // A request that spans the codebase is where a read-only sub-agent pays for itself: its reading
-  // stays out of this conversation, which a lean session cannot afford to fill.
-  { tools: ["delegate_readonly_task"], when: /\b(?:across|throughout|everywhere|whole|entire|codebase|every (?:file|module|package)|all (?:the )?(?:files|modules|packages|usages|callers)|audit|architecture|how does .+ work)\b/i },
+  // A request that spans the codebase, or asks several things at once, is where a read-only sub-agent
+  // pays for itself: its reading stays out of this conversation, which a lean session cannot afford
+  // to fill. Found by running a real free model on three numbered questions about a repository: the
+  // old word list ("codebase", "across") did not match, the tool was never offered, and the one agent
+  // read the same files again and again over eighteen turns.
+  { tools: ["delegate_readonly_task"], when: isBroadResearch },
   { tools: ["application_status"], when: /\b(?:app|application|server|preview|port)\b.*\b(?:running|status|up|reachable)\b/i },
   // Pure bookkeeping: `todo_write` already returns the list it wrote.
   { tools: ["todo_read"], when: /(?!)/ },
 ];
+
+/** Words that mean the answer is spread over a code base, and the signs of a request with several parts. */
+const BROAD_WORDS = /\b(?:across|throughout|everywhere|whole|entire|codebase|repositor(?:y|ies)|monorepo|every (?:file|module|package|service)|all (?:the )?(?:files|modules|packages|services|usages|callers)|audit|architecture|how does .+ work)\b/i;
+
+/**
+ * Whether a request is broad enough that searching it in the main conversation would fill it: it
+ * names the whole code base, or asks several things at once (two numbered parts, two or more
+ * questions). A single narrow question is not: it is a one- or two-call lookup, done directly.
+ */
+export function isBroadResearch(objective: string): boolean {
+  if (BROAD_WORDS.test(objective)) return true;
+  const numbered = objective.match(/(?:^|[\s(])(?:\(\s*[1-9]\s*\)|[1-9][.)])\s+\S/g)?.length ?? 0;
+  const questions = objective.match(/\?/g)?.length ?? 0;
+  return numbered >= 2 || questions >= 2;
+}
 
 /** What defender mode is for; never trimmed there. */
 const DEFENDER_TOOLS = new Set(["query_defensive_brain", "read_playbook", "scan_secrets", "web_search", "web_fetch"]);
@@ -110,7 +128,7 @@ export function leanToolset(tools: readonly AgentTool[], mode: ArchymedesMode, o
   for (const rule of ON_REQUEST) {
     for (const name of rule.tools) {
       optional.add(name);
-      if (rule.when.test(objective)) wanted.add(name);
+      if (typeof rule.when === "function" ? rule.when(objective) : rule.when.test(objective)) wanted.add(name);
     }
   }
   for (const name of DEFENDER_ONLY) optional.add(name);

@@ -31,6 +31,24 @@ describe("intent-aware tool profiles", () => {
     expect(toolProfileForObjective("something ambiguous", "build")).toBe("full");
   });
 
+  it("gives write tools for the everyday ways people ask for a change, not only the verbs on the first list", () => {
+    // Found by the cloud harness: "make a file" went to the read-only profile, so the agent could never make it.
+    for (const objective of [
+      "please make a file hello.txt", "make a new component for the navbar", "put a loading spinner in app.tsx", "convert this file to TypeScript",
+      "clean up utils.ts", "tidy the imports in src/index.ts", "configure eslint for the project", "enable strict mode in tsconfig.json",
+      "extract this into a function in src/a.ts", "split parser.ts into two files", "merge these two modules", "wire the button to the api",
+      "hook up the form to the backend", "optimise the query in db.ts", "optimize the render loop", "simplify the reducer", "swap axios for fetch in client.ts",
+    ]) {
+      expect(toolProfileForObjective(objective, "build"), objective).toBe("full");
+    }
+  });
+
+  it("still keeps questions about code read-only", () => {
+    for (const objective of ["what does this function do in app.ts", "explain how the router works", "where is the login handled in the code", "why does parser.ts return null here", "summarize the architecture of this project"]) {
+      expect(toolProfileForObjective(objective, "build"), objective).toBe("read");
+    }
+  });
+
   it("filters by effect without trusting tool names", () => {
     const tools = [
       { name: "read", effect: "none" },

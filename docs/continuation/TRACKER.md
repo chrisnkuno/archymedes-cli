@@ -8,6 +8,18 @@ has 5,100 lines and `tui.ts` has 1,364.
 ## Release 3.10.0 (2026-10-19)
 WS-29: read-only commands run unasked and in parallel, auto mode asks only about risk, one bad call no longer voids a batch, tool calls shown while the model writes them, a sharper grep, numbered reads, edits as a real array, and a working loop in the system prompt. `@archymedes/friday` and the six platform packages at 3.10.0.
 
+## WS-34: Friday from a phone: hosted sandboxes, accounts, billing (2026-10-20)
+
+Design in REMOTE.md. Code: CLI repo `friday-cli/src/bridge/` and `account/`; site repo `workers/app/` (untracked until approved). Deploy is held for the owner's go-ahead and secrets.
+
+| ID | Task | Status | Evidence |
+| --- | --- | --- | --- |
+| WS-34.1 | `friday bridge`: dials out to the Session DO, runs `friday acp`, buffers and reconnects, places config files (0600), git control with a scoped token | done | `bridge/*.test.ts` (66) |
+| WS-34.2 | `friday login/logout/account/keys`: device link with RSA-OAEP, vault push/pull by scope | done | `account/commands.test.ts` (19); real CLI against the local Worker in `scripts/e2e-local.ts` |
+| WS-34.3 | Worker: ledger with holds, E2B REST + webhook reconcile, proxies (hosted, own key, free), vault, sessions, reaper, Stripe | done locally | 310 bun tests; e2e harness passes with real DOs, real bridge and real `friday acp` against fake E2B/provider |
+| WS-34.4 | Phone client `web/` (keys, link a computer, source chooser) | done, not yet run in a browser | 168 bun tests, tsc clean, build ok |
+| WS-34.5 | Deploy: D1, secrets, DNS `app.archymedes.xyz`, E2B webhook, template rebuild; rotate the E2B key that was pasted in chat | held | needs owner approval; live billing vs invoices, OpenRouter resale terms and Stripe Tax unverified |
+
 ## WS-33: Friday builds test first, by default (2026-10-20)
 User: "let's make Friday tests oriented first, highly clean tests, invariants, functional tests then it writes the code based on the successfull ones, it finishes with light static analysis. make it the default while building". Found: the runtime already held a turn until passing evidence followed an edit, ranked check < tests < smoke < behavior, and the prompt described three test levels, but the order was free: code first, a regression test "only when the change would otherwise be unprotected".
 

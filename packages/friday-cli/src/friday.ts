@@ -78,6 +78,27 @@ async function main(): Promise<number> {
     return runJobWorkerProcess(root, jobId);
   }
 
+  // The process a cloud sandbox runs for its whole life (see bridge/run.ts). Ahead of `parseArgs`
+  // for the same reason as the job worker: it has no flags, and nothing may print on its stdout.
+  if (process.argv[2] === "bridge") {
+    const { runBridge } = await import("./bridge/run");
+    // The agent's command line, for a development run that is not an installed `friday`.
+    const agent = process.env.FRIDAY_BRIDGE_AGENT?.trim();
+    return runBridge(agent ? { command: agent.split(/\s+/) } : {});
+  }
+
+  // A Friday account on this computer: link it, and move provider keys to and from the account. These are
+  // commands that print and exit, so they come before anything that sets up a session.
+  if (["login", "logout", "account", "keys"].includes(process.argv[2] ?? "")) {
+    const { runAccountCommand } = await import("./account/commands");
+    const environment = process.env as Record<string, string | undefined>;
+    return runAccountCommand(process.argv.slice(2), {
+      environment,
+      out: (line) => process.stdout.write(`${line}\n`),
+      err: (line) => process.stderr.write(`${line}\n`),
+    });
+  }
+
   const args = parseArgs(process.argv.slice(2));
   const processEnvironment = process.env as Record<string, string | undefined>;
   let savedSettings = await loadSettings(processEnvironment);

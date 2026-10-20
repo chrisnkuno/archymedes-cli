@@ -13,6 +13,7 @@ import {
   loadSubagentProfiles,
   parseSubagentFile,
   toolsForSubagent,
+  withoutRepeatedReads,
   type SubagentProfile,
 } from "./subagents";
 import { createArchymedesTools, TodoList } from "./tools";
@@ -130,6 +131,116 @@ describe("the delegation tools", () => {
   });
 });
 
+/** A read_file that returns numbered lines like the real one and counts how often it really ran. */
+function fakeRead(lines: number) {
+  const calls: Array<Record<string, unknown>> = [];
+  const tool = {
+    name: "read_file", description: "", inputSchema: {}, capabilityId: "workspace.files.read", effect: "none", requiresApproval: false, parallelSafe: true,
+    async execute(args: Record<string, unknown>) {
+      calls.push(args);
+      const from = typeof args.offset === "number" ? args.offset : 1;
+      const to = Math.min(lines, typeof args.limit === "number" ? from + args.limit - 1 : lines);
+      if (args.path === "missing.ts") return { content: "No such file", isError: true };
+      return { content: Array.from({ length: to - from + 1 }, (_, i) => `${from + i}\ttext`).join("\n"), data: { path: String(args.path), startLine: from, totalLines: lines, truncated: to < lines } };
+    },
+  } as unknown as AgentTool;
+  return { calls, tool: withoutRepeatedReads([tool])[0] };
+}
+const ctx = { taskId: "t", runId: "r", stepId: "s" };
+
+describe("not reading the same thing twice", () => {
+  it("runs a first read, and answers a repeat of lines it already returned with where they are", async () => {
+    const { tool, calls } = fakeRead(470);
+    await tool.execute({ path: "a.ts" }, ctx);
+    const again = await tool.execute({ path: "a.ts" }, ctx);
+    expect(calls).toHaveLength(1);
+    expect(again.content).toContain("Already in this conversation: a.ts lines 1-470");
+    expect(again.isError).toBeUndefined();
+    expect(again.data).toMatchObject({ repeated: true });
+  });
+
+  it("answers a window inside one already read, and runs one that reaches beyond it", async () => {
+    const { tool, calls } = fakeRead(470);
+    await tool.execute({ path: "a.ts", offset: 100, limit: 100 }, ctx); // 100-199
+    expect((await tool.execute({ path: "a.ts", offset: 120, limit: 30 }, ctx)).content).toContain("Already in this conversation");
+    expect((await tool.execute({ path: "a.ts", offset: 150, limit: 100 }, ctx)).content).not.toContain("Already"); // 150-249 reaches past 199
+    expect(calls).toHaveLength(2);
+    // And what was just read joins what was had: 100-249 is now covered.
+    expect((await tool.execute({ path: "a.ts", offset: 200, limit: 40 }, ctx)).content).toContain("lines 100-249");
+  });
+
+  it("joins neighbouring windows into one covered range", async () => {
+    const { tool, calls } = fakeRead(470);
+    await tool.execute({ path: "a.ts", offset: 1, limit: 100 }, ctx);
+    await tool.execute({ path: "a.ts", offset: 101, limit: 100 }, ctx);
+    expect((await tool.execute({ path: "a.ts", offset: 90, limit: 30 }, ctx)).content).toContain("lines 1-200");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("treats a read with no limit as 'to the end', repeated only once the end is known and covered", async () => {
+    const { tool, calls } = fakeRead(300);
+    await tool.execute({ path: "a.ts", offset: 1, limit: 100 }, ctx);
+    expect((await tool.execute({ path: "a.ts" }, ctx)).content).not.toContain("Already"); // the rest is not yet read
+    expect((await tool.execute({ path: "a.ts" }, ctx)).content).toContain("Already"); // now it is
+    expect((await tool.execute({ path: "a.ts", offset: 250 }, ctx)).content).toContain("Already");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("keeps files apart, and does not count a failed read as read", async () => {
+    const { tool, calls } = fakeRead(50);
+    await tool.execute({ path: "a.ts" }, ctx);
+    expect((await tool.execute({ path: "b.ts" }, ctx)).content).not.toContain("Already");
+    await tool.execute({ path: "missing.ts" }, ctx);
+    expect((await tool.execute({ path: "missing.ts" }, ctx)).content).toBe("No such file");
+    expect(calls).toHaveLength(4);
+  });
+
+  it("starts fresh for each sub-agent run and leaves every other tool alone", async () => {
+    const first = fakeRead(50);
+    await first.tool.execute({ path: "a.ts" }, ctx);
+    const second = fakeRead(50);
+    expect((await second.tool.execute({ path: "a.ts" }, ctx)).content).not.toContain("Already");
+    const grep = { name: "grep_files", execute: async () => ({ content: "hit" }) } as unknown as AgentTool;
+    expect(withoutRepeatedReads([grep])[0]).toBe(grep);
+  });
+});
+
+describe("what each role is given", () => {
+  const tools = async (name: string) => {
+    const all = await createArchymedesTools({ workspace: new LocalWorkspace(root), todos: new TodoList(), delegate: async () => ({ report: "", status: "completed", iterations: 0, toolCallsExecuted: 0 }) });
+    return toolsForSubagent(role(name), all, all.map((tool) => tool.capabilityId)).map((tool) => tool.name);
+  };
+
+  it("gives an explorer only what searching needs: no git, no compute, no commands", async () => {
+    const names = await tools("explore");
+    expect(names).toEqual(expect.arrayContaining(["read_file", "grep_files", "glob_files", "list_files"]));
+    for (const unwanted of ["compute", "git_status", "git_diff", "run_command", "web_search", "write_file"]) expect(names, unwanted).not.toContain(unwanted);
+    expect(names.length).toBeLessThanOrEqual(6);
+  });
+
+  it("gives a reviewer the diff as well", async () => {
+    const names = await tools("review");
+    expect(names).toEqual(expect.arrayContaining(["git_diff", "read_file", "grep_files"]));
+    expect(names).not.toContain("write_file");
+  });
+
+  it("keeps read-only roles on short budgets and says to read once", () => {
+    for (const name of ["explore", "plan", "review"]) {
+      expect(role(name).maxIterations, name).toBeLessThanOrEqual(12);
+      expect(role(name).maxToolCalls, name).toBeLessThanOrEqual(36);
+      expect(role(name).instructions, name).toMatch(/Never re-read a file/);
+    }
+  });
+
+  it("asks every report to be short and to be partial rather than empty", () => {
+    const prompts: string[] = [];
+    // The contract is in every sub-agent's prompt; read it from the roles' shared text.
+    prompts.push(delegationGuidance(["delegate_readonly_task"]));
+    expect(prompts[0]).toMatch(/do not repeat its search/);
+    expect(delegationGuidance(["delegate_readonly_task"], true)).toMatch(/do not repeat a sub-agent's search/);
+  });
+});
+
 describe("when to delegate", () => {
   it("is said only when a delegation tool is offered, in full and in lean prompts", () => {
     expect(delegationGuidance(["read_file"])).toBe("");
@@ -227,6 +338,107 @@ describe("a sub-agent in a session", () => {
     expect(offered?.description).toContain("ports (knows the port config)");
     const childSystem = String(requests[1].messages.find((message) => message.role === "system")?.content);
     expect(childSystem).toContain("Ports live in app.ts.");
+    await agent.dispose();
+  });
+
+  it("asks a sub-agent that ran out of steps for what it found, instead of returning nothing", async () => {
+    let childCalls = 0;
+    const seenRequests: AgentModelRequest[] = [];
+    const { model } = routedModel(
+      [
+        { finishReason: "tool_calls", toolCalls: [{ id: "d1", name: "delegate_readonly_task", arguments: { task: "map the whole thing" } }] },
+        { content: "Done." },
+      ],
+      async (request) => {
+        seenRequests.push(request);
+        childCalls += 1;
+        // Never stops by itself: a different file each turn, so the read guard never answers for it.
+        if (request.tools.length > 0) return { finishReason: "tool_calls", toolCalls: [{ id: `r${childCalls}`, name: "glob_files", arguments: { pattern: `**/*${childCalls}.ts` } }] };
+        return { content: "Found so far: the entry point is app.ts:1; the rest was not reached." };
+      },
+    );
+    const events: ArchymedesEvent[] = [];
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow", onEvent: (event) => events.push(event) });
+    await agent.send("map the whole thing");
+    const wrap = seenRequests.at(-1)!;
+    // The last call had no tools to call, saw what the sub-agent had done, and was told to report.
+    expect(wrap.tools).toEqual([]);
+    expect(JSON.stringify(wrap.messages)).toContain("You have run out of steps");
+    expect(wrap.messages.filter((message) => message.role === "tool").length).toBeGreaterThanOrEqual(5);
+    expect(seenRequests.slice(0, -1).every((request) => request.tools.length > 0)).toBe(true);
+    // And its findings, not a bare step count, are what the main agent receives.
+    const delegated = events.find((event) => event.type === "runtime" && event.event.type === "tool_result" && event.event.toolCallId === "d1");
+    const content = delegated && delegated.type === "runtime" && delegated.event.type === "tool_result" ? delegated.event.content : "";
+    expect(content).toContain("Found so far: the entry point is app.ts:1");
+    expect(content).toMatch(/ended: iteration_limit/);
+    // The extra call is paid for, once, in the turn's total.
+    expect(childCalls).toBeLessThanOrEqual(role("explore").maxIterations + 1);
+    await agent.dispose();
+  });
+
+  it("answers a sub-agent's repeat read with where the lines are, in a real session", async () => {
+    let turn = 0;
+    const childRequests: AgentModelRequest[] = [];
+    const { model } = routedModel(
+      [
+        { finishReason: "tool_calls", toolCalls: [{ id: "d1", name: "delegate_readonly_task", arguments: { task: "read app.ts" } }] },
+        { content: "Done." },
+      ],
+      async (request) => {
+        childRequests.push(request);
+        turn += 1;
+        if (turn <= 2) return { finishReason: "tool_calls", toolCalls: [{ id: `r${turn}`, name: "read_file", arguments: { path: "app.ts" } }] }; // the same file twice
+        return { content: "app.ts:1 exports port." };
+      },
+    );
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    await agent.send("read app.ts");
+    const tools = childRequests.at(-1)!.messages.filter((message) => message.role === "tool").map((message) => String(message.content));
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toContain("export const port");
+    expect(tools[1]).toContain("Already in this conversation: app.ts");
+    await agent.dispose();
+  });
+
+  it("lets a sub-agent in a lean session read a file in a few pieces, not a dozen: its context is its own", async () => {
+    await fs.writeFile(path.join(root, "big.ts"), Array.from({ length: 400 }, (_, n) => `export const value${n} = ${n}; // padding to make the line a realistic length`).join("\n"));
+    const asked: string[] = [];
+    let turn = 0;
+    const { model: scripted } = routedModel(
+      [
+        { finishReason: "tool_calls", toolCalls: [{ id: "d1", name: "delegate_readonly_task", arguments: { task: "read big.ts" } }] },
+        { content: "Done." },
+      ],
+      async (request) => {
+        turn += 1;
+        if (turn === 1) return { finishReason: "tool_calls", toolCalls: [{ id: "r1", name: "read_file", arguments: { path: "big.ts", offset: 1, limit: 100 } }] };
+        asked.push(String(request.messages.filter((message) => message.role === "tool").at(-1)?.content ?? ""));
+        return { content: "read it" };
+      },
+    );
+    // The main agent in a lean session (token saver): its own tool results are capped at 3 000 characters.
+    const lean = { ...scripted, tokenSaver: true, capabilities: { contextWindow: 128_000, maxOutputTokens: 8_192 } } as unknown as AgentTurnProvider & { tokenSaver: boolean };
+    const agent = new ArchymedesAgent({ root, model: lean, prices, mode: "plan", approve: async () => "deny" });
+    await agent.send("answer these: (1) what is in big.ts? (2) is value399 there?");
+    const result = asked.at(-1) ?? "";
+    // 100 numbered lines are ~7 000 characters: whole for a sub-agent (cap 9 000), where the main agent's lean 3 000 would cut it
+    expect(result.length).toBeGreaterThan(3_500);
+    expect(result).not.toContain("Output too large");
+    expect(result).toContain("value99");
+    await agent.dispose();
+  });
+
+  it("does not make a wrap-up call for a sub-agent that finished by itself", async () => {
+    const { model, requests } = routedModel(
+      [
+        { finishReason: "tool_calls", toolCalls: [{ id: "d1", name: "delegate_readonly_task", arguments: { task: "look" } }] },
+        { content: "Done." },
+      ],
+      async () => ({ content: "All found in app.ts:1." }),
+    );
+    const agent = new ArchymedesAgent({ root, model, prices, mode: "build", approve: async () => "allow" });
+    await agent.send("look at app.ts");
+    expect(requests.filter((request) => request.tools.length === 0)).toHaveLength(0);
     await agent.dispose();
   });
 

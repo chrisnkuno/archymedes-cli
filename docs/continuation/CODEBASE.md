@@ -110,6 +110,7 @@ policy modules such as `permissions.ts`; it implements the types in `engines/con
 | A command that should run unasked (it only reads) | `core/cli/command-readonly.ts` (read by run_command's `effectFor`, `PermissionLedger.decide` and the Claude bridge) |
 | A provider | `core/providers/<vendor>.ts`, dialect quirks in `chat-dialects.ts` |
 | An ACP method | `core/cli/acp.ts` (protocol), handler in `friday-cli/src/server/`, client in `internal/acp` |
+| The hosted/remote bridge, accounts | `friday-cli/src/bridge/` (sandbox side), `friday-cli/src/account/` (login, keys); Worker in the site repo `workers/app/`; design in REMOTE.md |
 | An engine | `friday-cli/src/engines/<name>/`, implementing `engines/contract.ts`, registered in `server/session.ts` |
 | A command-line flag | `cli/args.ts`, handled in `cli/startup-commands.ts` (exits) or `run/` (runs a turn) |
 | An app, dialog or command in the interface | `internal/tui/<prefix>_<name>.go` (above) |
