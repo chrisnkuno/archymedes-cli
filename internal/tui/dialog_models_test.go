@@ -71,6 +71,11 @@ func TestFreeModelFitLabelsAndWarnings(t *testing.T) {
 			t.Errorf("fitLabel(%s) = %q, want %q", choice.Model, got, label)
 		}
 	}
+	for choice, label := range map[*acp.ModelChoice]string{&slow: "slow", &gated: "apps only", &small: "", &busy: "", &agent: ""} {
+		if got := rowLabel(*choice); got != label {
+			t.Errorf("rowLabel(%s) = %q, want %q", choice.Model, got, label)
+		}
+	}
 	if w := fitWarning(slow); !strings.Contains(w, "3min") || !strings.Contains(w, "openrouter/free") {
 		t.Errorf("slow warning should say why and what to use instead: %q", w)
 	}

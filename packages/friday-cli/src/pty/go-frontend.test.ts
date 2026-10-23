@@ -269,7 +269,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
     const home = await settle(screen);
     expect(home).toContain("New here? Three things:");
-    expect(home).toContain("Unsplash"); // a photo's credit, beside the mark
+    expect(home).toMatch(/Unsplash|drawn by Friday/); // the picture's credit, beside the mark: a photo or art drawn by code
     expect(home).toContain("Explain what this project does");
 
     proc.write("write notes\r");
@@ -310,7 +310,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     // The photo fills what nothing else does, and the words are all still there.
     expect(frame).toContain("▀");
     expect(frame).toContain("a coding agent that shows its work");
-    expect(frame).toMatch(/by .+ · Unsplash/);
+    expect(frame).toMatch(/by .+ · Unsplash|drawn by Friday/); // a photo, or art drawn by code
     // Quitting draws once more; that draw once could block on a closed zone manager.
     proc.write("/quit\r");
     expect((await proc.waitForExit(15_000)).exitCode).toBe(0);

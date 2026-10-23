@@ -302,7 +302,7 @@ func (p *modelPicker) view(m *Model) string {
 			if at, ok := m.limited[c.Model]; ok && time.Since(at) < 2*time.Minute && !c.Locked {
 				priceText += " · rate limited"
 			}
-			if label := fitLabel(c); label != "" && !c.Locked {
+			if label := rowLabel(c); label != "" && !c.Locked {
 				priceText += " · " + label
 			}
 			price := ansi.Truncate(priceText, priceWidth, "…")
@@ -349,6 +349,16 @@ func fitLabel(c acp.ModelChoice) string {
 		return "apps only"
 	case c.Small || c.Fit == "small":
 		return "small"
+	}
+	return ""
+}
+
+// rowLabel is what a model's row says of its fit: only what stops it working well at all (slow,
+// apps only). "small" and "busy" are left to the warning on picking it; on every row they read
+// as a verdict on models that mostly answer.
+func rowLabel(c acp.ModelChoice) string {
+	if label := fitLabel(c); label != "small" && label != "busy" {
+		return label
 	}
 	return ""
 }
