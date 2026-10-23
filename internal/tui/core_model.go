@@ -642,7 +642,7 @@ var modeBlurb = map[string]string{
 }
 
 func nextMode(mode string) string {
-	cycle := []string{"plan", "build", "auto"}
+	cycle := []string{"plan", "build", "auto", "defender"}
 	i := slices.Index(cycle, mode)
 	return cycle[(i+1)%len(cycle)]
 }

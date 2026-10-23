@@ -58,9 +58,9 @@ spent, or when Friday notices it is going in circles. The last line of the turn 
 
 ## How much Friday may do on its own
 
-The **mode** decides what Friday may do without asking. shift+tab cycles plan → build → auto in a
-session; `/mode <name>`, or `/plan`, `/build`, `/auto`, `/defender`, switch directly. The mode can
-change mid-session; standing approvals carry over.
+The **mode** decides what Friday may do without asking. shift+tab cycles plan → build → auto →
+defender in a session; `/mode <name>`, or `/plan`, `/build`, `/auto`, `/defender`, switch
+directly. The mode can change mid-session; standing approvals carry over.
 
 | Mode | Reads | Edits files | Runs commands | Asks you |
 | --- | --- | --- | --- | --- |
@@ -68,6 +68,11 @@ change mid-session; standing approvals carry over.
 | **build** (default) | yes | yes | yes | before every edit and every command that is not read-only |
 | **auto** | yes | yes | yes | only for risky actions: credentials, deleting work, pushing, publishing, deploying, privileged commands |
 | **defender** | yes | yes | yes | before every change, always; security work |
+
+**Defender** is Friday as a defensive security engineer. It reads the security playbooks that fit
+the project (19, from access control to AI applications), scans for hardcoded secrets, and
+reports each finding with its file and line, the input that triggers it, and its impact. It fixes
+what you ask, and every change asks first: command rules that allow a command do not apply here.
 
 "Read-only" commands never ask in any mode: `git status`, `git diff`, `git log`, `ls`, `cat`,
 `rg`, `grep`, `find` without `-delete`/`-exec`, `sed -n …p`, version checks. Friday decides this by

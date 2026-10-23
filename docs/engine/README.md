@@ -84,7 +84,8 @@ switch:
 - Docker and E2B sandboxes; the Linux command sandbox (bubblewrap)
 - Checkpoints and `/undo`, `/rewind`, `/diff`, `/cost`, `/review`, `/fork`, goals
 - MCP servers and LSP diagnostics
-- Jev, defender playbooks, web search and fetch, `start_application`
+- Jev, defender's knowledge index (`query_defensive_brain`), web search and fetch,
+  `start_application`
 - Money budgets and prices; reasoning effort per call; images
 - The headless `--json` mode (served by the TypeScript agent)
 

@@ -466,6 +466,12 @@ func (s *Session) rootTools(mode policy.Mode) *tool.Catalog {
 	}
 	list = append(list, s.delegationTools(mode)...)
 	deferTools(list, s.cfg.Env.Get("ARCHYMEDES_DEFER_TOOLS"))
+	// The secret scan is defender mode's from the start; elsewhere tool_search finds it.
+	for _, t := range list {
+		if t.Name == "scan_secrets" {
+			t.Deferred = mode != policy.Defender
+		}
+	}
 	return tool.NewCatalog(list...)
 }
 

@@ -254,6 +254,30 @@ func TestPlanModeOffersNoWritableDelegation(t *testing.T) {
 	}
 }
 
+func TestDefenderModeHasItsPlaybooksAndSecretScan(t *testing.T) {
+	h := newHarness(t, t.TempDir(), policy.Defender, func(string, fantasy.Call) reply { return reply{text: "x"} })
+	s := h.create()
+	sent := func(mode policy.Mode) []string {
+		var out []string
+		for _, tl := range s.rootTools(mode).Visible() {
+			out = append(out, tl.Name)
+		}
+		return out
+	}
+	if d := sent(policy.Defender); !slices.Contains(d, "read_playbook") || !slices.Contains(d, "scan_secrets") {
+		t.Fatalf("defender tools = %v", d)
+	}
+	if b := sent(policy.Build); slices.Contains(b, "read_playbook") || slices.Contains(b, "scan_secrets") {
+		t.Fatalf("build should have no playbooks and find the scan with tool_search: %v", b)
+	}
+	if p := s.rootSystemPrompt(policy.Defender, s.rootTools(policy.Defender)); !strings.Contains(p, "- access-control — Access control") {
+		t.Fatal("defender's prompt lacks the playbook index")
+	}
+	if p := s.rootSystemPrompt(policy.Build, s.rootTools(policy.Build)); strings.Contains(p, "Security playbooks") {
+		t.Fatal("build's prompt carries the playbook index")
+	}
+}
+
 func TestForkFullGivesTheChildTheConversation(t *testing.T) {
 	var childSaw []string
 	var mu sync.Mutex

@@ -12,6 +12,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/roles"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
+	"github.com/chrisnkuno/friday-cli/internal/core/tools"
 )
 
 // The root prompt follows packages/core/src/cli/prompt.ts in substance and wording, shortened
@@ -31,6 +32,12 @@ var modeGuidance = map[policy.Mode]string{
 		"Find real, exploitable weaknesses and report them precisely (file:line, the triggering input, the concrete impact) or fix them when asked; never inflate a checklist into findings that do not apply. " +
 		"Prefer the project's own linters, audits and tests; rank findings by real exploitability; make the smallest fix that closes the gap.",
 }
+
+// defenderPlaybooks is defender mode's index of playbooks: the model reads the few that apply.
+var defenderPlaybooks = "Security playbooks, by id. Each holds the concrete triggers for its category: what to grep for and why it matters. " +
+	"Call read_playbook(id) for the two or three categories this project actually has a surface for, in one turn, before you start looking, and skip the rest: " +
+	"a database-free project has no SQL injection to check, and a project that calls no model has no LLM playbook to run. " +
+	"Run scan_secrets early; a pattern match is a lead to verify, not a finding.\n\n" + tools.PlaybookIndex()
 
 const workingLoop = `How to work:
 1. Orient. Search and read what the task touches, several files in one turn; search for a symbol's uses before you alter it. Use what is already in this conversation rather than reading it again.
@@ -103,6 +110,9 @@ func (s *Session) rootSystemPrompt(mode policy.Mode, catalog *tool.Catalog) stri
 	parts := []string{identity, modeGuidance[mode], loop, choosingTools}
 	if guidance := roles.DelegationGuidance(names(catalog), false); guidance != "" {
 		parts = append(parts, guidance)
+	}
+	if mode == policy.Defender {
+		parts = append(parts, defenderPlaybooks)
 	}
 	parts = append(parts, s.environment(s.Models().Selection().Model))
 	if instructions := projectInstructions(s.cfg.Root); instructions != "" {

@@ -116,6 +116,7 @@ func (w *Workspace) Builtins() []*tool.Tool {
 		w.runCommand(),
 		w.todoWrite(), w.todoRead(),
 		w.gitStatus(), w.gitDiff(), w.gitLog(), w.gitShow(),
+		w.scanSecrets(), w.readPlaybook(),
 	}
 }
 

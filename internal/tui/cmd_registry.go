@@ -27,7 +27,7 @@ var commands []command
 func init() {
 	commands = []command{
 		{"help", "", "Show commands and keys", (*Model).cmdHelp},
-		{"mode", "[plan|build|auto|defender]", "Show or change what the agent may do (shift+tab cycles plan, build, auto)", (*Model).cmdMode},
+		{"mode", "[plan|build|auto|defender]", "Show or change what the agent may do (shift+tab cycles them)", (*Model).cmdMode},
 		{"model", "[name]", "Pick a model, or switch straight to one; the conversation carries on", (*Model).cmdModel},
 		{"models", "", "Every model you can switch to, with prices", func(m *Model, _ string) tea.Cmd { return m.cmdModel("") }},
 		{"resume", "", "Pick an earlier session in this project and continue it", (*Model).cmdResume},

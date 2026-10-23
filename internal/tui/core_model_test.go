@@ -418,7 +418,8 @@ func TestAModeChosenDuringATurnAppliesBeforeTheNextMessage(t *testing.T) {
 	typeText(m, "first")
 	first := press(m, tea.KeyEnter, 0)
 	press(m, tea.KeyTab, tea.ModShift) // build → auto, during the turn
-	press(m, tea.KeyTab, tea.ModShift) // auto → plan
+	press(m, tea.KeyTab, tea.ModShift) // auto → defender
+	press(m, tea.KeyTab, tea.ModShift) // defender → plan
 	if len(agent.modes) != 0 || m.pendingMode != "plan" || !regexp.MustCompile(`build\s+→\s+plan`).MatchString(screen(m)) {
 		t.Fatalf("modes=%v pending=%q\n%s", agent.modes, m.pendingMode, screen(m))
 	}

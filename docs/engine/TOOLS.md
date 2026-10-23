@@ -10,7 +10,7 @@ files or runs something; asks in build and defender mode, and in auto mode only 
 the same time.
 
 **Modes.** Plan mode has only the tools whose effect is none, plus the read-only helpers. Build,
-auto and defender have them all.
+auto and defender have them all; defender also has `read_playbook`.
 
 - [Reading and searching](#reading-and-searching)
 - [Changing files](#changing-files)
@@ -18,6 +18,7 @@ auto and defender have them all.
 - [Planning](#planning)
 - [Git](#git)
 - [Asking you](#asking-you)
+- [Security](#security)
 - [Sub-agents](#sub-agents)
 - [Finding more tools](#finding-more-tools)
 - [Paths, sizes and what is skipped](#paths-sizes-and-what-is-skipped)
@@ -191,6 +192,38 @@ One question, when a decision is yours to make.
 
 Effect none. Dismissing the question tells the model to decide and say what it assumed. Only the
 main conversation has it; a sub-agent's question would reach you without the context to answer it.
+
+## Security
+
+Defender mode's tools. Its instructions list the playbooks by id, and tell the model to read the
+two or three that fit the project before it starts looking.
+
+### `scan_secrets`
+
+Scan files for likely hardcoded credentials: cloud, GitHub, Google, Slack, Stripe and model API
+keys, private key blocks, JSON Web Tokens, and credential-looking assignments.
+
+| Argument | | |
+| --- | --- | --- |
+| `include` | optional | a glob limiting which files are scanned, e.g. `src/**` |
+
+Effect none, together. Findings come worst first (critical, high, medium), each as
+`path:line: [severity] kind — value`. A value shows only its first and last four characters, so the
+result never holds a secret in full. Sent from the start in defender mode; found with `tool_search`
+in the others.
+
+### `read_playbook`
+
+Read one security playbook in full, by id: access control, misconfiguration, supply chain,
+injection, client-side, authentication, APIs, SSRF, secrets, dependencies, cryptography,
+infrastructure, error handling, business logic, input validation, logging, AI applications,
+threat intelligence, and hardening resources.
+
+| Argument | | |
+| --- | --- | --- |
+| `id` | required | an id from the index, or a playbook's title |
+
+Effect none, together. Defender mode only. An unknown id is answered with the list of ids.
 
 ## Sub-agents
 
