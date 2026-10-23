@@ -67,16 +67,16 @@ func (m *Model) goalVerdict(result acp.CommandResult) tea.Cmd {
 		return nil
 	}
 	if m.goal.turns >= goalMaxTurns {
-		m.notice(noticeWarn, fmt.Sprintf("Goal not met after %d turns: %s. /goal %s tries again.", goalMaxTurns, result.Reason, m.goal.condition))
+		m.notice(noticeWarn, fmt.Sprintf("Goal not met after %d turns: %s; /goal %s tries again", goalMaxTurns, result.Reason, m.goal.condition))
 		m.goal = nil
 		return nil
 	}
 	if result.Next == "" {
 		m.goal = nil
-		return m.toast(toastWarn, "The goal could not continue")
+		return m.toast(toastWarn, "The goal stopped: no next step came back; /goal <condition> starts it again")
 	}
 	if m.goal.turns > 0 {
-		m.notice(noticeFaint, fmt.Sprintf("Not met yet (%s) — turn %d of %d.", result.Reason, m.goal.turns+1, goalMaxTurns))
+		m.notice(noticeFaint, fmt.Sprintf("Not met yet (%s) — turn %d of %d", result.Reason, m.goal.turns+1, goalMaxTurns))
 	}
 	m.goal.turns++
 	if m.phase != ready {

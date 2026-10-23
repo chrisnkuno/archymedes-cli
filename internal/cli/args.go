@@ -25,8 +25,10 @@ type Invocation struct {
 	Prompt string
 
 	// Go-only: these never reach the agent.
-	Theme   string
-	Agent   string
+	Theme string
+	Agent string
+	// Engine is which agent runs the session: "go" for the Go engine, "" or "ts" for the TypeScript one.
+	Engine  string
 	Cwd     string
 	NoMouse bool
 	Help    bool
@@ -58,6 +60,22 @@ var (
 	themeWord = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	paceWords = []string{"on", "gentle", "slow", "strict", "very", "max", "off", "none", "full"}
 )
+
+// goOnlyFlags are read by the Go binary and never reach the agent.
+var goOnlyFlags = []string{"--theme", "--agent", "--engine", "-C", "--cwd", "--no-mouse", "--help", "-h", "--version", "-v", "--resume"}
+
+// sessionFlags are the agent's switches for a session that take no value (the mode, free models).
+var sessionFlags = []string{"--plan", "-p", "--build", "--auto", "-y", "--defender", "--free", "--slow", "--pace", "--sandbox"}
+
+// GoOnlyFlags is every flag only the Go binary reads; `friday --help` must name each one.
+func GoOnlyFlags() []string { return slices.Clone(goOnlyFlags) }
+
+// KnownFlags is every flag this package recognizes, for checking that what `--help` names is real.
+func KnownFlags() []string {
+	out := slices.Concat(goOnlyFlags, sessionFlags, valueFlags, passthroughFlags)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
 
 // Parse splits argv (without the program name). interactive is whether both stdin and stdout are
 // terminals; without one, there is no session to draw and everything passes through.
@@ -95,6 +113,8 @@ func Parse(argv []string, interactive bool) Invocation {
 			}
 		case name == "--agent":
 			inv.Agent, i = flagValue(hasValue, value, next, i)
+		case name == "--engine":
+			inv.Engine, i = flagValue(hasValue, value, next, i)
 		case name == "-C" || name == "--cwd":
 			inv.Cwd, i = flagValue(hasValue, value, next, i)
 			flag("--cwd", inv.Cwd)

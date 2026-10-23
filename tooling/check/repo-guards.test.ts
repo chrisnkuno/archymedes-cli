@@ -16,6 +16,15 @@ describe("repository guards", () => {
     expect(countGoLayering("cmd/friday/main.go", imports("tui", "acp"), SECTIONS.packages)).toBe(0);
   });
 
+  it("holds the Go engine's packages under internal/core to their own matrix", () => {
+    const packages = { ...SECTIONS.packages, "core/tool": [], "core/loop": ["core/tool"] };
+    expect(countGoLayering("internal/core/loop/loop.go", imports("core/tool"), packages)).toBe(0);
+    expect(countGoLayering("internal/core/loop/loop_test.go", imports("core/loop", "core/tool"), packages)).toBe(0);
+    expect(countGoLayering("internal/core/tool/tool.go", imports("core/loop"), packages)).toBe(1);
+    expect(countGoLayering("internal/core/tool/tool.go", imports("tui"), packages)).toBe(1);
+    expect(countGoLayering("internal/render/x.go", imports("core/loop"), SECTIONS.packages)).toBe(1);
+  });
+
   it("places a tui file by its prefix, cross-section tests in suite_, and nothing else", () => {
     expect(tuiSectionOf("internal/tui/chat_composer.go", SECTIONS.tui)).toBe("chat");
     expect(tuiSectionOf("internal/tui/app_changes_branches_test.go", SECTIONS.tui)).toBe("app");

@@ -1,0 +1,261 @@
+# Protocol reference
+
+What the Go engine speaks: ACP version 1 over JSON-RPC 2.0, one message per line, plus the
+`_archymedes/*` extension the Friday interface uses. The TypeScript agent speaks the same, so a
+client cannot tell the engines apart except by `_meta.archymedes.engine` (`"go"`) in session info.
+
+Source: `internal/core/server/` (`server.go` framing and dispatch, `methods.go` methods, `ask.go`
+requests to the client, `events.go` notifications). The client side the interface uses is
+`internal/acp/`.
+
+- [Framing](#framing)
+- [Client → engine methods](#client--engine-methods)
+- [Forwarded methods](#forwarded-methods)
+- [Engine → client requests](#engine--client-requests)
+- [Notifications](#notifications)
+- [Extension events](#extension-events)
+- [Ordering guarantees](#ordering-guarantees)
+- [Toward ACP v2](#toward-acp-v2)
+
+## Framing
+
+- One JSON object per line, UTF-8, `\n`-terminated. Lines may be up to 64 MiB (one large tool
+  result is one line).
+- Requests carry `id`; the engine's own requests to the client use string ids `"friday-<n>"`, and a
+  reply echoing them as a string, a bare number string or a number is accepted.
+- Requests are handled concurrently: a `session/prompt` holds its reply for the whole turn while
+  other requests (steering, model lists, cancel) are answered.
+- Errors use JSON-RPC codes: `-32600` invalid request (including anything before `initialize`),
+  `-32601` method not found, `-32602` invalid params, `-32603` internal.
+
+## Client → engine methods
+
+### `initialize`
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+  "protocolVersion":1,
+  "clientCapabilities":{"_meta":{"archymedes":{"events":true,"questions":true}}}}}
+```
+
+`events` opts in to [extension events](#extension-events); `questions` lets the engine ask the
+person (`ask_user`). The reply:
+
+```json
+{"protocolVersion":1,"authMethods":[],
+ "agentCapabilities":{"loadSession":true,
+   "promptCapabilities":{"image":false,"audio":false,"embeddedContext":true},
+   "_meta":{"archymedes":{"events":1,"engine":"go"}}}}
+```
+
+(`_meta` only when `events` was asked for.) `authenticate` is accepted and does nothing: keys come
+from settings.
+
+### `session/new`
+
+Params: `cwd` (the project), `mcpServers` (accepted, not used yet). Opens a session with the
+provider and model the [settings](CONFIGURATION.md) choose.
+
+```json
+{"sessionId":"20261023T094105Z-k3x9ab",
+ "modes":{"currentModeId":"build","availableModes":[{"id":"plan","name":"plan"},{"id":"build","name":"build"},{"id":"auto","name":"auto"},{"id":"defender","name":"defender"}]},
+ "_meta":{"archymedes":{"sessionId":"20261023T094105Z-k3x9ab","provider":"groq","providerLabel":"Groq",
+   "model":"openai/gpt-oss-120b","mode":"build","root":"/home/me/project",
+   "workspace":"local","workspaceLabel":"this computer","engine":"go"}}}
+```
+
+Fails with `-32600` and a plain message when no provider is ready or the provider is TypeScript-only.
+
+### `session/load`
+
+Params: `cwd`, `sessionId` (an id, or `latest`). Replays the conversation as `session/update`
+(`user_message_chunk`, `agent_message_chunk`) and extension `tool_call` / `tool_result` events,
+resumes any sub-agent that was running or paused, then replies with `_meta.archymedes` as above
+(no `sessionId` or `modes` at the top level).
+
+### `session/prompt`
+
+Params: `sessionId`, `prompt` (content blocks). `text` blocks are joined; `resource` blocks become
+`<context uri="…">…</context>`; `resource_link` blocks become `@<uri>`; others are ignored. An empty
+prompt is refused before it is queued.
+
+The prompt is accepted (given its place in line) when the request is read. It runs after every
+prompt accepted before it. The reply comes when the turn ends:
+
+```json
+{"stopReason":"end_turn"}
+```
+
+| `stopReason` | When |
+| --- | --- |
+| `end_turn` | done, stuck, or failed (the extension's `runtime_stop` says which) |
+| `cancelled` | stopped by `session/cancel`, including before it started |
+| `max_turn_requests` | the turn's step or call budget ran out |
+
+### `session/cancel` (notification)
+
+Params: `sessionId`. Stops the running turn and every prompt accepted before this notification was
+read; prompts sent after it run normally. Background sub-agents keep working.
+
+### `session/set_mode`
+
+Params: `sessionId`, `modeId` (`plan`, `build`, `auto`, `defender`). Standing approvals and granted
+patterns are kept. Reply `{}`.
+
+### `session/close`
+
+Params: `sessionId`. Stops the turn and every sub-agent; background sub-agents are paused and resume
+when the session is loaded again. Reply `{}`.
+
+### `_archymedes/session/steer`
+
+Params: `sessionId`, `text`. Hands text to the running turn, read at its next step.
+
+```json
+{"accepted":true}
+```
+
+`false` means no turn is running: send it as a prompt instead.
+
+### `_archymedes/session/set_model`
+
+Params: `sessionId`, `provider`, `model`. The same provider switches the model; another provider
+opens its models, keeping the conversation. Replies with `_meta.archymedes` session info. Claude
+Code and Codex are refused with a message (they run on the TypeScript engine).
+
+### `_archymedes/session/command`
+
+Params: `sessionId`, `command`, `argument`. Replies with a `kind` and its fields:
+
+| `command` | Reply |
+| --- | --- |
+| `todos` | `{"kind":"todos","items":[{"text":"…","status":"pending|in_progress|done"}]}`, or `{"kind":"text","text":"No plan yet."}` |
+| `tools` | `{"kind":"text","text":"Tools in build mode: …"}` |
+| `compact` | `{"kind":"text","text":"Compacted the conversation: 12 → 3 messages."}`; `argument` is the focus to keep |
+| `subagents` (also `threads`, `agents`) | `{"kind":"text","text":"t-k3x9ab  explore  done  background  map the API"}` |
+| anything else | `{"kind":"error","text":"/<command> is not in the Go engine yet. To use it, set Settings → Engine to TypeScript …"}` |
+
+### `_archymedes/threads`
+
+Params: `sessionId`. The session's sub-agents as stored:
+
+```json
+{"threads":[{"id":"t-k3x9ab","parent":"root","callId":"c4-0","role":"explore","brief":"map the API",
+  "fork":"none","background":true,"model":"small","status":"done","report":"…",
+  "createdAt":"2026-10-23T09:41:12Z","updatedAt":"2026-10-23T09:41:40Z"}]}
+```
+
+`status` is `running`, `done`, `failed`, `cancelled`, `paused` or `interrupted`; an editing
+background sub-agent also has `worktree` and `branch`.
+
+### `_archymedes/sessions`
+
+Params: `cwd`. `[{"id":"…","title":"…","updatedAt":1761212465000,"openElsewhere":false}]`, newest
+first, at most 50 (the Go engine's sessions only).
+
+### `_archymedes/startup`
+
+`{"notices":[…]}`: what the TypeScript agent's startup check has to say (an update is available),
+when it is installed; otherwise an empty list.
+
+### `_archymedes/setup/status` and `_archymedes/models`
+
+Answered by the TypeScript agent when it is installed (it has key links and the live model
+catalog). Without it, the engine answers itself: whether a provider is ready and which could be,
+and one model per ready provider.
+
+## Forwarded methods
+
+Sent to the TypeScript agent unchanged, started on first need: `_archymedes/settings/list`,
+`_archymedes/settings/set`, `_archymedes/providers`, `_archymedes/providers/connect`,
+`_archymedes/providers/models`, `_archymedes/providers/remember-model`, `_archymedes/setup/save`.
+They only read and write the shared settings file, which the Go engine reads when the next session
+opens. Without the TypeScript agent they are `-32601`.
+
+## Engine → client requests
+
+### `session/request_permission`
+
+```json
+{"jsonrpc":"2.0","id":"friday-3","method":"session/request_permission","params":{
+  "sessionId":"…",
+  "toolCall":{"toolCallId":"c2-0","title":"run npm test -- --watch=false","kind":"execute","status":"pending"},
+  "options":[
+    {"optionId":"allow","name":"Allow","kind":"allow_once"},
+    {"optionId":"allow_always","name":"Allow this action from now on","kind":"allow_always"},
+    {"optionId":"allow_pattern","name":"Always allow commands starting with \"npm test\"","kind":"allow_always"},
+    {"optionId":"deny","name":"Deny","kind":"reject_once"},
+    {"optionId":"deny_always","name":"Deny this action from now on","kind":"reject_always"}]}}
+```
+
+`allow_pattern` appears only when a broader rule is safe (here, commands starting with `npm test`).
+For a sensitive call the title adds the safety screen's reasons, for example
+`run git push origin main — deployment or package publication command`, and no pattern is offered. Both answer shapes are read: ACP's nested
+`{"outcome":{"outcome":"selected","optionId":"allow"}}` and the interface's flat
+`{"outcome":"selected","selectedOptionId":"allow"}`. Anything else, an error, or no answer (the
+client went away) is a denial.
+
+### `_archymedes/session/ask`
+
+Only to a client that opted in with `questions`.
+
+```json
+{"sessionId":"…","question":"Which database?","options":["Postgres","SQLite"],"multiSelect":false}
+```
+
+Answer `{"answer":"SQLite"}`; `{"dismissed":true}` or an empty answer tells the model to decide.
+
+## Notifications
+
+`session/update` carries what any ACP client can draw:
+
+| `sessionUpdate` | When |
+| --- | --- |
+| `agent_message_chunk` | each piece of the reply, as it streams |
+| `user_message_chunk` | replay on `session/load` |
+| `tool_call` | a call is about to run (before its approval), with `title`, `kind`, `status:"in_progress"`, `rawInput` |
+| `tool_call_update` | its result: `status` `completed` or `failed`, and the text |
+
+## Extension events
+
+`_archymedes/event` with `{"sessionId":"…","event":{…}}`, to a client that opted in with `events`.
+
+| `event.type` | Fields | Meaning |
+| --- | --- | --- |
+| `runtime` | `event`: a runtime event (below) | something in the main conversation's turn |
+| `subagent` | `parentToolCallId`, `agent`, `event` | a sub-agent's `tool_call`, `tool_result`, `model_turn` or `provider_retry`, under the call that started it |
+| `thread` | `thread`: `id`, `parentToolCallId`, `agent`, `status`, `background`, `brief`, `report`, `branch` | a sub-agent started (`running`) or ended (`done`, `failed`, `cancelled`), with its report |
+| `compaction` | `tokensBefore`, `messagesBefore`, `messagesAfter` | the conversation was summarized |
+| `steering_unread` | `messages` | steering the turn accepted and ended before reading; send them as prompts |
+| `rules_problems` | `problems` | command rules or role files left out, and why |
+
+Runtime events (`event.event.type`), the same as the TypeScript runtime's `AgentRuntimeEvent`:
+
+| Type | Fields |
+| --- | --- |
+| `model_turn` | `iteration`, `model`, `toolCallCount`, `usage` (`inputTokens`, `outputTokens`, `cachedInputTokens`, `reasoningTokens`) |
+| `tool_compose` | `iteration`, `index`, `toolName`, `subject` (a path or command once streamed), `chars`: a call still being written |
+| `tool_call` | `toolCallId`, `toolName`, `effect` (`none`, `workspace`, `external`), `arguments` |
+| `tool_result` | `toolCallId`, `toolName`, `effect`, `isError`, `content`, `data` |
+| `provider_retry` | `iteration`, `nextAttempt`, `maxAttempts`, `delayMs`, `reason` (`rate_limit`, `server_error`, `timeout`, `network`) |
+| `steered` | `iteration`, `count`: messages folded into this step |
+| `context_shrunk` | `iteration`, `step`: compacted after the provider said the conversation was too long |
+| `test_first` | `state`: `tests`, `code`, `red`, `green`, `checked` |
+| `runtime_stop` | `status` (`completed`, `cancelled`, `failed`, `stuck`, `budget_exhausted`), `summary` |
+
+`assistant_delta` is never sent here; the text already went as `agent_message_chunk`.
+
+## Ordering guarantees
+
+- A prompt's events are all written before its reply.
+- Prompts run in the order they were read; a cancel covers exactly the prompts read before it.
+- On `session/load`, the replayed conversation comes before any event of a resumed sub-agent.
+- A sub-agent's report is delivered to the main conversation once.
+
+## Toward ACP v2
+
+ACP v2 (a draft since July 2026) changes the prompt lifecycle: the prompt's reply acknowledges it
+with a message id, and the turn's progress and end arrive as updates. The engine already works that
+way inside: a prompt is accepted, runs in its slot, and ends with a status. So v2 is a change to
+`internal/core/server` alone: reply on acceptance, and send the end as an update. v1 stays as long
+as clients use it. See the [v2 draft](https://agentclientprotocol.com/announcements/acp-v2-draft).

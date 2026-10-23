@@ -1,0 +1,263 @@
+# Tools
+
+Every tool the model can call on the Go engine. Names and arguments match the TypeScript engine's,
+so prompts, role files and the interface's cards work the same on both. `/tools` in a session lists
+the ones the current mode has, with what each may do.
+
+**Effect** is what a call can change: *none* (it only reads; never asks), *project* (it changes
+files or runs something; asks in build and defender mode, and in auto mode only when risky), or
+*per call* (decided from the arguments). **Together** means several such calls in one step run at
+the same time.
+
+**Modes.** Plan mode has only the tools whose effect is none, plus the read-only helpers. Build,
+auto and defender have them all.
+
+- [Reading and searching](#reading-and-searching)
+- [Changing files](#changing-files)
+- [Running commands](#running-commands)
+- [Planning](#planning)
+- [Git](#git)
+- [Asking you](#asking-you)
+- [Sub-agents](#sub-agents)
+- [Finding more tools](#finding-more-tools)
+- [Paths, sizes and what is skipped](#paths-sizes-and-what-is-skipped)
+
+## Reading and searching
+
+### `read_file`
+
+Read a text file, with numbered lines (`12<tab>text`; the numbers are not in the file).
+
+| Argument | | |
+| --- | --- | --- |
+| `path` | required | relative to the project, or absolute inside it |
+| `offset` | optional | first line, from 1 |
+| `limit` | optional | how many lines; default 2,000 |
+
+Effect none, together. A window says which lines it shows (`app.go (lines 200-399 of 812)`).
+Binary files and directories are refused, and so are files over 10 MB. Reading a file also
+remembers its content, so a later edit can tell whether someone changed it in between.
+
+### `list_files`
+
+The files and folders under a path, folders ending in `/`.
+
+| Argument | | |
+| --- | --- | --- |
+| `path` | optional | default: the project root |
+| `depth` | optional | levels to descend; default 2 |
+
+Effect none, together. At most 500 entries; it says so when there are more.
+
+### `glob_files`
+
+Files whose path matches a pattern, newest first.
+
+| Argument | | |
+| --- | --- | --- |
+| `pattern` | required | `**` spans folders: `src/**/*.tsx`. A pattern with no `/` matches the file name at any depth: `*.go` |
+| `path` | optional | the folder to search; default the project root |
+
+Effect none, together. At most 500 paths.
+
+### `grep_files`
+
+Search file contents. Uses ripgrep when it is installed (and so honours `.gitignore`), a built-in
+search otherwise.
+
+| Argument | | |
+| --- | --- | --- |
+| `query` | required | the text to find; a regular expression with `regex: true` |
+| `path` | optional | a file or folder; default the project root |
+| `include` | optional | a file-name pattern: `*.ts` at any depth, or `src/**/*.tsx` |
+| `regex` | optional | treat the query as a regular expression |
+| `ignoreCase` | optional | |
+| `output` | optional | `content` (matching lines, the default), `files` (paths only), `count` (matches per file) |
+| `context` | optional | lines before and after each match, up to 10 |
+| `limit` | optional | lines shown; default 100, at most 500 |
+
+Effect none, together.
+
+## Changing files
+
+### `write_file`
+
+Create a file, or replace all of it. Folders on the way are created.
+
+| Argument | | |
+| --- | --- | --- |
+| `path` | required | |
+| `content` | required | the whole new content |
+
+Effect project. If the file was read earlier in the session and has changed since (you edited it,
+another tool did), the write is refused until it is read again: Friday never overwrites what it has
+not seen.
+
+### `edit_file`
+
+Replace exact text in a file.
+
+| Argument | | |
+| --- | --- | --- |
+| `path` | required | |
+| `oldText`, `newText` | one edit | `oldText` must occur exactly once (add surrounding lines to make it unique) |
+| `replaceAll` | optional | replace every occurrence instead |
+| `edits` | several edits | a list of `{oldText, newText, replaceAll}` applied in order, **all or nothing** |
+
+Effect project. Refused, with the reason, when the text is not found, occurs more than once, or
+the file changed since it was read. Line numbers pasted from `read_file` output are recognised and
+stripped; a file with Windows line endings matches text written with plain newlines.
+
+## Running commands
+
+### `run_command`
+
+Run a shell command in the project root (`sh -c`, or `cmd /C` on Windows) and wait for it.
+
+| Argument | | |
+| --- | --- | --- |
+| `command` | required | |
+| `timeoutSeconds` | optional | default 120, at most 1,800 |
+
+Effect **per call**:
+
+- **Read-only commands run unasked** in every mode, and several in one step run together:
+  `git status`, `git diff`, `ls`, `cat`, `rg`, `grep`, `find` (without `-delete`, `-exec`),
+  `sed -n …p`, `head`, `wc`, version and help checks. Every part of a compound command must be
+  read-only, and anything that redirects, substitutes (`$( )`), backgrounds (`&`) or sets a
+  variable is not.
+- **Everything else** asks in build and defender mode; in auto mode it asks only when risky
+  (credentials, deleting work, pushing, publishing, deploying, `sudo`, `chmod 777`).
+- **Command rules** speak first: `allow` runs unasked (except in defender mode), `ask` always asks,
+  `forbid` is refused with your reason. See [Configuration → Command rules](CONFIGURATION.md#command-rules).
+- **Refused outright**, whatever the mode: recursive forced `rm`, `find -delete`,
+  `git reset --hard`, `git clean -f`, `git checkout -- .`, `mkfs`, `dd if=`, writing to a raw
+  disk, the fork bomb.
+
+The result is `exit <code>` and the output (stdout, then stderr), each kept to 200,000 characters.
+When the time runs out, the command and everything it started are stopped. A command that looks
+like a server or watcher (`npm start`, `vite`, `--watch`) gets 15 seconds; if it is still running
+then, it is stopped and the model is told it is a long-running process. A missing program is
+named, with a request not to retry it.
+
+**As proof.** A successful run of a test, build, typecheck or smoke command counts as evidence
+that a change works. From weakest to strongest: a check (build, typecheck, lint), tests, a smoke
+run of the assembled program (a script Friday wrote counts), an end-to-end suite.
+Reading files or printing text does not count, and the result says when a run was not accepted
+as proof and why.
+
+## Planning
+
+### `todo_write`
+
+The checklist for the task, shown with `/todos`.
+
+| Argument | | |
+| --- | --- | --- |
+| `items` | | a list of texts: replaces the list, with new ids |
+| `complete` | | ids now done |
+| `start` | | ids now in progress |
+
+Effect none. Unknown ids are reported, the others still applied; repeating an update that changes
+nothing is answered with "already recorded". Not given to sub-agents.
+
+### `todo_read`
+
+The checklist as it is. Effect none, together. Found with `tool_search`.
+
+## Git
+
+All read-only (effect none, together), with arguments checked so an option can never pose as a
+ref.
+
+| Tool | Arguments | Gives |
+| --- | --- | --- |
+| `git_status` | — | the branch, ahead and behind, staged, unstaged and untracked files |
+| `git_diff` | `staged`, `ref` (`HEAD~1`, `main..feature`), `path`, `stat`, `maxChars` (default 20,000, at most 100,000) | the changes |
+| `git_log` | `n` (default 20, at most 200), `path`, `ref` | commits: hash, date, author, subject. Found with `tool_search` |
+| `git_show` | `ref` (required), `stat`, `maxChars` | one commit's message and diff. Found with `tool_search` |
+
+## Asking you
+
+### `ask_user`
+
+One question, when a decision is yours to make.
+
+| Argument | | |
+| --- | --- | --- |
+| `question` | required | |
+| `options` | optional | suggested answers; you may answer anything |
+| `multiSelect` | optional | several options may be picked |
+
+Effect none. Dismissing the question tells the model to decide and say what it assumed. Only the
+main conversation has it; a sub-agent's question would reach you without the context to answer it.
+
+## Sub-agents
+
+Only the main conversation has these; a sub-agent never starts another. Full guide:
+[Sub-agents](SUBAGENTS.md).
+
+### `delegate_readonly_task` / `delegate_task`
+
+Start a helper. `delegate_readonly_task` takes the read-only roles (explore, plan, review, and your
+read-only ones) and several run together; `delegate_task` takes the others (general, verify, yours)
+and is not offered in plan mode.
+
+| Argument | | |
+| --- | --- | --- |
+| `task` | required | a self-contained brief: goal, area, what is known, what to report |
+| `agent` | optional | the role; default explore / general |
+| `background` | optional | return at once and keep working; the report comes later |
+| `fork` | optional | what it starts from: `none` (the brief only, the default), `full` (this whole conversation), `last:N` (the last N exchanges) |
+
+Effect none: what the helper does is approved call by call, as Friday's own calls are. In the
+foreground the result is the helper's report; in the background it is the helper's id.
+
+### `wait_agents`
+
+Wait for background helpers and collect their reports.
+
+| Argument | | |
+| --- | --- | --- |
+| `ids` | optional | which; default every background helper whose report has not been read |
+| `timeoutSeconds` | optional | default 600, at most 1,800 |
+
+A report that already reached the conversation as a message is not given twice; the result says
+where it is.
+
+### `send_agent`
+
+| Argument | | |
+| --- | --- | --- |
+| `id` | required | |
+| `message` | required | |
+
+A running helper reads it at its next step. A finished helper is re-opened with it as a follow-up,
+keeping everything it read, in the foreground or background as it ran before.
+
+### `close_agent`
+
+Stop a running helper (`id`); what it found so far becomes its report. Found with `tool_search`.
+
+## Finding more tools
+
+### `tool_search`
+
+Present only while some tools are not sent with every request (see
+`ARCHYMEDES_DEFER_TOOLS` in [Configuration](CONFIGURATION.md#behaviour)). It ranks those tools by
+how well their names and descriptions match the query and makes the matches available from the next
+step. Calling such a tool by its exact name works without searching first.
+
+| Argument | | |
+| --- | --- | --- |
+| `query` | required | what the tool should do, in a few words |
+| `limit` | optional | default 5 |
+
+## Paths, sizes and what is skipped
+
+- Every path is relative to the project root, or absolute inside it. Paths outside the project,
+  `~` paths, and links that lead out of it are refused.
+- Listing, globbing and the built-in search skip `.git`, `node_modules`, `.hg`, `.svn`, `dist`,
+  `target`, `vendor`, `__pycache__`, `.venv`, `.next` and the engine's own `go-sessions`.
+- A tool result over 40,000 characters (9,000 for a sub-agent) keeps its start and end, and says
+  how many characters were left out in the middle. Cuts never split a character.

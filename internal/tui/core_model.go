@@ -245,7 +245,7 @@ func New(opts Options) *Model {
 	m.help = newHelp(th)
 	m.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(th.Highlight))
 	if opts.Theme != "" && th.Name != strings.ToLower(strings.TrimSpace(opts.Theme)) {
-		m.notice(noticeWarn, fmt.Sprintf("No theme %q; using %s. /theme lists them.", opts.Theme, th.Name))
+		m.notice(noticeWarn, fmt.Sprintf("No theme %q; using %s (/theme lists them)", opts.Theme, th.Name))
 	}
 	return m
 }
@@ -672,7 +672,7 @@ func (m *Model) submit() tea.Cmd {
 		m.queue = append(m.queue, text)
 		return nil
 	}
-	m.notice(noticeError, "The agent is not running; restart Friday.")
+	m.notice(noticeError, "The agent is not running; restart Friday")
 	return nil
 }
 

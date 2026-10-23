@@ -111,6 +111,18 @@ func DescribeToolCall(toolName string, args map[string]any) string {
 			parts = append(parts, fmt.Sprintf("%d done", n))
 		}
 		return strings.Join(parts, ", ")
+	case "wait_agents":
+		// Which background helpers it waits for; with none named, every one not yet collected.
+		if ids, ok := args["ids"].([]any); ok && len(ids) > 0 {
+			names := make([]string, 0, len(ids))
+			for _, id := range ids {
+				names = append(names, asString(id))
+			}
+			return strings.Join(names, ", ")
+		}
+		return "every background agent"
+	case "send_agent":
+		return asString(args["id"]) + ": " + asString(args["message"])
 	default:
 		// An unknown tool still deserves a useful line, so a string argument stands in. Map order
 		// is random in Go, so the well-known subject keys are tried first, then any, sorted.

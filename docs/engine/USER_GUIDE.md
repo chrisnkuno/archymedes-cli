@@ -1,0 +1,274 @@
+# User guide
+
+How to work with Friday on its engine: what happens when you send a request, how much it may do on
+its own, how it uses helpers (sub-agents), and what to do when something goes wrong. For every
+setting see [Configuration](CONFIGURATION.md); for every tool see [Tools](TOOLS.md).
+
+- [Starting](#starting)
+- [What happens when you send a request](#what-happens-when-you-send-a-request)
+- [How much Friday may do on its own](#how-much-friday-may-do-on-its-own)
+- [Approvals](#approvals)
+- [Talking to Friday while it works](#talking-to-friday-while-it-works)
+- [Tests first, and proof before "done"](#tests-first-and-proof-before-done)
+- [Sub-agents](#sub-agents)
+- [Sessions: resuming, restarts, titles](#sessions-resuming-restarts-titles)
+- [Long conversations: compaction](#long-conversations-compaction)
+- [Models: the main one and the small one](#models-the-main-one-and-the-small-one)
+- [Limits Friday keeps to](#limits-friday-keeps-to)
+- [Commands in a session](#commands-in-a-session)
+- [Troubleshooting](#troubleshooting)
+
+## Starting
+
+```bash
+friday                          # a session in this folder
+friday "add a --verbose flag"   # a session that starts with a request
+friday --resume latest          # the last session in this folder
+friday --resume                 # same as latest
+friday --plan                   # start in plan mode (read and propose only)
+friday --provider groq --model openai/gpt-oss-120b
+```
+
+The first time, with no key anywhere, Friday opens a welcome that lets you pick a provider and
+paste its key; the key is saved in your settings file and never shown again. After that, `friday`
+opens straight into a session.
+
+Friday works in the folder you start it in (or `-C <dir>`). It can read anything in that folder,
+and it changes nothing outside it: paths outside the project, `~` paths, and links that lead out of
+it are refused by every file tool.
+
+## What happens when you send a request
+
+One request is one **turn**. A turn is a loop of **steps**:
+
+1. Friday reads what has arrived since the last step: your request, anything you typed while it
+   worked, and reports from sub-agents that finished.
+2. It asks the model what to do next. You see the reply stream in, and while the model is still
+   writing a tool call you see what it is about ("writing src/app.ts…").
+3. It runs the tools the model asked for. Calls that only read run together, at the same time;
+   anything that changes something runs on its own, in order, after your approval when the mode
+   asks for one. Every call appears as a card with its result.
+4. It saves the conversation. Then the next step, until the model has nothing more to do.
+
+When the model says it is done, Friday checks one more thing before it lets the turn end: if files
+changed, has anything shown that the change works? (See [Tests first](#tests-first-and-proof-before-done).)
+
+A turn ends when the work is done, when you stop it (esc), when the turn's budget of steps is
+spent, or when Friday notices it is going in circles. The last line of the turn says which.
+
+## How much Friday may do on its own
+
+The **mode** decides what Friday may do without asking. shift+tab cycles plan → build → auto in a
+session; `/mode <name>`, or `/plan`, `/build`, `/auto`, `/defender`, switch directly. The mode can
+change mid-session; standing approvals carry over.
+
+| Mode | Reads | Edits files | Runs commands | Asks you |
+| --- | --- | --- | --- | --- |
+| **plan** | yes | no | no | never: nothing can change |
+| **build** (default) | yes | yes | yes | before every edit and every command that is not read-only |
+| **auto** | yes | yes | yes | only for risky actions: credentials, deleting work, pushing, publishing, deploying, privileged commands |
+| **defender** | yes | yes | yes | before every change, always; security work |
+
+"Read-only" commands never ask in any mode: `git status`, `git diff`, `git log`, `ls`, `cat`,
+`rg`, `grep`, `find` without `-delete`/`-exec`, `sed -n …p`, version checks. Friday decides this by
+looking at every part of the command; anything it cannot account for (a redirect, `$( )`, a
+background `&`, a program it does not know) is treated as a change and asks.
+
+Some commands are refused outright, whatever the mode, because no undo brings their work back:
+a recursive forced `rm` (in any flag spelling), `find … -delete`, `git reset --hard`,
+`git clean -f`, `git checkout -- .`, `mkfs`, `dd if=…`, writing to a raw disk, and the fork bomb.
+The model is told why and asked to leave them to you; you can always run them yourself with
+`!command` in the input box.
+
+## Approvals
+
+When Friday asks, the dialog offers:
+
+| Answer | What it means |
+| --- | --- |
+| **Allow** | this call, once |
+| **Allow this action from now on** | this exact call (same tool, same arguments) for the rest of the session |
+| **Always allow commands starting with "npm test"** / **edits under src/app/** | a broader rule, offered only when generalizing is safe: a command prefix (never for `rm`, `sudo`, shells, network tools, `git push`, installs or publishes) or the edited file's own folder (never the project root, `.git` or `.archymedes`) |
+| **Deny** | not this call; the model is told you declined and should not try another way |
+| **Deny this action from now on** | never this exact call this session |
+
+Standing decisions are saved with the session and come back when you resume it. They are keyed to
+the exact action, including where the tool came from, so an approval for Friday's own `write_file`
+never covers a same-named tool from somewhere else. Decisions made on the TypeScript engine are
+understood by the Go engine and the other way round.
+
+For decisions you make every day, write **command rules** instead (`allow`, `ask` or `forbid` a
+command by its first words). See [Configuration → Command rules](CONFIGURATION.md#command-rules).
+
+## Talking to Friday while it works
+
+You do not have to wait. While a turn runs:
+
+- **Type and press enter.** Your message joins the turn at its next step, as if you had said it
+  between two of Friday's actions. Use it to correct course ("not that file, the other one"), add a
+  requirement, or answer a question it is about to ask.
+- If the turn ends before reading what you typed, your message is sent as the next turn instead, so
+  nothing you type is lost.
+- **esc** stops the turn. Requests already sent to Friday and waiting behind it are stopped with
+  it; what you send afterwards runs normally.
+
+## Tests first, and proof before "done"
+
+Two things hold a turn back from ending:
+
+**Proof.** If the turn changed files and nothing has shown the change works, Friday asks the model,
+once, to run the smallest relevant test or check and report the real result. A passing build or
+typecheck counts as the weakest proof; Friday asks once more for tests that run the changed
+behaviour. Running something that only prints, or reading a test file, is not proof. Changes with
+nothing to test (documentation, configuration) are allowed to say so and finish.
+
+**Tests first** (on by default; Settings → Behaviour → Build test first). For a code change, the
+order is: write the tests that define done and see them fail, write the smallest code that makes
+them pass, then run the project's own static check (typecheck, linter, vet). If code changes before
+any test, the model is reminded of the order; if it finishes without tests or without the check,
+it is asked once for each. You see where it is in a small row under the transcript:
+`✓ 1 test ✓ red ● code ○ green ○ checks`.
+
+## Sub-agents
+
+A **sub-agent** is a helper Friday starts for one part of the task. It gets a brief, works on its
+own, and reports back; only its report enters the main conversation, so a search that reads twenty
+files costs the conversation one report, not twenty files. Friday decides when to use them; you can
+also ask ("use a background explorer to map the API while you fix the bug").
+
+The built-in helpers:
+
+| Role | Does | Can change files | Model |
+| --- | --- | --- | --- |
+| **explore** | finds where and how something works; several at once, one area each | no | small |
+| **plan** | the files, order, risks and checks for a change across several files | no | main |
+| **review** | an independent bug review of changed code, before Friday reports it done | no | main |
+| **general** | one independent, fully specified piece of work, edits included | yes | main |
+| **verify** | runs tests, builds and typechecks and reports failures | runs commands, never edits | small |
+
+**In the background.** A helper can run while Friday keeps working. Its card stays on screen with
+what it is doing ("in the background · 6 calls"), and its report arrives as a message Friday reads
+at its next step, or when Friday waits for it. If Friday's turn ends first, the helper keeps
+working and its report is waiting at the start of your next message.
+
+A background helper that edits files works in its own copy of the project (a git worktree) on its
+own branch, `friday/<id>`, so it never edits the same file as Friday at the same time. When it
+finishes, its changes are committed on that branch, and the report says how to take them:
+
+```bash
+git merge friday/t-k3x9ab          # or cherry-pick
+git worktree remove <the path the report gives>
+```
+
+Outside a git repository, an editing helper runs in the foreground instead.
+
+**Following up.** Friday can send a running helper more instructions, or stop one. It can also
+re-open a finished helper with a follow-up question; the helper keeps everything it read. `/subagents` lists every helper of
+the session: its role, whether it ran in the background, its status, its brief and its branch.
+
+**Limits.** Helpers never start helpers of their own. At most four run at once (others wait their
+turn). Each role has its own step and call limits; a helper that runs out is asked for its report
+anyway, so what it found is not lost. Approvals for a helper's edits come to you exactly as
+Friday's own do.
+
+You can write your own roles; see [Sub-agents](SUBAGENTS.md).
+
+## Sessions: resuming, restarts, titles
+
+Every session is saved as it goes, in `.archymedes/go-sessions/<id>/` in the project. Each step is
+saved when it completes, and your request is saved before the first step, so a crash loses at most
+the step in progress. (Add `.archymedes/` to your project's `.gitignore` if it is not there.)
+
+- `friday --resume latest` (or `--resume`, or **F4 Sessions** / `/resume`) continues the last one;
+  `--resume <id>` a particular one. The conversation is drawn again as it was.
+- **Helpers survive.** A helper that was working when Friday crashed or was closed resumes, from
+  its last saved step, when you open the session again. Its report then arrives like any other.
+- **Titles.** A session is titled from your first request, and then renamed in the background by
+  the small model to a few words ("Fix the login bug"). `ARCHYMEDES_TITLES=off` keeps the first
+  line of the request instead.
+- Sessions of the two engines are kept apart: `--resume <id>` of a session the TypeScript engine
+  wrote opens it on the TypeScript engine.
+
+## Long conversations: compaction
+
+A conversation that nears the model's context window is **compacted**. The small model summarizes
+the earlier part (goal, requirements, decisions, files, commands and what they showed, what
+remains), and the summary replaces it. Your latest message and everything after it stay as they
+were. A line in the transcript says when it happened ("Compacted the conversation:
+48 → 6 messages").
+
+- It happens at 80% of the window. The window is assumed to be 128,000 tokens unless you set
+  `ARCHYMEDES_CONTEXT_LIMIT`.
+- If a provider says the conversation is already too long, Friday compacts and tries again, once.
+- `/compact` does it now, between turns; `/compact <focus>` keeps what you name in full ("/compact
+  the database migration").
+
+## Models: the main one and the small one
+
+A session uses its provider's **main model** for the conversation, and a **small model** for cheap,
+mechanical work: the explore and verify helpers, compaction and titles. Set the small model with
+`<PROVIDER>_SMALL_MODEL` (for example `GROQ_SMALL_MODEL=llama-3.1-8b-instant`) or
+`ARCHYMEDES_SMALL_MODEL`; without one, the main model does everything. In free mode the small model
+is always a free one.
+
+`/model <name>` switches the main model mid-session, and the conversation carries on; F5 lists
+every model you can switch to. Switching to another provider works too (`/model` lists them),
+except to Claude Code or Codex, which run on the TypeScript engine.
+
+## Limits Friday keeps to
+
+| Limit | Default | What happens at it |
+| --- | --- | --- |
+| Steps in a turn | 100 | the turn ends: "the run's budget is spent" |
+| Tool calls in a turn | 500 | the same |
+| Tool calls in one step | 16 | the rest are not run; the model is told to make them in its next step |
+| One tool result | 40,000 characters | the start and end are kept, the middle is left out and counted |
+| One reply | 16,384 tokens | a reply cut off by it is continued, up to twice |
+| A silent stream | 3 minutes | the connection is cut and the call retried |
+| Repeating one call with nothing changed | a note at 3, a stop at 5 | see below |
+
+**Going in circles.** If the model calls the same tool with the same arguments while nothing in the
+project changed in between, the third time it is told the result will not change; the fifth time
+the turn stops ("stuck"). Running the tests again after an edit is not a repeat: the edit changed
+something.
+
+**Rate limits and outages.** A request that fails before anything streamed is retried: up to 4
+times for an outage, 8 for a rate limit. Each wait is as long as the provider says ("try again in
+11s", or its `retry-after` header), up to 90 seconds. You see each retry as it happens. A request
+that failed after text already streamed is not retried, so nothing is said twice.
+
+## Commands in a session
+
+Type `/` to see every command with what it does. Those that matter most on this engine:
+
+| Command | Does |
+| --- | --- |
+| `/subagents` | the helpers of this session: role, status, brief, branch |
+| `/todos` | Friday's checklist for the task: what is done, doing and left |
+| `/compact [focus]` | summarize the conversation now, keeping what you name |
+| `/mode`, `/plan`, `/build`, `/auto`, `/defender` | how much Friday may do on its own |
+| `/model [name]` | switch the model; the conversation carries on |
+| `/resume`, `/new` | another session, or a fresh one |
+| `/settings` | every setting, including the engine |
+| `/tools` | every tool Friday has in this mode, what it may change, and whether it asks |
+
+Commands that are not in the Go engine yet (`/undo`, `/rewind`, `/diff`, `/cost`, `/review`,
+`/fork`, `/goal`, `/context`, `/memory`) say so when you run them, and how to switch.
+
+## Troubleshooting
+
+| You see | It means | Do |
+| --- | --- | --- |
+| "No model provider is configured" | no key anywhere | the welcome screen, `friday settings`, or `/key` |
+| "… is not available in the Go engine yet" | the provider runs on the TypeScript engine only | Settings → Engine → TypeScript, then a new session; or pick another provider |
+| "/cost is not in the Go engine yet" | that command is TypeScript-only so far | as above |
+| retries with "rate_limit", turns that take minutes | your provider's per-minute limit | a higher tier, a smaller model, or fewer helpers at once |
+| "Stopped: … was called 5 times with the same arguments" | the model went in circles | rephrase, or give it the missing fact |
+| a helper's report says it ran out of steps | its role's limit | ask Friday to continue it (`send_agent`), or raise the limit in a role file |
+| a background helper's work is not in your files | it worked on its own branch | `git merge friday/<id>` as its report says |
+| the session will not resume | it was written by the other engine | `--resume <id>` picks the right engine by itself; check `.archymedes/sessions` vs `.archymedes/go-sessions` |
+
+For a record of everything the engine and the interface said to each other, start Friday with
+`ARCHYMEDES_ACP_TRACE=/tmp/acp.log`. `ARCHYMEDES_DEBUG_LOG=/tmp/friday.log` writes the interface's
+own log. Its first `engine` line says which engine runs the session, and why when it is the
+TypeScript one.

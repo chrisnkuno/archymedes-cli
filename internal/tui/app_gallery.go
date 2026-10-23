@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -55,7 +56,7 @@ func (g *galleryApp) builtInImage() image.Image {
 
 // liveImage is the shown photo's full-resolution copy, once fetched.
 func (g *galleryApp) liveImage() image.Image {
-	if g.offline {
+	if g.offline && !gallery.Pick(g.index).Generated() {
 		return nil
 	}
 	return g.fetched[g.live.CurrentURL()]
@@ -91,6 +92,9 @@ func (m *Model) openGallery(index int) tea.Cmd {
 		builtIn: picture.NewWithConfig(picture.Config{KittyID: kittyIDBuiltIn, Fit: picture.FitContain}),
 		live: pictureurl.NewWithConfig(pictureurl.Config{
 			KittyID: kittyIDLive, Fit: picture.FitContain,
+			// Photographs come from Unsplash's CDN; generated pictures from friday-art://, drawn
+			// here at full size by the same client.
+			HTTPClient: gallery.HTTPClient(15 * time.Second),
 			// Image hosts turn away Go's stock User-Agent; say who is asking.
 			UserAgent: "friday/" + m.opts.Version + " (+https://github.com/chrisnkuno/friday-cli)",
 		}),
@@ -113,8 +117,11 @@ func (g *galleryApp) show(m *Model, index int) tea.Cmd {
 	if img, err := p.Image(); err == nil {
 		cmds = append(cmds, g.builtIn.SetImage(img))
 	}
-	if !g.offline {
+	// Offline, photographs stay at their built-in copy; a generated picture needs no network.
+	if !g.offline || p.Generated() {
 		cmds = append(cmds, g.live.SetURL(g.source(p)))
+	} else {
+		cmds = append(cmds, g.live.SetURL(""))
 	}
 	return tea.Batch(append(cmds, g.relayout(m))...)
 }
@@ -257,7 +264,7 @@ func (g *galleryApp) pane(m *Model, l galleryLayout, label, content string, p ga
 	caption := lipgloss.NewStyle().Width(l.innerCols).Align(lipgloss.Center)
 	captions := []string{
 		caption.Inherit(th.Body).Render(ansi.Truncate(p.Title, l.innerCols, "…")),
-		caption.Inherit(th.Faint).Hyperlink(p.URL()).Render(ansi.Truncate("by "+p.By+" · Unsplash", l.innerCols, "…")),
+		caption.Inherit(th.Faint).Hyperlink(p.URL()).Render(ansi.Truncate(p.Byline(), l.innerCols, "…")),
 		caption.Inherit(th.Faint).Render(ansi.Truncate(source, l.innerCols, "…")),
 	}
 	inner := strings.Join(append([]string{top, middle}, captions...), "\n")

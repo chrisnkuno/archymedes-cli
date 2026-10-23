@@ -139,5 +139,5 @@ func (m *Model) sendPrompt(text string) tea.Cmd {
 		m.queue = append(m.queue, text)
 		return m.toast(toastInfo, "Queued — runs when this turn ends")
 	}
-	return m.toast(toastWarn, "The agent is not running")
+	return m.toast(toastWarn, "The agent is not running; restart Friday")
 }

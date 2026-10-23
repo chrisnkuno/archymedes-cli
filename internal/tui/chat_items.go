@@ -118,6 +118,8 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	// so a cached card never needs repainting just to animate.
 	glyph, summary, accent := th.Faint.Render("◌"), th.Faint.Render("running"), th.Secondary
 	switch {
+	case backgroundRunning(t):
+		// Its call returned at once; the sub-agent behind it is still working.
 	case t.done && t.isError:
 		// The error itself is printed below the card; the header only says that it failed — with
 		// a curly underline where the terminal draws one, as a second signal beside the ✗.

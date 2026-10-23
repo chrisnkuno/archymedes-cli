@@ -17,10 +17,16 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 	if _, ok := m.overlay.(*wallpaperPicker); !ok || !strings.Contains(screen(m), "Take turns") {
 		t.Fatalf("no picker:\n%s", screen(m))
 	}
-	press(m, tea.KeyDown, 0) // the first photo: shown at once
-	first := gallery.Photos[0]
-	if m.wallChoice != first.ID || m.homePhoto() != first {
-		t.Fatalf("preview = %q", m.wallChoice)
+	press(m, tea.KeyDown, 0) // abstract only, taking turns: shown at once
+	if m.wallChoice != "turns:abstract" || m.homePhoto().Theme != "abstract" || !strings.Contains(screen(m), "Take turns: abstract only") {
+		t.Fatalf("preview = %q, %s", m.wallChoice, m.homePhoto().ID)
+	}
+	for range 3 {
+		press(m, tea.KeyDown, 0) // past sci-fi and antiquity only, to the first single picture
+	}
+	first := m.overlay.(*wallpaperPicker).choices[m.overlay.(*wallpaperPicker).cursor]
+	if p, ok := gallery.ByID(first); !ok || p.Theme != "abstract" || m.homePhoto().ID != first {
+		t.Fatalf("the first single picture should be abstract: %q", first)
 	}
 	press(m, tea.KeyEscape, 0) // a preview is not a choice
 	if m.wallChoice != "" || config.LoadState(dir).Wallpaper != "" {
@@ -50,11 +56,11 @@ func TestTheGalleryMakesThePhotoInFrontTheWallpaper(t *testing.T) {
 	run(m, m.openGallery(3))
 	press(m, 'w', 0)
 	want := gallery.Pick(3)
-	if m.wallChoice != want.ID || m.homePhoto() != want || config.LoadState(dir).Wallpaper != want.ID {
+	if m.wallChoice != want.ID || m.homePhoto().ID != want.ID || config.LoadState(dir).Wallpaper != want.ID {
 		t.Fatalf("wallpaper = %q, want %q", m.wallChoice, want.ID)
 	}
 	m.photoIndex += 5 // a kept wallpaper does not take turns
-	if m.homePhoto() != want {
+	if m.homePhoto().ID != want.ID {
 		t.Fatal("the kept wallpaper turned")
 	}
 }

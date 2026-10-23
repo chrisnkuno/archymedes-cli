@@ -1,15 +1,94 @@
 {
-  "//": "The Go interface's sections. `packages`: what each internal/ package may import of the others (cmd/ may import any). `tui`: internal/tui is one package, so its sections are file prefixes; every non-test file starts with one. Tests take their file's name; tests spanning sections start with suite_. See docs/continuation/CODEBASE.md.",
+  "//": "The Go interface's sections. `packages`: what each internal/ package may import of the others (cmd/ may import any). `tui`: internal/tui is one package, so its sections are file prefixes; every non-test file starts with one. Tests take their file's name; tests spanning sections start with suite_. Under internal/core each package is its own section (core/<pkg>; docs/continuation/GO_ENGINE.md). See docs/continuation/CODEBASE.md.",
   "packages": {
-    "theme": [],
-    "acp": [],
-    "cli": [],
-    "config": [],
-    "gallery": [],
-    "i18n": [],
-    "project": [],
-    "render": ["theme"],
-    "tui": ["acp", "config", "gallery", "i18n", "project", "render", "theme"]
+    "theme": [
+      "conform"
+    ],
+    "acp": [
+      "conform"
+    ],
+    "cli": [
+      "conform"
+    ],
+    "config": [
+      "conform"
+    ],
+    "gallery": [
+      "conform"
+    ],
+    "i18n": [
+      "conform"
+    ],
+    "project": [
+      "conform"
+    ],
+    "render": [
+      "theme",
+      "conform"
+    ],
+    "tui": [
+      "acp",
+      "config",
+      "gallery",
+      "i18n",
+      "project",
+      "render",
+      "theme",
+      "conform"
+    ],
+    "core/tool": [
+      "conform"
+    ],
+    "core/policy": [
+      "core/tool",
+      "conform"
+    ],
+    "core/gate": [
+      "core/tool",
+      "conform"
+    ],
+    "core/roles": [
+      "core/tool",
+      "conform"
+    ],
+    "core/llm": [
+      "conform"
+    ],
+    "core/thread": [
+      "conform"
+    ],
+    "core/tools": [
+      "core/tool",
+      "core/policy",
+      "conform"
+    ],
+    "core/loop": [
+      "core/tool",
+      "core/gate",
+      "conform"
+    ],
+    "core/agents": [
+      "core/tool",
+      "core/policy",
+      "core/gate",
+      "core/roles",
+      "core/tools",
+      "core/llm",
+      "core/loop",
+      "core/thread",
+      "conform"
+    ],
+    "core/server": [
+      "core/agents",
+      "core/llm",
+      "core/loop",
+      "core/policy",
+      "core/gate",
+      "core/thread",
+      "core/tool",
+      "conform"
+    ],
+    "conform": []
   },
   "tui": {
     "core": "The Bubble Tea model, its update loop and input routing: state, agent events, keys, mouse, paste, click zones, the screen's composition, the action registry, the rate-limit forecast",

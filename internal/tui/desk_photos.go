@@ -43,26 +43,30 @@ func (m *Model) photoLines(p gallery.Photo, cols, rows int) []string {
 	return lines
 }
 
-// photoCard is a photo with its caption under it: what it shows, and who took it (linked to the
-// photo's page on Unsplash, where the terminal supports links).
+// photoCard is a picture with its caption under it: what it shows, and who made it (linked to the
+// photo's page on Unsplash, where the terminal supports links and it is a photograph).
 func (m *Model) photoCard(p gallery.Photo, cols, rows int) []string {
 	lines := m.photoLines(p, cols, rows)
 	if lines == nil {
 		return nil
 	}
 	th := m.th
-	credit := lipgloss.NewStyle().Foreground(th.Muted).Hyperlink(p.URL()).Render(ansi.Truncate("by "+p.By+" · Unsplash", cols, "…"))
+	credit := lipgloss.NewStyle().Foreground(th.Muted).Hyperlink(p.URL()).Render(ansi.Truncate(p.Byline(), cols, "…"))
 	return append(lines,
 		th.Body.Render(ansi.Truncate(p.Title, cols, "…")),
 		credit,
 	)
 }
 
-// homePhoto is the wallpaper now: the one the person picked, else antiquity and sci-fi in turn,
-// turning every photoInterval (or, with reduced motion, staying on the day's).
+// homePhoto is the wallpaper now: the picture the person picked; else one theme in turn, if they
+// picked one; else antiquity, sci-fi and abstract in turn; turning every photoInterval (or, with
+// reduced motion, staying on the day's).
 func (m *Model) homePhoto() gallery.Photo {
 	if p, ok := gallery.ByID(m.wallChoice); ok {
 		return p
+	}
+	if theme, ok := strings.CutPrefix(m.wallChoice, wallpaperTurns); ok {
+		return gallery.WallpaperOf(theme, m.photoIndex)
 	}
 	return gallery.Wallpaper(m.photoIndex)
 }

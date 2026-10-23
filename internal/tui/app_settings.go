@@ -75,7 +75,7 @@ func (m *Model) openSettings() tea.Cmd {
 
 func (m *Model) loadSettings() tea.Cmd {
 	if m.agent == nil {
-		return m.toast(toastWarn, "The agent is not ready yet")
+		return m.toast(toastWarn, "The agent is still starting; try again in a moment")
 	}
 	agent := m.agent
 	return func() tea.Msg {

@@ -59,7 +59,7 @@ func (m *Model) cmdRewind(arg string) tea.Cmd {
 // agentCall runs one request against the open session off the update loop.
 func (m *Model) agentCall(call func(ctx context.Context, agent Agent, id string) tea.Msg) tea.Cmd {
 	if m.agent == nil || m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
+		return m.toast(toastWarn, "The session is still opening; try again in a moment")
 	}
 	agent, id := m.agent, m.session.ID
 	return func() tea.Msg {

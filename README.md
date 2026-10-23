@@ -8,8 +8,20 @@ npm install -g @archymedes/friday
 friday "fix the failing test in src/parser.ts"
 ```
 
+Friday's engine is written in Go and runs inside the `friday` binary: helpers (sub-agents) that
+keep working in the background, steering mid-turn, sessions that survive a crash, and cheap work on
+a cheap model. Sessions that need what only the earlier TypeScript engine has (Claude Code, Codex,
+sandboxes, `/undo`) run there on their own. **Documentation: [`docs/engine/`](docs/engine/README.md)**
+— a [user guide](docs/engine/USER_GUIDE.md), [configuration](docs/engine/CONFIGURATION.md),
+[tools](docs/engine/TOOLS.md), [sub-agents](docs/engine/SUBAGENTS.md),
+[editors](docs/engine/EDITORS.md), [architecture](docs/engine/ARCHITECTURE.md),
+[protocol](docs/engine/PROTOCOL.md) and [extending it](docs/engine/EXTENDING.md).
+
 Open source under the Apache License 2.0. Friday CLI began as a fork of the Nova coding agent
 (MIT) and has since been rebranded end to end; see `NOTICE`.
+
+
+**Contents:** [Providers](#providers) · [Custom commands](#custom-commands) · [Cost and balance](#cost-and-balance) · [Install count](#install-count) · [Languages](#languages) · [Layout](#layout) · [Develop](#develop) · [Contributing](#contributing) · [License](#license) · [Release checks](#release-checks) · [Continuing development](#continuing-development)
 
 ## Providers
 
@@ -36,9 +48,9 @@ Set `<PROVIDER>_MODEL` to pick a model; the defaults are conservative and record
 
 Choose **Claude (your subscription)** in Providers (alt+p), or start with `--provider claude`.
 Archymedes then runs your own [Claude Code](https://code.claude.com/docs/en/setup), signed in with
-your Claude account, and shows its work in the same interface: streamed replies, approvals,
-Changes, `/undo` (Claude Code's file checkpoints), `/resume`, and switching to or from any other
-model mid-session with the conversation carried over.
+your Claude account. Its work shows in the same interface: streamed replies, approvals, Changes,
+`/undo` (Claude Code's file checkpoints), `/resume`, and switching to or from any other model
+mid-session with the conversation carried over.
 
 - **Your account stays with Claude Code.** Signing in is Claude Code's own flow (`claude auth
   login`, which Providers runs for you); Archymedes never reads, stores or forwards a Claude
@@ -46,9 +58,9 @@ model mid-session with the conversation carried over.
 - **Your subscription, not an API key.** `ANTHROPIC_API_KEY` is removed from Claude Code's
   environment, since with it Claude Code bills the key instead; set `ARCHYMEDES_CLAUDE_BILLING=api`
   to keep it. Turns count against your plan's limits, as using Claude Code does.
-- **Fast.** Claude Code is started when the session opens, before you type, and stays running:
-  each turn is one more message to the same process, so there is no start-up per turn and the
-  prompt cache stays warm (in testing, over 99% of input tokens after the first turn).
+- **Fast.** Claude Code is started when the session opens, before you type, and stays running.
+  Each turn is one more message to the same process: no start-up per turn, and the prompt cache
+  stays warm (in testing, over 99% of input tokens after the first turn).
 - **Anthropic's SDK is installed, not bundled.** Connecting installs `@anthropic-ai/claude-agent-sdk`
   (about 5 MB, its JavaScript only) from npm into Archymedes's settings folder. It is Anthropic's
   code under Anthropic's terms, so Archymedes does not ship it. `ARCHYMEDES_CLAUDE_SDK` points at
@@ -63,11 +75,12 @@ Archymedes only drives the unmodified Claude Code you installed and signed in to
 ### Codex, on your ChatGPT plan
 
 Choose **Codex (your ChatGPT plan)** in Providers, or start with `--provider codex`. Archymedes then
-runs your own [Codex CLI](https://developers.openai.com/codex/cli) through `codex app-server` and
-shows its work the same way: streamed replies, its commands and file changes as the usual cards (a
-change's result is its diff), approvals in the interface, `/undo` and `/rewind` (Archymedes's own
-checkpoints, taken before each Codex turn), steering mid-turn, `/compact`, `/resume` (Codex's own
-thread), and switching to or from any other engine with the conversation kept.
+runs your own [Codex CLI](https://developers.openai.com/codex/cli) through `codex app-server`, and
+its work shows the same way. That means streamed replies, its commands and file changes as the usual
+cards (a change's result is its diff), and approvals in the interface. It also means `/undo` and
+`/rewind` (Archymedes's own checkpoints, taken before each Codex turn), steering mid-turn,
+`/compact`, `/resume` (Codex's own thread), and switching to or from any other engine with the
+conversation kept.
 
 - **Your account stays with Codex.** Signing in is `codex login` (Providers runs it for you);
   Archymedes asks `codex login status` only whether you are signed in. `OPENAI_API_KEY` is removed
@@ -79,17 +92,16 @@ thread), and switching to or from any other engine with the conversation kept.
   default your plan cannot use fails with Codex's own explanation — pick another in Providers).
 
 **Switching keeps the conversation.** An engine that has never seen the session is told what was
-said; one coming back to a session it ran before resumes its own conversation and is told only what
+said. One coming back to a session it ran before resumes its own conversation and is told only what
 was said while it was away (Claude → Codex → Claude loses nothing). What is passed is what was said,
 not tool state: the work is in the files.
 
 `archymedes --free` runs on zero-priced OpenRouter models with no Archymedes Cloud account and no
-paid fallback. With your own `OPENROUTER_API_KEY` it goes to OpenRouter directly; without a key it
-needs a [free gateway](packages/free-gateway/README.md) reachable at `ARCHYMEDES_FREE_GATEWAY_URL` —
-the gateway holds the key server-side and rate limits requests, and the hosted public gateway is not
-generally available yet, so today that means running your own (the `packages/free-gateway` package
-deploys standalone). Only
-`openrouter/free` or exact `publisher/model:free` IDs that OpenRouter lists at zero price with tool
+paid fallback. With your own `OPENROUTER_API_KEY` it goes to OpenRouter directly. Without a key it
+needs a [free gateway](packages/free-gateway/README.md) reachable at `ARCHYMEDES_FREE_GATEWAY_URL`,
+which holds the key server-side and rate limits requests. The hosted public gateway is not generally
+available yet, so today that means running your own (the `packages/free-gateway` package deploys
+standalone). Only `openrouter/free` or exact `publisher/model:free` IDs that OpenRouter lists at zero price with tool
 support are accepted; every request carries a zero maximum price, and free mode never falls back to
 a paid provider. Free capacity is rate limited either way. Model discovery also
 reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
@@ -97,8 +109,8 @@ reads [ClawLabsAI/free-ai-models](https://github.com/ClawLabsAI/free-ai-models).
 ## Custom commands
 
 Save a prompt you reuse as Markdown: `.archymedes/commands/audit.md` becomes `/audit` for the
-project, and `commands/audit.md` in the Archymedes config directory is yours alone (the project
-file wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
+project. `commands/audit.md` in the Archymedes config directory is yours alone (the project file
+wins). `$ARGUMENTS` is replaced by the text typed after the command, and an optional
 `description:` line in `---` front matter describes it. Built-in commands cannot be replaced.
 They complete as you type `/`, appear in `/help` and the start menu, and run as a prompt (queued if
 a turn is running). A body without `$ARGUMENTS` gets what you typed appended.
@@ -122,14 +134,14 @@ are closed-loop: usable for Archymedes services, not transferable and not withdr
 
 When `archymedes-cloud` is selected, every model call reserves a configurable hard cap
 (`ARCHYMEDES_CLOUD_MAXIMUM_MICROS`, default 5,000,000 USD micros); the exchange settles measured
-usage and releases the remainder. Each hosted turn prints a routing receipt — the chosen model, the
-alternatives weighed and why each was passed over, the policy it was held to, and the estimate
-against the actual charge — and `/route` recalls them. `/route plan` asks the same question in
+usage and releases the remainder. Each hosted turn prints a routing receipt, and `/route` recalls
+them. A receipt names the chosen model, the alternatives weighed and why each was passed over, the
+policy it was held to, and the estimate against the actual charge. `/route plan` asks the same question in
 advance: what the next turn would be routed to and what the whole task would be expected to cost,
-before any of it is spent. It calls no model and reserves nothing. `/route summary` shows session totals by currency, retries, route switches,
-and calls without settlement data. `ARCHYMEDES_CLOUD_TASK_KIND` (coding,
-design, architecture, security, research, deployment) tells the exchange what kind of work it is
-routing. Billing and hosted execution are operated from isolated private services; this public
+before any of it is spent. It calls no model and reserves nothing. `/route summary` shows session
+totals by currency, retries, route switches, and calls without settlement data.
+`ARCHYMEDES_CLOUD_TASK_KIND` (coding, design, architecture, security, research, deployment) tells the
+exchange what kind of work it is routing. Billing and hosted execution are operated from isolated private services; this public
 repository contains only their client contract.
 
 `/balance` and `/route` are not in the Go interface yet (WS-7); `/cost` shows what a session has
@@ -157,9 +169,9 @@ The control surfaces are localized into 16 languages — `friday --language <cod
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `cmd/friday`, `internal/` | `@archymedes/friday-<platform>-<arch>` (Go) | The interactive interface: Bubble Tea v2, driving the agent over ACP. |
-| `packages/friday-cli` | `@archymedes/friday` | The agent (`friday acp`, one-shot, `--json`, `settings`, `doctor`) and the npm launcher that runs the Go interface. |
-| `packages/core` | `@archymedes/core` | Provider-neutral agent runtime, model adapters, workspace backends, cost accounting. Internal CLI-only code lives under `src/cli/`. |
+| `cmd/friday`, `internal/` | `@archymedes/friday-<platform>-<arch>` (Go) | The interactive interface (Bubble Tea v2) and, in `internal/core/`, the Go engine it runs by default, over ACP through in-process pipes. |
+| `packages/friday-cli` | `@archymedes/friday` | The TypeScript agent (sessions that need it, `--json`, `settings`, `doctor`, the methods the Go engine forwards) and the npm launcher that runs the Go binary. |
+| `packages/core` | `@archymedes/core` | Provider-neutral agent runtime, model adapters, workspaces (local and sandboxed), cost accounting. Internal CLI-only code lives under `src/cli/`. |
 | `packages/archymedes-state` | `archymedes-state` (Rust) | The local, rebuildable history and memory index. Optional at runtime — the CLI falls back to a portable TypeScript projection. |
 | `packages/free-gateway` | `@archymedes/free-gateway` (private) | Separately deployed server behind `archymedes --free`: holds the OpenRouter key, serves only verified free models, rate limits. |
 | `tooling/build` | — | Builds the packages into something npm can install. |
@@ -168,7 +180,7 @@ The control surfaces are localized into 16 languages — `friday --language <cod
 
 ```bash
 bun install
-bun run archymedes            # run the CLI from source: the Go interface, with this checkout's agent
+bun run archymedes            # run the CLI from source: the Go interface and engine (this checkout's TS agent for what it forwards)
 bun run agent "a request"     # the TypeScript agent alone, for one-shot and --json runs
 bun run test                  # vitest
 bun run test:invariants       # seeded random model and random user: the runtime's and the desktop's invariants
@@ -179,54 +191,65 @@ bun run build:packages        # emit packages/*/dist
 bun run build:state           # cargo build the Rust state binary (optional)
 ```
 
-### The interface is Go
+### The interface and the engine are Go
 
 The terminal interface is a Go program on [Bubble Tea v2](https://github.com/charmbracelet/bubbletea)
-(`cmd/friday`, `internal/`). The agent behind it is still the TypeScript package, run as
-`archymedes acp` and driven over the Agent Client Protocol with Archymedes's `_archymedes/*`
-extensions; non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
-`settings`) go to the agent unchanged. There is no TypeScript interface: the agent run with no
+(`cmd/friday`, `internal/`). The engine behind it is, by default, the Go engine in the same
+binary (`internal/core/`, see [docs/engine](docs/engine/ARCHITECTURE.md)), driven over the Agent
+Client Protocol with Friday's `_archymedes/*` extensions through in-process pipes. A session that
+needs what only the TypeScript agent has runs on it instead, as `friday acp` under Node, without
+being asked (`--engine ts`, `ARCHYMEDES_ENGINE=ts` or Settings → Engine choose it for every
+session). Non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
+`settings`) go to the TypeScript agent unchanged. There is no TypeScript interface: the agent run with no
 request says where the interface is. The npm package ships one static binary per platform as an
-optional dependency (`@archymedes/cli-<platform>-<arch>`); where none can be used, the bundled
-agent still serves every non-interactive mode, and asked for the interface it says why there is
-none and how to install it.
+optional dependency (`@archymedes/cli-<platform>-<arch>`). Where none can be used, the bundled
+agent still serves every non-interactive mode; asked for the interface, it says why there is none
+and how to install it.
 
 ```bash
 bun run archymedes                      # from a checkout: go run ./cmd/friday (`bun run dev` too)
 go test ./...                           # Go tests; `bun run check` runs these too
 bun run build:go                        # all six platform binaries → artifacts/npm
 ARCHYMEDES_ACP_TRACE=/tmp/acp.log go run ./cmd/friday   # log every protocol frame
+go test -race ./internal/core/... ./cmd/friday   # the Go engine, its contract through the real client
+FRIDAY_LIVE=1 go test ./cmd/friday -run Live -v  # the Go engine against your own provider (a few cents)
 ```
 
-The interface is a small desktop: a top bar with a `◇` start menu (ctrl+space — finds any app,
-action, session or file) and a tab per open window, and a dock along the bottom with every app and
-its key (F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
-F10 Changes, F12 Gallery) — click or press. Changes is the working tree against the last commit, file by file:
-each file's lines added and removed, and the selected file's diff with old and new line numbers
-(it reads again when a turn ends, so the agent's edits show as they land). Models lists every
-model of every provider, read live from the providers, OpenRouter's whole catalog and every free
-model included; tab narrows it to the free ones or the ones ready to use, and a model whose
-provider has no key yet is shown with the key it needs.
+The interface is a small desktop. The top bar has a `◇` start menu (ctrl+space finds any app,
+action, session or file) and a tab per open window. The dock along the bottom has every app and its
+key: F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
+F10 Changes, F12 Gallery. Click or press.
+
+Changes is the working tree against the last commit, file by file: each file's lines added and
+removed, and the selected file's diff with old and new line numbers. It reads again when a turn
+ends, so the agent's edits show as they land. Models lists every model of every provider, read live
+from the providers, OpenRouter's whole catalog and every free model included. Tab narrows it to the
+free ones or the ones ready to use; a model whose provider has no key yet shows the key it needs.
 
 The home screen turns slowly through photographs of Archimedes, the Greek world and mathematics
 beside the mark (from Unsplash, shipped in the binary and credited on screen; see
 [`internal/gallery/CREDITS.md`](internal/gallery/CREDITS.md)). A click on it, or F12, opens the
 Gallery: the built-in copy beside the full-resolution original loaded live from Unsplash's image
-CDN. It draws with the sharpest the terminal has, found by asking it: Kitty graphics (kitty,
-Ghostty, WezTerm), Sixel (Windows Terminal 1.22+, foot, mlterm, VS Code with images on), or
-otherwise half-block glyphs through ntcharts' picture component, which hold two pixels a cell and so
-look pixelated at any size. g switches between the ways the terminal can draw; f changes the fit.
+CDN. It draws with the sharpest the terminal has, found by asking it. That is Kitty graphics
+(kitty, Ghostty, WezTerm), else Sixel (Windows Terminal 1.22+, foot, mlterm, VS Code with images
+on). Otherwise it uses half-block glyphs through ntcharts' picture component, two pixels a cell, so
+they look pixelated at any size. g switches between the ways the terminal can draw; f changes the fit.
 The home screen's photo is drawn the same way: in Sixel where the terminal draws it (asked once at
 start), in glyphs otherwise. A first run says what to do in three
 steps and offers requests to start from — tab puts one in the input, and when the project has
 uncommitted changes the first offer is to review them. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
 call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
-is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the settings
-file. `ARCHYMEDES_REDUCE_MOTION=1` turns off animated scrolling (and the photos stay still);
-`ARCHYMEDES_PHOTOS=off` leaves the photos out, `ARCHYMEDES_WALLPAPER=off` keeps them but not behind the screen, and `ARCHYMEDES_PHOTOS=local` keeps them to the
-built-in copies (the Gallery fetches nothing); `ARCHYMEDES_MODELS_OFFLINE=1` keeps the model list to
-its cache unless refreshed; `ARCHYMEDES_DEBUG_LOG=<file>` writes a structured log of what the
-interface does.
+is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the
+settings file.
+
+| Variable | Does |
+| --- | --- |
+| `ARCHYMEDES_REDUCE_MOTION=1` | Turns off animated scrolling; the photos stay still |
+| `ARCHYMEDES_PHOTOS=off` | Leaves the photos out |
+| `ARCHYMEDES_PHOTOS=local` | Keeps the photos to the built-in copies; the Gallery fetches nothing |
+| `ARCHYMEDES_WALLPAPER=off` | Keeps the photos, but not behind the screen |
+| `ARCHYMEDES_MODELS_OFFLINE=1` | Keeps the model list to its cache unless refreshed |
+| `ARCHYMEDES_DEBUG_LOG=<file>` | Writes a structured log of what the interface does |
 
 `ARCHYMEDES_AGENT` overrides the agent command (a JSON array, or a space-separated string). Commands
 the interface does not have yet say so when typed; WS-7 in [`TRACKER.md`](docs/continuation/TRACKER.md)

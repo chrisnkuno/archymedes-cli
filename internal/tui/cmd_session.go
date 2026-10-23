@@ -26,7 +26,7 @@ type commandDoneMsg struct {
 
 func (m *Model) sessionCommand(command, argument string) tea.Cmd {
 	if m.agent == nil || m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
+		return m.toast(toastWarn, "The session is still opening; try again in a moment")
 	}
 	if m.phase == busy && (command == "undo" || command == "rewind" || command == "compact" || command == "review" || command == "fork") {
 		return m.toast(toastWarn, "/"+command+" between turns; esc stops this one")
@@ -177,7 +177,7 @@ type sessionsLoadedMsg struct {
 func (m *Model) loadSessions() tea.Cmd {
 	agent, cwd := m.agent, m.opts.Cwd
 	if agent == nil {
-		return m.toast(toastWarn, "The agent is not running yet")
+		return m.toast(toastWarn, "The agent is still starting; try again in a moment")
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

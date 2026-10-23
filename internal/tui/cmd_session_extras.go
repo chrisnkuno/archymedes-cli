@@ -37,7 +37,7 @@ func (m *Model) cmdRetry(string) tea.Cmd {
 
 func (m *Model) cmdContinue(string) tea.Cmd {
 	if m.phase == busy {
-		return m.toast(toastWarn, "A turn is running already")
+		return m.toast(toastWarn, "A turn is running already; esc stops it, or wait for it to end")
 	}
 	return m.sendPrompt("Continue from where you stopped.")
 }

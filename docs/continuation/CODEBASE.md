@@ -1,6 +1,6 @@
 # The codebase, section by section
 
-Updated 2026-10-18 (WS-27). This is the current map: what each part owns, what it may depend on,
+Updated 2026-10-23 (WS-35: the Go engine). This is the current map: what each part owns, what it may depend on,
 and where new code goes. The rules here are checked by `bun run recheck` (see
 [WORKFLOW.md](WORKFLOW.md)); when this page and a guard disagree, the guard is right and this page
 is stale.
@@ -19,6 +19,12 @@ cmd/friday ──▶ internal/tui ──ACP over stdio──▶ packages/friday-
                   ├─ internal/config                      └─ providers/  one adapter per vendor
                   └─ internal/gallery
 ```
+
+**The default engine is Go**, inside the `friday` binary: `internal/core/`, speaking the same ACP
+to the same interface, and forwarding what it lacks to the TypeScript agent; a session that needs
+the TypeScript engine runs there by itself (`cmd/friday/engine.go`). Its design is in
+[GO_ENGINE.md](GO_ENGINE.md), its documentation in [`docs/engine/`](../engine/README.md). The
+TypeScript engines below remain for what the Go engine does not have yet.
 
 Three engines run a session: Friday's own agent (`core/cli/agent.ts` on any provider), Claude Code
 (`engines/claude/`) and Codex (`engines/codex/`). All three speak to the interface through the same ACP
@@ -41,7 +47,8 @@ Packages, and what each may import (`tooling/check/go-sections.json`, guard `go-
 | `cli` | Arguments and pass-through to the agent | — |
 | `render` | Markdown, tool-call cards, the mark | `theme` |
 | `tui` | The interface (its words through `m.text.T(key)`) | all of the above |
-| `cmd/friday` | Wiring | anything |
+| `core/*` | The Go engine, one section per package (`core/tool`, `core/loop`, `core/agents`…); its own matrix is in [GO_ENGINE.md](GO_ENGINE.md) | other `core/*` only |
+| `cmd/friday` | Wiring; `engine.go` runs the Go engine in-process or on stdio | anything |
 
 `internal/tui` is one Go package (every app hangs off `*Model`), so its sections are **file
 prefixes**, and every non-test file has one (guard `sections`):
@@ -114,6 +121,8 @@ policy modules such as `permissions.ts`; it implements the types in `engines/con
 | An engine | `friday-cli/src/engines/<name>/`, implementing `engines/contract.ts`, registered in `server/session.ts` |
 | A command-line flag | `cli/args.ts`, handled in `cli/startup-commands.ts` (exits) or `run/` (runs a turn) |
 | An app, dialog or command in the interface | `internal/tui/<prefix>_<name>.go` (above) |
+| A tool, role, provider or ACP method of the Go engine | `internal/core/tools`, `core/roles`, `core/llm`, `core/server` (see [GO_ENGINE.md](GO_ENGINE.md)); the TypeScript one stays the reference until a method is ported |
+| A rule of the mechanism design system | `internal/conform` (the rule), a `TestConform…` beside the registry it judges, and [docs/mechanisms](../mechanisms/README.md) |
 | A guard | `tooling/check/guards.ts` (CLI) or `repo-guards.ts` (core, Go), with a test and a baseline entry |
 
 ## Guards
@@ -128,8 +137,10 @@ Each count is per file, kept in `tooling/check/baseline.json`; it may fall, neve
 | `sections` | `internal/tui` files without a section prefix |
 | `theme`, `helpers`, `unwired` | Raw colours, private copies of shared helpers, exports nothing reaches (`packages/friday-cli/src`) |
 
-`bun run recheck` also runs typecheck, the unit tests related to changed TS files, `go vet ./...`
-and `go test` for the Go packages that changed (`--all`/`--pty`: every Go package).
+`bun run recheck` also runs typecheck, the unit tests related to changed TS files, `go vet ./...`,
+every mechanism conformance test (`go test -run '^TestConform' ./...`: the standard in
+[docs/mechanisms](../mechanisms/README.md), with its rules in `internal/conform`), and `go test`
+for the Go packages that changed (`--all`/`--pty`: every Go package).
 
 ## Tools for structural work
 

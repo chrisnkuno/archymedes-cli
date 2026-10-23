@@ -17,6 +17,8 @@ Add the task before writing the code, and update the status as you go, not at th
 
 ## 2. Change in compartments
 
+Every mechanism (a command, flag, key, setting, message, tool, role, protocol method, event) is built to [the mechanism design system](../mechanisms/README.md): its name, its words and its measures are checked.
+
 Where each kind of code lives, in Go and TypeScript, is [CODEBASE.md](CODEBASE.md).
 
 - New behaviour goes in a focused module with explicit inputs, not into `friday.ts`.
@@ -29,7 +31,7 @@ Where each kind of code lives, in Go and TypeScript, is [CODEBASE.md](CODEBASE.m
 
 | Level | Command | When | Covers |
 | --- | --- | --- | --- |
-| Quick | `bun run recheck` | After each edit batch | Guards, typecheck, unit tests related to changed files, `go vet`, `go test` of changed Go packages |
+| Quick | `bun run recheck` | After each edit batch | Guards, typecheck, unit tests related to changed files, `go vet`, every mechanism conformance test (`TestConform…`, see [the mechanism design system](../mechanisms/README.md)), `go test` of changed Go packages |
 | Terminal | `bun run recheck --pty` | After UI, input or layout changes | Adds the whole PTY project (about 4 minutes). PTY tests spawn the CLI, so the import graph cannot pick out related ones |
 | Release | `bun run recheck --full` | Before a commit that closes a workstream, and before publishing | `release:check`: full suite, build, package verification |
 

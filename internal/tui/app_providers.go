@@ -53,7 +53,7 @@ func (m *Model) openProviders() tea.Cmd {
 
 func (m *Model) loadProviders() tea.Cmd {
 	if m.agent == nil {
-		return m.toast(toastWarn, "The agent is not ready yet")
+		return m.toast(toastWarn, "The agent is still starting; try again in a moment")
 	}
 	agent := m.agent
 	return func() tea.Msg {

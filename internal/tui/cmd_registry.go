@@ -31,13 +31,13 @@ func init() {
 		{"model", "[name]", "Pick a model, or switch straight to one; the conversation carries on", (*Model).cmdModel},
 		{"models", "", "Every model you can switch to, with prices", func(m *Model, _ string) tea.Cmd { return m.cmdModel("") }},
 		{"resume", "", "Pick an earlier session in this project and continue it", (*Model).cmdResume},
-		{"history", "", "The same: earlier sessions, newest first", (*Model).cmdResume},
-		{"diff", "[stat]", "What changed since the last checkpoint", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("diff", arg) }},
+		{"history", "", "Earlier sessions in this project, newest first (same as /resume)", (*Model).cmdResume},
+		{"diff", "[stat]", "What the agent changed since your last message, as a diff (stat: line counts per file)", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("diff", arg) }},
 		{"undo", "[code|conversation]", "Revert the last turn: files, conversation, or both; again for the one before", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("undo", arg) }},
 		{"push", "", "Push this branch to its remote (on the default branch, a new branch is offered first)", (*Model).cmdPush},
 		{"pr", "[guidance]", "Push this branch and have the agent open a pull request for it with the GitHub CLI", (*Model).cmdPR},
 		{"goal", "[condition|stop]", "Keep the agent working, turn after turn, until the condition holds (checked after each turn)", (*Model).cmdGoal},
-		{"worktree", "[name|back]", "Start a new session on a new branch in its own worktree (runs .archymedes/setup.sh there); back returns", (*Model).cmdWorktree},
+		{"worktree", "[name|back]", "Start a session on a new branch in its own worktree (runs .archymedes/setup.sh); back returns", (*Model).cmdWorktree},
 		{"fork", "", "Copy this conversation into a new session and continue there; this one stays as it is", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("fork", "") }},
 		{"context", "", "What fills the model's context window: prompt, tools, conversation, tool results, and what is free", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("context", arg) }},
 		{"compact", "[focus]", "Summarize the conversation so far to free the context window, keeping what you name", func(m *Model, arg string) tea.Cmd {
@@ -51,7 +51,8 @@ func init() {
 		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openOverlay(newWallpaperPicker(m)); return nil }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
-		{"todos", "", "The agent's current plan", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
+		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
+		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
 		{"key", "[provider]", "Set or replace an API key: pick a provider, paste the key", (*Model).cmdKey},
 		{"copy", "[code]", "Copy the last reply, or its last code block, to the clipboard", (*Model).cmdCopy},
 		{"select", "", "Let the terminal select text with the mouse (toggle)", (*Model).cmdSelect},
@@ -75,11 +76,11 @@ func init() {
 		{"providers", "", "Every provider: use one, give it a key, pick its model, make it the default (alt+p)", func(m *Model, _ string) tea.Cmd { return m.runAction("providers") }},
 		{"settings", "", "Every setting, in sections, edited in place (alt+s)", func(m *Model, _ string) tea.Cmd { return m.runAction("settings") }},
 		{"update", "", "Check for a newer Friday and install it", func(m *Model, _ string) tea.Cmd { return m.handOff("update", "update") }},
-		{"plan", "", "Read-only: investigate and propose", func(m *Model, _ string) tea.Cmd { return m.setMode("plan") }},
-		{"build", "", "Edit with approval (the default)", func(m *Model, _ string) tea.Cmd { return m.setMode("build") }},
-		{"auto", "", "Edit and run without asking", func(m *Model, _ string) tea.Cmd { return m.setMode("auto") }},
-		{"defender", "", "Security triage: find and fix real issues, every change asks", func(m *Model, _ string) tea.Cmd { return m.setMode("defender") }},
-		{"palette", "", "The start menu: find any app, action, session or file", func(m *Model, _ string) tea.Cmd { return m.runAction("start") }},
+		{"plan", "", "Switch to plan mode: the agent reads and proposes, and changes nothing", func(m *Model, _ string) tea.Cmd { return m.setMode("plan") }},
+		{"build", "", "Switch to build mode: every edit and command asks you first (the default)", func(m *Model, _ string) tea.Cmd { return m.setMode("build") }},
+		{"auto", "", "Switch to auto mode: edits and commands run unasked; risky ones still ask", func(m *Model, _ string) tea.Cmd { return m.setMode("auto") }},
+		{"defender", "", "Switch to defender mode: find and fix security problems; every change asks", func(m *Model, _ string) tea.Cmd { return m.setMode("defender") }},
+		{"palette", "", "Open the start menu: find any app, action, session or file (ctrl+space)", func(m *Model, _ string) tea.Cmd { return m.runAction("start") }},
 		{"keys", "", "See and change every key", func(m *Model, _ string) tea.Cmd { return m.runAction("keys") }},
 		{"expand", "", "Show tool output in full, or fold it again (ctrl+o)", (*Model).cmdExpand},
 		{"theme", "[name]", "Pick a theme with a live preview, or switch to one (ctrl+t)", (*Model).cmdTheme},
@@ -156,7 +157,7 @@ func (m *Model) cmdMode(arg string) tea.Cmd {
 
 func (m *Model) cmdModel(arg string) tea.Cmd {
 	if m.agent == nil || m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
+		return m.toast(toastWarn, "The session is still opening; try again in a moment")
 	}
 	if arg != "" {
 		return m.loadModels(false, arg)

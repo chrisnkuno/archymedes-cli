@@ -58,6 +58,15 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+// Go is the default and the way back is one setting, read by the `friday` binary itself before
+// anything starts (cmd/friday/engine.go): no flag to remember. Friday still runs a session on the
+// TypeScript engine on its own when the session needs what only it has (Claude Code, Codex, a
+// Docker or E2B sandbox, Archymedes Cloud, keyless free mode).
+const ENGINE_CHOICES: readonly SettingChoice[] = [
+  { value: "go", label: "Go — Friday's engine: background sub-agents, steering, restart-safe sessions (default)" },
+  { value: "ts", label: "TypeScript — the earlier engine: Claude Code, Codex, sandboxes, /undo, /cost, /review" },
+];
+
 const TEST_FIRST_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — tests that define done, then the code, then a light static check (default)" },
   { value: "off", label: "Off — verify with whatever the change needs" },
@@ -119,7 +128,7 @@ const RESUME_CHOICES: readonly SettingChoice[] = [
 ];
 
 const AUTOSAVE_CHOICES: readonly SettingChoice[] = [
-  { value: "off", label: "Off — save with Ctrl+S (default)" },
+  { value: "off", label: "Off — save with ctrl+s (default)" },
   { value: "on", label: "On — save a second after you stop typing" },
 ];
 
@@ -157,6 +166,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_LANGUAGE", label: "Control language", choices: LANGUAGE_CHOICES },
   { key: "ARCHYMEDES_REASONING", label: "Reasoning effort — clear it to leave each model at its own default", choices: REASONING_CHOICES },
   { key: "ARCHYMEDES_RESUME", label: "Continue your last chat at startup", choices: RESUME_CHOICES, section: "Behaviour" },
+  { key: "ARCHYMEDES_ENGINE", label: "Engine — what runs your sessions (applies to the next session)", choices: ENGINE_CHOICES },
   { key: "ARCHYMEDES_EDITOR_AUTOSAVE", label: "Auto-save in /edit", choices: AUTOSAVE_CHOICES },
   // Off by default, and the label says what it costs: the deterministic suggestions are free and
   // instant, and this buys two extra project-specific ones for a small model call per turn. A
@@ -184,7 +194,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
   { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES, section: "Providers" },
   { key: "ARCHYMEDES_FALLBACK_MODEL", label: "Fallback after transient provider failure — ask, or provider:model" },
-  { key: "CLAUDE_MODEL", label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for Claude Code's default" },
+  { key: "CLAUDE_MODEL", label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for the default" },
   { key: "CODEX_MODEL", label: "Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", secret: true },
   { key: "ANTHROPIC_BASE_URL", label: "Anthropic base URL", url: true },
@@ -379,6 +389,8 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && !OUTSIDE_ENGINE_IDS.includes(value.toLowerCase())) throw new Error(`Choose one of: ${[...PROVIDER_IDS, ...OUTSIDE_ENGINE_IDS].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
+  if (key === "ARCHYMEDES_ENGINE" && !["go", "ts"].includes(value.toLowerCase())) throw new Error("Choose go or ts.");
+  if (key === "ARCHYMEDES_ENGINE") return value.toLowerCase();
   if ((key === "ARCHYMEDES_JEV" || key === "ARCHYMEDES_TEST_FIRST") && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");
   if (key === "ARCHYMEDES_JEV" || key === "ARCHYMEDES_TEST_FIRST") return value.toLowerCase();
   if (key === "ARCHYMEDES_FALLBACK_MODEL" && value.toLowerCase() !== "ask") {

@@ -99,7 +99,7 @@ func (m *Model) styleInput(in *textinput.Model) {
 // named provider: set it up (or change its key and URL), or go straight to picking among its models.
 func (m *Model) openConnect(provider, then string) tea.Cmd {
 	if m.agent == nil {
-		return m.toast(toastWarn, "The agent is not ready yet")
+		return m.toast(toastWarn, "The agent is still starting; try again in a moment")
 	}
 	d := newConnectDialog(m)
 	m.openOverlay(d)

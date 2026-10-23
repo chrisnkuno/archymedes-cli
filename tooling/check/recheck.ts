@@ -7,7 +7,8 @@ import { collectRepoMetrics, type GoSections } from "./repo-guards";
 
 /**
  * `bun run recheck` — the loop run after every change.
- *   guards → typecheck → tests related to changed files (unit project) → go vet → go test of changed Go packages
+ *   guards → typecheck → tests related to changed files (unit project) → go vet → mechanism
+ *   conformance (every TestConform…) → go test of changed Go packages
  * Flags: --pty also runs every terminal test; --all runs the whole suite instead of related tests;
  * --full runs `release:check`; --update-baseline accepts current guard counts (say why in TRACKER.md);
  * --unwired lists exports no product code reaches.
@@ -87,6 +88,9 @@ else {
   // The Go interface: vetted whole (seconds), tested where it changed — or whole, for --all and
   // --pty, since a terminal change is the interface's own.
   ok = run("go vet", "go", ["vet", "./..."]) && ok;
+  // The mechanism design system (docs/mechanisms/README.md): every conformance test, every time,
+  // whatever changed, because a registry and the document it must match can change apart.
+  ok = run("mechanisms (conformance)", "go", ["test", "-run", "^TestConform", "./..."]) && ok;
   const goPackages = args.has("--all") || args.has("--pty") ? ["./..."] : changedGoPackages();
   if (goPackages.length === 0) results.push({ step: "go tests", ok: true, detail: "no changed Go files" });
   else ok = run(`go tests (${goPackages.join(" ")})`, "go", ["test", ...goPackages]) && ok;

@@ -50,6 +50,8 @@ type SessionInfo struct {
 	// Notice is said once when the session opened is not quite the one asked for: a session open
 	// in another terminal is resumed as a copy of it.
 	Notice string `json:"notice"`
+	// Engine is "go" for the Go engine, empty for the TypeScript one.
+	Engine string `json:"engine"`
 }
 
 // Session is what `session/new` returned.
@@ -143,6 +145,20 @@ type Event struct {
 	// ParentToolCallID, run in role Agent
 	ParentToolCallID string `json:"parentToolCallId"`
 	Agent            string `json:"agent"`
+	// thread: a sub-agent's thread changed status (Go engine): started, done, failed, cancelled
+	Thread *ThreadInfo `json:"thread"`
+}
+
+// ThreadInfo is a sub-agent thread as the Go engine reports it.
+type ThreadInfo struct {
+	ID               string `json:"id"`
+	ParentToolCallID string `json:"parentToolCallId"`
+	Agent            string `json:"agent"`
+	Status           string `json:"status"`
+	Background       bool   `json:"background"`
+	Brief            string `json:"brief"`
+	Report           string `json:"report"`
+	Branch           string `json:"branch"`
 }
 
 // PermissionOption is one choice the agent offers for an approval.

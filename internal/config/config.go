@@ -125,8 +125,8 @@ const StateFile = "state.json"
 type State struct {
 	// Welcomed is set once the first request is sent: the home screen stops explaining itself.
 	Welcomed bool `json:"welcomed"`
-	// Wallpaper is the photo behind the screen: empty to take turns, a photo id to keep one, "off"
-	// for the theme's plain ground.
+	// Wallpaper is the picture behind the screen: empty for every theme in turn, "turns:<theme>"
+	// for one theme in turn, a picture id to keep one, "off" for the theme's plain ground.
 	Wallpaper string `json:"wallpaper,omitempty"`
 	// TourHidden is set when the tour drawer on the home screen was folded away.
 	TourHidden bool `json:"tourHidden,omitempty"`

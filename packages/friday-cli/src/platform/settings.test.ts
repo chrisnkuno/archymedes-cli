@@ -68,6 +68,13 @@ describe("Friday settings", () => {
     expect(() => validateSetting("ARCHYMEDES_PROVIDER", "gemini")).toThrow("anthropic");
   });
 
+  it("accepts only go or ts as the engine, normalised to lower case", () => {
+    expect(validateSetting("ARCHYMEDES_ENGINE", "GO")).toBe("go");
+    expect(validateSetting("ARCHYMEDES_ENGINE", "ts")).toBe("ts");
+    expect(() => validateSetting("ARCHYMEDES_ENGINE", "rust")).toThrow("Choose go or ts.");
+    expect(SETTING_FIELDS.find((field) => field.key === "ARCHYMEDES_ENGINE")?.choices?.map((choice) => choice.value)).toEqual(["go", "ts"]);
+  });
+
   it("accepts only on or off for the jev second opinion, normalised to lower case", () => {
     expect(validateSetting("ARCHYMEDES_JEV", "OFF")).toBe("off");
     expect(validateSetting("ARCHYMEDES_JEV", "on")).toBe("on");

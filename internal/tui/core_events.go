@@ -53,19 +53,21 @@ func (m *Model) handleEvent(ev acp.Event) {
 	case "compaction":
 		if ev.MessagesBefore == 0 && ev.TokensBefore > 0 {
 			// Claude Code compacts its own conversation and says only how long it was.
-			m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation (it was %s tokens).", compact(ev.TokensBefore)))
+			m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation (it was %s tokens)", compact(ev.TokensBefore)))
 			break
 		}
-		m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation: %d → %d messages.", ev.MessagesBefore, ev.MessagesAfter))
+		m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation: %d → %d messages", ev.MessagesBefore, ev.MessagesAfter))
 	case "rules_problems":
 		m.notice(noticeWarn, "Some command rules or agent roles were left out:\n"+strings.Join(ev.Problems, "\n"))
 	case "subagent":
 		m.handleSubagent(ev)
+	case "thread":
+		m.handleThread(ev.Thread)
 	case "steering_unread":
 		// The turn ended before reading these: they go first in the queue, as turns of their own.
 		m.queue = append(slices.Clone(ev.Messages), m.queue...)
 	case "jev-review":
-		m.notice(noticeWarn, fmt.Sprintf("Jev disagreed (%s, %.0f%%); asking the agent to check its work.", ev.Outcome, ev.Probability*100))
+		m.notice(noticeWarn, fmt.Sprintf("Jev disagreed (%s, %.0f%%); asking the agent to check its work", ev.Outcome, ev.Probability*100))
 	}
 }
 

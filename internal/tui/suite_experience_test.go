@@ -23,6 +23,7 @@ import (
 func TestTheHomeScreenCreditsItsWallpaperAndOpensItOnAClick(t *testing.T) {
 	m := projectModel(t)
 	m.opts.NoWallpaper = false
+	m.photoIndex = 0 // a photograph (the day's turn could land on a generated picture)
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 32})
 	first := m.homePhoto()
 	s := screen(m)
@@ -36,13 +37,25 @@ func TestTheHomeScreenCreditsItsWallpaperAndOpensItOnAClick(t *testing.T) {
 	x, y := cellOf(t, m, "by "+first.By)
 	click(m, x, y)
 	g, ok := m.activeWindow().(*galleryApp)
-	if !ok || gallery.Pick(g.index) != first {
+	if !ok || gallery.Pick(g.index).ID != first.ID {
 		t.Fatalf("a click on the photo did not open it in the Gallery: %T", m.activeWindow())
+	}
+}
+
+func TestAGeneratedWallpaperIsCreditedToFridayNotUnsplash(t *testing.T) {
+	m := projectModel(t)
+	m.opts.NoWallpaper = false
+	m.wallChoice = "art-synthwave"
+	m.Update(tea.WindowSizeMsg{Width: 130, Height: 32})
+	s := screen(m)
+	if !strings.Contains(s, "Synthwave horizon") || !strings.Contains(s, "drawn by Friday") || strings.Contains(s, "Unsplash") || !strings.Contains(s, "▀") {
+		t.Fatalf("a generated wallpaper should be drawn and credited to Friday:\n%s", s)
 	}
 }
 
 func TestTheHomeCardSaysWhatIsInFrontOfYou(t *testing.T) {
 	m := projectModel(t)
+	m.photoIndex = 0 // a photograph, credited to Unsplash
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	s := screen(m)
 	for _, want := range []string{"model", m.session.Info.Model, "mode", modeBlurb["build"], "can", abilities("build"), "Unsplash"} {

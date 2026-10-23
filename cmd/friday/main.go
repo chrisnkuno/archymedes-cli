@@ -1,7 +1,9 @@
 // Command friday is the Friday CLI.
 //
-// The interactive session is drawn here, in Go. The agent behind it is still the TypeScript one,
-// run as `friday acp` and driven over the Agent Client Protocol (internal/acp), and every
+// The interactive session is drawn here, in Go, and by default the agent behind it is the Go engine
+// in this same process (internal/core, engine.go), driven over the Agent Client Protocol
+// (internal/acp). The TypeScript agent, run as `friday acp`, takes a session that needs what only
+// it has (see chooseEngine); and every
 // non-interactive mode — `--json`, piped prompts, `doctor`, `update`, `history`, `settings` — is
 // handed to it unchanged (internal/cli decides which is which).
 package main
@@ -51,9 +53,30 @@ func run(args []string) int {
 	}
 	cwd, _ = filepath.Abs(cwd)
 
-	agent, err := agentCommand(firstNonEmpty(inv.Agent, os.Getenv("ARCHYMEDES_AGENT")), cwd)
+	agent, agentErr := agentCommand(firstNonEmpty(inv.Agent, os.Getenv("ARCHYMEDES_AGENT")), cwd)
+	choice, err := chooseEngine(engineFactsFor(inv.Engine, inv.Args, cwd, inv.Resume, agentErr == nil))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "friday:", err)
+		return 2
+	}
+	goEngine := choice.goEngine
+	logger := debugLog()
+	if logger != nil {
+		logger.Info("engine", "go", goEngine, "explicit", choice.explicit, "why", choice.why)
+	}
+	// The Go engine serves ACP itself; every other non-interactive mode is still the TypeScript agent's.
+	if goEngine && inv.Passthrough && len(inv.Args) > 0 && (inv.Args[0] == "acp" || inv.Args[0] == "--acp") {
+		opts, oerr := engineOptions(inv.Args, cwd)
+		if oerr != nil {
+			fmt.Fprintln(os.Stderr, "friday:", oerr)
+			return 2
+		}
+		return serveGoEngine(opts, &lazyAgent{argv: agent, cwd: cwd})
+	}
+	// The TypeScript agent is needed for the modes it alone serves; the Go engine only borrows it,
+	// for settings and providers, when it is there.
+	if agentErr != nil && (inv.Passthrough || !goEngine) {
+		fmt.Fprintln(os.Stderr, "friday:", agentErr)
 		return 2
 	}
 	if inv.Passthrough {
@@ -68,11 +91,19 @@ func run(args []string) int {
 	start := func(ctx context.Context) (tui.Agent, error) {
 		return acp.Start(ctx, argv, cwd, os.Environ())
 	}
+	if goEngine {
+		opts, oerr := engineOptions(inv.Args, cwd)
+		if oerr != nil {
+			fmt.Fprintln(os.Stderr, "friday:", oerr)
+			return 2
+		}
+		start = startGoEngine(opts, &lazyAgent{argv: agent, cwd: cwd})
+	}
 	ui := tui.New(tui.Options{
 		Theme: firstNonEmpty(inv.Theme, os.Getenv("ARCHYMEDES_THEME")), Start: start, Resume: inv.Resume, Prompt: inv.Prompt,
 		Mouse: !inv.NoMouse, Cwd: cwd, Version: version, AgentArgv: agent,
 		Motion: os.Getenv("ARCHYMEDES_REDUCE_MOTION") == "",
-		Debug:  debugLog(), ConfigDir: config.Default(),
+		Debug:  logger, ConfigDir: config.Default(),
 		NoPhotos:      photosOff(os.Getenv("ARCHYMEDES_PHOTOS")),
 		NoWallpaper:   photosOff(os.Getenv("ARCHYMEDES_WALLPAPER")),
 		PhotosOffline: strings.EqualFold(strings.TrimSpace(os.Getenv("ARCHYMEDES_PHOTOS")), "local"),
@@ -166,25 +197,52 @@ func firstNonEmpty(values ...string) string {
 
 const usage = `Friday — a coding agent that shows its work.
 
-Usage:
-  friday [flags] [request]              start a session (with a first request, if given)
-  friday --json "request"               run one request headless; JSON lines on stdout
-  echo "request" | friday               the same, from a pipe
-  friday history | doctor | update | settings | acp
+Start:
+  friday                        open a session in this folder
+  friday "fix the failing test" open a session that starts with that request
+  friday --resume latest        continue your last session here (or --resume <id>)
 
-Session:
-  --plan, -p   --build   --auto, -y   --defender        start in a mode (shift+tab cycles)
-  --provider <id>   --model <id>   --free               choose the model
-  --resume [id|latest]                                  continue an earlier session
-  --sandbox [local|docker|e2b]   --budget <n>           where the work runs, and its ceiling
-  -C, --cwd <dir>                                       project directory
+Without opening a session:
+  friday --json "request"       run one request and print what happens as JSON lines (for scripts)
+  echo "request" | friday       the same, with the request from a pipe
+  friday settings               set API keys, models and preferences
+  friday history                list earlier sessions (friday history search <words> to find one)
+  friday doctor                 check your keys, connection and setup, and say what is wrong
+  friday update                 install the newest Friday
+  friday login | logout         sign in to (or out of) your archymedes.xyz account
+  friday acp                    talk to an editor (Zed, JetBrains) instead of a terminal
 
-Interface:
-  --theme <name>     archymedes-blue (default), archymedes, blueprint, chalkboard,
-                     high-contrast, parchment, rainbow
-  --no-mouse         leave the mouse to the terminal (text selection) instead of wheel scrolling
-  --agent <command>  run a different agent over ACP (default: the bundled one)
-  --version, --help
+How much Friday may do on its own (shift+tab switches in a session):
+  --plan, -p        read and propose; change nothing
+  --build           every edit and command asks you first (the default)
+  --auto, -y        edits and commands run unasked; risky ones still ask
+  --defender        find and fix security problems; every change asks
 
-In a session: enter sends · \ enter or ctrl+j new line · ctrl+p commands · ? keys · esc stops a turn · ctrl+c twice quits.
+Which model:
+  --provider <id>   anthropic, openai, openrouter, google, xai, deepseek, mistral, groq,
+                    ollama, openai-compatible, claude (Claude Code), codex
+  --model <id>      a model of that provider
+  --free            free models only, through OpenRouter
+
+Where it works:
+  -C, --cwd <dir>   the project folder (default: this one)
+  --sandbox local|docker|e2b   run commands here, in a Docker container, or in a remote E2B sandbox
+  --budget <n>      stop a --json run once it has spent this much
+
+The screen:
+  --theme <name>    archymedes-blue (default), archymedes, blueprint, chalkboard,
+                    high-contrast, parchment, rainbow
+  --no-mouse        leave the mouse to the terminal, so you can select text
+
+The engine (you rarely need these: Friday picks on its own):
+  --engine ts       use the TypeScript engine, which runs Claude Code, Codex, sandboxes, /undo
+                    and /cost; the Go engine is the default (also ARCHYMEDES_ENGINE, or
+                    Settings → Engine)
+  --agent <command> drive a different agent program over ACP
+
+  --version, -v     print the version
+  --help, -h        print this
+
+In a session: enter sends · \ enter or ctrl+j adds a line · / or ctrl+p lists commands · ? lists keys ·
+esc stops the agent · ctrl+c twice quits.
 `

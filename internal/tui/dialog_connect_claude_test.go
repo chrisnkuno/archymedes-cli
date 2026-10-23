@@ -107,7 +107,7 @@ func TestProvidersSaysHowClaudeIsSetUp(t *testing.T) {
 func TestClaudeCodesOwnCompactionIsSaidInTokens(t *testing.T) {
 	m, _ := readyModel(t)
 	m.handleEvent(acp.Event{Type: "compaction", TokensBefore: 152_300})
-	if s := screen(m); !strings.Contains(s, "Compacted the conversation (it was 152.3k tokens).") {
+	if s := screen(m); !strings.Contains(s, "Compacted the conversation (it was 152.3k tokens)") {
 		t.Fatalf("compaction notice:\n%s", s)
 	}
 }

@@ -54,3 +54,22 @@ func TestASubagentEventForAnUnknownCallStillCountsItsSpend(t *testing.T) {
 		t.Fatalf("spend is the session's whether or not the card is on screen: %+v", m.usage)
 	}
 }
+
+func TestABackgroundSubagentsCardFollowsItsThreadUntilTheReport(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.phase = busy
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "d1", ToolName: "delegate_readonly_task", Arguments: map[string]any{"task": "map the API", "background": true}})
+	m.handleEvent(acp.Event{Type: "thread", Thread: &acp.ThreadInfo{ID: "t-1", ParentToolCallID: "d1", Agent: "explore", Status: "running", Background: true}})
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_result", ToolCallID: "d1", ToolName: "delegate_readonly_task", Content: "Started explore sub-agent t-1 in the background."})
+	m.handleEvent(subagentEvent("d1", "explore", acp.RuntimeEvent{Type: "tool_call", ToolCallID: "x", ToolName: "grep_files", Arguments: map[string]any{"query": "route"}}))
+	s := screen(m)
+	if !strings.Contains(s, "in the background") || !strings.Contains(s, "grep files") {
+		t.Fatalf("a background card keeps showing the work after its call returned:\n%s", s)
+	}
+	m.phase = ready
+	m.handleEvent(acp.Event{Type: "thread", Thread: &acp.ThreadInfo{ID: "t-1", ParentToolCallID: "d1", Agent: "explore", Status: "done", Background: true, Report: "The API is in api/routes.go."}})
+	s = screen(m)
+	if strings.Contains(s, "in the background") || !strings.Contains(s, "The API is in api/routes.go.") || !strings.Contains(s, "its report reaches Friday") {
+		t.Fatalf("a finished background card shows its report:\n%s", s)
+	}
+}

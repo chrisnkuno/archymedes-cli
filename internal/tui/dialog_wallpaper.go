@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -13,8 +14,11 @@ import (
 // wallpaperNone is the choice of no photo: the theme's plain ground.
 const wallpaperNone = "off"
 
-// wallpaperPicker (/wallpaper) chooses the photo behind the screen: taking turns (the default), any
-// one photo, or none. Moving the cursor shows the choice at once, as the theme picker does; esc
+// wallpaperTurns prefixes a choice that takes turns within one theme: "turns:abstract".
+const wallpaperTurns = "turns:"
+
+// wallpaperPicker (/wallpaper) chooses the picture behind the screen: every theme taking turns (the
+// default), one theme taking turns, any one picture, or none. Moving the cursor shows the choice at once, as the theme picker does; esc
 // puts back what was there, enter keeps it and remembers it (config.State.Wallpaper).
 type wallpaperPicker struct {
 	choices  []string // "" (take turns), photo ids, wallpaperNone
@@ -24,8 +28,17 @@ type wallpaperPicker struct {
 
 func newWallpaperPicker(m *Model) *wallpaperPicker {
 	choices := []string{""}
-	for _, p := range gallery.Photos {
-		choices = append(choices, p.ID)
+	// Abstract first: the theme most people come here for.
+	order := []string{"abstract", "scifi", "greek"}
+	for _, theme := range order {
+		choices = append(choices, wallpaperTurns+theme)
+	}
+	for _, theme := range append(order, "math") {
+		for _, p := range gallery.Photos {
+			if p.Theme == theme {
+				choices = append(choices, p.ID)
+			}
+		}
 	}
 	choices = append(choices, wallpaperNone)
 	cursor := 0
@@ -54,12 +67,29 @@ func (m *Model) setWallpaper(choice, note string) tea.Cmd {
 func (w *wallpaperPicker) label(choice string) (string, string) {
 	switch choice {
 	case "":
-		return "Take turns", "antiquity and sci-fi, a new one every few minutes"
+		return "Take turns", "antiquity, sci-fi and abstract, one after another"
 	case wallpaperNone:
 		return "None", "the theme's plain ground"
 	}
+	if theme, ok := strings.CutPrefix(choice, wallpaperTurns); ok {
+		photos, drawn := 0, 0
+		for _, p := range gallery.Photos {
+			switch {
+			case p.Theme != theme:
+			case p.Generated():
+				drawn++
+			default:
+				photos++
+			}
+		}
+		detail := fmt.Sprintf("%d pictures, one after another", photos)
+		if drawn > 0 {
+			detail = fmt.Sprintf("%d photographs and %d drawn by Friday, one after another", photos, drawn)
+		}
+		return "Take turns: " + gallery.ThemeLabel(theme) + " only", detail
+	}
 	p, _ := gallery.ByID(choice)
-	return p.Title, "by " + p.By + " · " + p.Theme
+	return p.Title, p.Byline() + " · " + gallery.ThemeLabel(p.Theme)
 }
 
 func (w *wallpaperPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {

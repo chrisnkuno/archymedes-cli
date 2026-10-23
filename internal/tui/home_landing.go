@@ -52,7 +52,7 @@ func (m *Model) landing(width, height int) []string {
 	// The wallpaper is laid under the whole screen (desk_wallpaper.go); here, what it is and who took
 	// it, in the corner. A click opens it in the Gallery.
 	p := m.homePhoto()
-	credit := lipgloss.NewStyle().Foreground(m.th.Muted).Hyperlink(p.URL()).Render(ansi.Truncate(p.Title+" · by "+p.By+" · Unsplash", width-2, "…"))
+	credit := lipgloss.NewStyle().Foreground(m.th.Muted).Hyperlink(p.URL()).Render(ansi.Truncate(p.Title+" · "+p.Byline(), width-2, "…"))
 	creditWidth := ansi.StringWidth(credit)
 	out[height-1] = splice(out[height-1], mark(m.zones.frame, "photo", credit), max(width-creditWidth-1, 0), creditWidth)
 	return out

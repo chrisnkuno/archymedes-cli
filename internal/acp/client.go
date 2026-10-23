@@ -76,6 +76,21 @@ func Start(ctx context.Context, argv []string, dir string, env []string) (*Clien
 	return c, nil
 }
 
+// Connect performs the handshake with an agent already running behind stdin and stdout: the Go
+// engine in this process, over pipes. Close ends stdin; Exited arrives when stdout ends.
+func Connect(ctx context.Context, stdin io.WriteCloser, stdout io.Reader) (*Client, error) {
+	c := newClient(stdin, stdout)
+	go func() {
+		<-c.done
+		c.finish(nil)
+	}()
+	if err := c.initialize(ctx); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
 // newClient wires a client to raw streams; Start adds the process. Separate so tests can use pipes.
 func newClient(stdin io.WriteCloser, stdout io.Reader) *Client {
 	c := &Client{stdin: stdin, pending: map[string]pendingCall{}, messages: make(chan any, 256), stderr: &tailBuffer{max: 16 << 10}, done: make(chan struct{})}
@@ -155,9 +170,14 @@ func (c *Client) Steer(ctx context.Context, sessionID, text string) (bool, error
 // Close ends stdin, which the agent reads as the end of the connection, and waits for it to exit.
 func (c *Client) Close() {
 	_ = c.stdin.Close()
-	if c.cmd != nil && c.cmd.Process != nil {
-		<-c.done
-	}
+	<-c.done
+}
+
+// CallRaw is any request, its result as raw JSON: how one agent forwards a method to another.
+func (c *Client) CallRaw(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := c.call(ctx, method, params, &out)
+	return out, err
 }
 
 func (c *Client) call(ctx context.Context, method string, params any, out any) error {

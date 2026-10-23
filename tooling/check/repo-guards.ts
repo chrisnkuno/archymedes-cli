@@ -18,7 +18,17 @@ export const SIZE_ROOTS: ReadonlyArray<{ root: string; file: RegExp }> = [
 export type GoSections = { packages: Record<string, readonly string[]>; tui: Record<string, string> };
 
 const MODULE = "github.com/chrisnkuno/friday-cli/internal/";
-const INTERNAL_IMPORT = new RegExp(`"${MODULE.replace(/[./]/g, "\\$&")}([a-z0-9_]+)`, "g");
+const INTERNAL_IMPORT = new RegExp(`"${MODULE.replace(/[./]/g, "\\$&")}([a-z0-9_]+(?:/[a-z0-9_]+)?)`, "g");
+
+/**
+ * The section a path or import names: `internal/<pkg>`, except under `internal/core`, where the Go
+ * engine's packages are sections of their own (`core/loop`, `core/policy`), so its layering is
+ * held to as well (docs/continuation/GO_ENGINE.md).
+ */
+function goSection(path: string): string {
+  const [first, second] = path.split("/");
+  return first === "core" && second ? `core/${second}` : first!;
+}
 
 /** Go files under root, relative to the repository, tests included when asked. */
 export function goFiles(repoRoot: string, root: string, tests = false): string[] {
@@ -27,11 +37,12 @@ export function goFiles(repoRoot: string, root: string, tests = false): string[]
 
 /** Imports of other internal/ packages that `file`'s package may not make. Files outside internal/ are unrestricted. */
 export function countGoLayering(file: string, source: string, packages: GoSections["packages"]): number {
-  const own = /^internal\/([a-z0-9_]+)\//.exec(file)?.[1];
-  if (!own) return 0;
+  const path = /^internal\/([a-z0-9_]+(?:\/[a-z0-9_]+)?)\//.exec(file)?.[1];
+  if (!path) return 0;
+  const own = goSection(path);
   const allowed = new Set([own, ...(packages[own] ?? [])]);
   let violations = 0;
-  for (const match of source.matchAll(INTERNAL_IMPORT)) if (!allowed.has(match[1]!)) violations += 1;
+  for (const match of source.matchAll(INTERNAL_IMPORT)) if (!allowed.has(goSection(match[1]!))) violations += 1;
   return violations;
 }
 

@@ -10,7 +10,8 @@ import { settle, VirtualScreen } from "./virtual-screen";
 
 /**
  * The Go front end (WS-6), end to end: the Bubble Tea binary in a real pty, driving this
- * repository's TypeScript agent over ACP, which talks to the Anthropic stub over HTTP.
+ * repository's TypeScript agent over ACP (ARCHYMEDES_ENGINE=ts), which talks to the Anthropic stub
+ * over HTTP.
  *
  * Skipped where Go is not installed, so a TS-only checkout still passes. What it guards is the seam
  * the port depends on: the handshake and extension events, an approval answered while a turn is
@@ -70,6 +71,9 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
         ARCHYMEDES_FX_OFFLINE: "true",
         ARCHYMEDES_MODELS_OFFLINE: "true", // the model list never reaches past the stub
         ARCHYMEDES_AGENT: `${bunExecutable()} run ${path.join(REPO, "packages/friday-cli/src/friday.ts")}`,
+        // This suite is the interface with the TypeScript agent behind it; the Go engine, now the
+        // default, has its own (go-engine.test.ts).
+        ARCHYMEDES_ENGINE: "ts",
         TZ: "UTC",
         ARCHYMEDES_WALLPAPER: "off", // the screen is read as text; the wallpaper fills its gaps
         ...env,
@@ -326,6 +330,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
         ARCHYMEDES_FX_OFFLINE: "true",
         ARCHYMEDES_MODELS_OFFLINE: "true", // the model list never reaches past the stub
         ARCHYMEDES_AGENT: `${bunExecutable()} run ${path.join(REPO, "packages/friday-cli/src/friday.ts")}`,
+        ARCHYMEDES_ENGINE: "ts", // the Go engine's first run has its own test (go-engine.test.ts)
       },
     });
     const screen = new VirtualScreen(proc, 100, 30);

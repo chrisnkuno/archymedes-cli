@@ -222,7 +222,7 @@ func (m *Model) cmdNew(string) tea.Cmd {
 		return m.toast(toastWarn, "Start a new session between turns; esc stops this one")
 	}
 	if m.agent == nil || m.session.ID == "" {
-		return m.toast(toastWarn, "The session is not open yet")
+		return m.toast(toastWarn, "The session is still opening; try again in a moment")
 	}
 	m.stats, m.usage = newSessionStats(), usageTotals{}
 	return tea.Batch(m.resumeSession(""), m.toast(toastInfo, "New session · the previous one is in /resume"))

@@ -89,3 +89,18 @@ func TestASpendingCapIsRefusedRatherThanIgnored(t *testing.T) {
 		t.Fatalf("%+v", inv)
 	}
 }
+
+func TestEngineIsGoOnlyAndNeverReachesTheAgent(t *testing.T) {
+	inv := Parse([]string{"--engine", "go", "--auto", "fix it"}, true)
+	if inv.Engine != "go" || inv.Prompt != "fix it" {
+		t.Fatalf("inv = %+v", inv)
+	}
+	for _, arg := range inv.Args {
+		if arg == "--engine" || arg == "go" {
+			t.Fatalf("--engine reached the agent: %v", inv.Args)
+		}
+	}
+	if inv := Parse([]string{"--engine=go", "acp"}, false); inv.Engine != "go" || !inv.Passthrough || len(inv.Args) != 1 || inv.Args[0] != "acp" {
+		t.Fatalf("passthrough inv = %+v", inv)
+	}
+}

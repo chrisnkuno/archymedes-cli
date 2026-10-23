@@ -1,77 +1,113 @@
-# archymedes
+# Friday
 
 A coding agent for your terminal. It reads, searches, edits and runs commands in a real project,
-asks before it changes anything you have not allowed, keeps a checkpoint before every turn, and
-says what each request cost. It works with the model you choose: your own API key for any of ten
-providers, free models through OpenRouter, your Claude subscription through your own Claude Code, or
-your ChatGPT plan through your own Codex.
+asks before it changes anything you have not allowed, shows its work as it goes, and does not call
+a change done until something has shown it works. It runs on the model you choose: your own key
+for any of ten providers, free models through OpenRouter, your Claude subscription through your own
+Claude Code, or your ChatGPT plan through your own Codex.
 
 ```bash
-npm install -g archymedes-cli
-archymedes                                   # the interface
-archymedes "fix the failing test in src/parser.ts"   # one request, then exit
+npm install -g @archymedes/friday
+friday                                  # a session in this folder
+friday "fix the failing test in src/parser.ts"   # a session that starts with that request
+friday --resume latest                  # carry on where you left off
 ```
 
 The first run asks for a provider: pick one, paste its key, choose a model from the list the
 provider sends back. Nothing else is required.
 
+
+**Contents:** [Its engine](#its-engine) · [The interface](#the-interface) · [Working with Friday](#working-with-friday) · [What keeps it safe](#what-keeps-it-safe) · [Providers](#providers) · [Extending it](#extending-it) · [In an editor](#in-an-editor) · [Without the interface](#without-the-interface) · [Requirements](#requirements)
+
+## Its engine
+
+The part of Friday that talks to the model and does the work is written in Go and runs inside the
+`friday` binary. You do not choose it: when a session needs something only the earlier TypeScript
+engine has (Claude Code, Codex, a Docker or E2B sandbox, `/undo`), Friday runs that session there
+on its own. Settings → Engine, or `ARCHYMEDES_ENGINE=ts`, picks the TypeScript engine for every
+session.
+
+On the Go engine:
+
+- **Helpers that keep working while Friday does.** Friday hands parts of a task to helpers
+  (sub-agents). There are explorers that search several areas at once, a planner, an independent
+  reviewer, a verifier that runs the checks, and helpers that do a whole piece of work. A helper can run in
+  the background while Friday carries on; one that edits files in the background does so on its
+  own git branch, so the two never edit the same file at once. `/subagents` lists them.
+- **Nothing lost to a crash or a quit.** Every step is saved; a helper cut off resumes when you
+  open the session again.
+- **Talk to it while it works.** What you type mid-turn reaches Friday at its next step.
+- **Cheap work on a cheap model**, if you name one (`<PROVIDER>_SMALL_MODEL`): searching, checking,
+  summarizing and titles.
+- **It notices going in circles**, and **waits out rate limits** as long as the provider says.
+
+Full documentation: [the engine](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/README.md),
+the [user guide](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/USER_GUIDE.md),
+[configuration](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/CONFIGURATION.md),
+[tools](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/TOOLS.md),
+[helpers](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/SUBAGENTS.md) and
+[editors](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/EDITORS.md).
+
 ## The interface
 
-`archymedes` opens a small desktop in the terminal: a top bar with a `◇` start menu
-(`ctrl+space` finds any app, action, session or file), a tab per open window, and a dock with every
-app and its key — **F1** Chat, **F2** Files, **F3** Search, **F4** Sessions, **F5** Models,
-**F6** Themes, **F7** Keys, **F8** Help, **F9** Stats, **F10** Changes, **F12** Gallery; `alt+p`
-Providers and `alt+s` Settings. Everything is reachable by key and by mouse.
+`friday` opens a small desktop in the terminal: a top bar with a `◇` start menu (`ctrl+space`
+finds any app, action, session or file), a tab per open window, and a dock. The dock has every app
+and its key: **F1** Chat, **F2** Files, **F3** Search, **F4** Sessions, **F5** Models, **F6** Themes,
+**F7** Keys, **F8** Help, **F9** Stats, **F10** Changes, **F12** Gallery; `alt+p` Providers and
+`alt+s` Settings. Everything is reachable by key and by mouse.
 
-- **Chat** streams the reply and every tool call with its result, folded (`ctrl+o` unfolds).
+- **Chat** streams the reply and every tool call with its result, folded (`ctrl+o` unfolds). A
+  helper's card shows what it is doing while it works, and its report when it is done.
 - **Changes** is the working tree against the last commit, file by file, with each file's diff;
-  `b` turns to **Branches**: local and remote branches with how they stand against their upstream,
-  worktrees, and the stash, each readable in place.
+  `b` turns to **Branches**: branches, worktrees and the stash.
 - **Models** lists every model of every provider, read live, with prices; **Providers** connects,
   switches and sets the default.
 - **Stats** draws the session: tokens, time and tools per turn.
 
-`/help` lists every command; the most used are below.
+Type `/` to see every command with what it does.
 
-## Working with the agent
+## Working with Friday
 
-| | |
+| Command | Does |
 | --- | --- |
-| `/plan` `/build` `/auto` `/defender` | What the agent may do: read only; edit with approval (default); edit and run ordinary things without asking; security review where every change asks |
-| `/model [name]` | Switch model; the conversation carries on, across providers |
-| `/undo [code\|conversation]` | Revert the last turn — files, conversation or both; again for the one before |
-| `/rewind` | Every turn of the session with what it changed; go back to before any of them |
-| `/diff` | What changed since the last checkpoint |
-| `/review [base <ref>\|commit <ref>\|branch <ref>\|focus]` | A read-only review of a change, findings worst first; `R` on a branch in Branches reviews it |
-| `/commit [guidance]` | The agent reviews the changes and commits them (never pushes) |
-| `/push`, `/pr [guidance]` | Push the branch; `/pr` then has the agent open the pull request with `gh`. On the default branch a new branch is offered first |
-| `/goal <condition>` | Keep working, turn after turn, until the condition holds — judged after each turn, at most ten |
-| `/worktree [name]` | A new session on a new branch in its own worktree; `.archymedes/setup.sh` runs there first; `/worktree back` returns |
-| `/fork` | Copy the conversation into a new session; the original stays as it was |
-| `/compact [focus]`, `/context` | Summarize the conversation to free room; see what fills the context window |
-| `/resume`, `/new`, `/export` | Earlier sessions; a fresh one; this one as Markdown |
-| `!command` | Run a shell command yourself; its output shows here and is not sent to the agent |
-| `@path` | Mention a file in your message |
+| `/plan` `/build` `/auto` `/defender` | how much Friday may do on its own: read and propose only; every edit and command asks (default); edits and commands run unasked, risky ones still ask; security work where every change asks. shift+tab switches |
+| `/model [name]` | switch the model; the conversation carries on, across providers |
+| `/subagents` | the helpers of this session: what each is doing, or what it found |
+| `/todos` | Friday's checklist for the task |
+| `/tools` | every tool Friday has in this mode, what it may change, and whether it asks |
+| `/compact [focus]` | summarize the conversation to free room, keeping what you name |
+| `/commit [guidance]` | Friday reviews the changes and commits them (never pushes) |
+| `/push`, `/pr [guidance]` | push the branch; `/pr` then has Friday open the pull request with `gh` |
+| `/worktree [name]` | a new session on a new branch in its own worktree; `/worktree back` returns |
+| `/resume`, `/new`, `/export` | earlier sessions; a fresh one; this one as Markdown |
+| `!command` | run a shell command yourself; its output shows here and is not sent to Friday |
+| `@path` | mention a file in your message |
 
-**Steering.** A message sent while a turn runs reaches the agent after the tool calls in flight,
-within the same turn — "use tabs, not spaces" lands before the next edit.
+On the TypeScript engine only, for now (a command that is not there says so, and how to switch):
+`/undo`, `/rewind`, `/diff`, `/cost`, `/review`, `/fork`, `/goal`, `/context`, `/memory`.
+
+**Steering.** A message sent while a turn runs reaches Friday at its next step, within the same
+turn: "use tabs, not spaces" lands before the next edit.
 
 **Comments on diffs.** In Changes, `[` and `]` pick a line and `c` writes a note on it; your notes
 go with your next message, each with its file, line and code.
 
 ## What keeps it safe
 
-**Approval.** In build mode every edit and command is shown and asked for: once, always for that
-exact action, or for a pattern (a command prefix, a directory). Plan mode does not load the write
-tools at all. Auto mode still stops for anything sensitive — credentials, deploys, publishing,
-pushes, destructive commands.
+**Approval.** In build mode every edit and every command that is not read-only is shown and asked
+for: once, always for that exact action, or for a safe pattern (a command prefix, a folder). Plan
+mode has no tool that can change anything. Auto mode still stops for anything sensitive:
+credentials, deploys, publishing, pushes, privileged commands. Read-only commands (`git status`,
+`ls`, `rg`) never ask, and some commands are refused outright (`rm -rf`, `git reset --hard`,
+`mkfs`).
 
-**Checkpoints.** Before each turn the workspace is snapshotted into a private git index and kept by a
-hidden ref (`refs/archymedes/checkpoints/…`, never a branch), so `/undo` and `/rewind` work after a
-resume and after `git gc`, and your staged changes are never touched.
+**Proof before "done".** A turn that changed files is asked, once, to show the change works; a
+build alone is weaker proof than tests that run the changed behaviour. By default Friday builds
+test first: the tests that define done, seen failing, then the code, then the project's own static
+check.
 
 **Command rules.** `.archymedes/rules.json` (or `rules.json` in the config directory) says what to
-`allow`, always `ask`, or `forbid`, by a command's leading words. Each rule can carry examples that
+`allow`, always `ask`, or `forbid`, by a command's first words. Each rule can carry examples that
 are checked when it loads, so a rule that does not do what you meant is reported, not trusted:
 
 ```json
@@ -82,20 +118,12 @@ are checked when it loads, so a rule that does not do what you meant is reported
 ] }
 ```
 
-A forbidden command is refused with its reason, and the agent carries on another way.
+**It never overwrites what it has not seen.** A file that changed since Friday read it is not edited or
+overwritten until it is read again.
 
-**Command sandbox (Linux).** With `ARCHYMEDES_SANDBOX=on` and bubblewrap installed, commands can
-write only to the project and the temporary directory, `.archymedes` stays read-only, and there is
-no network (`ARCHYMEDES_SANDBOX_NETWORK=on` allows it). When something needs more, the agent asks
-to run that one command outside, and you are always asked. Off by default; without it, an approved
-command runs with your own permissions. `--sandbox` (E2B) and `--sandbox docker` run the whole
-session in a container instead.
-
-**Verification.** A turn that changed files without running anything that checks them ends as
-`needs_verification`, not `completed`.
-
-**Files changed under it.** When a file the agent read changes on disk, the next turn names it, so
-it re-reads instead of editing from a stale copy.
+**On the TypeScript engine:** checkpoints before every turn (for `/undo` and `/rewind`), the Linux
+command sandbox (`ARCHYMEDES_SANDBOX=on`, bubblewrap), and whole sessions in Docker
+(`--sandbox docker`) or a remote E2B sandbox (`--sandbox e2b`).
 
 ## Providers
 
@@ -103,6 +131,7 @@ it re-reads instead of editing from a stale copy.
 | --- | --- |
 | Anthropic | `ANTHROPIC_API_KEY` |
 | OpenAI | `OPENAI_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
 | Google Gemini | `GOOGLE_API_KEY` |
 | xAI | `XAI_API_KEY` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
@@ -114,48 +143,53 @@ it re-reads instead of editing from a stale copy.
 | Claude (your subscription) | none: your own Claude Code, signed in (`claude auth login`) |
 | Codex (your ChatGPT plan) | none: your own Codex CLI, signed in (`codex login`) |
 
-Keys can be set in the environment or saved through Providers or `archymedes settings`. Claude
-runs through your installed Claude Code with Anthropic's Agent SDK (installed on your machine when
-you connect it), and Codex through your installed Codex CLI (`codex app-server`); Archymedes never
-handles either account's credentials. Switching between them and any other model mid-session keeps
-the conversation: each engine is told what was said while it was not there.
+Keys can be set in the environment or saved through Providers or `friday settings`.
+`<PROVIDER>_MODEL` picks the model and `<PROVIDER>_SMALL_MODEL` a cheaper one for helpers and
+summaries. Claude and Codex run through your own installed tools, on the TypeScript engine; Friday
+never handles either account's credentials.
 
 ## Extending it
 
 Everything lives under `.archymedes/` in the project, so it travels with the repository.
 
+- **Helpers of your own** — `.archymedes/agents/<name>.md`: a role with its instructions, tools,
+  model and limits. See [helpers](https://github.com/chrisnkuno/archymedes-cli/blob/master/docs/engine/SUBAGENTS.md#writing-a-role).
 - **Custom commands** — `.archymedes/commands/audit.md` becomes `/audit`; `$ARGUMENTS` is what you
   type after it.
-- **Skills** — `.archymedes/skills/<name>/skill.json`: a named command with an input schema.
-- **Hooks** — scripts in `.archymedes/hooks/pre-tool-use/` (can block a call) and
-  `post-tool-use/` (can warn).
-- **MCP servers** — `.archymedes/mcp.json`.
-- **Plugins** — `.archymedes/plugins/<name>/` bundle the above.
-- **Memory** — `/memory` shows and edits what the agent remembers about you and the project, kept as
-  plain Markdown.
+- **Project instructions** — `AGENTS.md` (or `CLAUDE.md`, `ARCHYMEDES.md`) at the root is given to
+  Friday with every request.
+- **On the TypeScript engine:** skills (`.archymedes/skills/`), hooks (`.archymedes/hooks/`), MCP
+  servers (`.archymedes/mcp.json`), plugins, and `/memory`.
 
-Tools that did not ship with Archymedes always ask, in every mode, and say where they came from.
+## In an editor
+
+`friday acp` speaks the Agent Client Protocol on stdio. In Zed:
+
+```json
+{ "agent_servers": { "Friday": { "command": "friday", "args": ["acp"] } } }
+```
 
 ## Without the interface
 
 ```
-archymedes "add a health check"      One request, then exit
-archymedes --json "…"                Machine-readable events and result
-archymedes --plan | --auto | --defender
-archymedes --provider groq --model openai/gpt-oss-120b
-archymedes --free                    Free models only; never falls back to a paid one
-archymedes --resume                  Continue the last session
-archymedes --budget 500              A spend cap for the session, in your currency
-archymedes --estimate "task"         Forecast tokens and cost without calling a model
-archymedes acp                       The Agent Client Protocol on stdio, for an editor (Zed, JetBrains)
-archymedes settings | history | doctor | update
+friday --json "add a health check"   one request; events and result as JSON lines, for scripts
+echo "add a health check" | friday   the same, from a pipe
+friday --plan | --auto | --defender  start in a mode
+friday --provider groq --model openai/gpt-oss-120b
+friday --free                        free models only; never falls back to a paid one
+friday --resume [id|latest]          continue a session
+friday settings                      keys, models, preferences
+friday history                       earlier sessions
+friday doctor                        what is wrong with your setup, if anything
+friday update                        install the newest Friday
+friday --help                        all of it
 ```
 
 ## Requirements
 
-Node 22.5 or newer on Linux, macOS or Windows. The interface is a native binary installed with the
-package for linux, darwin and win32 on x64 and arm64; where none fits, every mode without the
-interface still works. `git` enables checkpoints, Changes, review and worktrees; `gh` is needed for
-`/pr`; bubblewrap for the command sandbox; Claude Code or the Codex CLI to run on those plans.
+Linux, macOS or Windows, x64 or arm64: the `friday` binary is installed with the package. Node 22.5
+or newer runs the TypeScript agent for settings, `--json`, and sessions on the TypeScript engine.
+Where the binary cannot run, those still work. `git` enables Changes, helpers that edit in the
+background, and worktrees; `gh` is needed for `/pr`; ripgrep makes search faster.
 
 Apache-2.0 licensed. Source: [github.com/chrisnkuno/archymedes-cli](https://github.com/chrisnkuno/archymedes-cli).

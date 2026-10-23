@@ -23,6 +23,43 @@ type subagentRun struct {
 	calls, failed int
 	tokens        int
 	recent        []string // its latest calls, oldest first, at most recentSubagentCalls
+	// background and status come from the Go engine's thread events: a background sub-agent's
+	// call returns at once, and the card follows the thread instead until it ends.
+	background bool
+	status     string
+	thread     string
+}
+
+// backgroundRunning reports whether a card's sub-agent works on after its call returned.
+func backgroundRunning(t *toolItem) bool {
+	return t.sub != nil && t.sub.background && t.sub.status == "running"
+}
+
+// handleThread follows a sub-agent thread. A background one's report replaces the card's output
+// ("started in the background") when it ends; with no card on screen, a line says it finished.
+func (m *Model) handleThread(th *acp.ThreadInfo) {
+	if th == nil {
+		return
+	}
+	ended := th.Status == "done" || th.Status == "failed" || th.Status == "cancelled"
+	t := m.tools[th.ParentToolCallID]
+	if t == nil {
+		if ended && th.Background {
+			m.notice(noticeFaint, fmt.Sprintf("Background agent %s (%s) %s; its report reaches Friday with your next message", th.ID, th.Agent, th.Status))
+		}
+		return
+	}
+	if t.sub == nil {
+		t.sub = &subagentRun{}
+	}
+	t.sub.agent, t.sub.thread, t.sub.background, t.sub.status = th.Agent, th.ID, th.Background, th.Status
+	if th.Background && ended {
+		t.result, t.isError, t.ended = th.Report, th.Status == "failed", time.Now()
+		if m.phase != busy {
+			m.notice(noticeFaint, fmt.Sprintf("Background agent %s (%s) %s; its report reaches Friday with your next message", th.ID, th.Agent, th.Status))
+		}
+	}
+	t.touch()
 }
 
 // handleSubagent folds one of a sub-agent's own events into its delegation card, and its spend
@@ -107,6 +144,9 @@ func subagentSummary(t *toolItem) string {
 			parts = append(parts, compact(t.sub.tokens)+" tokens")
 		}
 	}
+	if backgroundRunning(t) {
+		parts = append([]string{"in the background"}, parts...)
+	}
 	if len(parts) == 0 {
 		if t.done {
 			return "done"
@@ -121,7 +161,7 @@ func subagentSummary(t *toolItem) string {
 func subagentActivity(ctx renderCtx, t *toolItem, expanded bool) []string {
 	rule := ctx.th.Faint.Render("  ⎿ ")
 	room := max(ctx.width-4, 8)
-	if t.done {
+	if t.done && !backgroundRunning(t) {
 		if expanded || t.isError {
 			return nil // the full output follows
 		}
