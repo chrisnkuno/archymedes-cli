@@ -25,7 +25,7 @@ type keyMap struct {
 	// Typing (locked).
 	Send, Newline, Complete, Cancel, Interrupt, History key.Binding
 	// Apps.
-	Start, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer key.Binding
+	Start, Finder, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer key.Binding
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
@@ -54,6 +54,7 @@ var actions = []action{
 	{"providers", "providers", "Apps", []string{"alt+p"}, false, func(k *keyMap) *key.Binding { return &k.Providers }},
 	{"settings", "settings", "Apps", []string{"alt+s"}, false, func(k *keyMap) *key.Binding { return &k.Settings }},
 	{"tour-drawer", "tour drawer", "Apps", []string{"alt+o"}, false, func(k *keyMap) *key.Binding { return &k.TourDrawer }},
+	{"finder", "finder", "Apps", []string{"alt+g"}, false, func(k *keyMap) *key.Binding { return &k.Finder }},
 
 	{"next-window", "next window", "Windows", []string{"ctrl+pgdown", "alt+]"}, false, func(k *keyMap) *key.Binding { return &k.NextWindow }},
 	{"prev-window", "previous window", "Windows", []string{"ctrl+pgup", "alt+["}, false, func(k *keyMap) *key.Binding { return &k.PrevWindow }},

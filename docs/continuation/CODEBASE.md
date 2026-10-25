@@ -58,7 +58,7 @@ prefixes**, and every non-test file has one (guard `sections`):
 | `core_` | The model, update loop, input routing, screen composition, action registry | `core_model.go`, `core_events.go`, `core_keyboard.go`, `core_view.go`, `core_keys.go` |
 | `chat_` | The Chat window | `chat_transcript.go`, `chat_items.go`, `chat_composer.go`, `chat_approval.go` |
 | `home_` | The home screen before the first message | `home_landing.go`, `home_welcome.go`, `home_onboarding.go`, `home_drawer.go` |
-| `desk_` | The desktop around the windows | `desk_bars.go`, `desk_shell.go`, `desk_start.go`, `desk_wallpaper.go` |
+| `desk_` | The desktop around the windows | `desk_bars.go`, `desk_shell.go`, `desk_start.go`, `desk_finder.go`, `desk_finder_art.go`, `desk_tiles.go`, `desk_wallpaper.go` |
 | `app_` | One app per file; its parts as `app_<name>_<part>.go` | `app_changes.go`, `app_changes_branches.go`, `app_settings.go`, `app_tour.go` |
 | `dialog_` | Modal flows over a window | `dialog_connect.go`, `dialog_models.go`, `dialog_resume.go` |
 | `cmd_` | Slash commands | `cmd_registry.go`, `cmd_session.go`, `cmd_gitflow.go`, `cmd_rewind.go` |

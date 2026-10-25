@@ -88,6 +88,9 @@ func (m *Model) filesLoaded(msg filesLoadedMsg) {
 		s.files = msg.files // the start menu searches files as soon as they are known
 		s.refilter()
 	}
+	if f, ok := m.overlay.(*finder); ok {
+		f.reload(m)
+	}
 	var f *filesView
 	for _, w := range m.windows {
 		if view, ok := w.(*filesView); ok {

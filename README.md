@@ -218,7 +218,10 @@ FRIDAY_LIVE=1 go test ./cmd/friday -run Live -v  # the Go engine against your ow
 The interface is a small desktop. The top bar has a `◇` start menu (ctrl+space finds any app,
 action, session or file) and a tab per open window. The dock along the bottom has every app and its
 key: F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
-F10 Changes, F12 Gallery. Click or press. `/theme`, `/wallpaper`, `/mode`, Providers and the
+F10 Changes, F12 Gallery. Click or press. The Finder (`alt+g`, `/finder`) shows everything Friday
+can open as a grid of icons drawn in colour: apps, commands, sessions, the project's files folder by
+folder, themes and modes. Typing searches all of them, space looks inside one, and enter opens it.
+`/theme`, `/wallpaper`, `/mode`, Providers and the
 Settings sections are grids of square tiles, each a preview, moved through with all four arrows. In lists ↑/↓ move and enter picks; the side arrows
 step a setting's choice in place, turn Gallery pictures, and switch the model list between all,
 free and ready.

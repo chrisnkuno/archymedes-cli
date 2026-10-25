@@ -536,6 +536,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.load(msg)
 		case *startMenu:
 			p.addSessions(m)
+		case *finder:
+			p.reload(m)
 		}
 		return m, nil
 	case startupNoticesMsg:

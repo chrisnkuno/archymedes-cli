@@ -50,6 +50,7 @@ func init() {
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
 		{"gallery", "", "The pictures, full size: built-in photos, live originals from Unsplash, and art drawn by code", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openOverlay(newWallpaperPicker(m)); return nil }},
+		{"finder", "", "Everything Friday opens, as a grid of icons: apps, commands, sessions, files, themes, modes (alt+g)", func(m *Model, _ string) tea.Cmd { return m.openFinder() }},
 		{"welcome", "", "The first-run walkthrough again: name, look, mode, keys, connection, a first request", func(m *Model, _ string) tea.Cmd { return m.openOnboarding() }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},

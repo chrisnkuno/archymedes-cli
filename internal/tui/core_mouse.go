@@ -44,6 +44,11 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 			m.overlay = nil // a click outside a dialog closes it, as esc does
 			return nil
 		}
+		if c, ok := m.overlay.(interface {
+			click(*Model, tea.MouseClickMsg) tea.Cmd
+		}); ok {
+			return c.click(m, msg)
+		}
 		if p, ok := m.overlay.(rowPicker); ok {
 			for i := range p.rowCount() {
 				if m.zones.dialog.Get(rowID(i)).InBounds(msg) {

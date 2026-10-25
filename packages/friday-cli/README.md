@@ -56,6 +56,11 @@ and its key: **F1** Chat, **F2** Files, **F3** Search, **F4** Sessions, **F5** M
 **F7** Keys, **F8** Help, **F9** Stats, **F10** Changes, **F12** Gallery; `alt+p` Providers and
 `alt+s` Settings. Everything is reachable by key and by mouse.
 
+**Finder.** `alt+g` (or `/finder`) opens everything Friday can open as a grid of icons drawn in
+colour. Places run down the side: apps, commands, sessions, files, themes and modes. The arrows move
+through the icons, and ← at the edge steps into the places. Typing searches all of them, space
+looks inside one, and enter opens it. In Files, enter goes into a folder and backspace comes out.
+
 **Tiles.** Choices worth seeing are grids of square tiles, moved through with all four arrows:
 
 - `/theme`: each theme as a small screen in its colours

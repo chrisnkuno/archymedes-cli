@@ -48,6 +48,8 @@ const MAX_RESTARTS = 5;
 /** What the agent must never inherit from the bridge's own environment. */
 const BRIDGE_ONLY = new Set(["FRIDAY_BRIDGE_CONFIG"]);
 
+type StartResult = "ok" | "failed" | "gave up";
+
 export async function runBridge(options: BridgeOptions = {}): Promise<number> {
   const configPath = options.configPath ?? process.env.FRIDAY_BRIDGE_CONFIG ?? BRIDGE_CONFIG_PATH;
   const log = options.log ?? ((message: string) => process.stderr.write(`[bridge] ${message}\n`));
@@ -98,6 +100,8 @@ export async function runBridge(options: BridgeOptions = {}): Promise<number> {
   let finished: ((code: number) => void) | undefined;
   const done = new Promise<number>((resolve) => { finished = resolve; });
   const starts: number[] = [];
+  // Set once the bridge has its answer; a restart waiting on its delay then stays down.
+  let over = false;
 
   const environmentFor = (config: BridgeConfig): Record<string, string | undefined> => {
     const inherited = Object.fromEntries(Object.entries(options.baseEnvironment ?? process.env).filter(([key]) => !BRIDGE_ONLY.has(key)));
@@ -135,18 +139,32 @@ export async function runBridge(options: BridgeOptions = {}): Promise<number> {
     }
   };
 
-  const startAgent = async (): Promise<boolean> => {
+  /** Restarts the agent after a death; a restart that dies before it is ready counts as another death. */
+  const restart = async (): Promise<void> => {
+    for (;;) {
+      await sleep(options.restartDelayMs ?? 1_000);
+      if (aborted() || over) return;
+      const started = await startAgent().catch((): StartResult => "failed");
+      if (started === "ok") return;
+      if (started === "gave up") return finished?.(1);
+    }
+  };
+
+  const startAgent = async (): Promise<StartResult> => {
     const now = Date.now();
     starts.push(now);
     while (starts.length > 0 && now - starts[0] > RESTART_WINDOW_MS) starts.shift();
     if (starts.length > MAX_RESTARTS) {
       log(`the agent died ${MAX_RESTARTS} times in a minute; giving up`);
-      return false;
+      return "gave up";
     }
     await fs.mkdir(current!.cwd, { recursive: true });
     await placeFiles(current!).catch((error: unknown) => log(`could not place a file: ${error instanceof Error ? error.message : String(error)}`));
     const make = options.hostFactory ?? ((hostOptions) => new AcpHost(hostOptions));
-    host = make({
+    // An agent that dies before it is ready is its start's to handle (a failed start), not its exit's:
+    // otherwise both would restart it, and the exit would clear the host the start is still using.
+    let ready = false;
+    const started = make({
       command: options.command ?? ["friday", "acp"],
       cwd: current!.cwd,
       env: environmentFor(current!),
@@ -154,32 +172,32 @@ export async function runBridge(options: BridgeOptions = {}): Promise<number> {
       onFrame: (line) => relay.send(line),
       onStderr: (text) => log(`agent: ${text.trimEnd().slice(-500)}`),
       onExit: (code, signal) => {
+        if (!ready || host !== started) return;
         log(`the agent exited (${signal ?? code}); restarting`);
         host = undefined;
-        void sleep(options.restartDelayMs ?? 1_000).then(async () => {
-          if (aborted() || !(await startAgent().catch(() => false))) finished?.(1);
-        });
+        void restart();
       },
     });
+    host = started;
     try {
-      info = await host.start();
+      info = await started.start();
     } catch (error) {
       log(`could not start the agent: ${error instanceof Error ? error.message : String(error)}`);
-      host.stop();
-      host = undefined;
-      return false;
+      started.stop();
+      if (host === started) host = undefined;
+      return "failed";
     }
+    ready = true;
     log(`agent ready (${info.sessionId})`);
     // A restarted agent has a new process but, usually, the same session; say hello again either way.
     relay.announce();
-    return true;
+    return "ok";
   };
 
-  if (!(await startAgent())) return 1;
+  if ((await startAgent()) !== "ok") return 1;
   relay.setConfig({ url: current.url, secret: current.secret });
 
   // A new file means a new secret (after a resume) or a new address: reconnect, nothing else changes.
-  let over = false;
   void (async () => {
     while (!aborted() && !over) {
       await sleep(pollMs);
