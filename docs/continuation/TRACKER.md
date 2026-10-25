@@ -5,6 +5,9 @@ Method: [WORKFLOW.md](WORKFLOW.md). Newest workstream first. Statuses: `todo`, `
 Baseline at start (2026-09-14, after publishing 2.2.0): 92 theme leaks in 10 files; `friday.ts`
 has 5,100 lines and `tui.ts` has 1,364.
 
+## Release 3.11.1 (2026-10-26)
+Claude Code works on the Go engine (WS-49). Choosing Claude in the model picker or Providers no longer fails with "Claude Code runs on the TypeScript engine": the Go engine drives your own Claude Code itself, on your Claude plan, with no Agent SDK to install. Replies stream in, its tool calls draw as Friday's cards, its permission questions come to Friday's approval dialog under the session's mode, and steering, esc, shift+tab, `/cost`, `/todos`, `/tools` and `/undo` work. Switching to Claude and back keeps the conversation both ways, and `--provider claude` or Claude as the default starts there without the TypeScript engine.
+
 ## Release 3.11.0 (2026-10-26)
 Friday becomes a desktop driven by the arrows and the mouse (WS-48). Every app is a window floating on the wallpaper, its body frosted glass, with ▢ to zoom and ✕ to close; its keys are buttons along its foot. The home screen is a desktop: icons on the left (a sleeker folder for the project, Wallpaper and Welcome among them), a short card with the prism, and the tour playing on the right down to laptop widths. One grammar everywhere: a click selects and a second opens, the wheel scrolls what is under the pointer, esc steps out to the bars, ↑ walks the conversation (earlier messages are ctrl+↑). Sessions, Models, Themes, Wallpaper, Help and the Finder are windows. Suggestions while you work (WS-47): next steps after a turn, notes on each edit and hints while typing, ranked by Jev when a TypeSafe key is set; Settings → Suggestions turns them off. The first-run walkthrough opens once for everyone, and alt+w brings it back (WS-46).
 
