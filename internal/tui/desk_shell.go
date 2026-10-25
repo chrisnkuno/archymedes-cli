@@ -137,6 +137,8 @@ func (m *Model) runAction(id string) tea.Cmd {
 		return m.openShowcase()
 	case "tour-drawer":
 		return m.toggleTourDrawer()
+	case "wallpaper":
+		m.openWindow(newWallpaperPicker(m))
 	case "welcome":
 		return m.openOnboarding()
 	case "stats":

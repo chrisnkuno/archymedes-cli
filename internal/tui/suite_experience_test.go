@@ -74,7 +74,7 @@ func TestTheHomeCardSaysWhatIsInFrontOfYou(t *testing.T) {
 func TestTheDesktopIconsOpenByArrowAndClick(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
-	for _, name := range []string{"Changes", "Sessions", "Finder", "Settings", "Tour"} {
+	for _, name := range []string{"Changes", "Sessions", "Finder", "Settings", "Wallpaper", "Welcome"} {
 		if !strings.Contains(screen(m), name) {
 			t.Fatalf("no %s icon:\n%s", name, screen(m))
 		}

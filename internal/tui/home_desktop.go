@@ -29,7 +29,8 @@ type desktopApp struct {
 	art      func(m *Model, i int) []string
 }
 
-// desktopApps are the icons, in order: the project first, then what is opened most.
+// desktopApps are the icons, in order: the project first, then what is opened most; the tour plays
+// in its own panel beside the card, so it needs no icon.
 func (m *Model) desktopApps() []desktopApp {
 	app := func(glyph string) func(m *Model, i int) []string {
 		return func(m *Model, i int) []string {
@@ -49,7 +50,8 @@ func (m *Model) desktopApps() []desktopApp {
 		{"models", "Models", app("◎")},
 		{"themes", "Themes", app("◐")},
 		{"settings", "Settings", app("⚙")},
-		{"showcase", "Tour", app("✦")},
+		{"wallpaper", "Wallpaper", app("▣")},
+		{"welcome", "Welcome", app("✦")},
 	}
 }
 
