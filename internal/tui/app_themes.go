@@ -114,4 +114,3 @@ func themeArt(name string) func(*Model, int, int) []string {
 		return lines[:rows]
 	}
 }
-

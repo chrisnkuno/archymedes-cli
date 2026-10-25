@@ -114,11 +114,11 @@ type Model struct {
 	pendingMode string
 	overlay     overlay // a dialog over the focused window
 	// windows are the open apps beside Chat; active is the focused one (0 = Chat, i = windows[i-1]).
-	windows  []window
-	windowState // where the focused window floats, zoomed or not (desk_window.go)
+	windows     []window
+	windowState           // where the focused window floats, zoomed or not (desk_window.go)
 	desk        deskState // the home screen's icons (home_desktop.go)
-	active   int
-	expanded bool
+	active      int
+	expanded    bool
 
 	keys     keyMap
 	help     help.Model

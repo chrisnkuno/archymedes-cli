@@ -111,17 +111,19 @@ func sessionIcon(c color.Color) func(theme.Theme) []string {
 	}
 }
 
-// folderIcon is a folder: a lighter tab over a body that darkens toward its foot.
+// folderIcon is a folder, the width of an app icon: a rounded tab in a darker shade over one body in
+// the folder's colour, rounded at its corners. It is drawn in foreground blocks only, two pixels a
+// cell: the wallpaper frosts any background a cell paints, and a folder half background, half
+// foreground would come out in two shades.
 func folderIcon(c color.Color) func(theme.Theme) []string {
 	return func(th theme.Theme) []string {
-		tab := toward(c, th.Text, 0.3)
-		low := toward(c, th.Bg, 0.3)
+		tab := toward(c, th.Bg, 0.3)
 		return []string{
-			fg(tab).Render("▗▄▄▄▄▖     "),
-			bg(tab).Render(strings.Repeat(" ", 11)),
-			bg(c).Render(strings.Repeat(" ", 11)),
-			bg(low).Render(strings.Repeat(" ", 11)),
-			fg(low).Render("▝▀▀▀▀▀▀▀▀▀▘"),
+			fg(tab).Render("▄███▄") + strings.Repeat(" ", 4), // the tab, rounded at its top
+			fg(c).Render("████████▄"),                        // the body, rounded at its top right
+			fg(c).Render("█████████"),
+			fg(c).Render("█████████"),
+			fg(c).Render("▝▀▀▀▀▀▀▀▘"), // the foot, rounded
 		}
 	}
 }
