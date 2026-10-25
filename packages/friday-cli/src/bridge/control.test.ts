@@ -153,3 +153,34 @@ describe("branch, status and push", () => {
     expect(await runControl("rm-rf", {}, context())).toEqual({ ok: false, detail: "unknown operation 'rm-rf'" });
   });
 });
+
+describe("files", () => {
+  it("lists a folder, folders first then newest files, and makes the workspace if it is not there yet", async () => {
+    const listed = await runControl("files", { path: "" }, context());
+    expect(listed).toEqual({ ok: true, detail: { path: "", entries: [] } });
+    await fs.mkdir(path.join(cwd, "out"));
+    await fs.writeFile(path.join(cwd, "old.txt"), "a");
+    await fs.utimes(path.join(cwd, "old.txt"), new Date(1_000_000), new Date(1_000_000));
+    await fs.writeFile(path.join(cwd, "new.csv"), "a,b");
+    const result = await runControl("files", { path: "" }, context());
+    expect((result.detail as any).entries.map((e: any) => [e.name, e.dir])).toEqual([["out", true], ["new.csv", false], ["old.txt", false]]);
+    expect((result.detail as any).entries[1]).toMatchObject({ path: "new.csv", size: 3 });
+  });
+
+  it("will not leave the workspace, by .. or by a symlink the agent made", async () => {
+    await fs.mkdir(cwd, { recursive: true });
+    await fs.symlink(root, path.join(cwd, "escape"));
+    expect(await runControl("files", { path: "../" }, context())).toMatchObject({ ok: false });
+    expect(await runControl("files", { path: "escape" }, context())).toMatchObject({ ok: false, detail: "that path is outside the workspace" });
+  });
+
+  it("lists recent files across folders, skipping dependencies and hidden ones", async () => {
+    await fs.mkdir(path.join(cwd, "out", "charts"), { recursive: true });
+    await fs.mkdir(path.join(cwd, "node_modules", "x"), { recursive: true });
+    await fs.writeFile(path.join(cwd, "out", "charts", "a.png"), "png");
+    await fs.writeFile(path.join(cwd, "node_modules", "x", "index.js"), "");
+    await fs.writeFile(path.join(cwd, ".env"), "");
+    const result = await runControl("files", { recent: true }, context());
+    expect((result.detail as any).entries.map((e: any) => e.path)).toEqual(["out/charts/a.png"]);
+  });
+});

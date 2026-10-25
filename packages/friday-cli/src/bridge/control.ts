@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { ControlResult } from "./relay";
 
 /**
  * Housekeeping the server asks of the sandbox: clone the repository, make the working branch, push
- * it. Git runs here, as a request over the bridge, because the server cannot run commands in a
+ * it, and list the workspace's files for the phone (the bytes themselves go through the sandbox's
+ * own file endpoint, not this connection). Git runs here, as a request over the bridge, because the server cannot run commands in a
  * sandbox (its SDK does not run in Workers) and because the credential then never has to be written
  * anywhere.
  *
@@ -101,7 +103,81 @@ export async function runControl(op: string, args: Record<string, unknown>, cont
       const status = await git(context.cwd, ["status", "--porcelain=v1", "--branch"]);
       return status.ok ? { ok: true, detail: status.out } : { ok: false, detail: status.out };
     }
+    case "files": {
+      const listed = args.recent === true ? await recentFiles(context.cwd) : await listFolder(context.cwd, typeof args.path === "string" ? args.path : "");
+      return "error" in listed ? { ok: false, detail: listed.error } : { ok: true, detail: listed };
+    }
     default:
       return { ok: false, detail: `unknown operation '${op.slice(0, 40)}'` };
   }
+}
+
+// ---------------------------------------------------------------- files
+
+export type FileEntry = { name: string; path: string; dir: boolean; size: number; modifiedAt: number };
+
+const MAX_ENTRIES = 500;
+const RECENT_LIMIT = 60;
+const RECENT_DEPTH = 5;
+/** Folders a person never wants to scroll through in "recent": tool caches, dependencies, VCS. */
+const SKIPPED = new Set(["node_modules", ".git", ".venv", "venv", "__pycache__", ".cache", ".next", "dist", "build", ".archymedes"]);
+
+/** The workspace folder, made if the agent has not written anything yet, with symlinks resolved. */
+async function workspaceRoot(cwd: string): Promise<string> {
+  await fs.mkdir(cwd, { recursive: true });
+  return fs.realpath(cwd);
+}
+
+/**
+ * One folder of the workspace, folders first, then the newest files. The server has already refused
+ * `..` and absolute paths; this checks again after resolving symlinks, because the agent can make a link
+ * that points anywhere.
+ */
+export async function listFolder(cwd: string, relative: string): Promise<{ path: string; entries: FileEntry[] } | { error: string }> {
+  const root = await workspaceRoot(cwd);
+  if (relative.split("/").includes("..") || relative.startsWith("/")) return { error: "that path is outside the workspace" };
+  let dir: string;
+  try {
+    dir = await fs.realpath(relative ? path.join(root, relative) : root);
+  } catch {
+    return { error: "there is no such folder" };
+  }
+  if (dir !== root && !dir.startsWith(root + path.sep)) return { error: "that path is outside the workspace" };
+  let names: string[];
+  try {
+    names = await fs.readdir(dir);
+  } catch {
+    return { error: "that is not a folder" };
+  }
+  const entries: FileEntry[] = [];
+  for (const name of names.slice(0, MAX_ENTRIES * 2)) {
+    if (name === ".git") continue;
+    const stat = await fs.stat(path.join(dir, name)).catch(() => undefined);
+    if (!stat) continue;
+    entries.push({ name, path: path.relative(root, path.join(dir, name)).split(path.sep).join("/"), dir: stat.isDirectory(), size: stat.isDirectory() ? 0 : stat.size, modifiedAt: Math.round(stat.mtimeMs) });
+  }
+  entries.sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : a.dir ? a.name.localeCompare(b.name) : b.modifiedAt - a.modifiedAt));
+  return { path: path.relative(root, dir).split(path.sep).join("/"), entries: entries.slice(0, MAX_ENTRIES) };
+}
+
+/** The newest files anywhere in the workspace (a few levels down): what the agent just made, without hunting for it. */
+export async function recentFiles(cwd: string): Promise<{ path: string; entries: FileEntry[] }> {
+  const root = await workspaceRoot(cwd);
+  const found: FileEntry[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    const items = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const item of items) {
+      if (found.length >= MAX_ENTRIES * 4) return;
+      const full = path.join(dir, item.name);
+      if (item.isDirectory()) {
+        if (depth < RECENT_DEPTH && !SKIPPED.has(item.name) && !item.name.startsWith(".")) await walk(full, depth + 1);
+      } else if (item.isFile() && !item.name.startsWith(".")) {
+        const stat = await fs.stat(full).catch(() => undefined);
+        if (stat) found.push({ name: item.name, path: path.relative(root, full).split(path.sep).join("/"), dir: false, size: stat.size, modifiedAt: Math.round(stat.mtimeMs) });
+      }
+    }
+  };
+  await walk(root, 0);
+  found.sort((a, b) => b.modifiedAt - a.modifiedAt);
+  return { path: "", entries: found.slice(0, RECENT_LIMIT) };
 }

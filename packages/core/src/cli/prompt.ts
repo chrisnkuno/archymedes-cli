@@ -69,6 +69,13 @@ export async function collectProjectContext(root: string, maxInstructionChars = 
       }
     }
   }
+  // A machine-wide file (ARCHYMEDES_INSTRUCTIONS_FILE): how a hosted sandbox tells the agent what it has
+  // installed without writing into the person's repository. Outermost, so a project's own files win.
+  const machineWide = process.env.ARCHYMEDES_INSTRUCTIONS_FILE?.trim();
+  if (machineWide && path.isAbsolute(machineWide)) {
+    const text = await fs.readFile(machineWide, "utf8").catch(() => undefined);
+    if (text) discovered.unshift({ file: machineWide, relative: path.basename(machineWide), text });
+  }
   let remaining = Math.max(0, maxInstructionChars);
   const selected: Array<{ path: string; content: string; sha256: string; truncated: boolean }> = [];
   // Deeper instructions are more specific, so they receive the budget first.

@@ -31,6 +31,24 @@ describe("collectProjectContext", () => {
     expect(context.instructionsFile).toBe("CLAUDE.md");
   });
 
+  it("reads a machine-wide ARCHYMEDES_INSTRUCTIONS_FILE first, with the project's own after it", async () => {
+    const toolkit = path.join(root, "..", `toolkit-${path.basename(root)}.md`);
+    await fs.writeFile(toolkit, "Python is installed.");
+    await fs.writeFile(path.join(root, "AGENTS.md"), "Use spaces.");
+    const before = process.env.ARCHYMEDES_INSTRUCTIONS_FILE;
+    process.env.ARCHYMEDES_INSTRUCTIONS_FILE = toolkit;
+    try {
+      const context = await collectProjectContext(root);
+      expect(context.instructions).toBe(`[${path.basename(toolkit)}]\nPython is installed.\n\n[AGENTS.md]\nUse spaces.`);
+      process.env.ARCHYMEDES_INSTRUCTIONS_FILE = "relative/is-ignored.md";
+      expect((await collectProjectContext(root)).instructions).toBe("Use spaces.");
+    } finally {
+      if (before === undefined) delete process.env.ARCHYMEDES_INSTRUCTIONS_FILE;
+      else process.env.ARCHYMEDES_INSTRUCTIONS_FILE = before;
+      await fs.rm(toolkit, { force: true });
+    }
+  });
+
   it("leaves instructions null rather than erroring when no such file exists", async () => {
     const context = await collectProjectContext(root);
     expect(context.instructions).toBeNull();
