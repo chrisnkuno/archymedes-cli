@@ -67,7 +67,7 @@ func TestTheGalleryShowsTheBuiltInPhotoBesideTheLiveOneWithCaptions(t *testing.T
 		t.Fatalf("fetched without saying who asks: %q", agents)
 	}
 	s := screen(m)
-	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Friday", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ photo", "Kitty:", "Sixel:"} {
+	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Friday", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ picture", "↑/↓ theme", "Kitty:", "Sixel:"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("Gallery lacks %q:\n%s", want, s)
 		}
@@ -90,6 +90,18 @@ func TestTheGalleryTurnsChangesFitAndCloses(t *testing.T) {
 	deliver(m, press(m, tea.KeyLeft, 0))
 	if g.index != len(gallery.Photos)-1 {
 		t.Fatalf("← from the first wraps to the last: %d", g.index)
+	}
+	press(m, tea.KeyDown, 0) // from the last picture: the first of the next theme, wrapping
+	if g.index != 0 {
+		t.Fatalf("↓ from the last picture should wrap to the first theme: %d", g.index)
+	}
+	deliver(m, press(m, tea.KeyDown, 0))
+	if gallery.Pick(g.index).Theme == gallery.Pick(0).Theme || gallery.Pick(g.index-1).Theme != gallery.Pick(0).Theme {
+		t.Fatalf("↓ should land on the next theme's first picture: %d", g.index)
+	}
+	deliver(m, press(m, tea.KeyUp, 0))
+	if g.index != 0 {
+		t.Fatalf("↑ from a theme's first picture goes to the theme before: %d", g.index)
 	}
 	typeText(m, "f")
 	if g.builtIn.Fit() != picture.FitCover || g.live.Fit() != picture.FitCover || !strings.Contains(screen(m), "fit cover") {

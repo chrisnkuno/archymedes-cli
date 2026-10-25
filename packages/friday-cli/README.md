@@ -56,6 +56,25 @@ and its key: **F1** Chat, **F2** Files, **F3** Search, **F4** Sessions, **F5** M
 **F7** Keys, **F8** Help, **F9** Stats, **F10** Changes, **F12** Gallery; `alt+p` Providers and
 `alt+s` Settings. Everything is reachable by key and by mouse.
 
+**Tiles.** Choices worth seeing are grids of square tiles, moved through with all four arrows:
+
+- `/theme`: each theme as a small screen in its colours
+- `/wallpaper`: each picture as a preview; tab jumps to the next theme
+- `/mode`: the four modes and what each may do
+- `/welcome`: the first-run walkthrough
+- Providers: each one in use, ready, or what it needs
+- Settings: a tile per section, opening into its list
+
+**First run.** Friday opens on a walkthrough of six steps, each one tile grid or one question. It
+asks for a name (kept on this machine, for the greeting), then a theme and a mode. You try four keys
+in place, see what it is connected to, and choose whether installs are counted. Last you pick a
+first request. enter goes on, backspace goes back, and esc skips the rest. `/welcome` opens it again.
+
+**Arrow keys.** In lists ↑/↓ move and enter picks. In Settings the side arrows
+step a choice in place, saved as you go, and in the model list they switch all, free and ready. In
+the Gallery they turn the picture, and ↑/↓ jump theme by theme. Pickers preview as you move; esc
+puts back what was there.
+
 - **Chat** streams the reply and every tool call with its result, folded (`ctrl+o` unfolds). A
   helper's card shows what it is doing while it works, and its report when it is done.
 - **Changes** is the working tree against the last commit, file by file, with each file's diff;
@@ -63,6 +82,8 @@ and its key: **F1** Chat, **F2** Files, **F3** Search, **F4** Sessions, **F5** M
 - **Models** lists every model of every provider, read live, with prices; **Providers** connects,
   switches and sets the default.
 - **Stats** draws the session: tokens, time and tools per turn.
+- **Gallery** shows the pictures behind the screen, full size: photographs (antiquity, sci-fi,
+  abstract) and art Friday draws in code. `/wallpaper` picks one, a theme, or none.
 
 Type `/` to see every command with what it does.
 
@@ -85,6 +106,11 @@ Type `/` to see every command with what it does.
 
 On the TypeScript engine only, for now (a command that is not there says so, and how to switch):
 `/undo`, `/rewind`, `/diff`, `/cost`, `/review`, `/fork`, `/goal`, `/context`, `/memory`.
+
+**Defender.** `/defender` (or `--defender`) makes Friday a defensive security engineer. It reads
+the security playbooks that fit the project, from access control to AI applications, scans for
+hardcoded secrets, and reports each finding with its file and line, the input that triggers it,
+and its impact. Every change it makes asks first.
 
 **Steering.** A message sent while a turn runs reaches Friday at its next step, within the same
 turn: "use tabs, not spaces" lands before the next edit.
@@ -182,6 +208,8 @@ friday settings                      keys, models, preferences
 friday history                       earlier sessions
 friday doctor                        what is wrong with your setup, if anything
 friday update                        install the newest Friday
+friday login | logout                link this computer to your Friday account, or unlink it
+friday account | keys                who it is linked as; the provider keys your account holds
 friday --help                        all of it
 ```
 

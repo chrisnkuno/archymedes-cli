@@ -37,6 +37,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		}
 	}
 	if m.overlay != nil {
+		if _, walkthrough := m.overlay.(*onboarding); walkthrough && !m.zones.dialog.Get("dialog").InBounds(msg) {
+			return nil // a stray click does not end the first-run walkthrough; esc does
+		}
 		if !m.zones.dialog.Get("dialog").InBounds(msg) {
 			m.overlay = nil // a click outside a dialog closes it, as esc does
 			return nil
@@ -139,7 +142,7 @@ func (p *resumePicker) choose(m *Model, i int) tea.Cmd {
 
 func (t *themePicker) rowCount() int { return len(t.names) }
 func (t *themePicker) choose(m *Model, i int) tea.Cmd {
-	t.cursor = i
+	t.grid.cursor = i
 	m.applyTheme(t.names[i])
 	m.overlay = nil
 	return m.toast(toastInfo, "Theme: "+t.names[i])

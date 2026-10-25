@@ -45,6 +45,8 @@ describe.skipIf(!goAvailable() || CONPTY)("plain friday runs on the Go engine", 
     stub = await startAnthropicStub();
     cwd = await mkdtemp(path.join(tmpdir(), "friday-go-engine-cwd-"));
     configDir = await mkdtemp(path.join(tmpdir(), "friday-go-engine-cfg-"));
+    // Past the first-run walkthrough, which has its own test; these read the screen behind it.
+    await writeFile(path.join(configDir, "state.json"), JSON.stringify({ onboarded: true }));
     await writeFile(path.join(cwd, "README.md"), "hi\n");
   });
 

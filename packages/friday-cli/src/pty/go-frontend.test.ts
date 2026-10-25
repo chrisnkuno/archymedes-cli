@@ -46,6 +46,8 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     stub = await startAnthropicStub();
     cwd = await mkdtemp(path.join(tmpdir(), "archymedes-go-cwd-"));
     configDir = await mkdtemp(path.join(tmpdir(), "archymedes-go-cfg-"));
+    // Past the first-run walkthrough, which has its own test; these read the screen behind it.
+    await writeFile(path.join(configDir, "state.json"), JSON.stringify({ onboarded: true }));
     await writeFile(path.join(cwd, "README.md"), "hi\n");
   });
 
@@ -81,6 +83,20 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     });
     return { proc, screen: new VirtualScreen(proc, cols, rows) };
   }
+
+  it("opens on the first-run walkthrough, and esc leaves it for the session", async () => {
+    await rm(path.join(configDir, "state.json"));
+    const { proc, screen } = boot(100, 40);
+    await proc.waitFor("What should Friday call you?", { timeoutMs: 60_000 });
+    expect(await screen.text()).toContain("step 1 of 6");
+    proc.write("Ada\r"); // the name, then on to Look
+    await proc.waitFor("Pick a look", { timeoutMs: 10_000 });
+    proc.write("\x1b");
+    await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
+    await settle(screen);
+    expect(await screen.text()).not.toContain("Pick a look");
+    expect(JSON.parse(await readFile(path.join(configDir, "state.json"), "utf8"))).toMatchObject({ onboarded: true, name: "Ada" });
+  }, 120_000);
 
   // `tee` writes (here to /dev/null), so it asks; a bare `echo` is read-only and would not.
   it("streams a turn, asks before running a command, and runs it once allowed", async () => {

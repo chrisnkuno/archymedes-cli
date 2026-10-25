@@ -218,7 +218,10 @@ FRIDAY_LIVE=1 go test ./cmd/friday -run Live -v  # the Go engine against your ow
 The interface is a small desktop. The top bar has a `◇` start menu (ctrl+space finds any app,
 action, session or file) and a tab per open window. The dock along the bottom has every app and its
 key: F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
-F10 Changes, F12 Gallery. Click or press.
+F10 Changes, F12 Gallery. Click or press. `/theme`, `/wallpaper`, `/mode`, Providers and the
+Settings sections are grids of square tiles, each a preview, moved through with all four arrows. In lists ↑/↓ move and enter picks; the side arrows
+step a setting's choice in place, turn Gallery pictures, and switch the model list between all,
+free and ready.
 
 Changes is the working tree against the last commit, file by file: each file's lines added and
 removed, and the selected file's diff with old and new line numbers. It reads again when a turn
@@ -226,17 +229,20 @@ ends, so the agent's edits show as they land. Models lists every model of every 
 from the providers, OpenRouter's whole catalog and every free model included. Tab narrows it to the
 free ones or the ones ready to use; a model whose provider has no key yet shows the key it needs.
 
-The home screen turns slowly through photographs of Archimedes, the Greek world and mathematics
-beside the mark (from Unsplash, shipped in the binary and credited on screen; see
-[`internal/gallery/CREDITS.md`](internal/gallery/CREDITS.md)). A click on it, or F12, opens the
-Gallery: the built-in copy beside the full-resolution original loaded live from Unsplash's image
-CDN. It draws with the sharpest the terminal has, found by asking it. That is Kitty graphics
+The home screen turns slowly through pictures in three themes: antiquity (Archimedes, the Greek
+world, mathematics), sci-fi, and abstract. They are photographs from Unsplash, shipped in the
+binary and credited on screen (see [`internal/gallery/CREDITS.md`](internal/gallery/CREDITS.md)),
+and pictures Friday draws in code, credited "drawn by Friday". `/wallpaper` picks one, lets one
+theme take turns, or turns them off. A click on the picture, or F12, opens the Gallery: the
+built-in copy beside the full-resolution original loaded live from Unsplash's image CDN. It draws with the sharpest the terminal has, found by asking it. That is Kitty graphics
 (kitty, Ghostty, WezTerm), else Sixel (Windows Terminal 1.22+, foot, mlterm, VS Code with images
 on). Otherwise it uses half-block glyphs through ntcharts' picture component, two pixels a cell, so
 they look pixelated at any size. g switches between the ways the terminal can draw; f changes the fit.
 The home screen's photo is drawn the same way: in Sixel where the terminal draws it (asked once at
-start), in glyphs otherwise. A first run says what to do in three
-steps and offers requests to start from — tab puts one in the input, and when the project has
+start), in glyphs otherwise. A first run opens a walkthrough of six steps: a name for the
+greeting, kept on the machine; a theme and a mode, picked from tiles; four keys tried in place;
+the connection and the install count; a first request. `/welcome` opens it again. The home
+screen then says what to do in three steps and offers requests to start from — tab puts one in the input, and when the project has
 uncommitted changes the first offer is to review them. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
 call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
 is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the
@@ -278,7 +284,7 @@ bun run release:check
 The release check runs every test (TypeScript, Go and the terminal suites), type-checks, builds,
 and validates the packed CLI in a separate consumer project: the Go interface, the agent behind
 it, and what an install without the interface says. See the
-[release assessment](docs/RELEASE_ASSESSMENT.md) for findings, priorities and publishing requirements.
+[release procedure](docs/RELEASING.md) for building and publishing.
 
 ## Continuing development
 

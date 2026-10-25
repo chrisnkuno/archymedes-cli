@@ -210,6 +210,7 @@ Without opening a session:
   friday doctor                 check your keys, connection and setup, and say what is wrong
   friday update                 install the newest Friday
   friday login | logout         sign in to (or out of) your archymedes.xyz account
+  friday account | keys         who this computer is linked as; the provider keys your account holds
   friday acp                    talk to an editor (Zed, JetBrains) instead of a terminal
 
 How much Friday may do on its own (shift+tab switches in a session):

@@ -22,7 +22,7 @@ const wallpaperTurns = "turns:"
 // puts back what was there, enter keeps it and remembers it (config.State.Wallpaper).
 type wallpaperPicker struct {
 	choices  []string // "" (take turns), photo ids, wallpaperNone
-	cursor   int
+	grid     tileGrid // one tile per choice, in the same order
 	original string
 }
 
@@ -47,7 +47,81 @@ func newWallpaperPicker(m *Model) *wallpaperPicker {
 			cursor = i
 		}
 	}
-	return &wallpaperPicker{choices: choices, cursor: cursor, original: m.wallChoice}
+	w := &wallpaperPicker{choices: choices, original: m.wallChoice}
+	for _, c := range choices {
+		w.grid.tiles = append(w.grid.tiles, tile{id: c, caption: w.caption(c), art: wallpaperArt(c)})
+	}
+	w.grid.cursor = cursor
+	return w
+}
+
+// caption is a tile's one line: ↻ for taking turns, the picture's title otherwise.
+func (w *wallpaperPicker) caption(choice string) string {
+	switch {
+	case choice == "":
+		return "↻ all themes"
+	case choice == wallpaperNone:
+		return "none"
+	}
+	if theme, ok := strings.CutPrefix(choice, wallpaperTurns); ok {
+		return "↻ " + gallery.ThemeLabel(theme)
+	}
+	p, _ := gallery.ByID(choice)
+	return p.Title
+}
+
+// wallpaperArt draws a choice's tile: the picture itself, or for taking turns a 2×2 mosaic of what
+// takes turns; none is left blank, as the screen would be.
+func wallpaperArt(choice string) func(*Model, int, int) []string {
+	return func(m *Model, cols, rows int) []string {
+		if choice == wallpaperNone {
+			return nil
+		}
+		if p, ok := gallery.ByID(choice); ok {
+			return m.photoLines(p, cols, rows)
+		}
+		var picks []gallery.Photo
+		if theme, ok := strings.CutPrefix(choice, wallpaperTurns); ok {
+			for _, p := range gallery.Photos {
+				if p.Theme == theme && len(picks) < 4 {
+					picks = append(picks, p)
+				}
+			}
+		} else {
+			for _, theme := range []string{"greek", "scifi", "abstract", "math"} {
+				for _, p := range gallery.Photos {
+					if p.Theme == theme {
+						picks = append(picks, p)
+						break
+					}
+				}
+			}
+		}
+		return mosaic(m, picks, cols, rows)
+	}
+}
+
+// mosaic is up to four pictures in two rows of two.
+func mosaic(m *Model, picks []gallery.Photo, cols, rows int) []string {
+	if len(picks) == 0 {
+		return nil
+	}
+	left, top := cols/2, rows/2
+	cell := func(i, w, h int) []string {
+		lines := m.photoLines(picks[i%len(picks)], w, h)
+		for len(lines) < h {
+			lines = append(lines, strings.Repeat(" ", w))
+		}
+		return lines
+	}
+	var out []string
+	for half, h := range []int{top, rows - top} {
+		a, b := cell(half*2, left, h), cell(half*2+1, cols-left, h)
+		for i := range h {
+			out = append(out, a[i]+b[i])
+		}
+	}
+	return out
 }
 
 // setWallpaper shows choice now and remembers it for the next start.
@@ -98,22 +172,64 @@ func (w *wallpaperPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) 
 		m.wallChoice = w.original // a preview is not a choice
 		return true, nil
 	case "enter":
-		title, _ := w.label(w.choices[w.cursor])
-		return true, m.setWallpaper(w.choices[w.cursor], "Wallpaper: "+title)
-	case "up", "k", "shift+tab":
-		w.cursor = (w.cursor - 1 + len(w.choices)) % len(w.choices)
-	case "down", "j", "tab":
-		w.cursor = (w.cursor + 1) % len(w.choices)
+		title, _ := w.label(w.choices[w.grid.cursor])
+		return true, m.setWallpaper(w.choices[w.grid.cursor], "Wallpaper: "+title)
+	case "tab":
+		w.grid.cursor = w.groupStart(1)
+	case "shift+tab":
+		w.grid.cursor = w.groupStart(-1)
 	default:
-		return false, nil
+		_, h := tileOuter()
+		if !w.grid.move(msg.String(), max((m.height-8)/h, 1)) {
+			return false, nil
+		}
 	}
-	m.wallChoice = w.choices[w.cursor]
+	m.wallChoice = w.choices[w.grid.cursor]
 	return false, nil
+}
+
+// group is which run of the list a choice is in: the ways of taking turns, one theme's pictures,
+// or none. tab and shift+tab move between groups.
+func (w *wallpaperPicker) group(choice string) string {
+	switch {
+	case choice == "" || strings.HasPrefix(choice, wallpaperTurns):
+		return "turns"
+	case choice == wallpaperNone:
+		return wallpaperNone
+	}
+	p, _ := gallery.ByID(choice)
+	return p.Theme
+}
+
+// groupStart is the first choice of the next group (by 1) or of this one's predecessor (by -1),
+// wrapping around; shift+tab inside a group goes to its start first.
+func (w *wallpaperPicker) groupStart(by int) int {
+	n := len(w.choices)
+	here := w.group(w.choices[w.grid.cursor])
+	start := w.grid.cursor
+	for start > 0 && w.group(w.choices[start-1]) == here {
+		start--
+	}
+	if by < 0 {
+		if start != w.grid.cursor {
+			return start
+		}
+		prev := (start - 1 + n) % n
+		for prev > 0 && w.group(w.choices[prev-1]) == w.group(w.choices[prev]) {
+			prev--
+		}
+		return prev
+	}
+	i := w.grid.cursor
+	for i < n && w.group(w.choices[i]) == here {
+		i++
+	}
+	return i % n
 }
 
 func (w *wallpaperPicker) rowCount() int { return len(w.choices) }
 func (w *wallpaperPicker) choose(m *Model, i int) tea.Cmd {
-	w.cursor = i
+	w.grid.cursor = i
 	m.overlay = nil
 	title, _ := w.label(w.choices[i])
 	return m.setWallpaper(w.choices[i], "Wallpaper: "+title)
@@ -121,22 +237,13 @@ func (w *wallpaperPicker) choose(m *Model, i int) tea.Cmd {
 
 func (w *wallpaperPicker) view(m *Model) string {
 	th := m.th
-	width := overlayWidth(m, 64)
+	width := gridWidth(m, 4)
 	inner := max(width-4, 10)
-	// As many rows as fit, scrolled to keep the cursor in view.
-	room := max(m.height-8, 3)
-	first := min(max(w.cursor-room/2, 0), max(len(w.choices)-room, 0))
-	var b strings.Builder
-	for i := first; i < min(first+room, len(w.choices)); i++ {
-		title, detail := w.label(w.choices[i])
-		text := ansi.Truncate(title, inner-2, "…")
-		rest := ansi.Truncate(" · "+detail, max(inner-2-ansi.StringWidth(text), 0), "…")
-		row := th.Body.Render("  "+text) + th.Faint.Render(rest)
-		if i == w.cursor {
-			row = th.Title.Render("› "+text) + th.Faint.Render(rest)
-		}
-		b.WriteString(mark(m.zones.dialog, rowID(i), row) + "\n")
-	}
-	b.WriteString(th.Faint.Render("↑/↓ preview · enter keep · esc revert · w in the Gallery"))
-	return frame(th, "Wallpaper", b.String(), width)
+	grid := w.grid.view(m, inner, max(m.height-8, 1))
+	// The tile under the cursor in full: its title, who made it, its theme.
+	title, detail := w.label(w.choices[w.grid.cursor])
+	text := ansi.Truncate(title, inner, "…")
+	about := th.Strong.Render(text) + th.Faint.Render(ansi.Truncate(" · "+detail, max(inner-ansi.StringWidth(text), 0), "…"))
+	hint := th.Faint.Render(ansi.Truncate("↑↓←→ preview · tab next theme · enter keep · esc revert", inner, "…"))
+	return frame(th, "Wallpaper", grid+"\n"+about+"\n"+hint, width)
 }

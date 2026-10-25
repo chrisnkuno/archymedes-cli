@@ -108,6 +108,32 @@ func (m *Model) openGallery(index int) tea.Cmd {
 		picture.QueryKittySupport(), g.builtIn.Init(), g.live.Init(), g.show(m, index))
 }
 
+// themeStart is the first picture of the next run of another theme (by 1), or of this run, then
+// the one before (by -1), wrapping: ↑/↓ move theme by theme, ←/→ picture by picture.
+func (g *galleryApp) themeStart(by int) int {
+	n := len(gallery.Photos)
+	theme := func(i int) string { return gallery.Pick(i).Theme }
+	start := g.index
+	for start > 0 && theme(start-1) == theme(g.index) {
+		start--
+	}
+	if by < 0 {
+		if start != g.index {
+			return start
+		}
+		prev := (start - 1 + n) % n
+		for prev > 0 && theme(prev-1) == theme(prev) {
+			prev--
+		}
+		return prev
+	}
+	i := g.index
+	for i < n && theme(i) == theme(g.index) {
+		i++
+	}
+	return i % n
+}
+
 // show switches both panes to photo index.
 func (g *galleryApp) show(m *Model, index int) tea.Cmd {
 	n := len(gallery.Photos)
@@ -186,6 +212,12 @@ func (g *galleryApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return false, g.show(m, g.index+1)
 	case "left", "h", "p":
 		return false, g.show(m, g.index-1)
+	case "down", "j":
+		return false, g.show(m, g.themeStart(1))
+	case "up", "k":
+		return false, g.show(m, g.themeStart(-1))
+	case "home":
+		return false, g.show(m, 0)
 	case "f":
 		next := nextFit(g.builtIn.Fit())
 		return false, tea.Batch(g.builtIn.SetFit(next), g.live.SetFit(next))
@@ -274,7 +306,7 @@ func (g *galleryApp) pane(m *Model, l galleryLayout, label, content string, p ga
 }
 
 func (g *galleryApp) footer() string {
-	parts := []string{"drawn as " + g.mode.String(), "fit " + fitName(g.builtIn.Fit()), "←/→ photo", "w wallpaper", "f fit"}
+	parts := []string{"drawn as " + g.mode.String(), "fit " + fitName(g.builtIn.Fit()), "←/→ picture", "↑/↓ theme", "w wallpaper", "f fit"}
 	if len(g.modes()) > 1 {
 		parts = append(parts, "g how it draws")
 	}

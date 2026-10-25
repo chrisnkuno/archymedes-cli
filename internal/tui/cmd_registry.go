@@ -27,7 +27,7 @@ var commands []command
 func init() {
 	commands = []command{
 		{"help", "", "Show commands and keys", (*Model).cmdHelp},
-		{"mode", "[plan|build|auto|defender]", "Show or change what the agent may do (shift+tab cycles them)", (*Model).cmdMode},
+		{"mode", "[plan|build|auto|defender]", "Pick what the agent may do, from four tiles (shift+tab cycles them)", (*Model).cmdMode},
 		{"model", "[name]", "Pick a model, or switch straight to one; the conversation carries on", (*Model).cmdModel},
 		{"models", "", "Every model you can switch to, with prices", func(m *Model, _ string) tea.Cmd { return m.cmdModel("") }},
 		{"resume", "", "Pick an earlier session in this project and continue it", (*Model).cmdResume},
@@ -48,8 +48,9 @@ func init() {
 		{"cost", "", "What this session has spent, and on what", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("cost", "") }},
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
-		{"gallery", "", "The photographs, full size: built in and live from Unsplash", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
+		{"gallery", "", "The pictures, full size: built-in photos, live originals from Unsplash, and art drawn by code", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openOverlay(newWallpaperPicker(m)); return nil }},
+		{"welcome", "", "The first-run walkthrough again: name, look, mode, keys, connection, a first request", func(m *Model, _ string) tea.Cmd { return m.openOnboarding() }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
@@ -150,7 +151,8 @@ func (m *Model) cmdHelp(string) tea.Cmd {
 
 func (m *Model) cmdMode(arg string) tea.Cmd {
 	if arg == "" {
-		return m.toast(toastInfo, fmt.Sprintf("Mode: %s — %s", m.mode, modeBlurb[m.mode]))
+		m.openOverlay(newModePicker(m))
+		return nil
 	}
 	return m.setMode(strings.ToLower(arg))
 }

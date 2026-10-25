@@ -22,7 +22,8 @@ type providersApp struct {
 	loaded  bool
 	err     string
 	cursor  int
-	pending string // what is in flight, shown while it is
+	pending string   // what is in flight, shown while it is
+	grid    tileGrid // the providers as tiles; its cursor is cursor
 }
 
 type providersLoadedMsg struct {
@@ -98,12 +99,10 @@ func (p *providersApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		return true, nil
-	case "up", "k":
-		p.cursor--
-		p.current()
-		return false, nil
-	case "down", "j":
-		p.cursor++
+	case "up", "k", "down", "j", "left", "h", "right", "l", "home", "end", "pgup", "pgdown":
+		p.grid.cursor = p.cursor
+		p.grid.move(msg.String(), 1)
+		p.cursor = p.grid.cursor
 		p.current()
 		return false, nil
 	case "r":
@@ -166,13 +165,39 @@ func (m *Model) defaultProviderSaved(msg defaultProviderMsg) tea.Cmd {
 }
 
 func (p *providersApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
-	for i := range p.rows {
-		if m.zones.frame.Get(fmt.Sprintf("provider:%d", i)).InBounds(msg) {
-			p.cursor = i
-			return nil
-		}
+	if i, ok := p.grid.clicked(m, msg); ok {
+		p.cursor = i
 	}
 	return nil
+}
+
+// tiles is each provider as a tile: whether it runs this session, is ready or needs something,
+// and the model it would use.
+func (p *providersApp) tiles(m *Model) []tile {
+	th := m.th
+	var out []tile
+	for _, row := range p.rows {
+		// The full name of what it needs is under the grid; a tile says which kind.
+		symbol, tint, status := "○", th.Muted, "needs set-up"
+		switch {
+		case len(row.Login) > 0:
+			status = "needs sign-in"
+		case row.KeyVariable != "":
+			status = "needs a key"
+		}
+		switch {
+		case row.ID == m.session.Info.Provider:
+			symbol, tint, status = "●", th.Success, "in use"
+		case row.Configured:
+			symbol, tint, status = "✓", th.Success, "ready"
+		}
+		if row.IsDefault {
+			status += " · default"
+		}
+		lines := append(wrapTo(status, tileArtCols, 2), row.Model)
+		out = append(out, tile{id: row.ID, caption: row.Label, art: iconArt(symbol, tint, lines...)})
+	}
+	return out
 }
 
 func (p *providersApp) view(m *Model) string {
@@ -187,7 +212,7 @@ func (p *providersApp) view(m *Model) string {
 	if p.loaded {
 		head += th.Faint.Render(fmt.Sprintf("  %d of %d ready", ready, len(p.rows)))
 	}
-	lines := []string{" " + head, " " + th.Faint.Render("↑/↓ move · enter connect or pick a model · e key & URL · d make default · r refresh · esc close")}
+	lines := []string{" " + head, " " + th.Faint.Render("↑↓←→ move · enter connect or pick a model · e key & URL · d make default · r refresh · esc close")}
 	switch {
 	case !p.loaded:
 		lines = append(lines, "", " "+m.spin.View()+th.Faint.Render(" asking the agent…"))
@@ -196,30 +221,12 @@ func (p *providersApp) view(m *Model) string {
 		lines = append(lines, "", " "+th.Bad.Render(ansi.Truncate(p.err, width-2, "…")))
 		return strings.Join(fitLines(lines, width, height), "\n")
 	}
-	lines = append(lines, "")
-	labelWidth := min(26, max(width/4, 12))
-	modelWidth := min(30, max(width/4, 12))
-	for i, row := range p.rows {
-		dot, state := th.Faint.Render("○ "), th.Faint
-		status := "needs " + strings.Join(row.Missing, ", ")
-		switch {
-		case row.ID == m.session.Info.Provider:
-			dot, state, status = th.OK.Render("● "), th.OK, "in use"
-		case row.Configured:
-			dot, state, status = th.OK.Render("✓ "), th.Body, "ready"
-		}
-		if row.IsDefault {
-			status += " · default"
-		}
-		label := padRight(ansi.Truncate(row.Label, labelWidth, "…"), labelWidth+1)
-		model := padRight(ansi.Truncate(row.Model, modelWidth, "…"), modelWidth+1)
-		line := dot + state.Render(label) + th.Faint.Render(model) + state.Render(status)
-		if i == p.cursor {
-			line = th.Title.Render("› ") + line
-		} else {
-			line = "  " + line
-		}
-		lines = append(lines, mark(m.zones.frame, fmt.Sprintf("provider:%d", i), ansi.Truncate(" "+line, width, "…")))
+	p.current()
+	p.grid.tiles, p.grid.cursor, p.grid.inWindow = p.tiles(m), p.cursor, true
+	// The grid gets what the description under it leaves.
+	grid := p.grid.view(m, max(width-2, 1), max(height-len(lines)-8, 1))
+	for _, line := range strings.Split(grid, "\n") {
+		lines = append(lines, " "+line)
 	}
 	if row := p.current(); row != nil {
 		lines = append(lines, "", " "+th.Strong.Render(row.Label))

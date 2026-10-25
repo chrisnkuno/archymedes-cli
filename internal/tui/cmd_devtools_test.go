@@ -185,7 +185,7 @@ func TestTheProvidersAppActsOnTheSelectedProvider(t *testing.T) {
 	}
 	run(m, m.runAction("providers"))
 	s := screen(m)
-	for _, want := range []string{"Providers", "2 of 4 ready", "in use", "needs OPENROUTER_API_KEY", "Get a key: https://openrouter.ai/keys"} {
+	for _, want := range []string{"Providers", "2 of 4 ready", "in use", "needs a key", "Needs OPENROUTER_API_KEY", "Get a key: https://openrouter.ai/keys"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("lacks %q:\n%s", want, s)
 		}
@@ -197,8 +197,8 @@ func TestTheProvidersAppActsOnTheSelectedProvider(t *testing.T) {
 	}
 	m.overlay = nil
 	// enter on a ready provider lists its models, fetched from it; enter switches and remembers
-	press(m, tea.KeyDown, 0)
-	press(m, tea.KeyDown, 0)
+	press(m, tea.KeyRight, 0) // the tiles run left to right
+	press(m, tea.KeyRight, 0)
 	agent.providerModels = []string{"llama-4", "openai/gpt-oss-120b"}
 	run(m, press(m, tea.KeyEnter, 0))
 	if d := m.connectDialog(); d == nil || d.step != stepModels || !strings.Contains(screen(m), "llama-4") {

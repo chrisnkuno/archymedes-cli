@@ -118,6 +118,10 @@ func (p *startMenu) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
 	case msg.String() == "down" || msg.String() == "ctrl+j" || msg.String() == "tab":
 		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
+	case msg.String() == "pgup":
+		p.cursor = max(p.cursor-10, 0)
+	case msg.String() == "pgdown":
+		p.cursor = max(min(p.cursor+10, len(p.shown)-1), 0)
 	case msg.String() == "enter":
 		if len(p.shown) == 0 {
 			return false, nil

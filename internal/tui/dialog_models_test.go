@@ -86,3 +86,39 @@ func TestFreeModelFitLabelsAndWarnings(t *testing.T) {
 		t.Error("a verified model should be switched to without a warning")
 	}
 }
+
+func TestLeftAndRightSwitchTheModelViewsUntilSomethingIsTyped(t *testing.T) {
+	m, _ := newTestModel(t)
+	typeText(m, "/model")
+	run(m, press(m, tea.KeyEnter, 0))
+	p := m.overlay.(*modelPicker)
+	press(m, tea.KeyRight, 0)
+	if pickerViews[p.narrow] != "free" {
+		t.Fatalf("→ = %s", pickerViews[p.narrow])
+	}
+	press(m, tea.KeyLeft, 0)
+	press(m, tea.KeyLeft, 0)
+	if pickerViews[p.narrow] != "ready" {
+		t.Fatalf("← should wrap: %s", pickerViews[p.narrow])
+	}
+	typeText(m, "gpt")
+	press(m, tea.KeyLeft, 0) // now it moves in the text
+	if pickerViews[p.narrow] != "ready" || p.filter.Value() != "gpt" {
+		t.Fatalf("with a filter, ← is for the text: view %s, filter %q", pickerViews[p.narrow], p.filter.Value())
+	}
+}
+
+func TestTheThemePickerPreviewsWithLeftAndRight(t *testing.T) {
+	m, _ := newTestModel(t)
+	before := m.th.Name
+	p := newThemePicker(m)
+	m.openOverlay(p)
+	press(m, tea.KeyRight, 0)
+	if m.th.Name == before || m.th.Name != p.names[p.grid.cursor] {
+		t.Fatalf("→ should preview the next theme: %s", m.th.Name)
+	}
+	press(m, tea.KeyLeft, 0)
+	if m.th.Name != before {
+		t.Fatalf("← should come back: %s", m.th.Name)
+	}
+}

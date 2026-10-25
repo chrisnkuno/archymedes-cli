@@ -116,6 +116,7 @@ func TestStartMenuFindsAppsActionsSessionsAndFiles(t *testing.T) {
 
 func TestKeysAppRebindsRefusesAndResetsAndTheChangeSurvivesARestart(t *testing.T) {
 	dir := t.TempDir()
+	config.SaveState(dir, config.State{Onboarded: true})
 	agent := &fakeAgent{messages: make(chan any, 16)}
 	newModel := func() *Model {
 		m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})

@@ -99,34 +99,5 @@ pseudo-terminal coverage. Keep these foundations.
 
 ## Release procedure
 
-Validation for 2.2.0 passed on 2026-09-14 after the fixed-workspace corrections:
-180 test files / 2,906 passing tests and one skipped (including PTY scenarios), TypeScript checking,
-core and CLI package builds, and `git diff --check`. The final 28-entry CLI archive passed isolated
-Bun installation under Node 22.22.0, version/help/provider-listing checks, and external TUI dependency
-imports. The named-session test now captures the requested record ID directly instead of assuming
-wall-clock timestamp order identifies the first thread. This validation did not call a live model
-provider. The archive checksum is stored beside it in `artifacts/archymedes-cli-2.2.0.tgz.sha256`.
-
-```sh
-bun install --frozen-lockfile
-bun run release:check
-# Publish the same archive that the isolated consumer test inspected:
-bun publish ./artifacts/archymedes-cli-2.2.0.tgz --access public
-```
-
-`verify:package` installs the archive with Bun. The final 2.2.0 archive was also installed with npm
-in a separate temporary consumer on 2026-09-14; installation and Node version/help/provider-listing
-checks passed. Unavailable optional native sidecars do not block this CLI installation. Publishing
-those sidecar packages remains a separate release with its own artifacts.
-
-The archive path follows the CLI package version. Update it if the manifest version changes.
-The root package stays private. Publishing a reviewed archive avoids rerunning a build between
-verification and upload. Bun documents this workflow at https://bun.sh/docs/pm/cli/publish.
-
-Before announcing availability, verify registry metadata and install the published version in a
-fresh project. The local archive check does not prove registry publication, real provider access,
-native optional sidecar availability, hosted billing, or that GitHub's OS matrix has executed.
-
-2.2.0 was published to the npm registry on 2026-09-14 (`bun publish ./artifacts/archymedes-cli-2.2.0.tgz --access public`,
-browser-based auth). A clean `npm install archymedes-cli@2.2.0` in a fresh directory afterward resolved
-and ran `--version`/`--help` correctly, confirming registry availability.
+The procedure above was for 2.2.0. The current one, with the platform packages, is
+[Releasing Friday](RELEASING.md).

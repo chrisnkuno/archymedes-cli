@@ -17,14 +17,14 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 	if _, ok := m.overlay.(*wallpaperPicker); !ok || !strings.Contains(screen(m), "Take turns") {
 		t.Fatalf("no picker:\n%s", screen(m))
 	}
-	press(m, tea.KeyDown, 0) // abstract only, taking turns: shown at once
+	press(m, tea.KeyRight, 0) // abstract only, taking turns: shown at once
 	if m.wallChoice != "turns:abstract" || m.homePhoto().Theme != "abstract" || !strings.Contains(screen(m), "Take turns: abstract only") {
 		t.Fatalf("preview = %q, %s", m.wallChoice, m.homePhoto().ID)
 	}
 	for range 3 {
-		press(m, tea.KeyDown, 0) // past sci-fi and antiquity only, to the first single picture
+		press(m, tea.KeyRight, 0) // past sci-fi and antiquity only, to the first single picture
 	}
-	first := m.overlay.(*wallpaperPicker).choices[m.overlay.(*wallpaperPicker).cursor]
+	first := m.overlay.(*wallpaperPicker).choices[m.overlay.(*wallpaperPicker).grid.cursor]
 	if p, ok := gallery.ByID(first); !ok || p.Theme != "abstract" || m.homePhoto().ID != first {
 		t.Fatalf("the first single picture should be abstract: %q", first)
 	}
@@ -35,7 +35,7 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 
 	m.welcome() // saved first, so the wallpaper saved after it must keep it
 	m.openOverlay(newWallpaperPicker(m))
-	press(m, tea.KeyUp, 0) // wraps to None
+	press(m, tea.KeyLeft, 0) // wraps to None
 	press(m, tea.KeyEnter, 0)
 	if m.overlay != nil || m.wallChoice != wallpaperNone || !m.wallpaperOff() || config.LoadState(dir).Wallpaper != wallpaperNone {
 		t.Fatalf("None was not kept: %q", m.wallChoice)
@@ -62,5 +62,44 @@ func TestTheGalleryMakesThePhotoInFrontTheWallpaper(t *testing.T) {
 	m.photoIndex += 5 // a kept wallpaper does not take turns
 	if m.homePhoto().ID != want.ID {
 		t.Fatal("the kept wallpaper turned")
+	}
+}
+
+func TestTheWallpaperGridMovesInTwoDimensionsAndTabJumpsTheme(t *testing.T) {
+	m, _ := firstRunModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	w := newWallpaperPicker(m)
+	m.openOverlay(w)
+	screen(m) // lays the grid out: its columns follow the width
+	cols := w.grid.cols
+	if cols < 2 {
+		t.Fatalf("a grid at 100 columns should have several tiles a row: %d", cols)
+	}
+	press(m, tea.KeyDown, 0)
+	if w.grid.cursor != cols || m.wallChoice != w.choices[cols] {
+		t.Fatalf("↓ moves a row and previews: cursor %d, cols %d", w.grid.cursor, cols)
+	}
+	press(m, tea.KeyUp, 0)
+	press(m, tea.KeyUp, 0) // the top row stays put
+	if w.grid.cursor != 0 {
+		t.Fatalf("↑ from the top row: %d", w.grid.cursor)
+	}
+	groups := []string{}
+	for range 6 {
+		press(m, tea.KeyTab, 0)
+		groups = append(groups, w.group(w.choices[w.grid.cursor]))
+	}
+	if strings.Join(groups, ",") != "abstract,scifi,greek,math,"+wallpaperNone+",turns" {
+		t.Fatalf("tab visits = %v", groups)
+	}
+	press(m, tea.KeyEnd, 0)
+	if m.wallChoice != wallpaperNone {
+		t.Fatal("end goes to None, previewed")
+	}
+	for _, want := range []string{"↻ all themes", "↻ abstract", "tab next theme"} {
+		press(m, tea.KeyHome, 0)
+		if !strings.Contains(screen(m), want) {
+			t.Fatalf("the grid lacks %q:\n%s", want, screen(m))
+		}
 	}
 }

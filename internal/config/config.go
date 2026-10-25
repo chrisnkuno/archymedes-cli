@@ -130,6 +130,10 @@ type State struct {
 	Wallpaper string `json:"wallpaper,omitempty"`
 	// TourHidden is set when the tour drawer on the home screen was folded away.
 	TourHidden bool `json:"tourHidden,omitempty"`
+	// Onboarded is set once the first-run walkthrough ended, finished or skipped.
+	Onboarded bool `json:"onboarded,omitempty"`
+	// Name is what the person asked to be called; only the greeting uses it, on this machine.
+	Name string `json:"name,omitempty"`
 }
 
 // UpdateState changes what change touches and keeps the rest: each field is written by a different

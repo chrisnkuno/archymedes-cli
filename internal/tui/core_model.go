@@ -154,6 +154,7 @@ type Model struct {
 	// First-run guidance (home_welcome.go): whether the first request was ever sent, whether this
 	// session sent it (its first turn ends with a tip), and how many files the project has changed.
 	welcomed       bool
+	firstRun       firstRunState
 	firstTurnTip   bool
 	projectChanged int
 	toasts         []toast
@@ -235,6 +236,7 @@ func New(opts Options) *Model {
 	m.welcomed = opts.ConfigDir == "" || state.Welcomed
 	m.wallChoice = state.Wallpaper
 	m.tourOpen = !state.TourHidden
+	m.beginFirstRun(state)
 	m.input = newComposer(th)
 	m.scroll = newScroller()
 	m.stats = newSessionStats()
@@ -300,7 +302,7 @@ func (m *Model) Init() tea.Cmd {
 		return startedMsg{agent, status}
 		// What the terminal can draw: its cell size, whether it draws Sixel (DA1), its window in pixels.
 	}, tea.RequestBackgroundColor, picture.RequestCellSize(), tea.Raw(ansi.RequestPrimaryDeviceAttributes+ansi.WindowOp(14)),
-		m.animate(), m.sayStartupNote(), limitTick())
+		m.animate(), m.sayStartupNote(), limitTick(), m.onboardFocus())
 }
 
 func (m *Model) sayStartupNote() tea.Cmd {
@@ -445,12 +447,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.expireToast(msg.id)
 		return m, nil
 	case startedMsg:
-		m.agent = msg.agent
-		m.forward(m.agent)
-		if msg.status.Configured {
-			return m, m.openSession()
-		}
-		return m, m.openFirstRun(msg.status)
+		return m, m.agentStarted(msg)
 	case shellDoneMsg:
 		return m, m.shellDone(msg)
 	case openedMsg:
@@ -471,9 +468,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case limitTickMsg:
 		return m, m.limitTicked()
 	case progress.FrameMsg:
-		var cmd tea.Cmd
-		m.limitBar, cmd = m.limitBar.Update(msg)
-		return m, cmd
+		return m, m.barFrame(msg)
+	case onboardSavedMsg:
+		return m, m.onboardSaved(msg)
 	case editedMsg:
 		return m, m.edited(msg)
 	case connectProvidersMsg:
@@ -561,6 +558,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.queue = append([]string{m.opts.Prompt}, m.queue...)
 		}
 		cmds := []tea.Cmd{m.animate()}
+		cmds = append(cmds, m.modeChosenEarlier())
 		if first {
 			cmds = append(cmds, m.readProjectState())
 			// Once, in the background, after the session is usable: never on the way to the prompt.

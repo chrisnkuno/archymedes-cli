@@ -31,6 +31,10 @@ func openSettingsApp(t *testing.T) (*Model, *fakeAgent, *settingsApp) {
 	if s == nil || s.list == nil {
 		t.Fatalf("settings did not load: %+v", s)
 	}
+	press(m, tea.KeyEnter, 0) // the first tile: every setting
+	if s.section != settingsAll {
+		t.Fatalf("enter on the first tile should open every setting: %q", s.section)
+	}
 	return m, agent, s
 }
 
@@ -124,5 +128,81 @@ func TestSettingsReplaceTheHandOffToTheTerminalMenu(t *testing.T) {
 	_ = cmd
 	if m.settingsWindow() == nil {
 		t.Fatal("/settings should open the in-app window")
+	}
+}
+
+func TestArrowsStepAChoiceInPlaceAndOpenATextRow(t *testing.T) {
+	m, agent, s := openSettingsApp(t)
+	run(m, press(m, tea.KeyRight, 0)) // Theme: blue → parchment, saved without opening
+	if s.editing || len(agent.set) == 0 || agent.set[len(agent.set)-1] != "ARCHYMEDES_THEME=parchment" || m.th.Name != "parchment" {
+		t.Fatalf("→ should save the next choice: editing=%v saved=%v theme=%s", s.editing, agent.set, m.th.Name)
+	}
+	run(m, press(m, tea.KeyRight, 0)) // wraps to the first
+	if agent.set[len(agent.set)-1] != "ARCHYMEDES_THEME=archymedes-blue" {
+		t.Fatalf("→ past the last should wrap: %v", agent.set)
+	}
+	run(m, press(m, tea.KeyLeft, 0))
+	if agent.set[len(agent.set)-1] != "ARCHYMEDES_THEME=parchment" {
+		t.Fatalf("← should step back: %v", agent.set)
+	}
+	saved := len(agent.set)
+	press(m, tea.KeyDown, 0) // the API key: ← does nothing, → opens it
+	press(m, tea.KeyLeft, 0)
+	if s.editing || len(agent.set) != saved {
+		t.Fatal("← on a text row should leave it alone")
+	}
+	press(m, tea.KeyRight, 0)
+	if !s.editing {
+		t.Fatal("→ on a text row should open it")
+	}
+}
+
+func TestArrowsMoveInsideAnOpenChoiceList(t *testing.T) {
+	m, agent, _ := openSettingsApp(t)
+	press(m, tea.KeyEnter, 0)
+	press(m, tea.KeyRight, 0)
+	run(m, press(m, tea.KeyEnter, 0))
+	if agent.set[len(agent.set)-1] != "ARCHYMEDES_THEME=parchment" {
+		t.Fatalf("→ in the open list should move to the next choice: %v", agent.set)
+	}
+}
+
+func TestStepFromAnUnsetChoiceStartsAtItsDefault(t *testing.T) {
+	m, agent, s := openSettingsApp(t)
+	s.list.Rows[0].Value, s.list.Rows[0].IsSet = "", false
+	s.list.Rows[0].Choices = []acp.SettingChoice{{Value: "a", Label: "A"}, {Value: "b", Label: "B (default)"}, {Value: "c", Label: "C"}}
+	run(m, press(m, tea.KeyRight, 0))
+	if agent.set[len(agent.set)-1] != "ARCHYMEDES_THEME=c" {
+		t.Fatalf("→ from an unset row should go past its default: %v", agent.set)
+	}
+}
+
+func TestSettingsOpenOnTilesOfSectionsAndEscComesBack(t *testing.T) {
+	m, agent := unconfigured(t)
+	m.overlay = nil
+	m.phase = ready
+	m.session.ID = "s1"
+	agent.settings = settingsFixture()
+	run(m, m.openSettings())
+	s := m.settingsWindow()
+	out := screen(m)
+	for _, want := range []string{"All settings", "Appearance", "Providers", "1 setting", "3 settings", "2 set"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the home grid lacks %q:\n%s", want, out)
+		}
+	}
+	press(m, tea.KeyRight, 0) // Appearance
+	press(m, tea.KeyRight, 0) // Providers
+	press(m, tea.KeyEnter, 0)
+	if s.section != "Providers" || strings.Contains(screen(m), "archymedes-blue") || !strings.Contains(screen(m), "OpenRouter API key") {
+		t.Fatalf("enter should open only Providers: section %q\n%s", s.section, screen(m))
+	}
+	press(m, tea.KeyEscape, 0)
+	if s.section != "" || m.settingsWindow() == nil {
+		t.Fatal("esc in a section should come back to the tiles, not close")
+	}
+	typeText(m, "/theme") // a search from the tiles looks through every section
+	if !strings.Contains(screen(m), "archymedes-blue") {
+		t.Fatalf("search from home:\n%s", screen(m))
 	}
 }

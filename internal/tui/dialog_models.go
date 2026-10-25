@@ -200,9 +200,20 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
 	case "down", "ctrl+j":
 		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
-	case "tab", "shift+tab":
+	case "pgup":
+		p.cursor = max(p.cursor-10, 0)
+	case "pgdown":
+		p.cursor = max(min(p.cursor+10, len(p.shown)-1), 0)
+	case "tab", "shift+tab", "left", "right":
+		// ←/→ move between all, free and ready while nothing is typed; with a filter they move
+		// in the text, as in any field.
+		if (msg.String() == "left" || msg.String() == "right") && p.filter.Value() != "" {
+			var cmd tea.Cmd
+			p.filter, cmd = p.filter.Update(msg)
+			return false, cmd
+		}
 		step := 1
-		if msg.String() == "shift+tab" {
+		if msg.String() == "shift+tab" || msg.String() == "left" {
 			step = len(pickerViews) - 1
 		}
 		p.narrow, p.cursor = (p.narrow+step)%len(pickerViews), 0
@@ -329,7 +340,7 @@ func (p *modelPicker) view(m *Model) string {
 			b.WriteString(th.Warn.Render(ansi.Truncate(p.err, inner, "…")) + "\n")
 		}
 	}
-	footer := "enter switch · tab all/free/ready · ctrl+r ask providers again · esc close"
+	footer := "enter switch · ←/→ or tab all/free/ready · ctrl+r ask providers again · esc close"
 	if p.pending {
 		footer = m.spin.View() + " switching…"
 	}

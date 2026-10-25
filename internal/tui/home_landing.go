@@ -134,7 +134,7 @@ func (m *Model) homeInfo(width, height int) []string {
 			theme.Gradient("F R I D A Y", th.Primary, th.Secondary, true)+m.versionLabel(),
 			th.Faint.Render("a coding agent that shows its work"),
 		)},
-		{2, append(fit(th.Strong.Render(greeting(time.Now()))), wrapped(th.Highlight, spark(m.photoIndex), width)...)},
+		{2, append(fit(th.Strong.Render(greeting(time.Now(), m.firstRun.name))), wrapped(th.Highlight, spark(m.photoIndex), width)...)},
 		{1, fit(m.homeFacts(width)...)},
 	}
 	if !m.welcomed {
@@ -238,17 +238,21 @@ func abilities(mode string) string {
 	return "read, edit, run; you approve changes"
 }
 
-// greeting is hello for the time of day.
-func greeting(now time.Time) string {
+// greeting is hello for the time of day, to name when there is one.
+func greeting(now time.Time, name string) string {
+	to := ""
+	if name != "" {
+		to = ", " + name
+	}
 	switch h := now.Hour(); {
 	case h < 5:
-		return "Up late. Make it count."
+		return "Up late" + to + ". Make it count."
 	case h < 12:
-		return "Good morning."
+		return "Good morning" + to + "."
 	case h < 18:
-		return "Good afternoon."
+		return "Good afternoon" + to + "."
 	default:
-		return "Good evening."
+		return "Good evening" + to + "."
 	}
 }
 

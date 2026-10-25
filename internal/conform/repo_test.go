@@ -214,6 +214,7 @@ var documents = []string{
 	"README.md",
 	"packages/friday-cli/README.md",
 	"docs/mechanisms/README.md",
+	"docs/RELEASING.md",
 	"docs/engine/README.md",
 	"docs/engine/USER_GUIDE.md",
 	"docs/engine/CONFIGURATION.md",

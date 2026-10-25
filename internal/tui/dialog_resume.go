@@ -68,6 +68,10 @@ func (p *resumePicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
 	case "down", "ctrl+j", "tab":
 		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
+	case "pgup":
+		p.cursor = max(p.cursor-10, 0)
+	case "pgdown":
+		p.cursor = max(min(p.cursor+10, len(p.shown)-1), 0)
 	case "enter":
 		if len(p.shown) == 0 {
 			return false, nil

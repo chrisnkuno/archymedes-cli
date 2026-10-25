@@ -92,7 +92,7 @@ func TestAShortHomeScreenKeepsTheEssentials(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	s := screen(m)
-	for _, want := range []string{"F R I D A Y", "mode", strings.Fields(greeting(time.Now()))[0]} { // the greeting follows the clock
+	for _, want := range []string{"F R I D A Y", "mode", strings.Fields(greeting(time.Now(), ""))[0]} { // the greeting follows the clock
 		if !strings.Contains(s, want) {
 			t.Errorf("a short home screen lost %q:\n%s", want, s)
 		}
@@ -147,6 +147,7 @@ func TestAPhotoIsDrawnOnceForEachSize(t *testing.T) {
 func firstRunModel(t *testing.T) (*Model, string) {
 	t.Helper()
 	dir := t.TempDir()
+	config.SaveState(dir, config.State{Onboarded: true}) // the walkthrough has its own tests
 	agent := &fakeAgent{messages: make(chan any, 16)}
 	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})

@@ -35,6 +35,18 @@ type settingsApp struct {
 	// armed is the key a first "d" asked to clear; a second "d" on it clears, any other key disarms.
 	armed      string
 	rowIndexes []int
+	// section is the one open: "" is the home grid of sections, settingsAll every row.
+	section string
+	home    tileGrid
+}
+
+// settingsAll is the home grid's first tile: every setting in one list.
+const settingsAll = "*"
+
+// sectionSymbols draw each section's tile; a section not named here gets a plain diamond.
+var sectionSymbols = map[string]string{
+	settingsAll: "≡", "Providers": "⇄", "Appearance": "◐", "Behaviour": "✎", "Tools & voice": "⚙",
+	"Free mode": "○", "Money": "$", "Price overrides": "¤",
 }
 
 type settingsLoadedMsg struct {
@@ -61,6 +73,51 @@ func (s *settingsApp) title() string { return "Settings" }
 func (s *settingsApp) key() string   { return "settings" }
 
 func (s *settingsApp) capturing() bool { return s.editing || s.filtering }
+
+// atHome is whether the home grid is showing: loaded, no section open, nothing being searched.
+func (s *settingsApp) atHome() bool {
+	return s.list != nil && s.section == "" && s.filter == "" && !s.filtering
+}
+
+// homeTiles are "All settings" and one tile per section, each saying how many of its settings are set.
+func (s *settingsApp) homeTiles(m *Model) []tile {
+	var order []string
+	count, set := map[string]int{}, map[string]int{}
+	for _, r := range s.list.Rows {
+		if count[r.Section] == 0 {
+			order = append(order, r.Section)
+		}
+		count[r.Section]++
+		count[settingsAll]++
+		if r.IsSet {
+			set[r.Section]++
+			set[settingsAll]++
+		}
+	}
+	tiles := []tile{}
+	for _, name := range append([]string{settingsAll}, order...) {
+		symbol := sectionSymbols[name]
+		if symbol == "" {
+			symbol = "◇"
+		}
+		caption := name
+		if name == settingsAll {
+			caption = "All settings"
+		}
+		noun := "settings"
+		if count[name] == 1 {
+			noun = "setting"
+		}
+		art := iconArt(symbol, m.th.Primary, fmt.Sprintf("%d %s", count[name], noun), fmt.Sprintf("%d set", set[name]))
+		tiles = append(tiles, tile{id: name, caption: caption, art: art})
+	}
+	return tiles
+}
+
+// openSection shows one section's list (settingsAll: every one), from the top.
+func (s *settingsApp) openSection(name string) {
+	s.section, s.cursor = name, 0
+}
 
 func (m *Model) openSettings() tea.Cmd {
 	for _, w := range m.windows {
@@ -115,6 +172,9 @@ func (s *settingsApp) visible() []int {
 	var out []int
 	needle := strings.ToLower(s.filter)
 	for i, r := range s.list.Rows {
+		if s.section != "" && s.section != settingsAll && r.Section != s.section && needle == "" {
+			continue // a search looks through every section
+		}
 		if needle == "" || strings.Contains(strings.ToLower(r.Label+" "+r.Key+" "+r.Section), needle) {
 			out = append(out, i)
 		}
@@ -155,12 +215,32 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		s.cursor = 0
 		return false, nil
 	}
+	if s.atHome() {
+		switch key {
+		case "esc", "q":
+			return true, nil
+		case "enter", "space":
+			s.home.tiles = s.homeTiles(m)
+			s.openSection(s.home.tiles[min(s.home.cursor, len(s.home.tiles)-1)].id)
+		case "/":
+			s.filtering = true
+		case "r":
+			return false, m.loadSettings()
+		default:
+			s.home.move(key, 1)
+		}
+		return false, nil
+	}
 	armedKey := s.armed
 	s.armed = ""
 	switch key {
 	case "esc", "q":
 		if s.filter != "" {
 			s.filter = ""
+			return false, nil
+		}
+		if s.section != "" {
+			s.section = "" // back to the sections
 			return false, nil
 		}
 		return true, nil
@@ -190,9 +270,47 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 	case "enter", "e":
 		return false, s.begin(m)
+	case "left", "h":
+		return false, s.step(m, -1)
+	case "right", "l":
+		return false, s.step(m, 1)
 	}
 	s.current()
 	return false, nil
+}
+
+// step changes a choice row to its previous or next choice and saves it, without opening it: the
+// quick way through a setting with a few values. A row without choices opens for editing on →.
+func (s *settingsApp) step(m *Model, by int) tea.Cmd {
+	r := s.current()
+	if r == nil {
+		return nil
+	}
+	if r.Kind != "choice" || len(r.Choices) == 0 {
+		if by > 0 {
+			return s.begin(m)
+		}
+		return nil
+	}
+	at := -1
+	for i, c := range r.Choices {
+		if c.Value == r.Value {
+			at = i
+		}
+	}
+	if at < 0 {
+		// Not set: it has its default, the choice that says so; failing that, before the first.
+		for i, c := range r.Choices {
+			if strings.Contains(c.Label, "(default)") {
+				at = i
+			}
+		}
+		if at < 0 && by < 0 {
+			at = 0
+		}
+	}
+	next := r.Choices[(at+by+len(r.Choices))%len(r.Choices)]
+	return s.save(m, r.Key, next.Value)
 }
 
 // begin starts editing the highlighted row.
@@ -237,10 +355,14 @@ func (s *settingsApp) editKey(m *Model, msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if r.Kind == "choice" && len(r.Choices) > 0 {
 		switch key {
-		case "up", "k":
+		case "up", "k", "left", "h":
 			s.choice = (s.choice - 1 + len(r.Choices)) % len(r.Choices)
-		case "down", "j":
+		case "down", "j", "right", "l":
 			s.choice = (s.choice + 1) % len(r.Choices)
+		case "home":
+			s.choice = 0
+		case "end":
+			s.choice = len(r.Choices) - 1
 		case "enter":
 			return s.save(m, r.Key, r.Choices[s.choice].Value)
 		}
@@ -330,6 +452,13 @@ func (m *Model) settingSaved(msg settingSavedMsg) tea.Cmd {
 }
 
 func (s *settingsApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if s.atHome() {
+		if i, ok := s.home.clicked(m, msg); ok {
+			s.home.cursor = i
+			s.openSection(s.home.tiles[i].id)
+		}
+		return nil
+	}
 	for pos := range s.rowIndexes {
 		if m.zones.frame.Get(fmt.Sprintf("setting:%d", pos)).InBounds(msg) {
 			if s.editing || s.saving {
@@ -348,7 +477,7 @@ func (s *settingsApp) view(m *Model) string {
 	if s.list != nil {
 		head += th.Faint.Render("  " + ansi.Truncate(s.list.File, max(width-40, 10), "…"))
 	}
-	hint := "↑/↓ move · enter edit · d clear · / filter · r reload · esc close"
+	hint := "↑/↓ move · ←/→ change a choice · enter edit · d clear · / filter · r reload · esc sections"
 	switch {
 	case s.armed != "":
 		hint = "press d again to clear " + s.armed + " · any other key keeps it"
@@ -367,6 +496,14 @@ func (s *settingsApp) view(m *Model) string {
 		return strings.Join(fitLines(lines, width, height), "\n")
 	case s.list == nil:
 		lines = append(lines, "", " "+m.spin.View()+th.Faint.Render(" reading settings…"))
+		return strings.Join(fitLines(lines, width, height), "\n")
+	}
+	if s.atHome() {
+		lines[1] = " " + th.Faint.Render("↑↓←→ move · enter open · / search every setting · r reload · esc close")
+		s.home.tiles, s.home.inWindow = s.homeTiles(m), true
+		for _, line := range strings.Split(s.home.view(m, max(width-2, 1), max(height-len(lines)-1, 1)), "\n") {
+			lines = append(lines, " "+line)
+		}
 		return strings.Join(fitLines(lines, width, height), "\n")
 	}
 	vis := s.visible()

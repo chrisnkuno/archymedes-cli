@@ -106,17 +106,22 @@ func subsequence(text, query string) (gaps int, ok bool) {
 	return gaps, i == len(query)
 }
 
-// --- theme picker, with a live preview ---
+// --- theme picker: a grid of tiles, each a small screen in its theme, previewed as you move ---
 
 type themePicker struct {
 	names    []string
-	cursor   int
+	grid     tileGrid
 	original string
 }
 
 func newThemePicker(m *Model) *themePicker {
 	names := theme.Names()
-	return &themePicker{names: names, cursor: max(slices.Index(names, m.th.Name), 0), original: m.th.Name}
+	t := &themePicker{names: names, original: m.th.Name}
+	for _, name := range names {
+		t.grid.tiles = append(t.grid.tiles, tile{id: name, caption: name, art: themeArt(name)})
+	}
+	t.grid.cursor = max(slices.Index(names, m.th.Name), 0)
+	return t
 }
 
 func (t *themePicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
@@ -125,37 +130,54 @@ func (t *themePicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.applyTheme(t.original) // a preview is not a choice
 		return true, nil
 	case "enter":
-		return true, m.toast(toastInfo, "Theme: "+t.names[t.cursor])
-	case "up", "k", "shift+tab":
-		t.cursor = (t.cursor - 1 + len(t.names)) % len(t.names)
-	case "down", "j", "tab":
-		t.cursor = (t.cursor + 1) % len(t.names)
-	default:
+		return true, m.toast(toastInfo, "Theme: "+t.names[t.grid.cursor])
+	}
+	if !t.grid.move(msg.String(), t.rowsShown(m)) {
 		return false, nil
 	}
-	m.applyTheme(t.names[t.cursor])
+	m.applyTheme(t.names[t.grid.cursor])
 	return false, nil
 }
 
+func (t *themePicker) rowsShown(m *Model) int {
+	_, h := tileOuter()
+	return max((m.height-6)/h, 1)
+}
+
 func (t *themePicker) view(m *Model) string {
-	width := overlayWidth(m, 44)
-	var b strings.Builder
-	for i, name := range t.names {
-		th, _ := theme.Load(name)
-		swatch := ""
+	width := gridWidth(m, 4)
+	body := t.grid.view(m, max(width-4, 1), max(m.height-6, 1))
+	return frame(m.th, "Theme", body+"\n"+m.th.Faint.Render("↑↓←→ preview · enter keep · esc revert"), width)
+}
+
+// themeArt draws a theme as a small screen: its primary bar, a title and a muted line on its
+// background, its six colours as swatches, and its surface.
+func themeArt(name string) func(*Model, int, int) []string {
+	return func(_ *Model, cols, rows int) []string {
+		th, ok := theme.Load(name)
+		if !ok {
+			return nil
+		}
+		on := func(bg color.Color) lipgloss.Style { return lipgloss.NewStyle().Background(bg).Width(cols) }
+		fill := func(bg color.Color) string { return on(bg).Render("") }
+		swatches := " "
 		for _, c := range []color.Color{th.Primary, th.Secondary, th.Accent, th.Success, th.Warning, th.Error} {
-			swatch += lipgloss.NewStyle().Foreground(c).Render("●")
+			swatches += lipgloss.NewStyle().Foreground(c).Background(th.Bg).Render("██")
 		}
-		label := padRight(name, 16)
-		row := m.th.Body.Render("  "+label) + swatch
-		if i == t.cursor {
-			row = m.th.Title.Render("› "+label) + swatch
+		lines := []string{
+			fill(th.Primary),
+			on(th.Bg).Foreground(th.Text).Bold(true).Render(" Friday"),
+			on(th.Bg).Foreground(th.Muted).Render(" shows its work"),
+			fill(th.Bg),
+			on(th.Bg).Render(swatches),
+			fill(th.Bg),
+			on(th.Surface).Foreground(th.Secondary).Render(" › ask"),
 		}
-		b.WriteString(mark(m.zones.dialog, rowID(i), row))
-		b.WriteString("\n")
+		for len(lines) < rows {
+			lines = append(lines, fill(th.Bg))
+		}
+		return lines[:rows]
 	}
-	b.WriteString(m.th.Faint.Render("↑/↓ preview · enter keep · esc revert"))
-	return frame(m.th, "Theme", b.String(), width)
 }
 
 // --- toasts: what the session says that is not part of the conversation ---
