@@ -62,7 +62,7 @@ The matrix is enforced: `tooling/check/go-sections.json` lists each as `core/<pk
 
 - `friday`: the interface on the Go engine, in this process, through pipes and the same ACP
   client. `--engine ts`, `ARCHYMEDES_ENGINE=ts` or Settings → Engine choose the TypeScript engine;
-  without a choice, Claude Code, Codex, Archymedes Cloud, keyless free mode, flags the Go engine
+  without a choice, Codex, Archymedes Cloud, keyless free mode, flags the Go engine
   cannot honour (`--sandbox docker`, `--budget`) and TypeScript sessions go there by themselves.
 - `friday acp`: the engine on stdio for an editor, under the same rule.
 - Sessions live in `.archymedes/go-sessions/` and resume with `--resume` as before.
@@ -139,8 +139,8 @@ provider's hint is what fixed it.
 
 ## Not yet in the Go engine
 
-Each forwards to the TypeScript agent or answers that it is not available here: Claude Code and
-Codex engines, MCP and LSP clients, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
+Each forwards to the TypeScript agent or answers that it is not available here: the Codex
+engine (Claude Code runs here: `internal/core/claude`, WS-49), MCP and LSP clients, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
 `/cost`, `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own

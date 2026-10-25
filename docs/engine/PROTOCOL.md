@@ -120,8 +120,10 @@ Params: `sessionId`, `text`. Hands text to the running turn, read at its next st
 ### `_archymedes/session/set_model`
 
 Params: `sessionId`, `provider`, `model`. The same provider switches the model; another provider
-opens its models, keeping the conversation. Replies with `_meta.archymedes` session info. Claude
-Code and Codex are refused with a message (they run on the TypeScript engine).
+opens its models, keeping the conversation. Replies with `_meta.archymedes` session info.
+`claude` starts the person's Claude Code (signed in, or the switch is refused and the session stays
+where it was), which then runs the session's turns; Codex is refused with a message (it runs on the
+TypeScript engine).
 
 ### `_archymedes/session/command`
 

@@ -45,8 +45,9 @@ type engineFacts struct {
 	goSession   func(id string) bool // a session with this id was written by the Go engine
 }
 
-// outsideEngines are providers that are someone's own installed agent, run by the TypeScript engine.
-var outsideEngines = map[string]string{"claude": "Claude Code", "codex": "Codex"}
+// outsideEngines are providers that are someone's own installed agent and that only the TypeScript
+// engine drives. Claude Code is not one of them: the Go engine drives it itself (internal/core/claude).
+var outsideEngines = map[string]string{"codex": "Codex"}
 
 // chooseEngine applies the rule: an explicit choice wins; otherwise the Go engine, unless this
 // session needs what only the TypeScript engine has (and that engine is installed).

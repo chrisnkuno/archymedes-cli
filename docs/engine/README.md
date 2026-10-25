@@ -63,7 +63,7 @@ Friday decides once, when it starts, in this order:
 
 | The session… | Because |
 | --- | --- |
-| runs on Claude Code or Codex (your own subscription) | those are engines of their own, driven by the TypeScript engine |
+| runs on Codex (your own subscription) | it is an engine of its own, driven by the TypeScript engine |
 | uses Archymedes Cloud | its routed provider is not in the Go engine yet |
 | uses keyless free mode through a free gateway | the gateway client is not in the Go engine yet (free mode with your own `OPENROUTER_API_KEY` runs on Go) |
 | asks for `--sandbox docker` or `--sandbox e2b` | the Go engine runs on this computer only |
@@ -71,6 +71,11 @@ Friday decides once, when it starts, in this order:
 | resumes a session the TypeScript engine wrote | each engine reads its own sessions |
 
 If the TypeScript agent is not installed, the Go engine always runs.
+
+Claude Code runs on the Go engine. Choose Claude in the model picker (F5) or Providers, or start
+with `--provider claude`, and the Go engine drives your own Claude Code on your Claude plan. Its
+replies stream in and its permission questions become Friday's approvals. Switching back to another
+model keeps the conversation. See [Claude Code](USER_GUIDE.md#claude-code).
 
 **Non-interactive modes** — `friday --json "…"`, a piped request, `friday doctor`, `update`,
 `history`, `settings`, `login` — are still served by the TypeScript agent, exactly as before.
@@ -80,7 +85,7 @@ If the TypeScript agent is not installed, the Go engine always runs.
 These are on the TypeScript engine only. A command that is not there says so, and tells you how to
 switch:
 
-- Claude Code and Codex as engines; Archymedes Cloud; keyless free mode
+- Codex as an engine; Archymedes Cloud; keyless free mode
 - Docker and E2B sandboxes; the Linux command sandbox (bubblewrap)
 - Checkpoints and `/undo`, `/rewind`, `/diff`, `/cost`, `/review`, `/fork`, goals
 - MCP servers and LSP diagnostics

@@ -35,6 +35,8 @@ func OpenModel(ctx context.Context, sel Selection, env Env, model string) (fanta
 	switch p.Kind {
 	case KindAnthropic:
 		return newAnthropic(key, base, model), nil
+	case KindClaudeCode:
+		return nil, fmt.Errorf("Claude Code runs its own model; Friday's own work (titles, compaction, sub-agents) needs another provider")
 	case KindOpenAI:
 		opts := []openai.Option{openai.WithAPIKey(key), openai.WithUserAgent(UserAgent)}
 		if base != "" {
@@ -88,6 +90,9 @@ func NewModels(ctx context.Context, sel Selection, env Env, open Opener) (*Model
 		open = OpenModel
 	}
 	m := &Models{sel: sel, env: env, open: open, cache: map[string]fantasy.LanguageModel{}}
+	if sel.Provider.Kind == KindClaudeCode {
+		return m, nil // Claude Code runs its own model: there is nothing to open here
+	}
 	if _, err := m.get(ctx, sel.Model); err != nil {
 		return nil, err
 	}
@@ -128,8 +133,10 @@ func (m *Models) For(ctx context.Context, choice string) (fantasy.LanguageModel,
 // Switch moves the session to another model on the same provider (set_model); the small model
 // stays unless it was the old main one.
 func (m *Models) Switch(ctx context.Context, model string) error {
-	if _, err := m.get(ctx, model); err != nil {
-		return err
+	if m.Selection().Provider.Kind != KindClaudeCode {
+		if _, err := m.get(ctx, model); err != nil {
+			return err
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

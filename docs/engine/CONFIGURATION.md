@@ -65,7 +65,7 @@ ready one in this order:
 | Ollama (local) | `ollama` | — | `llama3.1` | Chat Completions at `http://localhost:11434/v1` |
 | OpenAI-compatible | `openai-compatible` | `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL` | `gpt-4o-mini` | Chat Completions at your address |
 | Free models | `free` / `--free` | `OPENROUTER_API_KEY` | `openrouter/free` | OpenRouter, free models only |
-| Claude Code | `claude` | your own `claude` sign-in | — | TypeScript engine only |
+| Claude Code | `claude` | your own `claude` sign-in | `default` (Claude Code's choice) | your own Claude Code, driven over its stream-JSON protocol; see [Claude Code](#claude-code) |
 | Codex | `codex` | your own `codex` sign-in | — | TypeScript engine only |
 
 Each provider's settings share a prefix: the id in capitals with `-` as `_` (`openai-compatible` →
@@ -82,6 +82,17 @@ Each provider's settings share a prefix: the id in capitals with `-` as `_` (`op
 **Free mode never pays.** With `--free` or `ARCHYMEDES_PROVIDER=free`, only `openrouter/free` or a
 model ending in `:free` is accepted, for the main model, the small model and any role's model.
 A session that remembered free mode never falls through to a paid provider when the key is gone.
+
+## Claude Code
+
+| Variable | Default | Does |
+| --- | --- | --- |
+| `ARCHYMEDES_CLAUDE_PATH` | the `PATH`, then `~/.local/bin` and `~/.claude/local` | where the `claude` program is |
+| `ARCHYMEDES_CLAUDE_BILLING` | — | `api` passes `ANTHROPIC_API_KEY` to Claude Code, which then bills that key instead of your plan |
+| `CLAUDE_MODEL` | `default` | the model new Claude sessions start on: `default`, `opus`, `sonnet`, `haiku` or a model id |
+
+Claude Code runs with the environment Friday was started in, never with the keys Friday keeps in
+its settings file for other providers. It needs no key of its own: it is signed in, or not.
 
 ## Models
 

@@ -236,8 +236,8 @@ The screen:
   --no-mouse        leave the mouse to the terminal, so you can select text
 
 The engine (you rarely need these: Friday picks on its own):
-  --engine ts       use the TypeScript engine, which runs Claude Code, Codex, sandboxes, /undo
-                    and /cost; the Go engine is the default (also ARCHYMEDES_ENGINE, or
+  --engine ts       use the TypeScript engine, which runs Codex, sandboxes, /undo and /cost;
+                    the Go engine is the default (also ARCHYMEDES_ENGINE, or
                     Settings → Engine)
   --agent <command> drive a different agent program over ACP
 

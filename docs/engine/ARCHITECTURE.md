@@ -37,13 +37,14 @@ friday  (one Go binary)
       │    ├─ core/policy ── modes, ledger, safety screen, read-only commands, rules
       │    ├─ core/gate ──── proof before done, tests first
       │    └─ core/tool ──── what a tool is; the catalog and tool_search
+      ├─ core/claude ── a session run by the person's own Claude Code (its stream-JSON protocol)
       ├─ core/thread ── the session on disk: log, messages, fork, recovery
       ├─ core/llm ───── provider and models (Fantasy; native Anthropic)
       ├─ core/advise ── suggestions: next steps, notes on edits, hints; Jev
       └─ core/roles ─── sub-agent roles
 
 TypeScript agent (`friday acp` under Node): settings, providers, setup, --json, doctor, history;
-and whole sessions that need Claude Code, Codex, sandboxes, Archymedes Cloud or keyless free mode.
+and whole sessions that need Codex, sandboxes, Archymedes Cloud or keyless free mode.
 ```
 
 The interface does not know which engine it talks to: both speak the same ACP messages and
@@ -190,7 +191,7 @@ and the verification classifier in `tools.ts`, with their test cases. They mean 
 
 `chooseEngine` (`cmd/friday/engine.go`) is a pure function over gathered facts, tested case by
 case. An explicit choice wins (`--engine`, `ARCHYMEDES_ENGINE`, the setting); without the TypeScript
-agent, Go. Then the TypeScript engine for Claude Code or Codex, Archymedes Cloud, keyless free mode,
+agent, Go. Then the TypeScript engine for Codex, Archymedes Cloud, keyless free mode,
 flags the Go engine would ignore, and sessions it wrote; otherwise Go. See the
 [README](README.md#which-engine-runs).
 

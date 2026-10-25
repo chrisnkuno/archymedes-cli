@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"charm.land/fantasy"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/advise"
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
+	"github.com/chrisnkuno/friday-cli/internal/core/claude"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
@@ -25,6 +27,9 @@ type session struct {
 	cwd  string
 	core *agents.Session
 	env  llm.Env
+
+	mu     sync.Mutex
+	claude *claude.Session // set while the person's Claude Code runs the session (claude.go)
 }
 
 func (s *Server) session(id string) *session {
@@ -43,7 +48,7 @@ func (s *Server) closeAll() {
 	s.sessions = map[string]*session{}
 	s.sessMu.Unlock()
 	for _, sess := range all {
-		sess.core.Close()
+		sess.close()
 	}
 }
 
@@ -148,11 +153,19 @@ func (s *Server) newSession(ctx context.Context, params json.RawMessage, resume 
 		return nil, errorf(codeInvalidRequest, "%s", err.Error())
 	}
 	sess := &session{id: core.ID(), cwd: cwd, core: core, env: env}
+	if sel.Provider.Kind == llm.KindClaudeCode {
+		c, err := s.openClaude(ctx, sess, sel.Model)
+		if err != nil {
+			core.Close()
+			return nil, errorf(codeInvalidRequest, "%s", err.Error())
+		}
+		sess.claude = c
+	}
 	s.sessMu.Lock()
 	if s.closing {
 		// The client left while this session opened: nothing will ever close it but us.
 		s.sessMu.Unlock()
-		core.Close()
+		sess.close()
 		return nil, errorf(codeInvalidRequest, "the connection is closing")
 	}
 	s.sessions[sess.id] = sess
@@ -212,6 +225,9 @@ func (r *sessionRef) set(s *Server, id string) {
 
 func (s *Server) info(sess *session) map[string]any {
 	sel := sess.core.Models().Selection()
+	if c := sess.outside(); c != nil {
+		sel.Model = c.Model()
+	}
 	return map[string]any{
 		"sessionId": sess.id, "provider": sel.Provider.ID, "providerLabel": sel.Provider.Label, "model": sel.Model,
 		"mode": string(sess.core.Mode()), "root": sess.cwd, "workspace": "local", "workspaceLabel": "this computer", "engine": "go",
@@ -298,7 +314,12 @@ func (s *Server) acceptPrompt(params json.RawMessage) (acceptedPrompt, error) {
 }
 
 func (s *Server) prompt(ctx context.Context, p acceptedPrompt) (any, error) {
-	result := p.sess.core.Prompt(ctx, p.accepted, p.text)
+	var result loop.Result
+	if c := p.sess.outside(); c != nil {
+		result = s.claudeTurn(ctx, p, c)
+	} else {
+		result = p.sess.core.Prompt(ctx, p.accepted, p.text)
+	}
 	return map[string]any{"stopReason": stopReason(result.Status)}, nil
 }
 
@@ -357,6 +378,13 @@ func (s *Server) setMode(params json.RawMessage) (any, error) {
 		return nil, errorf(codeInvalidParams, "no mode %q; modes are %s", p.ModeID, strings.Join(modeIDs, ", "))
 	}
 	sess.core.SetMode(mode)
+	if c := sess.outside(); c != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := c.SetMode(ctx, mode); err != nil {
+			return nil, errorf(codeInternal, "Claude Code did not change mode: %s", err.Error())
+		}
+	}
 	return map[string]any{}, nil
 }
 
@@ -370,7 +398,7 @@ func (s *Server) closeSession(params json.RawMessage) (any, error) {
 	delete(s.sessions, p.SessionID)
 	s.sessMu.Unlock()
 	if sess != nil {
-		sess.core.Close()
+		sess.close()
 	}
 	return map[string]any{}, nil
 }
@@ -384,6 +412,9 @@ func (s *Server) steer(params json.RawMessage) (any, error) {
 	sess := s.session(p.SessionID)
 	if sess == nil || strings.TrimSpace(p.Text) == "" {
 		return map[string]any{"accepted": false}, nil
+	}
+	if c := sess.outside(); c != nil {
+		return map[string]any{"accepted": c.Steer(p.Text)}, nil
 	}
 	return map[string]any{"accepted": sess.core.Steer(p.Text)}, nil
 }
@@ -400,11 +431,26 @@ func (s *Server) setModel(ctx context.Context, params json.RawMessage) (any, err
 		return nil, errorf(codeInvalidParams, "no session %s", p.SessionID)
 	}
 	current := sess.core.Models().Selection()
-	if p.Provider == "" || p.Provider == current.Provider.ID {
+	onClaude := current.Provider.Kind == llm.KindClaudeCode
+	toClaude := strings.EqualFold(p.Provider, claude.Provider) || (p.Provider == "" && onClaude)
+	switch {
+	case toClaude && onClaude:
+		if c := sess.outside(); c != nil {
+			if err := c.SetModel(ctx, p.Model); err != nil {
+				return nil, errorf(codeInvalidRequest, "%s", err.Error())
+			}
+		}
+		if err := sess.core.SetModel(ctx, firstNonEmpty(p.Model, "default")); err != nil {
+			return nil, errorf(codeInternal, "%s", err.Error())
+		}
+	case p.Provider == "" || p.Provider == current.Provider.ID:
 		if err := sess.core.SetModel(ctx, p.Model); err != nil {
 			return nil, errorf(codeInvalidRequest, "%s", err.Error())
 		}
-	} else {
+	default:
+		if sess.core.Busy() {
+			return nil, errorf(codeInvalidRequest, "switch providers between turns; esc stops this one")
+		}
 		env := s.env()
 		sel, err := llm.Resolve(env, p.Provider, p.Model)
 		if err != nil {
@@ -414,8 +460,24 @@ func (s *Server) setModel(ctx context.Context, params json.RawMessage) (any, err
 		if err != nil {
 			return nil, errorf(codeInvalidRequest, "%s", err.Error())
 		}
+		var next *claude.Session
+		if toClaude {
+			// Claude Code is started (and its sign-in checked) before anything changes: a
+			// switch that cannot run leaves the session where it was.
+			if next, err = s.openClaude(ctx, sess, sel.Model); err != nil {
+				return nil, errorf(codeInvalidRequest, "%s", err.Error())
+			}
+		}
 		if err := sess.core.UseModels(models); err != nil {
+			if next != nil {
+				next.Close()
+			}
 			return nil, errorf(codeInternal, "%s", err.Error())
+		}
+		previous := sess.outside()
+		sess.setOutside(next)
+		if previous != nil {
+			previous.Close() // its conversation is kept by Claude Code, and resumed if it comes back
 		}
 	}
 	return map[string]any{"_meta": map[string]any{"archymedes": s.info(sess)}}, nil
@@ -431,6 +493,9 @@ func (s *Server) command(params json.RawMessage) (any, error) {
 	sess := s.session(p.SessionID)
 	if sess == nil {
 		return nil, errorf(codeInvalidParams, "no session %s", p.SessionID)
+	}
+	if c := sess.outside(); c != nil {
+		return c.Command(p.Command, p.Argument), nil
 	}
 	if c, ok := sessionCommandByName[p.Command]; ok {
 		return c.run(sess, p.Argument), nil
@@ -563,12 +628,12 @@ func (s *Server) setupStatus(ctx context.Context, params json.RawMessage) (any, 
 }
 
 func (s *Server) models(ctx context.Context, params json.RawMessage) (any, error) {
+	env := s.env()
 	if s.opts.Forward != nil {
 		if raw, err := s.opts.Forward(ctx, "_archymedes/models", params); err == nil {
-			return raw, nil
+			return unlockClaude(raw, env.Get), nil
 		}
 	}
-	env := s.env()
 	choices := []any{}
 	for _, p := range llm.Configured(env) {
 		if p.Kind == llm.KindUnsupported {
@@ -580,6 +645,7 @@ func (s *Server) models(ctx context.Context, params json.RawMessage) (any, error
 		}
 		choices = append(choices, map[string]any{"provider": p.ID, "providerLabel": p.Label, "model": sel.Model, "isDefault": true, "free": p.ID == "free"})
 	}
+	choices = append(choices, claudeChoices(env.Get)...)
 	return map[string]any{"choices": choices, "unconfigured": []any{}, "errors": []any{}}, nil
 }
 

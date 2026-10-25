@@ -26,6 +26,9 @@ const (
 	KindOpenRouter Kind = "openrouter"
 	// KindCompatible is any Chat Completions endpoint, reached by base URL.
 	KindCompatible Kind = "openai-compatible"
+	// KindClaudeCode is the person's own Claude Code, run as an engine of its own
+	// (internal/core/claude): it has no key and no model to open, only a program to drive.
+	KindClaudeCode Kind = "claude-code"
 	// KindUnsupported is a provider only the TypeScript engine can open yet.
 	KindUnsupported Kind = ""
 )
@@ -61,8 +64,16 @@ var Providers = []Provider{
 	{ID: "free", Label: "Free models (OpenRouter)", Requires: []string{"OPENROUTER_API_KEY"}, DefaultModel: FreeRouter, Kind: KindOpenRouter},
 }
 
+// ClaudeCode is the person's own Claude Code on their Claude plan. It is not in Providers: it needs
+// no key, so it is never picked as "the first configured", and the Providers app lists it itself.
+// "default" is Claude Code's own choice of model.
+var ClaudeCode = Provider{ID: "claude", Label: "Claude (your subscription)", DefaultModel: "default", Kind: KindClaudeCode}
+
 // Lookup finds a provider by id.
 func Lookup(id string) (Provider, bool) {
+	if strings.EqualFold(id, ClaudeCode.ID) {
+		return ClaudeCode, true
+	}
 	for _, p := range Providers {
 		if p.ID == id {
 			return p, true
@@ -132,8 +143,8 @@ func Resolve(env Env, provider, model string) (Selection, error) {
 	switch {
 	case provider != "":
 		p, ok := Lookup(provider)
-		if name, outside := map[string]string{"claude": "Claude Code", "codex": "Codex"}[strings.ToLower(provider)]; !ok && outside {
-			return Selection{}, fmt.Errorf("%s runs on the TypeScript engine: set Settings → Engine to TypeScript (or ARCHYMEDES_ENGINE=ts) and start a new session", name)
+		if !ok && strings.EqualFold(provider, "codex") {
+			return Selection{}, fmt.Errorf("Codex runs on the TypeScript engine: set Settings → Engine to TypeScript (or ARCHYMEDES_ENGINE=ts) and start a new session")
 		}
 		if !ok {
 			ids := make([]string, len(Providers))
@@ -160,6 +171,9 @@ func Resolve(env Env, provider, model string) (Selection, error) {
 		return Selection{}, fmt.Errorf("%s is not available in the Go engine yet; set Settings → Engine to TypeScript (or ARCHYMEDES_ENGINE=ts)", spec.Label)
 	}
 	chosen := firstNonEmpty(model, env.Get(spec.Prefix()+"_MODEL"), spec.DefaultModel)
+	if spec.Kind == KindClaudeCode {
+		return Selection{Provider: spec, Model: chosen, Small: chosen}, nil // Claude Code picks its own small model
+	}
 	if spec.ID == "free" && !IsFreeModel(chosen) {
 		return Selection{}, fmt.Errorf("free mode accepts %s or publisher/model:free only; paid models are not allowed", FreeRouter)
 	}

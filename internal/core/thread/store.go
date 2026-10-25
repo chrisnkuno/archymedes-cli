@@ -83,8 +83,13 @@ type Meta struct {
 	Model     string            `json:"model,omitempty"`
 	Mode      string            `json:"mode,omitempty"`
 	Approvals map[string]string `json:"approvals,omitempty"`
-	CreatedAt time.Time         `json:"createdAt"`
-	UpdatedAt time.Time         `json:"updatedAt"`
+	// ClaudeSession is Claude Code's own id for this conversation, which resuming continues.
+	ClaudeSession string `json:"claudeSession,omitempty"`
+	// EngineSeen is, per outside engine, how many root messages it has seen: what it is told on
+	// coming back is only what came after (the TypeScript record's engineSeen).
+	EngineSeen map[string]int `json:"engineSeen,omitempty"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
 // Store is one session's directory.

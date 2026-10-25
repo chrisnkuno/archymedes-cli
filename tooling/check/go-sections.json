@@ -82,8 +82,18 @@
       "core/advise",
       "conform"
     ],
+    "core/claude": [
+      "core/agents",
+      "core/gate",
+      "core/loop",
+      "core/policy",
+      "core/thread",
+      "core/tool",
+      "conform"
+    ],
     "core/server": [
       "core/agents",
+      "core/claude",
       "core/llm",
       "core/loop",
       "core/policy",

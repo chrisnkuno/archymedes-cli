@@ -247,7 +247,32 @@ is always a free one.
 
 `/model <name>` switches the main model mid-session, and the conversation carries on; F5 lists
 every model you can switch to. Switching to another provider works too (`/model` lists them),
-except to Claude Code or Codex, which run on the TypeScript engine.
+Claude included (see [Claude Code](#claude-code)), except to Codex, which runs on the TypeScript
+engine.
+
+## Claude Code
+
+Choose **Claude (your subscription)** in the model picker, in Providers, or with `--provider claude`,
+and your own Claude Code does the work on your Claude plan, with its own tools, prompt and project
+instructions (`CLAUDE.md`). Friday shows it and keeps the session:
+
+- **Replies stream in**, and its tool calls draw as Friday's cards (its `Edit` is an edit card with
+  the diff, its `Bash` a command card; its own sub-agents' calls go under the call that started them).
+- **It asks the way Friday asks.** Claude Code's permission questions come to Friday's approval
+  dialog, and the mode decides first. Reads and read-only commands never ask, and your command
+  rules apply. Auto mode runs a command when the safety screen finds nothing sensitive in it.
+  "Allow from now on" lasts for the session and is never written to Claude Code's settings.
+- **Switching keeps the conversation.** Claude is told, once, what was said before it joined; coming
+  back after another model, only what it missed. Its own conversation resumes with the session.
+- **Steering, stop and modes work.** A message sent while one of its tools runs reaches it within
+  the turn; esc interrupts it; shift+tab changes its permission mode.
+- `/cost` shows its usage and your plan's limit, `/undo` puts back the files it changed in the last
+  turn (from Claude Code's own checkpoints), `/todos` and `/tools` show its list and its tools.
+
+It needs Claude Code installed and signed in (`claude auth login`, which Providers runs for you);
+Friday never sees your account. With `ANTHROPIC_API_KEY` in your environment, Claude Code would bill
+that key instead of your plan, so Friday leaves it out unless `ARCHYMEDES_CLAUDE_BILLING=api`
+(see [Configuration](CONFIGURATION.md#claude-code)).
 
 ## Limits Friday keeps to
 

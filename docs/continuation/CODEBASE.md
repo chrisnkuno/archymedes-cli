@@ -27,7 +27,8 @@ the TypeScript engine runs there by itself (`cmd/friday/engine.go`). Its design 
 TypeScript engines below remain for what the Go engine does not have yet.
 
 Three engines run a session: Friday's own agent (`core/cli/agent.ts` on any provider), Claude Code
-(`engines/claude/`) and Codex (`engines/codex/`). All three speak to the interface through the same ACP
+(`engines/claude/`; on the Go engine `internal/core/claude`, which speaks Claude Code's stream-JSON
+protocol itself, without the Agent SDK) and Codex (`engines/codex/`). All three speak to the interface through the same ACP
 messages, so the interface never knows which one is running. One rule follows from that: **a mode
 means the same thing on every engine.** Friday's `PermissionPolicy.decide` (core) is the reference,
 and each engine's permission bridge (`engines/claude/permissions.ts`, `engines/codex/session.ts`) maps onto it.

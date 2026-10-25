@@ -386,7 +386,8 @@ func TestTheGoEngineIsTheDefaultAndTheTypeScriptOneTakesWhatOnlyItCanDo(t *testi
 		{"explicit go beats every fallback", with(func(f *engineFacts) { f.explicit = "go"; f.args = []string{"--sandbox", "docker"} }), true, ""},
 		{"docker sandbox", with(func(f *engineFacts) { f.args = []string{"--sandbox", "docker"} }), false, "--sandbox docker"},
 		{"money budget", with(func(f *engineFacts) { f.args = []string{"--budget", "5"} }), false, "--budget"},
-		{"Claude Code remembered", with(func(f *engineFacts) { f.env = llm.Env{"ARCHYMEDES_PROVIDER": "claude"} }), false, "Claude Code"},
+		{"Claude Code remembered stays on Go", with(func(f *engineFacts) { f.env = llm.Env{"ARCHYMEDES_PROVIDER": "claude"} }), true, ""},
+		{"Claude Code asked for stays on Go", with(func(f *engineFacts) { f.args = []string{"--provider", "claude"} }), true, ""},
 		{"Codex asked for", with(func(f *engineFacts) { f.args = []string{"--provider", "codex"} }), false, "Codex"},
 		{"Archymedes Cloud", with(func(f *engineFacts) {
 			f.env = llm.Env{"ARCHYMEDES_CLOUD_TOKEN": "t", "ARCHYMEDES_CLOUD_BASE_URL": "u"}
