@@ -146,14 +146,16 @@ func TestArrowsStepAChoiceInPlaceAndOpenATextRow(t *testing.T) {
 		t.Fatalf("← should step back: %v", agent.set)
 	}
 	saved := len(agent.set)
-	press(m, tea.KeyDown, 0) // the API key: ← does nothing, → opens it
-	press(m, tea.KeyLeft, 0)
-	if s.editing || len(agent.set) != saved {
-		t.Fatal("← on a text row should leave it alone")
-	}
+	press(m, tea.KeyDown, 0) // the API key: → opens it, ← goes back to the sections
 	press(m, tea.KeyRight, 0)
 	if !s.editing {
 		t.Fatal("→ on a text row should open it")
+	}
+	press(m, tea.KeyEscape, 0)
+	section := s.section
+	press(m, tea.KeyLeft, 0)
+	if s.editing || len(agent.set) != saved || (section != "" && s.section != "") {
+		t.Fatal("← on a text row should change nothing and go back to the sections")
 	}
 }
 

@@ -1,5 +1,7 @@
 package tui
 
+import "strings"
+
 // transcript is the scrollable history: items stacked top to bottom, drawn from the bottom up.
 //
 // Each item's lines are cached against its version and the width, so a frame only re-renders
@@ -13,6 +15,10 @@ type transcript struct {
 	// While scrolled back, the total height at the last draw: growth below the view (a streaming
 	// reply, a new tool call) is added to scroll so the lines being read stay where they are.
 	anchorTotal, anchorWidth int
+	// sel is the block the keyboard is on (chat_cursor.go), nil when it is on the input; selRows are
+	// its rows in the last window drawn, for the bar in the margin.
+	sel     item
+	selRows map[int]bool
 }
 
 type cached struct {
@@ -31,7 +37,7 @@ func (t *transcript) add(it item) {
 }
 
 func (t *transcript) clear() {
-	t.items, t.cache, t.scroll = nil, map[item]cached{}, 0
+	t.items, t.cache, t.scroll, t.sel = nil, map[item]cached{}, 0, nil
 }
 
 func (t *transcript) lines(it item, ctx renderCtx) []string {
@@ -55,16 +61,21 @@ func (t *transcript) window(ctx renderCtx, height int) []string {
 	t.holdAnchor(ctx)
 	need := height + t.scroll
 	var rows []string // newest last, built in reverse then flipped
+	var selected []bool
 	for i := len(t.items) - 1; i >= 0 && len(rows) < need; i-- {
-		lines := t.lines(t.items[i], ctx)
+		it := t.items[i]
+		lines := t.lines(it, ctx)
 		if len(lines) == 0 {
 			continue
 		}
 		if len(rows) > 0 {
-			rows = append(rows, "") // one blank line between blocks
+			rows, selected = append(rows, ""), append(selected, false) // one blank line between blocks
+		}
+		if selectable(it) && ctx.zones != nil {
+			lines = strings.Split(mark(ctx.zones, itemZone(it), strings.Join(lines, "\n")), "\n") // a click target
 		}
 		for j := len(lines) - 1; j >= 0; j-- {
-			rows = append(rows, lines[j])
+			rows, selected = append(rows, lines[j]), append(selected, it == t.sel)
 		}
 	}
 	// Clamp: scrolling cannot go above the first line.
@@ -74,8 +85,16 @@ func (t *transcript) window(ctx renderCtx, height int) []string {
 	start := t.scroll
 	end := min(start+height, len(rows))
 	out := make([]string, 0, height)
+	var marked []bool
 	for i := end - 1; i >= start; i-- {
-		out = append(out, rows[i])
+		out, marked = append(out, rows[i]), append(marked, selected[i])
+	}
+	pad := height - len(out)
+	t.selRows = map[int]bool{}
+	for i, on := range marked {
+		if on {
+			t.selRows[pad+i] = true
+		}
 	}
 	for len(out) < height {
 		out = append([]string{""}, out...)

@@ -18,7 +18,7 @@ func landingAt(t *testing.T, w, h int, angle float64) (*Model, string) {
 func TestNothingOnTheLandingScreenIsClipped(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {96, 28}, {100, 30}, {120, 32}, {150, 34}} {
 		_, s := landingAt(t, size[0], size[1], 0.7)
-		for _, want := range []string{"a coding agent that shows its work", "ask anything", "find anything", "what changed"} {
+		for _, want := range []string{"F R I D A Y", "desktop", "a start", "Explain this project"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("%dx%d lacks %q:\n%s", size[0], size[1], want, s)
 			}

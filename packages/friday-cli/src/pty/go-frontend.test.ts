@@ -245,7 +245,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     const text = await settle(screen);
     expect(text).toContain("Anthropic");
     expect(text).toContain("in use");
-    proc.write("\x1b"); // esc closes it
+    proc.write("q"); // q closes it (esc would step out to the bars, the window still open)
     await screenShows(screen, "Ask Friday");
     proc.write("!echo from-the-shell\r");
     await screenShows(screen, "from-the-shell");
@@ -284,9 +284,9 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     const { proc, screen } = boot(130, 34);
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
     const home = await settle(screen);
-    expect(home).toContain("New here? Three things:");
+    expect(home).toContain("Counts installs anonymously");
     expect(home).toMatch(/Unsplash|drawn by Friday/); // the picture's credit, beside the mark: a photo or art drawn by code
-    expect(home).toContain("Explain what this project does");
+    expect(home).toContain("Explain this project");
 
     proc.write("write notes\r");
     await proc.waitFor("Allow this?", { timeoutMs: 30_000 });
@@ -315,7 +315,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     expect(await settle(screen)).not.toEqual(before);
     proc.write("f");
     await screenShows(screen, "fit cover");
-    proc.write("\x1b"); // esc
+    proc.write("q"); // q closes it
     await screenShows(screen, "Ask Friday");
   }, 120_000);
 
@@ -325,7 +325,7 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     const frame = await settle(screen);
     // The photo fills what nothing else does, and the words are all still there.
     expect(frame).toContain("▀");
-    expect(frame).toContain("a coding agent that shows its work");
+    expect(frame).toContain("F R I D A Y");
     expect(frame).toMatch(/by .+ · Unsplash|drawn by Friday/); // a photo, or art drawn by code
     // Quitting draws once more; that draw once could block on a closed zone manager.
     proc.write("/quit\r");

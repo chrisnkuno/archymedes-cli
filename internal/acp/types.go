@@ -147,6 +147,29 @@ type Event struct {
 	Agent            string `json:"agent"`
 	// thread: a sub-agent's thread changed status (Go engine): started, done, failed, cancelled
 	Thread *ThreadInfo `json:"thread"`
+	// suggestions: up to three next steps after a turn that changed code (Go engine)
+	Steps []Suggestion `json:"steps"`
+	// edit_notes: what is worth knowing about the edit made by tool call ToolCallID to Path
+	ToolCallID string     `json:"toolCallId"`
+	Path       string     `json:"path"`
+	Notes      []EditNote `json:"notes"`
+}
+
+// Suggestion is one next step: the request (or /command) it would send, and why now. Score is
+// Jev's probability that it is useful, 0 when nothing judged it; Source is rule or model.
+type Suggestion struct {
+	Text   string  `json:"text"`
+	Why    string  `json:"why"`
+	Score  float64 `json:"score"`
+	Source string  `json:"source"`
+}
+
+// EditNote is one thing worth knowing about an edit: a fact code found, or Jev's judgment with
+// its probability in Score.
+type EditNote struct {
+	Text  string  `json:"text"`
+	Kind  string  `json:"kind"`
+	Score float64 `json:"score"`
 }
 
 // ThreadInfo is a sub-agent thread as the Go engine reports it.

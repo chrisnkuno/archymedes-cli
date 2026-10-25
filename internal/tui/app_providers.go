@@ -21,9 +21,9 @@ type providersApp struct {
 	rows    []acp.ProviderOverview
 	loaded  bool
 	err     string
-	cursor  int
 	pending string   // what is in flight, shown while it is
-	grid    tileGrid // the providers as tiles; its cursor is cursor
+	grid    tileGrid // the providers as tiles; its cursor is the selected one
+	shown   int      // rows of tiles as last drawn: a page for pgup/pgdn
 }
 
 type providersLoadedMsg struct {
@@ -84,15 +84,15 @@ func (m *Model) providersLoaded(msg providersLoadedMsg) {
 		return
 	}
 	p.rows, p.err = msg.rows, ""
-	p.cursor = min(p.cursor, max(len(p.rows)-1, 0))
+	p.grid.cursor = min(p.grid.cursor, max(len(p.rows)-1, 0))
 }
 
 func (p *providersApp) current() *acp.ProviderOverview {
 	if len(p.rows) == 0 {
 		return nil
 	}
-	p.cursor = min(max(p.cursor, 0), len(p.rows)-1)
-	return &p.rows[p.cursor]
+	p.grid.cursor = min(max(p.grid.cursor, 0), len(p.rows)-1)
+	return &p.rows[p.grid.cursor]
 }
 
 func (p *providersApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
@@ -100,9 +100,7 @@ func (p *providersApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "esc", "q":
 		return true, nil
 	case "up", "k", "down", "j", "left", "h", "right", "l", "home", "end", "pgup", "pgdown":
-		p.grid.cursor = p.cursor
-		p.grid.move(msg.String(), 1)
-		p.cursor = p.grid.cursor
+		p.grid.move(msg.String(), max(p.shown, 1))
 		p.current()
 		return false, nil
 	case "r":
@@ -164,10 +162,17 @@ func (m *Model) defaultProviderSaved(msg defaultProviderMsg) tea.Cmd {
 	return tea.Batch(m.toast(toastInfo, msg.label+" is the default for new sessions"), m.reloadProviders())
 }
 
+// click selects a provider; a second click on it connects it or lists its models, as enter does.
 func (p *providersApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
-	if i, ok := p.grid.clicked(m, msg); ok {
-		p.cursor = i
+	if i, ok := p.grid.clicked(m, msg); ok && p.grid.clickTile(i) {
+		_, cmd := p.handle(m, keyPress("enter"))
+		return cmd
 	}
+	return nil
+}
+
+func (p *providersApp) wheel(_ *Model, up bool) tea.Cmd {
+	p.grid.wheel(up)
 	return nil
 }
 
@@ -212,7 +217,8 @@ func (p *providersApp) view(m *Model) string {
 	if p.loaded {
 		head += th.Faint.Render(fmt.Sprintf("  %d of %d ready", ready, len(p.rows)))
 	}
-	lines := []string{" " + head, " " + th.Faint.Render("↑↓←→ move · enter connect or pick a model · e key & URL · d make default · r refresh · esc close")}
+	lines := []string{" " + head}
+	foot := m.hintBar(width, button{"enter", "connect or pick a model"}, button{"e", "key & URL"}, button{"d", "make default"}, button{"r", "refresh"}, button{"q", "close"})
 	switch {
 	case !p.loaded:
 		lines = append(lines, "", " "+m.spin.View()+th.Faint.Render(" asking the agent…"))
@@ -222,9 +228,12 @@ func (p *providersApp) view(m *Model) string {
 		return strings.Join(fitLines(lines, width, height), "\n")
 	}
 	p.current()
-	p.grid.tiles, p.grid.cursor, p.grid.inWindow = p.tiles(m), p.cursor, true
+	p.grid.tiles, p.grid.inWindow = p.tiles(m), true
 	// The grid gets what the description under it leaves.
-	grid := p.grid.view(m, max(width-2, 1), max(height-len(lines)-8, 1))
+	gridHeight := max(height-len(lines)-9, 1)
+	_, tileH := tileOuter()
+	p.shown = max(gridHeight/tileH, 1)
+	grid := p.grid.view(m, max(width-2, 1), gridHeight)
 	for _, line := range strings.Split(grid, "\n") {
 		lines = append(lines, " "+line)
 	}
@@ -257,5 +266,5 @@ func (p *providersApp) view(m *Model) string {
 	if p.err != "" {
 		lines = append(lines, " "+th.Bad.Render(ansi.Truncate(p.err, width-2, "…")))
 	}
-	return strings.Join(fitLines(lines, width, height), "\n")
+	return strings.Join(append(fitLines(lines, width, height-1), foot), "\n")
 }

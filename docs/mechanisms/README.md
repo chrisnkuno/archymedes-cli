@@ -23,6 +23,7 @@ document and in the tracker, together.
 7. [Recipes](#7-recipes)
 8. [Documentation](#8-documentation)
 9. [Conformance](#9-conformance)
+10. [Interaction](#10-interaction)
 
 ## 1 Principles
 
@@ -56,6 +57,9 @@ document and in the tracker, together.
 | **compaction** | replacing the earlier conversation with a summary | truncation (which is cutting a result) |
 | **wallpaper** | the picture behind the whole screen | background (which is the colour) |
 | **setting** | a value in `settings.json`, also readable from the environment | config, option, preference |
+| **window** | an app on the desktop: a frame of frosted glass with a tab in the top bar, switched to and from | modal (for a window) |
+| **dialog** | a question that must be answered before anything else: an approval, a confirmation, connecting a provider | popup |
+| **bars** | the top bar's tabs and the dock's apps, walked as one row by keyboard | taskbar |
 
 ## 3 Names
 
@@ -213,3 +217,34 @@ bun run recheck                       # runs them on every recheck, beside the g
   one commit, with the reason. The conformance tests then show everything the new rule touches.
 - **A rule that cannot be checked** is marked here as a review rule. If it can be made checkable
   later, it should be.
+
+## 10 Interaction
+
+Friday is driven like a desktop: by the arrows and by the mouse. Every surface follows one grammar,
+held by the components they share rather than by each surface's own code.
+
+| Input | Means | Where it is built |
+| --- | --- | --- |
+| ←↑↓→ | move: a row in a list, a tile in a grid, between panes | `internal/tui/desk_list.go`, `desk_tiles.go` |
+| home, end, pgup, pgdn | the first, the last, a screenful | the same |
+| enter | open, or do what the selected thing does | each surface's `handle` |
+| space | look inside without leaving: a quick look, a reader | the same |
+| esc | step out one level; from a window's top level or an empty input, out to the bars | `core_keyboard.go`, `desk_bars_focus.go` |
+| q, ctrl+w, ✕ | close a window | `desk_window.go` |
+| ↑ on an empty input | onto the conversation's newest block; on the home screen, onto the desktop's icons | `chat_cursor.go`, `home_desktop.go` |
+| ctrl+↑, ctrl+↓ | earlier messages | `core_keys.go` |
+| a click | select | `listView.clickRow`, `tileGrid.clickTile` |
+| a click on the selected thing | open it, as enter does | the same |
+| a click on a button, a tab or the dock | act at once | `desk_window.go` (`hintBar`) |
+| the wheel | scroll what is under the pointer, never what is hidden | `desk_window.go` (`wheel`) |
+
+**Windows and dialogs.** Anything browsed is a window: it floats on the wallpaper with a margin, its
+body frosted glass, its title and ▢ zoom and ✕ close in its top edge. A dialog is kept for a
+question that must be answered. A window's keys are buttons in its foot, so nothing a key does is
+out of reach of the mouse.
+
+**Adding a surface.** A list is a `listView`, a grid a `tileGrid`, a foot a `hintBar`. A window
+implements `wheel` (or `wheelAt` for panes) and `click`; it draws as if its inside were the screen
+(`within`). `TestConformEveryWindowTakesTheWheel` finds every window in the source and holds it to the
+wheel.
+

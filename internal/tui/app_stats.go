@@ -45,8 +45,18 @@ func (s *statsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if n > 0 {
 			s.selected = min(s.turn(n)+1, n-1)
 		}
+	case "home":
+		s.selected = 0
+	case "end":
+		s.selected = -1 // the latest, as it comes
 	}
 	return false, nil
+}
+
+// wheel steps from turn to turn, as ←/→ do.
+func (s *statsApp) wheel(m *Model, up bool) tea.Cmd {
+	_, cmd := s.handle(m, keyPress(map[bool]string{true: "left", false: "right"}[up]))
+	return cmd
 }
 
 // turn is the selected turn's index among n.

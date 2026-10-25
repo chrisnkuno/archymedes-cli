@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -116,6 +115,8 @@ type Model struct {
 	overlay     overlay // a dialog over the focused window
 	// windows are the open apps beside Chat; active is the focused one (0 = Chat, i = windows[i-1]).
 	windows  []window
+	windowState // where the focused window floats, zoomed or not (desk_window.go)
+	desk        deskState // the home screen's icons (home_desktop.go)
 	active   int
 	expanded bool
 
@@ -157,6 +158,7 @@ type Model struct {
 	firstRun       firstRunState
 	firstTurnTip   bool
 	projectChanged int
+	adviceState    // next steps and typing hints (chat_suggest.go)
 	toasts         []toast
 	toastSeq       int
 	// knownFiles is the project's file list once read (by /files, or for @ completion).
@@ -376,9 +378,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// The Gallery's pictures own their messages: fetched photos, Kitty frames, the Kitty probe.
 	if _, cell := msg.(uv.CellSizeEvent); !cell && pictureurl.IsPictureMsg(msg) {
 		if g := m.galleryWindow(); g != nil {
-			return m, g.update(m, msg)
+			var cmd tea.Cmd
+			m.within(func() { cmd = g.update(m, msg) })
+			return m, cmd
 		}
 		return m, nil
+	}
+	if cmd, ok := m.adviceMsg(msg); ok {
+		return m, cmd
 	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -386,7 +393,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sel.clear()
 		m.input.setWidth(m.width - 4)
 		if g := m.galleryWindow(); g != nil {
-			return m, g.relayout(m)
+			var cmd tea.Cmd
+			m.within(func() { cmd = g.relayout(m) })
+			return m, cmd
 		}
 		return m, nil
 	case sixelDrawMsg:
@@ -531,13 +540,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.recentSessions = msg.sessions
 		}
-		switch p := m.overlay.(type) {
-		case *resumePicker:
+		if p, ok := windowOf[*resumePicker](m); ok {
 			p.load(msg)
-		case *startMenu:
+		}
+		if p, ok := m.overlay.(*startMenu); ok {
 			p.addSessions(m)
-		case *finder:
-			p.reload(m)
+		}
+		if f, ok := windowOf[*finder](m); ok {
+			f.reload(m)
 		}
 		return m, nil
 	case startupNoticesMsg:
@@ -616,19 +626,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseReleaseMsg:
 		return m, m.selectRelease()
 	case tea.MouseWheelMsg:
-		m.sel.clear() // the text moves under it
-		if p, ok := m.activeWindow().(*pager); ok && m.overlay == nil {
-			var cmd tea.Cmd
-			p.vp, cmd = p.vp.Update(msg)
-			return m, cmd
-		}
-		switch msg.Mouse().Button {
-		case tea.MouseWheelUp:
-			return m, m.scrollBy(3)
-		case tea.MouseWheelDown:
-			return m, m.scrollBy(-3)
-		}
-		return m, nil
+		return m, m.wheel(msg)
 	case tea.KeyPressMsg:
 		return m, m.handleKey(msg)
 	}
@@ -639,12 +637,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 var modeBlurb = map[string]string{
 	"plan": "read-only, investigates and proposes", "build": "edits with your approval",
 	"auto": "edits and runs without asking", "defender": "security triage",
-}
-
-func nextMode(mode string) string {
-	cycle := []string{"plan", "build", "auto", "defender"}
-	i := slices.Index(cycle, mode)
-	return cycle[(i+1)%len(cycle)]
 }
 
 // submit sends what was typed: a command runs now; a message is sent, or queued behind a running turn.
@@ -685,6 +677,7 @@ func (m *Model) send(text string) tea.Cmd {
 	m.stopScroll()
 	m.tr.toBottom()
 	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying, m.composing, m.testFirst = busy, time.Now(), usageTotals{}, nil, "", nil, nil
+	m.nextSteps, m.typing.options, m.tr.sel = nil, nil, nil
 	agent, id := m.agent, m.session.ID
 	return tea.Batch(func() tea.Msg {
 		// A finished turn arrives in the agent's stream (acp.TurnEnded); only a failure comes back here.
@@ -755,30 +748,6 @@ func (m *Model) cancelTurn() tea.Cmd {
 	m.goal = nil
 	_ = m.agent.Cancel(m.session.ID)
 	return m.toast(toastInfo, "Stopping…")
-}
-
-func (m *Model) setMode(mode string) tea.Cmd {
-	if !slices.Contains(acp.Modes, mode) {
-		return m.toast(toastWarn, fmt.Sprintf("No mode %q — choose %s", mode, strings.Join(acp.Modes, ", ")))
-	}
-	if m.agent == nil {
-		return nil
-	}
-	if m.phase == busy {
-		if mode == m.mode {
-			m.pendingMode = ""
-			return m.toast(toastInfo, "Staying in "+mode+" mode")
-		}
-		m.pendingMode = mode
-		return m.toast(toastInfo, "Switching to "+mode+" mode when this turn ends")
-	}
-	m.pendingMode = ""
-	agent, id := m.agent, m.session.ID
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return modeSetMsg{mode, agent.SetMode(ctx, id, mode)}
-	}
 }
 
 func (m *Model) quit() tea.Cmd {

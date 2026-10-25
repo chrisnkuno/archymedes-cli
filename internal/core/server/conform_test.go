@@ -60,7 +60,7 @@ func TestConformSessionCommands(t *testing.T) {
 func TestConformEvents(t *testing.T) {
 	docs := protocolDocs(t)
 	events := []string{loop.EventDelta, loop.EventModelTurn, loop.EventToolCall, loop.EventToolResult, loop.EventCompose, loop.EventRetry, loop.EventSteered, loop.EventTestFirst, loop.EventStop, loop.EventCompaction, "context_shrunk"}
-	notices := []string{"runtime", "subagent", "thread", "compaction", "steering_unread", "rules_problems"}
+	notices := []string{"runtime", "subagent", "thread", "compaction", "steering_unread", "rules_problems", "suggestions", "edit_notes"}
 	for _, e := range append(events, notices...) {
 		for _, p := range conform.Name("event", e) {
 			t.Error(p)

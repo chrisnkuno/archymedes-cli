@@ -51,8 +51,11 @@ func newStartMenu(m *Model) *startMenu {
 		if c.args != "" && c.name != "mode" && c.name != "model" && c.name != "diff" && c.name != "undo" {
 			continue // needs an argument the menu cannot ask for
 		}
-		c := c
-		p.entries = append(p.entries, paletteEntry{"/" + c.name, c.help, "action", func(m *Model) tea.Cmd { return c.run(m, "") }})
+		c, hint := c, c.help
+		if a, ok := findAction(c.name); ok {
+			hint = keyLabel(m.keys.keysFor(a)) + " · " + hint // the key that skips the menu
+		}
+		p.entries = append(p.entries, paletteEntry{"/" + c.name, hint, "action", func(m *Model) tea.Cmd { return c.run(m, "") }})
 	}
 	p.addSessions(m)
 	p.refilter()
@@ -171,4 +174,10 @@ func (p *startMenu) view(m *Model) string {
 	}
 	b.WriteString(th.Faint.Render(ansi.Truncate(fmt.Sprintf("%d found · enter open · esc close", len(p.shown)), inner, "")))
 	return frame(th, "Start", b.String(), width)
+}
+
+// wheel moves through the menu's rows, as ↑/↓ do.
+func (p *startMenu) wheel(m *Model, up bool) tea.Cmd {
+	_, cmd := p.handle(m, keyPress(map[bool]string{true: "up", false: "down"}[up]))
+	return cmd
 }

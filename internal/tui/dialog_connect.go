@@ -513,20 +513,55 @@ func (d *connectDialog) rowCount() int {
 	return 0
 }
 
-// choose is a click on row i of the list or the models.
+// choose is a click on row i of the list or the models: the first selects it, a second goes on.
 func (d *connectDialog) choose(m *Model, i int) tea.Cmd {
 	switch d.step {
 	case stepChoose:
 		if i < len(d.providers) {
-			d.cursor, d.fromList = i, true
+			if d.cursor != i {
+				d.cursor = i
+				return nil
+			}
+			d.fromList = true
 			return d.selectProvider(m, d.providers[i], "")
 		}
 	case stepModels:
 		start := max(0, min(d.mcursor-connectModelRows/2, len(d.shown)-connectModelRows))
 		if start+i < len(d.shown) {
-			d.mcursor = start + i
+			if d.mcursor != start+i {
+				d.mcursor = start + i
+				return nil
+			}
 			return d.pick(m)
 		}
+	}
+	return nil
+}
+
+// click puts the cursor in the field clicked; the rows are rowPicker's.
+func (d *connectDialog) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if d.step == stepForm {
+		for i := range d.inputs {
+			if m.zones.dialog.Get(fmt.Sprintf("field:%d", i)).InBounds(msg) {
+				d.focus = i
+				return d.focusInput()
+			}
+		}
+		return nil
+	}
+	for i := range d.rowCount() {
+		if m.zones.dialog.Get(rowID(i)).InBounds(msg) {
+			return d.choose(m, i)
+		}
+	}
+	return nil
+}
+
+// wheel moves through the providers or the models.
+func (d *connectDialog) wheel(m *Model, up bool) tea.Cmd {
+	if d.step == stepChoose || d.step == stepModels {
+		_, cmd := d.handle(m, keyPress(map[bool]string{true: "up", false: "down"}[up]))
+		return cmd
 	}
 	return nil
 }
@@ -573,13 +608,13 @@ func (d *connectDialog) view(m *Model) string {
 			if d.firstRun {
 				leave = "esc quit"
 			}
-			b.WriteString("\n" + th.Faint.Render("enter choose · or just paste a key · "+leave))
+			b.WriteString("\n" + m.dialogHintBar(inner, button{"enter", "choose"}, button{"esc", strings.TrimPrefix(leave, "esc ")}) + th.Faint.Render(" · or paste a key"))
 		}
 	case stepForm:
 		p := d.provider
 		b.WriteString(th.Strong.Render(p.Label) + "\n")
 		if p.KeyURL != "" {
-			b.WriteString(th.Faint.Render("Get a key: ") + th.Highlight.Render(ansi.Truncate(p.KeyURL, inner-11, "…")) + "\n")
+			b.WriteString(th.Faint.Render("Get a key: ") + th.Highlight.Hyperlink(p.KeyURL).Render(ansi.Truncate(p.KeyURL, inner-11, "…")) + "\n")
 		}
 		for i, field := range p.Fields {
 			label := field.Label
@@ -588,7 +623,7 @@ func (d *connectDialog) view(m *Model) string {
 			}
 			b.WriteString("\n" + th.Body.Render(ansi.Truncate(label, inner, "…")) + "\n")
 			d.inputs[i].SetWidth(max(inner-4, 4))
-			b.WriteString(d.inputs[i].View() + "\n")
+			b.WriteString(mark(m.zones.dialog, fmt.Sprintf("field:%d", i), d.inputs[i].View()) + "\n")
 			if d.errField == field.Key && d.err != "" {
 				b.WriteString(th.Bad.Render(ansi.Wrap(d.err, inner, "")) + "\n")
 			}
@@ -614,7 +649,7 @@ func (d *connectDialog) view(m *Model) string {
 		if d.err != "" && d.errField == "" {
 			b.WriteString("\n" + th.Bad.Render(ansi.Wrap(d.err, inner, "")) + "\n")
 		}
-		b.WriteString("\n" + th.Faint.Render("paste or type · tab next field · enter connect (its models are fetched) · esc back"))
+		b.WriteString("\n" + m.dialogHintBar(inner, button{"enter", "connect"}, button{"tab", "next field"}, button{"esc", "back"}))
 	case stepWorking:
 		b.WriteString(th.Strong.Render(d.provider.Label) + "\n\n" + m.spin.View() + th.Faint.Render(" "+d.working+"…"))
 	case stepModels:
@@ -644,7 +679,7 @@ func (d *connectDialog) view(m *Model) string {
 			}
 			b.WriteString(th.Faint.Render(hint) + "\n")
 		}
-		b.WriteString("\n" + th.Faint.Render("type to filter · enter use · ctrl+e change key or URL · esc close"))
+		b.WriteString("\n" + m.dialogHintBar(inner, button{"enter", "use"}, button{"ctrl+e", "change key or URL"}, button{"esc", "close"}))
 	}
 	body := b.String()
 	if photo != nil {

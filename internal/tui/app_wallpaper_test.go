@@ -14,7 +14,7 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 	m, dir := firstRunModel(t)
 	typeText(m, "/wallpaper")
 	press(m, tea.KeyEnter, 0)
-	if _, ok := m.overlay.(*wallpaperPicker); !ok || !strings.Contains(screen(m), "Take turns") {
+	if _, ok := m.activeWindow().(*wallpaperPicker); !ok || !strings.Contains(screen(m), "Take turns") {
 		t.Fatalf("no picker:\n%s", screen(m))
 	}
 	press(m, tea.KeyRight, 0) // abstract only, taking turns: shown at once
@@ -24,7 +24,7 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 	for range 3 {
 		press(m, tea.KeyRight, 0) // past sci-fi and antiquity only, to the first single picture
 	}
-	first := m.overlay.(*wallpaperPicker).choices[m.overlay.(*wallpaperPicker).grid.cursor]
+	first := m.activeWindow().(*wallpaperPicker).choices[m.activeWindow().(*wallpaperPicker).grid.cursor]
 	if p, ok := gallery.ByID(first); !ok || p.Theme != "abstract" || m.homePhoto().ID != first {
 		t.Fatalf("the first single picture should be abstract: %q", first)
 	}
@@ -34,10 +34,11 @@ func TestTheWallpaperPickerPreviewsKeepsAndRemembers(t *testing.T) {
 	}
 
 	m.welcome() // saved first, so the wallpaper saved after it must keep it
-	m.openOverlay(newWallpaperPicker(m))
+	m.bar.on = false
+	m.openWindow(newWallpaperPicker(m))
 	press(m, tea.KeyLeft, 0) // wraps to None
 	press(m, tea.KeyEnter, 0)
-	if m.overlay != nil || m.wallChoice != wallpaperNone || !m.wallpaperOff() || config.LoadState(dir).Wallpaper != wallpaperNone {
+	if m.activeWindow() != nil || m.wallChoice != wallpaperNone || !m.wallpaperOff() || config.LoadState(dir).Wallpaper != wallpaperNone {
 		t.Fatalf("None was not kept: %q", m.wallChoice)
 	}
 	if strings.Contains(screen(m), "Unsplash") {

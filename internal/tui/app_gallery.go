@@ -203,6 +203,14 @@ func (g *galleryApp) relayout(m *Model) tea.Cmd {
 	return tea.Batch(g.builtIn.SetSize(l.innerCols, l.pictureRow), g.live.SetSize(l.innerCols, l.pictureRow))
 }
 
+// wheel steps through the pictures, a notch a picture.
+func (g *galleryApp) wheel(m *Model, up bool) tea.Cmd {
+	if up {
+		return g.show(m, g.index-1)
+	}
+	return g.show(m, g.index+1)
+}
+
 func (g *galleryApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "ctrl+c":
@@ -269,7 +277,16 @@ func (g *galleryApp) view(m *Model) string {
 		}
 		rows = fitLines(strings.Split(block, "\n"), m.width, body)
 	}
-	return strings.Join(append(append([]string{header}, rows...), " "+th.Faint.Render(ansi.Truncate(g.footer(), max(m.width-2, 0), "…"))), "\n")
+	state := th.Faint.Render(" drawn as " + g.mode.String() + " · fit " + fitName(g.builtIn.Fit()) + " ·")
+	buttons := []button{{"←", "previous"}, {"→", "next"}, {"↓", "next theme"}, {"w", "wallpaper"}, {"f", "fit"}}
+	if len(g.modes()) > 1 {
+		buttons = append(buttons, button{"g", "how it draws"})
+	}
+	if !g.offline {
+		buttons = append(buttons, button{"r", "reload"})
+	}
+	foot := state + m.hintBar(max(m.width-ansi.StringWidth(state), 0), append(buttons, button{"q", "close"})...)
+	return strings.Join(append(append([]string{header}, rows...), foot), "\n")
 }
 
 // liveContent is the live picture, or what is happening instead of it.
@@ -303,17 +320,6 @@ func (g *galleryApp) pane(m *Model, l galleryLayout, label, content string, p ga
 	// Lip Gloss v2 counts the border inside Width and Height.
 	return lipgloss.NewStyle().Border(th.Border).BorderForeground(th.BorderColor).
 		Width(l.innerCols + 2).Height(l.innerRows + 2).Render(inner)
-}
-
-func (g *galleryApp) footer() string {
-	parts := []string{"drawn as " + g.mode.String(), "fit " + fitName(g.builtIn.Fit()), "←/→ picture", "↑/↓ theme", "w wallpaper", "f fit"}
-	if len(g.modes()) > 1 {
-		parts = append(parts, "g how it draws")
-	}
-	if !g.offline {
-		parts = append(parts, "r reload")
-	}
-	return strings.Join(append(parts, "esc close"), " · ")
 }
 
 // kittyBadge says which graphics the terminal draws: Kitty (yes, no, or still asking) and Sixel.

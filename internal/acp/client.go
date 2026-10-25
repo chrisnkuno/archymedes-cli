@@ -527,6 +527,20 @@ func (c *Client) Sessions(ctx context.Context, cwd string) ([]SessionSummary, er
 	return sessions, err
 }
 
+// Suggest asks the engine to weigh the completions offered for what is being typed: each
+// option's probability and none's. ranked is false when the engine has no judge, or no such method.
+func (c *Client) Suggest(ctx context.Context, input string, options []string) (scores []float64, none float64, ranked bool) {
+	var result struct {
+		Ranked bool      `json:"ranked"`
+		Scores []float64 `json:"scores"`
+		None   float64   `json:"none"`
+	}
+	if err := c.call(ctx, "_archymedes/suggest", map[string]any{"input": input, "options": options}, &result); err != nil || !result.Ranked || len(result.Scores) != len(options) {
+		return nil, 0, false
+	}
+	return result.Scores, result.None, true
+}
+
 // CloseSession ends a session the client no longer shows.
 func (c *Client) CloseSession(ctx context.Context, sessionID string) error {
 	return c.call(ctx, "session/close", map[string]any{"sessionId": sessionID}, nil)

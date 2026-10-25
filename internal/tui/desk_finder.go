@@ -55,6 +55,7 @@ type finder struct {
 	items   []finderItem
 	grid    tileGrid
 	looking bool // a quick look at the item under the cursor
+	rows    int  // rows of tiles as last drawn: a page for pgup/pgdn
 }
 
 func newFinder(m *Model) *finder {
@@ -73,8 +74,18 @@ func newFinder(m *Model) *finder {
 
 // openFinder shows the Finder and reads what it lists beyond apps and commands.
 func (m *Model) openFinder() tea.Cmd {
-	m.openOverlay(newFinder(m))
+	m.openWindow(newFinder(m))
 	return m.startMenuSources()
+}
+
+func (f *finder) title() string { return "Finder" }
+func (f *finder) key() string   { return "finder" }
+
+func (f *finder) wheel(_ *Model, up bool) tea.Cmd {
+	if !f.sidebar {
+		f.grid.wheel(up)
+	}
+	return nil
 }
 
 // reload lists the place (or the search) again, keeping the cursor on the same name when it is there.
@@ -289,7 +300,7 @@ func (f *finder) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			f.sidebar = true // off the grid's left edge, into the places
 			return false, nil
 		}
-		f.grid.move(k, 1)
+		f.grid.move(k, f.rows)
 		return false, nil
 	}
 	// Anything else is typed into the search.
@@ -361,20 +372,19 @@ func (f *finder) open(m *Model) (bool, tea.Cmd) {
 		f.reload(m)
 		return false, nil
 	}
-	m.overlay = nil // what it opens may be a window or another dialog
-	return false, it.open(m)
+	return false, it.open(m) // a window it opens comes to the front; the Finder stays open behind
 }
 
 // click picks a place, or the icon under the pointer; a click on the icon already picked opens it.
 func (f *finder) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 	for i := range finderPlaces {
-		if m.zones.dialog.Get(fmt.Sprintf("place:%d", i)).InBounds(msg) {
+		if m.zones.frame.Get(fmt.Sprintf("place:%d", i)).InBounds(msg) {
 			f.choosePlace(m, i)
 			return nil
 		}
 	}
 	for i := range f.grid.tiles {
-		if m.zones.dialog.Get(f.grid.zoneID(i)).InBounds(msg) {
+		if m.zones.frame.Get(f.grid.zoneID(i)).InBounds(msg) {
 			f.sidebar = false
 			if i == f.grid.cursor {
 				_, cmd := f.open(m)
@@ -390,12 +400,13 @@ func (f *finder) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 
 func (f *finder) view(m *Model) string {
 	th := m.th
-	width := overlayWidth(m, 124)
-	inner := max(width-4, 20)
-	// The frame, its title, the toolbar, two rules and the status line take 8 rows; the rest holds
-	// whole rows of tiles, and no more, so the window has no empty band under the grid.
+	width := m.width
+	inner := max(width-2, 20)
+	// The toolbar, two rules and the status line take 4 rows; the rest holds whole rows of tiles.
 	_, tileHeight := tileOuter()
-	height := max((m.height-8)/tileHeight, 1) * tileHeight
+	f.rows = max((m.windowHeight()-4)/tileHeight, 1)
+	height := max(m.windowHeight()-4, f.rows*tileHeight) // the status line stays at the foot
+	f.grid.inWindow = true
 	tool := f.toolbar(m, inner)
 	rule := th.Faint.Render(strings.Repeat("─", inner))
 	gridWidth := max(inner-finderSidebar, tileOuterWidth())
@@ -410,7 +421,13 @@ func (f *finder) view(m *Model) string {
 	}
 	main = lipgloss.NewStyle().Width(gridWidth).Height(height).MaxHeight(height).Render(main)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, f.places(m, height), main)
-	return frame(th, "Finder", tool+"\n"+rule+"\n"+body+"\n"+rule+"\n"+f.status(m, inner), width)
+	out := []string{tool, rule}
+	out = append(out, strings.Split(body, "\n")...)
+	out = append(out, rule, f.status(m, inner))
+	for i := range out {
+		out[i] = " " + out[i]
+	}
+	return strings.Join(out, "\n")
 }
 
 func tileOuterWidth() int { w, _ := tileOuter(); return w }
@@ -465,7 +482,7 @@ func (f *finder) places(m *Model, height int) string {
 				style = style.Background(th.Tint(th.Primary, 0.55))
 			}
 		}
-		lines = append(lines, mark(m.zones.dialog, fmt.Sprintf("place:%d", i), style.Render(padRight(row, finderSidebar-2))))
+		lines = append(lines, mark(m.zones.frame, fmt.Sprintf("place:%d", i), style.Render(padRight(row, finderSidebar-2))))
 	}
 	return lipgloss.NewStyle().Width(finderSidebar).Height(height).MaxHeight(height).Render(strings.Join(lines, "\n"))
 }
@@ -525,11 +542,10 @@ func (f *finder) status(m *Model, width int) string {
 	if len(f.items) > 0 {
 		picked = " · " + th.Body.Render(f.items[f.grid.cursor].name)
 	}
-	keys := "←↑↓→ move · enter open · space look · tab places · type to search · esc close"
+	buttons := []button{{"enter", "open"}, {"space", "look"}, {"tab", "places"}, {"esc", "close"}}
 	if f.dir != "" {
-		keys = "backspace up · " + keys
+		buttons = append([]button{{"backspace", "up"}}, buttons...)
 	}
 	line := th.Faint.Render(count) + picked
-	room := max(width-ansi.StringWidth(line)-2, 0)
-	return line + "  " + th.Faint.Render(ansi.Truncate(keys, room, "…"))
+	return line + " " + m.hintBar(max(width-ansi.StringWidth(line)-1, 0), buttons...)
 }

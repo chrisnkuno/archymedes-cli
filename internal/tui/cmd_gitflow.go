@@ -9,7 +9,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/friday-cli/internal/project"
@@ -173,6 +172,20 @@ func (g *defaultBranchGuard) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cm
 	return false, nil
 }
 
+// rowCount and choose make the three choices clickable: a click picks one, a second click on it goes.
+func (g *defaultBranchGuard) rowCount() int { return 3 }
+func (g *defaultBranchGuard) choose(m *Model, i int) tea.Cmd {
+	if g.cursor != i {
+		g.cursor = i
+		return nil
+	}
+	closed, cmd := g.handle(m, keyPress("enter"))
+	if closed && m.overlay == g {
+		m.overlay = nil
+	}
+	return cmd
+}
+
 func (g *defaultBranchGuard) view(m *Model) string {
 	th := m.th
 	width := overlayWidth(m, 72)
@@ -180,9 +193,11 @@ func (g *defaultBranchGuard) view(m *Model) string {
 	g.name.SetWidth(max(inner-16, 4))
 	row := func(i int, text string) string {
 		if i == g.cursor {
-			return lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(padRight("› "+ansi.Strip(text), inner))
+			text = selectedBar(m, padRight("› "+ansi.Strip(text), inner))
+		} else {
+			text = "  " + text
 		}
-		return "  " + text
+		return mark(m.zones.dialog, rowID(i), text)
 	}
 	verb := "Push"
 	if g.plan.intent == "pr" {
@@ -192,7 +207,7 @@ func (g *defaultBranchGuard) view(m *Model) string {
 		row(0, "New branch: ") + g.name.View() + "\n" +
 		row(1, "Push "+g.plan.branch+" itself") + "\n" +
 		row(2, "Cancel") + "\n\n" +
-		th.Faint.Render(ansi.Truncate("↑/↓ choose · type the name · enter go · esc cancel", inner, ""))
+		m.dialogHintBar(inner, button{"enter", "go"}, button{"esc", "cancel"})
 	return frame(th, "On the default branch", body, width)
 }
 

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/friday-cli/internal/config"
@@ -16,29 +15,52 @@ import (
 // and is saved to keys.json. A key another action uses is named and refused; r resets a row, R all.
 
 type keysApp struct {
-	rows    []action // every action, grouped
-	cursor  int
+	rows    []keyRow // each group's name, then its actions
+	list    listView
 	waiting bool // the next key pressed becomes the binding
 	note    string
 	bad     bool
 }
 
+// keyRow is a row of the list: a group's name, or an action in it.
+type keyRow struct {
+	group  string
+	action action
+}
+
 func newKeysApp(m *Model) *keysApp {
-	k := &keysApp{}
+	k := &keysApp{list: listView{zone: "key"}}
 	for _, group := range actionGroups {
+		k.rows = append(k.rows, keyRow{group: group})
 		for _, a := range actions {
 			if a.group == group {
-				k.rows = append(k.rows, a)
+				k.rows = append(k.rows, keyRow{action: a})
 			}
 		}
 	}
+	k.list.skip = func(i int) bool { return k.rows[i].group != "" }
+	k.list.move("home", len(k.rows))
 	return k
 }
 
 func (k *keysApp) title() string    { return "Keys" }
 func (k *keysApp) key() string      { return "keys" }
 func (k *keysApp) capturing() bool  { return k.waiting }
-func (k *keysApp) selected() action { return k.rows[k.cursor] }
+func (k *keysApp) selected() action { return k.rows[k.list.cursor].action }
+
+func (k *keysApp) wheel(_ *Model, up bool) tea.Cmd {
+	k.list.wheel(up, len(k.rows))
+	return nil
+}
+
+// click selects an action; a second click on it waits for its new key, as enter does.
+func (k *keysApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if i, ok := k.list.clicked(m.zones.frame, msg, len(k.rows)); ok && k.list.clickRow(i) {
+		_, cmd := k.handle(m, keyPress("enter"))
+		return cmd
+	}
+	return nil
+}
 
 func (k *keysApp) say(text string, bad bool) { k.note, k.bad = text, bad }
 
@@ -56,10 +78,6 @@ func (k *keysApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch pressed {
 	case "esc", "q":
 		return true, nil
-	case "up", "k":
-		k.cursor = (k.cursor - 1 + len(k.rows)) % len(k.rows)
-	case "down", "j":
-		k.cursor = (k.cursor + 1) % len(k.rows)
 	case "enter", "space":
 		if a := k.selected(); a.locked {
 			k.say(a.label+" is fixed: typing depends on it.", true)
@@ -82,6 +100,8 @@ func (k *keysApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 		m.keyOverrides = map[string][]string{}
 		k.apply(m, "Every key is back to its default.")
+	default:
+		k.list.move(pressed, len(k.rows))
 	}
 	return false, nil
 }
@@ -136,26 +156,24 @@ func (k *keysApp) view(m *Model) string {
 	th := m.th
 	height := max(m.windowHeight(), 1)
 	width := m.width
-	header := " " + th.Title.Render("Keys") + th.Faint.Render("  enter change · r reset · R reset all · esc close")
-	lines := []string{ansi.Truncate(header, width, ""), ""}
-
 	// The key column takes what the label and the state tag leave, so narrow windows fit.
 	labelWidth := min(22, max(width/3, 8))
 	keyWidth := min(24, max(width-labelWidth-4-1-1-8, 6))
-	group := ""
-	var body []string
-	selectedRow := 0
-	for i, a := range k.rows {
-		if a.group != group {
-			group = a.group
-			if len(body) > 0 {
-				body = append(body, "")
-			}
-			body = append(body, "  "+th.Strong.Render(group))
+	from, to := k.list.window(len(k.rows), max(height-2, 1))
+	var lines []string
+	for i := from; i < to; i++ {
+		r := k.rows[i]
+		if r.group != "" {
+			lines = append(lines, "  "+th.Strong.Render(r.group))
+			continue
 		}
+		a := r.action
 		keys := keyLabel(m.keys.keysFor(a))
 		if extra := m.keys.keysFor(a); len(extra) > 1 && keys != "↑/↓" {
 			keys += th.Faint.Render(" · " + prettyKey(extra[1]))
+		}
+		if i == k.list.cursor && k.waiting {
+			keys = "press a key…"
 		}
 		state := ""
 		switch {
@@ -166,33 +184,19 @@ func (k *keysApp) view(m *Model) string {
 		}
 		label := padRight(ansi.Truncate(a.label, labelWidth, "…"), labelWidth)
 		cell := padRight(ansi.Truncate(keys, keyWidth, "…"), keyWidth)
-		row := "    " + label + " " + th.Key.Render(cell) + " " + state
-		if i == k.cursor {
-			selectedRow = len(body)
-			mark := "  › "
-			if k.waiting {
-				cell = padRight("press a key…", keyWidth)
-			}
-			row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).
-				Render(ansi.Truncate(padRight(mark+label+" "+cell+" "+ansi.Strip(state), width-2), width-2, ""))
-		}
-		body = append(body, ansi.Truncate(row, width, "…"))
+		lines = append(lines, k.list.row(m, m.zones.frame, i, "    "+label+" "+th.Key.Render(cell)+" "+state, width))
 	}
-
-	room := max(height-len(lines)-2, 1)
-	start := max(0, min(selectedRow-room/2, len(body)-room))
-	end := min(start+room, len(body))
-	lines = append(lines, body[start:end]...)
-	for len(lines) < height-1 {
+	for len(lines) < height-2 {
 		lines = append(lines, "")
 	}
-	note := th.Faint.Render(fmt.Sprintf("%d actions · changes apply at once and are saved", len(k.rows)))
+	note := th.Faint.Render(fmt.Sprintf("%d actions · changes apply at once and are saved", len(actions)))
 	if k.note != "" {
 		note = th.Body.Render(k.note)
 		if k.bad {
 			note = th.Warn.Render(k.note)
 		}
 	}
-	lines = append(lines, " "+ansi.Truncate(note, max(width-2, 0), "…"))
-	return strings.Join(lines[:height], "\n")
+	lines = append(lines, " "+ansi.Truncate(note, max(width-2, 0), "…"),
+		m.hintBar(width, button{"enter", "change"}, button{"r", "reset"}, button{"R", "reset all"}, button{"q", "close"}))
+	return strings.Join(fitLines(lines, width, height), "\n")
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chrisnkuno/friday-cli/internal/core/advise"
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
@@ -53,6 +54,13 @@ func TestConformDocumentedMeasures(t *testing.T) {
 		{"TOOLS.md", fmt.Sprintf("over %s characters (%s for a sub-agent)", thousands(b.MaxResultChars), thousands(roles.SubagentResultChars))},
 		{"SUBAGENTS.md", fmt.Sprintf("(default %d, at most %s)", seconds(agents.WaitDefault), thousands(seconds(agents.WaitCeiling)))},
 		{"SUBAGENTS.md", fmt.Sprintf("tool results to %s characters each", thousands(roles.SubagentResultChars))},
+		{"USER_GUIDE.md", fmt.Sprintf("ends with up to %d next\nsteps", advise.MaxSteps)},
+		{"USER_GUIDE.md", fmt.Sprintf("useful at %.1f or above", advise.MinUseful)},
+		{"USER_GUIDE.md", fmt.Sprintf("when it is sure at %.1f or above", advise.MinConcern)},
+		{"PROTOCOL.md", fmt.Sprintf("at most\n%d)", advise.MaxOptions)},
+		{"PROTOCOL.md", fmt.Sprintf("within\n%d seconds", seconds(advise.PickTimeout))},
+		{"PROTOCOL.md", fmt.Sprintf("concerns at %.1f or above", advise.MinConcern)},
+		{"USER_GUIDE.md", fmt.Sprintf("proposes up to %s next", spelled[advise.MaxProposed])},
 	}
 	for _, m := range measures {
 		data, err := os.ReadFile("../../docs/engine/" + m.doc)

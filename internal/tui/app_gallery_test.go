@@ -67,7 +67,7 @@ func TestTheGalleryShowsTheBuiltInPhotoBesideTheLiveOneWithCaptions(t *testing.T
 		t.Fatalf("fetched without saying who asks: %q", agents)
 	}
 	s := screen(m)
-	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Friday", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "←/→ picture", "↑/↓ theme", "Kitty:", "Sixel:"} {
+	for _, want := range []string{"Gallery", fmt.Sprintf("1 of %d", len(gallery.Photos)), "built into Friday", "live from Unsplash", gallery.Pick(0).Title, "by " + gallery.Pick(0).By, "fit contain", "→ next", "↓ next theme", "Kitty:", "Sixel:"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("Gallery lacks %q:\n%s", want, s)
 		}
@@ -111,9 +111,9 @@ func TestTheGalleryTurnsChangesFitAndCloses(t *testing.T) {
 	if g.builtIn.Mode() != picture.PictureGlyph {
 		t.Fatal("switched to Kitty on a terminal without it")
 	}
-	press(m, tea.KeyEscape, 0)
+	typeText(m, "q")
 	if m.galleryWindow() != nil {
-		t.Fatal("esc did not close the Gallery")
+		t.Fatal("q did not close the Gallery")
 	}
 }
 
@@ -203,8 +203,11 @@ func TestTheGalleryDrawsInSixelWhereTheTerminalCanAndOnlyThere(t *testing.T) {
 	if strings.Count(raw, "\x1bP0;1q") != 2 || !strings.HasPrefix(raw, ansi.SaveCursor) || !strings.HasSuffix(raw, ansi.RestoreCursor) {
 		t.Fatalf("two sixel pictures between a saved and restored cursor; got %d bytes", len(raw))
 	}
-	l := g.layout(m)
-	if !strings.Contains(raw, ansi.CursorPosition(2, 5)) || !strings.Contains(raw, ansi.CursorPosition(l.paneWidth+3, 5)) {
+	var l galleryLayout
+	m.within(func() { l = g.layout(m) })
+	// Inside the window: past its border and the Gallery's header, the pane's border and label.
+	in := m.windowInside().Min
+	if !strings.Contains(raw, ansi.CursorPosition(in.X+2, in.Y+4)) || !strings.Contains(raw, ansi.CursorPosition(in.X+l.paneWidth+3, in.Y+4)) {
 		t.Fatal("not placed at the panes' picture cells")
 	}
 	// Nothing changed: not drawn again.
@@ -285,7 +288,7 @@ func TestTheHomeWallpaperStaysInCellsEvenWhereSixelIsDrawn(t *testing.T) {
 	m, cmd := sixelHome(t)
 	m.opts.NoWallpaper = false
 	s := screen(m)
-	if !strings.Contains(s, "▀") || !strings.Contains(s, "by "+m.homePhoto().By) || !strings.Contains(s, "a coding agent that shows its work") {
+	if !photoShown(s) || !strings.Contains(s, "by "+m.homePhoto().By) || !strings.Contains(s, "F R I D A Y") {
 		t.Fatalf("no wallpaper, credit or card on a Sixel terminal:\n%s", s)
 	}
 	if raw, _ := drawn(t, m, cmd); strings.Contains(raw, "\x1bP0;1q") {

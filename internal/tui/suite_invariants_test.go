@@ -88,7 +88,7 @@ func checkFrame(m *Model) error {
 			return fmt.Errorf("row %d is %d wide in a %d-wide window: %q", i, w, m.width, ansi.Strip(row))
 		}
 	}
-	if !m.opts.NoWallpaper && !m.opts.NoPhotos && m.width > 0 && m.height > 0 {
+	if !m.wallpaperOff() && m.width > 0 && m.height > 0 {
 		grid := cells(m.View().Content, m.width, m.height)
 		for y := range m.height {
 			for x := range m.width {

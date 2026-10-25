@@ -10,6 +10,7 @@ setting see [Configuration](CONFIGURATION.md); for every tool see [Tools](TOOLS.
 - [Approvals](#approvals)
 - [Talking to Friday while it works](#talking-to-friday-while-it-works)
 - [Tests first, and proof before "done"](#tests-first-and-proof-before-done)
+- [Suggestions while you work](#suggestions-while-you-work)
 - [Sub-agents](#sub-agents)
 - [Sessions: resuming, restarts, titles](#sessions-resuming-restarts-titles)
 - [Long conversations: compaction](#long-conversations-compaction)
@@ -133,6 +134,34 @@ them pass, then run the project's own static check (typecheck, linter, vet). If 
 any test, the model is reminded of the order; if it finishes without tests or without the check,
 it is asked once for each. You see where it is in a small row under the transcript:
 `✓ 1 test ✓ red ● code ○ green ○ checks`.
+
+## Suggestions while you work
+
+Friday suggests in three places. Nothing it suggests is sent until you press enter.
+
+**Next steps after a turn.** A turn that changed files or ran a command ends with up to 3 next
+steps under the reply. Each says why now: a check that failed, a change nothing has tested, a diff
+worth reading before it goes further. alt+1, alt+2 and alt+3 put one in the input. On an empty
+input, tab puts the first and then the next; a click works too.
+
+**Notes on each edit.** Under an edit, a ⚑ line says what is worth knowing about it. Code finds the
+facts: a `TODO` left behind, debug output added, an exported signature changed or removed, many lines
+removed, no test file beside it.
+
+**Hints while you type.** Once a request is four characters long, the row above the input offers
+what it seems headed for. That is a slash command by what it does, an earlier request, a next step,
+or a file the last word begins. tab takes the first, alt+2 the second.
+
+**Jev.** With a TypeSafe key (`TYPESAFE_API_KEY`), Jev, TypeSafe's judging model, weighs all three.
+It keeps the next steps it finds useful at 0.5 or above, best first, with the probability shown. It
+adds two concerns to an edit when it is sure at 0.7 or above: an error left unhandled, and
+behaviour that callers rely on changed. While you type, it finds the command your words mean when
+they share few words with it; a ⟡ marks hints it weighed. Without a key, rules and word matching
+do the same work, and nothing leaves your machine for it.
+
+**The small model.** With `ARCHYMEDES_SUGGEST_MODEL` on, the small model proposes up to two next
+steps of its own after each turn, for one small call. It is off by default, because it costs a call
+per turn. `ARCHYMEDES_SUGGEST=off` turns all three off.
 
 ## Sub-agents
 

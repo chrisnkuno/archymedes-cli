@@ -153,14 +153,15 @@ func (m *Model) sixelDraw(msg sixelDrawMsg) tea.Cmd {
 		if g == nil {
 			return nil
 		}
-		l := g.layout(m)
+		var l galleryLayout
+		m.within(func() { l = g.layout(m) })
 		for i, img := range []image.Image{g.builtInImage(), g.liveImage()} {
 			if i >= l.panes || img == nil {
 				continue
 			}
 			// The picture's cells: inside the pane's border, under its label.
-			col := i*(l.paneWidth+1) + 1
-			row := 1 + 1 + 1 + 1 // top bar, Gallery header, pane border, pane label
+			col := m.winOrigin.X + i*(l.paneWidth+1) + 1
+			row := m.winOrigin.Y + 1 + 1 + 1 // Gallery header, pane border, pane label
 			out.WriteString(ansi.CursorPosition(col+1, row+1))
 			out.WriteString(m.sixelPicture(img, l.innerCols, l.pictureRow, g.builtIn.Fit()))
 		}

@@ -31,12 +31,65 @@ const (
 	wallpaperKeepWork = 0.2
 	// glassMix is how much of the photo shows through a cell that paints its own background.
 	glassMix = 0.3
+	// windowGlass is how much of the blurred photo shows through a window's body.
+	windowGlass = 0.38
+	// blurX, blurY are the frosting's reach, in cells either way: about square on screen.
+	blurX, blurY = 6, 3
 )
 
 // wallpaperGrid is the photo as two colours per cell, top and bottom half.
 type wallpaperGrid struct {
 	w, h        int
 	top, bottom []color.RGBA
+	soft        []color.RGBA // one colour per cell, blurred: what shows through a window's glass
+}
+
+// frosted is the cell's colour as seen through glass: the photo blurred around it. Worked out once
+// per photo and size, with two passes of a box blur.
+func (g *wallpaperGrid) frosted(x, y int) color.RGBA {
+	if g.soft == nil {
+		flat := make([]color.RGBA, g.w*g.h)
+		for i := range flat {
+			flat[i] = mixRGBA(g.top[i], g.bottom[i], 0.5)
+		}
+		g.soft = boxBlur(boxBlur(flat, g.w, g.h, blurX, blurY), g.w, g.h, blurX, blurY)
+	}
+	return g.soft[y*g.w+x]
+}
+
+// boxBlur averages each cell with its neighbours within rx columns and ry rows.
+func boxBlur(src []color.RGBA, w, h, rx, ry int) []color.RGBA {
+	pass := func(in []color.RGBA, horizontal bool) []color.RGBA {
+		out := make([]color.RGBA, len(in))
+		lines, length, reach := h, w, rx
+		if !horizontal {
+			lines, length, reach = w, h, ry
+		}
+		at := func(line, i int) int {
+			if horizontal {
+				return line*w + i
+			}
+			return i*w + line
+		}
+		for line := range lines {
+			var r, gr, b, n int
+			for i := -reach; i < length+reach; i++ {
+				if j := i; j >= 0 && j < length {
+					c := in[at(line, j)]
+					r, gr, b, n = r+int(c.R), gr+int(c.G), b+int(c.B), n+1
+				}
+				if j := i - 2*reach - 1; j >= 0 && j < length {
+					c := in[at(line, j)]
+					r, gr, b, n = r-int(c.R), gr-int(c.G), b-int(c.B), n-1
+				}
+				if k := i - reach; k >= 0 && k < length && n > 0 {
+					out[at(line, k)] = color.RGBA{uint8(r / n), uint8(gr / n), uint8(b / n), 255}
+				}
+			}
+		}
+		return out
+	}
+	return pass(pass(src, true), false)
 }
 
 func (g *wallpaperGrid) at(x, y int) (color.RGBA, color.RGBA) {
@@ -46,8 +99,8 @@ func (g *wallpaperGrid) at(x, y int) (color.RGBA, color.RGBA) {
 
 // wallpaperKeep is how much of the photo shows now.
 func (m *Model) wallpaperKeep() float64 {
-	if m.activeWindow() == nil && m.landingVisible() {
-		return wallpaperKeepHome
+	if m.activeWindow() != nil || m.landingVisible() {
+		return wallpaperKeepHome // a window floats on glass, with the desktop around it
 	}
 	return wallpaperKeepWork
 }
@@ -105,7 +158,7 @@ func buildWallpaper(img image.Image, width, height int, keep float64, ground col
 func (m *Model) panelRows(height int) map[int]bool {
 	rows := map[int]bool{0: true, height - 1: true}
 	if m.activeWindow() == nil {
-		for y := height - 1 - m.composerHeight() - m.dropupRows(); y < height; y++ {
+		for y := height - 1 - m.composerHeight() - m.dropupRows() - m.adviceRows(); y < height; y++ {
 			rows[y] = true
 		}
 	}
@@ -120,11 +173,12 @@ func (m *Model) underlay(content string, width, height int) string {
 	}
 	// Most frames are the last one again (a cursor that did not move, a tick with nothing to show):
 	// laying the wallpaper costs a few milliseconds a frame, so an unchanged frame reuses it.
-	if m.underIn == content && m.underGrid == g {
+	if m.underIn == content && m.underGrid == g && m.underGlass == m.glass {
 		return m.underOut
 	}
-	ground := toRGBA(m.th.Bg)
+	ground, surface := toRGBA(m.th.Bg), toRGBA(m.th.Surface)
 	panels := m.panelRows(height)
+	glass := m.glass
 	canvas := lipgloss.NewCanvas(width, height)
 	canvas.Compose(lipgloss.NewLayer(content))
 	isBlank := func(c *uv.Cell) bool { return c == nil || c.Content == " " || (c.Content == "" && c.Width > 0) }
@@ -151,6 +205,16 @@ func (m *Model) underlay(content string, width, height int) string {
 			}
 			top, bottom := g.at(x, y)
 			photo := mixRGBA(top, bottom, 0.5)
+			if image.Pt(x, y).In(glass) {
+				// A window: its whole body is glass over the blurred photo, its own grounds tinted too.
+				frost := g.frosted(x, y)
+				if cell.Style.Bg != nil {
+					cell.Style.Bg = mixRGBA(toRGBA(cell.Style.Bg), frost, 1-glassMix)
+				} else {
+					cell.Style.Bg = mixRGBA(surface, frost, 1-windowGlass)
+				}
+				continue
+			}
 			blank := isBlank(cell) && !(near(x, 1, -1) || near(x, 1, 1) || (near(x, 3, -1) && near(x, 3, 1)))
 			switch {
 			case cell.Style.Bg != nil:
@@ -167,7 +231,7 @@ func (m *Model) underlay(content string, width, height int) string {
 			}
 		}
 	}
-	m.underIn, m.underGrid, m.underOut = content, g, fillHeight(canvas.Render(), height)
+	m.underIn, m.underGrid, m.underGlass, m.underOut = content, g, m.glass, fillHeight(canvas.Render(), height)
 	return m.underOut
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"charm.land/fantasy"
 
+	"github.com/chrisnkuno/friday-cli/internal/core/advise"
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
@@ -589,4 +590,24 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// suggest weighs the completions the interface found for what is being typed: each option's
+// probability, and none's, by Jev. Without a judge, or when it cannot answer in time, the reply
+// is {"ranked": false} and the interface keeps its own order.
+func (s *Server) suggest(ctx context.Context, params json.RawMessage) map[string]any {
+	var p struct {
+		Input   string   `json:"input"`
+		Options []string `json:"options"`
+	}
+	_ = json.Unmarshal(params, &p)
+	env := s.env()
+	if strings.EqualFold(env.Get("ARCHYMEDES_SUGGEST"), "off") {
+		return map[string]any{"ranked": false}
+	}
+	scores, none, err := advise.Pick(ctx, advise.NewJev(env.Get), p.Input, p.Options)
+	if err != nil {
+		return map[string]any{"ranked": false}
+	}
+	return map[string]any{"ranked": true, "scores": scores, "none": none}
 }

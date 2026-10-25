@@ -67,6 +67,9 @@
       "core/gate",
       "conform"
     ],
+    "core/advise": [
+      "conform"
+    ],
     "core/agents": [
       "core/tool",
       "core/policy",
@@ -76,6 +79,7 @@
       "core/llm",
       "core/loop",
       "core/thread",
+      "core/advise",
       "conform"
     ],
     "core/server": [
@@ -86,17 +90,18 @@
       "core/gate",
       "core/thread",
       "core/tool",
+      "core/advise",
       "conform"
     ],
     "conform": []
   },
   "tui": {
     "core": "The Bubble Tea model, its update loop and input routing: state, agent events, keys, mouse, paste, click zones, the screen's composition, the action registry, the rate-limit forecast",
-    "chat": "The Chat window: transcript and its items, the composer, approvals and questions, selection, scrolling, steering a running turn",
-    "home": "The home screen before the first message: landing card, first-run welcome, tour drawer",
-    "desk": "The desktop around the windows: top bar and dock, window shell, start menu, overlays, wallpaper and photographs, Sixel",
-    "app": "One app window each (app_<name>.go, its parts app_<name>_<part>.go): Changes, Files, Pager, Gallery, Keys, Providers, Settings, Stats, Tasks and Notifications, Tour",
-    "dialog": "Modal flows over a window: connect a provider, pick a model, resume a session, pick a wallpaper",
+    "chat": "The Chat window: the conversation and its cursor, items, the input and its suggestions, approvals and questions, selection, scrolling, steering a running turn",
+    "home": "The home screen before the first message: the desktop's icons, the card, the first-run welcome and walkthrough, the tour panel",
+    "desk": "The desktop and the parts every surface shares: the floating glass window and its hint bar, lists, tile grids, the bars by keyboard, start menu, Finder, overlays, wallpaper and photographs, Sixel",
+    "app": "One window each (app_<name>.go, its parts app_<name>_<part>.go): Changes, Files, Pager, Gallery, Keys, Providers, Settings, Stats, Tasks and Notifications, Tour, Sessions, Models, Themes, Wallpaper, Help",
+    "dialog": "Questions that must be answered over a window: connect a provider, pick a mode",
     "cmd": "Slash commands: the registry, custom commands, session commands, and the commands that run git, worktrees, review, rewind, goals, dev tools and handoffs"
   }
 }

@@ -2,8 +2,15 @@ package tui
 
 import (
 	"cmp"
+	"context"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // modePicker (/mode with nothing after it) shows the four modes as tiles: what each lets Friday do,
@@ -56,4 +63,36 @@ func (p *modePicker) view(m *Model) string {
 	width := gridWidth(m, 4)
 	body := p.grid.view(m, max(width-4, 1), max(m.height-6, 1))
 	return frame(m.th, "Mode", body+"\n"+m.th.Faint.Render("↑↓←→ move · enter switch · esc keep · shift+tab cycles in a session"), width)
+}
+
+// nextMode is the mode after mode in the shift+tab cycle.
+func nextMode(mode string) string {
+	cycle := []string{"plan", "build", "auto", "defender"}
+	i := slices.Index(cycle, mode)
+	return cycle[(i+1)%len(cycle)]
+}
+
+// setMode asks the agent for mode; during a turn it waits for the turn to end.
+func (m *Model) setMode(mode string) tea.Cmd {
+	if !slices.Contains(acp.Modes, mode) {
+		return m.toast(toastWarn, fmt.Sprintf("No mode %q — choose %s", mode, strings.Join(acp.Modes, ", ")))
+	}
+	if m.agent == nil {
+		return nil
+	}
+	if m.phase == busy {
+		if mode == m.mode {
+			m.pendingMode = ""
+			return m.toast(toastInfo, "Staying in "+mode+" mode")
+		}
+		m.pendingMode = mode
+		return m.toast(toastInfo, "Switching to "+mode+" mode when this turn ends")
+	}
+	m.pendingMode = ""
+	agent, id := m.agent, m.session.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return modeSetMsg{mode, agent.SetMode(ctx, id, mode)}
+	}
 }

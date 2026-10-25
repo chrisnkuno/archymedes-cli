@@ -52,6 +52,7 @@ func init() {
 		{"_archymedes/sessions", "List a folder's sessions, newest first", func(s *Server, _ context.Context, p json.RawMessage) (any, error) { return s.sessionList(p) }},
 		{"_archymedes/startup", "Say what the startup check found, such as an update", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.startup(ctx, p) }},
 		{"_archymedes/setup/status", "Say whether a provider is ready, and which could be", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.setupStatus(ctx, p) }},
+		{"_archymedes/suggest", "Weigh the completions offered for a request being typed, when Jev is set up", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.suggest(ctx, p), nil }},
 		{"_archymedes/models", "List the models the session can switch to", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.models(ctx, p) }},
 	}
 	for _, m := range methods {

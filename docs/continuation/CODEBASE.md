@@ -56,11 +56,11 @@ prefixes**, and every non-test file has one (guard `sections`):
 | Prefix | Section | Examples |
 | --- | --- | --- |
 | `core_` | The model, update loop, input routing, screen composition, action registry | `core_model.go`, `core_events.go`, `core_keyboard.go`, `core_view.go`, `core_keys.go` |
-| `chat_` | The Chat window | `chat_transcript.go`, `chat_items.go`, `chat_composer.go`, `chat_approval.go` |
-| `home_` | The home screen before the first message | `home_landing.go`, `home_welcome.go`, `home_onboarding.go`, `home_drawer.go` |
-| `desk_` | The desktop around the windows | `desk_bars.go`, `desk_shell.go`, `desk_start.go`, `desk_finder.go`, `desk_finder_art.go`, `desk_tiles.go`, `desk_wallpaper.go` |
-| `app_` | One app per file; its parts as `app_<name>_<part>.go` | `app_changes.go`, `app_changes_branches.go`, `app_settings.go`, `app_tour.go` |
-| `dialog_` | Modal flows over a window | `dialog_connect.go`, `dialog_models.go`, `dialog_resume.go` |
+| `chat_` | The Chat window: the conversation and its cursor, the input, suggestions | `chat_transcript.go`, `chat_cursor.go`, `chat_items.go`, `chat_composer.go`, `chat_suggest.go`, `chat_approval.go` |
+| `home_` | The home screen before the first message: the desktop's icons, the card, the tour panel | `home_desktop.go`, `home_landing.go`, `home_welcome.go`, `home_onboarding.go`, `home_drawer.go` |
+| `desk_` | The desktop around the windows, and the parts every surface shares: the floating glass window and its hint bar, the list, the tile grid, the bars by keyboard | `desk_window.go`, `desk_list.go`, `desk_tiles.go`, `desk_bars.go`, `desk_bars_focus.go`, `desk_shell.go`, `desk_start.go`, `desk_finder.go`, `desk_wallpaper.go` |
+| `app_` | One window per file; its parts as `app_<name>_<part>.go` | `app_changes.go`, `app_sessions.go`, `app_models.go`, `app_themes.go`, `app_wallpaper.go`, `app_help.go`, `app_settings.go` |
+| `dialog_` | Questions that must be answered over a window | `dialog_connect.go`, `dialog_modes.go` |
 | `cmd_` | Slash commands | `cmd_registry.go`, `cmd_session.go`, `cmd_gitflow.go`, `cmd_rewind.go` |
 
 Tests take their file's name (`chat_composer_test.go`). A test spanning sections starts with

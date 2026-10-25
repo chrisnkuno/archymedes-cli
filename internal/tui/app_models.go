@@ -39,10 +39,36 @@ type modelPicker struct {
 	err     string
 	filter  textinput.Model
 	shown   []acp.ModelChoice
-	cursor  int
-	start   int  // first row shown, for clicks
+	rows    listView
 	pending bool // a switch is in flight
 	narrow  int  // index into pickerViews
+}
+
+func (p *modelPicker) title() string { return "Models" }
+func (p *modelPicker) key() string   { return "models" }
+
+func (p *modelPicker) wheel(_ *Model, up bool) tea.Cmd {
+	p.rows.wheel(up, len(p.shown))
+	return nil
+}
+
+// click picks a narrowing from the strip, or selects a model; a second click on it switches.
+func (p *modelPicker) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if p.pending {
+		return nil
+	}
+	for i := range pickerViews {
+		if m.zones.frame.Get(fmt.Sprintf("modeltab:%d", i)).InBounds(msg) {
+			p.narrow, p.rows.cursor = i, 0
+			p.refilter()
+			return nil
+		}
+	}
+	if i, ok := p.rows.clicked(m.zones.frame, msg, len(p.shown)); ok && p.rows.clickRow(i) {
+		_, cmd := p.handle(m, keyPress("enter"))
+		return cmd
+	}
+	return nil
 }
 
 // inView is whether a model belongs to the picker's current narrowing.
@@ -90,11 +116,11 @@ func (m *Model) modelsLoaded(msg modelsLoadedMsg) tea.Cmd {
 			return m.switchModel(choice)
 		}
 		picker := newModelPicker(m, msg.query)
-		m.openOverlay(picker)
+		m.openWindow(picker)
 		picker.load(msg)
 		return nil
 	}
-	if picker, ok := m.overlay.(*modelPicker); ok {
+	if picker, ok := windowOf[*modelPicker](m); ok {
 		picker.load(msg)
 	}
 	return nil
@@ -129,7 +155,7 @@ func (p *modelPicker) refilter() {
 		fmt.Sscan(e.hint, &i)
 		p.shown = append(p.shown, p.list.Choices[i])
 	}
-	p.cursor = min(p.cursor, max(len(p.shown)-1, 0))
+	p.rows.clamp(len(p.shown))
 }
 
 // uniqueModel finds the one model a query names: an exact id, "provider model", or a unique substring.
@@ -168,13 +194,13 @@ func (m *Model) switchModel(choice acp.ModelChoice) tea.Cmd {
 }
 
 func (m *Model) modelSet(msg modelSetMsg) tea.Cmd {
-	if p, ok := m.overlay.(*modelPicker); ok {
+	if p, ok := windowOf[*modelPicker](m); ok {
 		p.pending = false
 		if msg.err != nil {
 			p.err = msg.err.Error()
 			return nil
 		}
-		m.overlay = nil
+		m.closeWindow(m.windowIndex(p)) // switched: the window's work is done
 	}
 	if msg.err != nil {
 		return m.toast(toastWarn, "Model not changed: "+msg.err.Error())
@@ -196,14 +222,8 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		return true, nil
-	case "up", "ctrl+k":
-		p.cursor = (p.cursor - 1 + max(len(p.shown), 1)) % max(len(p.shown), 1)
-	case "down", "ctrl+j":
-		p.cursor = (p.cursor + 1) % max(len(p.shown), 1)
-	case "pgup":
-		p.cursor = max(p.cursor-10, 0)
-	case "pgdown":
-		p.cursor = max(min(p.cursor+10, len(p.shown)-1), 0)
+	case "up", "down", "ctrl+k", "ctrl+j", "pgup", "pgdown":
+		p.rows.move(msg.String(), len(p.shown)) // letters are the filter's
 	case "tab", "shift+tab", "left", "right":
 		// ←/→ move between all, free and ready while nothing is typed; with a filter they move
 		// in the text, as in any field.
@@ -216,7 +236,7 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if msg.String() == "shift+tab" || msg.String() == "left" {
 			step = len(pickerViews) - 1
 		}
-		p.narrow, p.cursor = (p.narrow+step)%len(pickerViews), 0
+		p.narrow, p.rows.cursor = (p.narrow+step)%len(pickerViews), 0
 		p.refilter()
 	case "ctrl+r":
 		p.list, p.shown = nil, nil
@@ -225,7 +245,7 @@ func (p *modelPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if len(p.shown) == 0 {
 			return false, nil
 		}
-		choice := p.shown[p.cursor]
+		choice := p.shown[p.rows.cursor]
 		if choice.Locked {
 			// A model with no key is one paste away: open that provider's key field.
 			if len(choice.Missing) == 1 && m.agent != nil {
@@ -265,35 +285,38 @@ func (p *modelPicker) tabs(m *Model, width int) string {
 	for i, v := range pickerViews {
 		label := fmt.Sprintf(" %s %d ", names[v], counts[v])
 		if i == p.narrow {
-			parts = append(parts, lipgloss.NewStyle().Foreground(th.Bg).Background(th.Primary).Bold(true).Render(label))
+			label = lipgloss.NewStyle().Foreground(th.Bg).Background(th.Primary).Bold(true).Render(label)
 		} else {
-			parts = append(parts, th.Faint.Render(label))
+			label = th.Faint.Render(label)
 		}
+		parts = append(parts, mark(m.zones.frame, fmt.Sprintf("modeltab:%d", i), label))
 	}
 	return ansi.Truncate(strings.Join(parts, " "), width, "")
 }
 
 func (p *modelPicker) view(m *Model) string {
 	th := m.th
-	width := overlayWidth(m, 84)
-	inner := max(width-4, 8)
+	width, height := m.width, max(m.windowHeight(), 1)
+	inner := max(width-2, 8)
 	p.filter.SetWidth(max(inner-2, 4))
-	var b strings.Builder
-	b.WriteString(p.filter.View() + "\n")
+	p.rows.zone = "model"
+	lines := []string{" " + p.filter.View()}
 	switch {
 	case p.list == nil && p.err == "":
-		b.WriteString(m.spin.View() + th.Faint.Render(" asking the agent for models…") + "\n")
+		lines = append(lines, " "+m.spin.View()+th.Faint.Render(" asking the agent for models…"))
 	case p.list == nil:
-		b.WriteString(th.Bad.Render(ansi.Wrap(p.err, inner, "")) + "\n")
+		lines = append(lines, " "+th.Bad.Render(ansi.Truncate(p.err, inner, "…")))
 	default:
-		b.WriteString(p.tabs(m, inner) + "\n")
-		rows := min(len(p.shown), max(m.transcriptHeight()-9, 3))
-		start := max(0, min(p.cursor-rows+1, len(p.shown)-rows))
-		p.start = start
+		lines = append(lines, " "+p.tabs(m, inner), "")
 		// Price first (it is what decides a switch), then the model name takes what is left.
-		priceWidth := min(30, max(inner-2-17-13, 0))
+		priceWidth := min(40, max(inner-2-17-13, 0))
 		modelWidth := max(inner-2-17-priceWidth-1, 4)
-		for i := start; i < start+rows && i < len(p.shown); i++ {
+		extra := 0
+		if p.err != "" {
+			extra = 1
+		}
+		from, to := p.rows.window(len(p.shown), max(height-len(lines)-1-extra, 1))
+		for i := from; i < to; i++ {
 			c := p.shown[i]
 			badge := "  "
 			switch {
@@ -326,26 +349,20 @@ func (p *modelPicker) view(m *Model) string {
 			default:
 				row = th.OK.Render(badge) + th.Body.Render(name) + th.Faint.Render(provider) + th.Highlight.Render(price)
 			}
-			if i == p.cursor {
-				line := padRight(badge+name+provider+price, inner)
-				row = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.3)).Bold(true).Render(ansi.Truncate(line, inner, ""))
-			}
-			b.WriteString(mark(m.zones.dialog, rowID(i), row))
-			b.WriteString("\n")
+			lines = append(lines, p.rows.row(m, m.zones.frame, i, " "+row, width))
 		}
 		if len(p.shown) == 0 {
-			b.WriteString(th.Faint.Render("nothing matches") + "\n")
+			lines = append(lines, " "+th.Faint.Render("nothing matches"))
 		}
 		if p.err != "" {
-			b.WriteString(th.Warn.Render(ansi.Truncate(p.err, inner, "…")) + "\n")
+			lines = append(lines, " "+th.Warn.Render(ansi.Truncate(p.err, inner, "…")))
 		}
 	}
-	footer := "enter switch · ←/→ or tab all/free/ready · ctrl+r ask providers again · esc close"
+	foot := m.hintBar(width, button{"enter", "switch"}, button{"tab", "all · free · ready"}, button{"ctrl+r", "ask providers again"}, button{"esc", "close"})
 	if p.pending {
-		footer = m.spin.View() + " switching…"
+		foot = " " + m.spin.View() + th.Faint.Render(" switching…")
 	}
-	b.WriteString(th.Faint.Render(ansi.Truncate(footer, inner, "")))
-	return frame(th, "Model", b.String(), width)
+	return strings.Join(append(fitLines(lines, width, height-1), foot), "\n")
 }
 
 // fitLabel is the few words a free model's measured fit adds to its row; a verified or unmeasured

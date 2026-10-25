@@ -214,7 +214,11 @@ func (p *pager) view(m *Model) string {
 		footer = " " + th.OK.Render(p.note)
 		p.note = ""
 	default:
-		footer = " " + th.Faint.Render("/ search · n/N next · g/G ends · c copy · esc close")
+		buttons := []button{{"/", "search"}, {"home", "top"}, {"end", "bottom"}, {"c", "copy"}, {"q", "close"}}
+		if p.query != "" {
+			buttons = append([]button{{"n", "next"}, {"N", "previous"}}, buttons...)
+		}
+		footer = m.hintBar(m.width, buttons...)
 	}
 	body := strings.Split(p.vp.View(), "\n")
 	for len(body) < p.vp.Height() {
@@ -222,4 +226,13 @@ func (p *pager) view(m *Model) string {
 	}
 	rows := append(append([]string{header}, body[:p.vp.Height()]...), ansi.Truncate(footer, m.width, ""))
 	return strings.Join(rows, "\n")
+}
+
+func (p *pager) wheel(_ *Model, up bool) tea.Cmd {
+	if up {
+		p.vp.ScrollUp(wheelStep)
+	} else {
+		p.vp.ScrollDown(wheelStep)
+	}
+	return nil
 }

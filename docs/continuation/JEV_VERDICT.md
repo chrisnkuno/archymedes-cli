@@ -3,6 +3,10 @@
 Status: implemented; unit-verified with injected responses. No live key exercised yet.
 Tracker: Jev verdict + tool check ("model first, Jev later").
 
+On the Go engine (WS-47) Jev does a different job: it ranks suggestions instead of judging turns.
+See [`internal/core/advise`](../../internal/core/advise/jev.go) and the
+[user guide](../engine/USER_GUIDE.md#suggestions-while-you-work). The client is the same contract.
+
 ## User outcome
 
 The CLI's own model does the work first; Jev (TypeSafe System One) judges after. Two

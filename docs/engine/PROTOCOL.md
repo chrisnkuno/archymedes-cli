@@ -158,6 +158,19 @@ first, at most 50 (the Go engine's sessions only).
 `{"notices":[…]}`: what the TypeScript agent's startup check has to say (an update is available),
 when it is installed; otherwise an empty list.
 
+### `_archymedes/suggest`
+
+Params: `input` (what is being typed) and `options` (the completions the client found, at most
+24). Jev weighs which option the input is heading for:
+
+```json
+{"ranked":true,"scores":[0.1,0.7],"none":0.2}
+```
+
+`scores` are in the order of `options`; `none` is the probability that no option fits. Without a
+TypeSafe key, with `ARCHYMEDES_JEV` or `ARCHYMEDES_SUGGEST` off, or when Jev does not answer within
+3 seconds, the reply is `{"ranked":false}` and the client keeps its own order.
+
 ### `_archymedes/setup/status` and `_archymedes/models`
 
 Answered by the TypeScript agent when it is installed (it has key links and the live model
@@ -228,6 +241,8 @@ Answer `{"answer":"SQLite"}`; `{"dismissed":true}` or an empty answer tells the 
 | `compaction` | `tokensBefore`, `messagesBefore`, `messagesAfter` | the conversation was summarized |
 | `steering_unread` | `messages` | steering the turn accepted and ended before reading; send them as prompts |
 | `rules_problems` | `problems` | command rules or role files left out, and why |
+| `suggestions` | `steps`: up to 3 of `text`, `why`, `score`, `source` (`rule`, `model`) | next steps after a turn that changed files or ran a command; `score` is Jev's probability, absent when nothing judged it |
+| `edit_notes` | `toolCallId`, `path`, `notes`: `text`, `kind` (`fact`, `judged`), `score` | what is worth knowing about one edit: facts found by code, and Jev's concerns at 0.7 or above |
 
 Runtime events (`event.event.type`), the same as the TypeScript runtime's `AgentRuntimeEvent`:
 
@@ -247,7 +262,9 @@ Runtime events (`event.event.type`), the same as the TypeScript runtime's `Agent
 
 ## Ordering guarantees
 
-- A prompt's events are all written before its reply.
+- A prompt's events are all written before its reply, except `suggestions` and `edit_notes`. They
+  are worked out beside the turn and may follow its reply; a client drops `suggestions` that
+  arrive once the next turn has begun.
 - Prompts run in the order they were read; a cancel covers exactly the prompts read before it.
 - On `session/load`, the replayed conversation comes before any event of a resumed sub-agent.
 - A sub-agent's report is delivered to the main conversation once.

@@ -28,7 +28,7 @@ func TestADiffLineCommentGoesWithTheNextMessage(t *testing.T) {
 	if len(m.comments) != 1 || !strings.Contains(screen(m), "◆") || !strings.Contains(screen(m), "1 comment for your next message") {
 		t.Fatalf("the comment is kept and marked: %v\n%s", m.comments, screen(m))
 	}
-	deliver(m, press(m, tea.KeyEscape, 0)) // back to the chat
+	deliver(m, press(m, tea.KeyF1, 0)) // back to the chat
 	typeText(m, "please fix")
 	deliver(m, press(m, tea.KeyEnter, 0))
 	agent.mu.Lock()

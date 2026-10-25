@@ -108,6 +108,9 @@ Without a small model, the main model does everything. What runs on which:
 | --- | --- | --- |
 | `ARCHYMEDES_TEST_FIRST` (Settings → Build test first) | `on` | for code changes: tests first and seen failing, then the code, then the project's static check. `off`: only the ordinary proof rule |
 | `ARCHYMEDES_TITLES` | on | `off` keeps a session's title as the first line of its first request, with no title request to the small model |
+| `ARCHYMEDES_SUGGEST` (Settings → Suggestions) | `on` | next steps after a turn, notes on each edit and hints while you type ([User guide](USER_GUIDE.md#suggestions-while-you-work)). `off`: none of them |
+| `ARCHYMEDES_SUGGEST_MODEL` | `off` | `on`: the small model proposes up to two next steps of its own after each turn, for one small call |
+| `ARCHYMEDES_JEV` | `on` | with `TYPESAFE_API_KEY` set, Jev weighs the suggestions and notes edits; `off` never calls it. `TYPESAFE_MODEL` names the Jev model (`jev-latest` by default) |
 | `ARCHYMEDES_DEFER_TOOLS` | `auto` | which tools are found on demand with `tool_search` instead of being sent with every request. `auto`: `git_log`, `git_show`, `todo_read`, `close_agent`. `off`: send every tool. A comma list: exactly those names |
 | `ARCHYMEDES_PROVIDER` | — | the provider to use when none is chosen; set for you when you pick one |
 
@@ -203,6 +206,9 @@ Read by the `friday` binary itself, for what the screen looks like. Each is also
 | `ARCHYMEDES_CONTEXT_LIMIT` | Go engine | [Models](#models) |
 | `ARCHYMEDES_TEST_FIRST` | both engines | [Behaviour](#behaviour) |
 | `ARCHYMEDES_TITLES` | Go engine | [Behaviour](#behaviour) |
+| `ARCHYMEDES_SUGGEST` | Go engine | [Behaviour](#behaviour) |
+| `ARCHYMEDES_SUGGEST_MODEL` | both engines | [Behaviour](#behaviour) |
+| `ARCHYMEDES_JEV`, `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | both engines | [Behaviour](#behaviour) |
 | `ARCHYMEDES_DEFER_TOOLS` | Go engine | [Behaviour](#behaviour) |
 | `OPENROUTER_BASE_URL` | Go engine (free mode) | [Providers and keys](#providers-and-keys) |
 | `ARCHYMEDES_FREE_GATEWAY_URL` | TypeScript engine; the binary reads it to choose the engine | [Providers and keys](#providers-and-keys) |

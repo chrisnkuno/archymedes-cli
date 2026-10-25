@@ -74,8 +74,13 @@ func TestEnterOpensAFileAndEscapeComesBackToTheTree(t *testing.T) {
 		t.Fatalf("viewer: %T\n%s", m.activeWindow(), screen(m))
 	}
 	press(m, tea.KeyEscape, 0)
+	if !m.bar.on || m.activeWindow() != p {
+		t.Fatal("esc steps out to the bars, the reader still open")
+	}
+	press(m, tea.KeyUp, 0)
+	typeText(m, "q")
 	if m.activeWindow() != f {
-		t.Fatalf("esc returns to the tree, got %T", m.activeWindow())
+		t.Fatalf("q closes the reader and returns to the tree, got %T", m.activeWindow())
 	}
 }
 

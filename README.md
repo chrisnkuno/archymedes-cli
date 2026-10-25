@@ -215,8 +215,16 @@ go test -race ./internal/core/... ./cmd/friday   # the Go engine, its contract t
 FRIDAY_LIVE=1 go test ./cmd/friday -run Live -v  # the Go engine against your own provider (a few cents)
 ```
 
-The interface is a small desktop. The top bar has a `◇` start menu (ctrl+space finds any app,
-action, session or file) and a tab per open window. The dock along the bottom has every app and its
+The interface is a small desktop, driven by the arrows and the mouse. Before the first message the
+home screen is a desktop. Icons run down its left edge, the card with the prism sits in the middle,
+and the tour's scenes play on the right. ↑ steps onto the icons, the arrows move between them, and enter opens one. A
+click selects, and a second click on the same thing opens it. Each app opens as a window floating
+on the wallpaper, its body frosted glass, with ▢ to zoom and ✕ to close. Its keys are buttons along
+its foot. esc steps out to the bars: the arrows walk the tabs and the dock, and enter switches. In a
+conversation, ↑ steps onto the newest message or tool call; enter opens it and space reads it in a
+reader. Earlier messages are ctrl+↑. The wheel scrolls what is under the pointer
+([the full grammar](docs/mechanisms/README.md#10-interaction)). The top bar has a `◇` start menu
+(ctrl+space finds any app, action, session or file) and a tab per open window. The dock along the bottom has every app and its
 key: F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
 F10 Changes, F12 Gallery. Click or press. The Finder (`alt+g`, `/finder`) shows everything Friday
 can open as a grid of icons drawn in colour: apps, commands, sessions, the project's files folder by
@@ -244,9 +252,13 @@ they look pixelated at any size. g switches between the ways the terminal can dr
 The home screen's photo is drawn the same way: in Sixel where the terminal draws it (asked once at
 start), in glyphs otherwise. A first run opens a walkthrough of six steps: a name for the
 greeting, kept on the machine; a theme and a mode, picked from tiles; four keys tried in place;
-the connection and the install count; a first request. `/welcome` opens it again. The home
+the connection and the install count; a first request. `alt+w` or `/welcome` opens it again. The home
 screen then says what to do in three steps and offers requests to start from — tab puts one in the input, and when the project has
-uncommitted changes the first offer is to review them. Stats draws the session as charts: tokens per turn, seconds per turn, output per model
+uncommitted changes the first offer is to review them. A turn that changed files ends with up to
+three next steps, and alt+1..3 or tab put one in the input. Each edit carries notes on what is worth
+knowing about it. While you type, the row above the input offers the command or earlier request you
+seem headed for. With a TypeSafe key, Jev weighs all three
+([Suggestions while you work](docs/engine/USER_GUIDE.md#suggestions-while-you-work)). Stats draws the session as charts: tokens per turn, seconds per turn, output per model
 call and tool use; while a turn runs, a small sparkline in the top bar shows how fast the reply
 is streaming. Change any key in the Keys app (F7); changes are saved to `keys.json` next to the
 settings file.

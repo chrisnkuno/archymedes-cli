@@ -209,6 +209,10 @@ func TestAnUnchangedFrameReusesItsWallpaperAndAChangedOneDoesNot(t *testing.T) {
 	}
 }
 
+// photoShown: the screen s has the wallpaper on it. A photo fills hundreds of cells with half
+// blocks; the desktop's icons draw their edges with a few dozen.
+func photoShown(s string) bool { return strings.Count(s, "▀")+strings.Count(s, "▄") > 400 }
+
 func TestTheWallpaperGoesAwayWhenAsked(t *testing.T) {
 	for _, off := range []func(m *Model){
 		func(m *Model) { m.opts.NoWallpaper = true },
@@ -216,7 +220,7 @@ func TestTheWallpaperGoesAwayWhenAsked(t *testing.T) {
 	} {
 		m := wallpaperModel(t, 130, 34)
 		off(m)
-		if strings.Contains(screen(m), "▀") || m.wallpaper(130, 34) != nil {
+		if photoShown(screen(m)) || m.wallpaper(130, 34) != nil {
 			t.Fatal("the wallpaper is drawn although it was turned off")
 		}
 	}

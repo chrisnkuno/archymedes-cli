@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ func (m *Model) dropupRows() int {
 func (m *Model) windowHeight() int { return max(m.height-2, 0) }
 
 func (m *Model) transcriptHeight() int {
-	return max(m.height-2-m.composerHeight()-m.dropupRows(), 0)
+	return max(m.height-2-m.composerHeight()-m.dropupRows()-m.adviceRows(), 0)
 }
 
 func (m *Model) View() tea.View {
@@ -46,9 +47,9 @@ func (m *Model) View() tea.View {
 	}
 	rows := make([]string, 0, m.height)
 	rows = append(rows, m.topBar())
+	m.glass, m.buttonKeys, m.dialogKeys = image.Rectangle{}, nil, nil
 	if w := m.activeWindow(); w != nil {
-		area := strings.Split(fillHeight(clipBlock(w.view(m), m.width, m.windowHeight()), m.windowHeight()), "\n")
-		rows = append(rows, area[:m.windowHeight()]...)
+		rows = append(rows, m.windowView(w)...)
 	} else {
 		body := m.body(m.transcriptHeight())
 		// A selection is kept in screen rows, so text moving under it (a reply streaming in) makes it
@@ -58,9 +59,13 @@ func (m *Model) View() tea.View {
 		}
 		m.bodyLines = body
 		for i, line := range body {
-			rows = append(rows, " "+m.highlight(i, line))
+			rows = append(rows, m.cursorMargin(i)+m.highlight(i, line))
 		}
-		for _, line := range m.input.dropup(m.th, m.width, m.dropupRows()) {
+		lines, first := m.input.dropup(m.th, m.width, m.dropupRows())
+		for i, line := range lines {
+			rows = append(rows, " "+mark(m.zones.frame, fmt.Sprintf("comp:%d", first+i), line))
+		}
+		for _, line := range m.adviceLines(m.width - 2) {
 			rows = append(rows, " "+line)
 		}
 		rows = append(rows, strings.Split(m.composerBox(), "\n")...)

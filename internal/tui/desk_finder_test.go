@@ -13,7 +13,7 @@ func finderModel(t *testing.T) (*Model, *finder) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.Update(filesLoadedMsg{files: []string{"README.md", "cmd/friday/main.go", "cmd/friday/flags.go", "internal/tui/desk_finder.go"}})
 	m.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModAlt})
-	f, ok := m.overlay.(*finder)
+	f, ok := m.activeWindow().(*finder)
 	if !ok {
 		t.Fatalf("alt+g did not open the Finder: %T", m.overlay)
 	}
@@ -86,7 +86,7 @@ func TestQuickLookAndEscStepBack(t *testing.T) {
 		t.Fatalf("no quick look:\n%s", screen(m))
 	}
 	press(m, tea.KeyEscape, 0)
-	if f.looking || m.overlay == nil {
+	if _, open := windowOf[*finder](m); f.looking || !open {
 		t.Fatal("esc should close the look first")
 	}
 	typeText(m, "zzzz")
@@ -94,12 +94,12 @@ func TestQuickLookAndEscStepBack(t *testing.T) {
 		t.Fatalf("no empty note:\n%s", screen(m))
 	}
 	press(m, tea.KeyEscape, 0)
-	if f.search.Value() != "" || m.overlay == nil {
+	if _, open := windowOf[*finder](m); f.search.Value() != "" || !open {
 		t.Fatal("esc should clear the search next")
 	}
 	press(m, tea.KeyEscape, 0)
-	if m.overlay != nil {
-		t.Fatal("esc should close the Finder last")
+	if _, open := windowOf[*finder](m); !open || !m.bar.on {
+		t.Fatal("esc should step out to the bars last, the Finder still open")
 	}
 }
 

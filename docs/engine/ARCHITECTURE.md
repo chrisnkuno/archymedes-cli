@@ -39,6 +39,7 @@ friday  (one Go binary)
       │    └─ core/tool ──── what a tool is; the catalog and tool_search
       ├─ core/thread ── the session on disk: log, messages, fork, recovery
       ├─ core/llm ───── provider and models (Fantasy; native Anthropic)
+      ├─ core/advise ── suggestions: next steps, notes on edits, hints; Jev
       └─ core/roles ─── sub-agent roles
 
 TypeScript agent (`friday acp` under Node): settings, providers, setup, --json, doctor, history;
@@ -65,8 +66,9 @@ All under `internal/core/`. Each is a layering section of its own (`core/<pkg>` 
 | `thread` | The **session on disk**: meta, the append-only thread log, message snapshots, fork modes, recovery | — |
 | `tools` | The **built-in tools** on a local workspace | `tool`, `policy` |
 | `loop` | **One run**: steps, streaming, tool execution and batching, the inbox, the loop detector, retries and the idle watchdog, compaction, wrap-up | `tool`, `gate` |
+| `advise` | **Suggestions** beside the work: next steps after a turn, notes on an edit, weighing what is being typed. The Jev client | — |
 | `agents` | The **coordinator**: a Session's turns in order, cancel, steering, sub-agents in the foreground and background, worktrees, prompts, compaction, titles | everything above |
-| `server` | **ACP**: framing, methods, requests to the client, events, forwarding | `agents`, `llm`, `loop`, `policy`, `gate`, `thread`, `tool` |
+| `server` | **ACP**: framing, methods, requests to the client, events, forwarding | `agents`, `advise`, `llm`, `loop`, `policy`, `gate`, `thread`, `tool` |
 
 `cmd/friday/engine.go` chooses the engine and wires the server to the interface or to stdio.
 

@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -31,33 +30,6 @@ func frame(th theme.Theme, title, body string, width int) string {
 // the box's two border columns.
 func overlayWidth(m *Model, preferred int) int {
 	return max(min(max(min(m.width-4, preferred), 16), m.width-2), 1)
-}
-
-// --- help ---
-
-type helpOverlay struct{}
-
-func (helpOverlay) handle(_ *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
-	return slices.Contains([]string{"esc", "?", "q", "enter", "ctrl+c"}, msg.String()), nil
-}
-
-func (helpOverlay) view(m *Model) string {
-	width := overlayWidth(m, 96)
-	h := m.help
-	h.SetWidth(width - 4)
-	h.ShowAll = true
-	var cmds strings.Builder
-	for _, c := range append(slices.Clone(commands), m.custom...) {
-		usage := "/" + c.name
-		if c.args != "" {
-			usage += " " + c.args
-		}
-		desc := ansi.Truncate(c.help, max(width-4-34, 0), "…")
-		cmds.WriteString(m.th.Key.Render(padRight(usage, 34)) + m.th.Faint.Render(desc) + "\n")
-	}
-	body := h.FullHelpView(m.keys.fullHelp()) + "\n\n" + m.th.Strong.Render("Commands") + "\n" + strings.TrimRight(cmds.String(), "\n") +
-		"\n\n" + m.th.Faint.Render("esc to close")
-	return frame(m.th, "Keys and commands", body, width)
 }
 
 // rankEntries keeps entries whose label holds the query's letters in order, best first: a prefix,
@@ -104,80 +76,6 @@ func subsequence(text, query string) (gaps int, ok bool) {
 		}
 	}
 	return gaps, i == len(query)
-}
-
-// --- theme picker: a grid of tiles, each a small screen in its theme, previewed as you move ---
-
-type themePicker struct {
-	names    []string
-	grid     tileGrid
-	original string
-}
-
-func newThemePicker(m *Model) *themePicker {
-	names := theme.Names()
-	t := &themePicker{names: names, original: m.th.Name}
-	for _, name := range names {
-		t.grid.tiles = append(t.grid.tiles, tile{id: name, caption: name, art: themeArt(name)})
-	}
-	t.grid.cursor = max(slices.Index(names, m.th.Name), 0)
-	return t
-}
-
-func (t *themePicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "ctrl+c":
-		m.applyTheme(t.original) // a preview is not a choice
-		return true, nil
-	case "enter":
-		return true, m.toast(toastInfo, "Theme: "+t.names[t.grid.cursor])
-	}
-	if !t.grid.move(msg.String(), t.rowsShown(m)) {
-		return false, nil
-	}
-	m.applyTheme(t.names[t.grid.cursor])
-	return false, nil
-}
-
-func (t *themePicker) rowsShown(m *Model) int {
-	_, h := tileOuter()
-	return max((m.height-6)/h, 1)
-}
-
-func (t *themePicker) view(m *Model) string {
-	width := gridWidth(m, 4)
-	body := t.grid.view(m, max(width-4, 1), max(m.height-6, 1))
-	return frame(m.th, "Theme", body+"\n"+m.th.Faint.Render("↑↓←→ preview · enter keep · esc revert"), width)
-}
-
-// themeArt draws a theme as a small screen: its primary bar, a title and a muted line on its
-// background, its six colours as swatches, and its surface.
-func themeArt(name string) func(*Model, int, int) []string {
-	return func(_ *Model, cols, rows int) []string {
-		th, ok := theme.Load(name)
-		if !ok {
-			return nil
-		}
-		on := func(bg color.Color) lipgloss.Style { return lipgloss.NewStyle().Background(bg).Width(cols) }
-		fill := func(bg color.Color) string { return on(bg).Render("") }
-		swatches := " "
-		for _, c := range []color.Color{th.Primary, th.Secondary, th.Accent, th.Success, th.Warning, th.Error} {
-			swatches += lipgloss.NewStyle().Foreground(c).Background(th.Bg).Render("██")
-		}
-		lines := []string{
-			fill(th.Primary),
-			on(th.Bg).Foreground(th.Text).Bold(true).Render(" Friday"),
-			on(th.Bg).Foreground(th.Muted).Render(" shows its work"),
-			fill(th.Bg),
-			on(th.Bg).Render(swatches),
-			fill(th.Bg),
-			on(th.Surface).Foreground(th.Secondary).Render(" › ask"),
-		}
-		for len(lines) < rows {
-			lines = append(lines, fill(th.Bg))
-		}
-		return lines[:rows]
-	}
 }
 
 // --- toasts: what the session says that is not part of the conversation ---

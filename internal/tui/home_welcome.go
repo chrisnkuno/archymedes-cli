@@ -36,11 +36,11 @@ func (m *Model) readProjectState() tea.Cmd {
 func (m *Model) starters() []string {
 	var s []string
 	if m.projectChanged > 0 {
-		s = append(s, fmt.Sprintf("Review my %s for risks", plural(m.projectChanged, "uncommitted change")))
+		s = append(s, fmt.Sprintf("Review my %s for risks", plural(m.projectChanged, "change")))
 	}
 	s = append(s,
-		"Explain what this project does",
-		"Find the riskiest code here, and say why",
+		"Explain this project",
+		"Find the riskiest code",
 		"Add a test for the most important function",
 	)
 	return s[:3]

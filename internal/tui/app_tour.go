@@ -119,6 +119,21 @@ func (s *showcaseApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return false, s.wake()
 }
 
+// wheel steps through the scenes, a notch a scene.
+func (s *showcaseApp) wheel(_ *Model, up bool) tea.Cmd {
+	s.step(map[bool]int{true: -1, false: 1}[up])
+	return s.wake()
+}
+
+// click on the scene pauses or plays it.
+func (s *showcaseApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if m.zones.frame.Get("scene").InBounds(msg) {
+		s.paused = !s.paused
+		return s.wake()
+	}
+	return nil
+}
+
 func (s *showcaseApp) view(m *Model) string {
 	th := m.th
 	width, height := m.width, max(m.windowHeight(), 1)
@@ -132,11 +147,15 @@ func (s *showcaseApp) view(m *Model) string {
 		" " + th.Strong.Render(ansi.Truncate(sc.caption, max(width-2, 1), "…")),
 		" " + th.Body.Render(ansi.Truncate(sc.detail, max(width-2, 1), "…")),
 	}
-	hint := " " + th.Faint.Render("←/→ scene · space pause · esc close")
+	pause := "pause"
+	if s.paused {
+		pause = "play"
+	}
+	hint := m.hintBar(width, button{"←", "previous"}, button{"→", "next"}, button{"space", pause}, button{"q", "close"})
 	artH := height - 1 - len(caption) - 2
 	lines := []string{header}
 	if artH >= 4 && width >= 12 {
-		lines = append(lines, paint(th, sc, sc.draw(width, artH, s.t))...)
+		lines = append(lines, strings.Split(mark(m.zones.frame, "scene", strings.Join(paint(th, sc, sc.draw(width, artH, s.t)), "\n")), "\n")...)
 	}
 	lines = append(lines, "")
 	lines = append(lines, caption...)

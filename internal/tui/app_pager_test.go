@@ -54,8 +54,13 @@ func TestPagerSearchesTheWholeSessionAndSteps(t *testing.T) {
 		t.Fatal("esc clears the search first")
 	}
 	press(m, tea.KeyEscape, 0)
+	if m.activeWindow() == nil || !m.bar.on {
+		t.Fatal("then steps out to the bars, the reader still open")
+	}
+	press(m, tea.KeyUp, 0)
+	typeText(m, "q")
 	if m.activeWindow() != nil {
-		t.Fatal("then closes")
+		t.Fatal("q closes it")
 	}
 }
 

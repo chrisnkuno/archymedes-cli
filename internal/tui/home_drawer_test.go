@@ -15,7 +15,7 @@ func TestTheTourDrawerShowsTheScenesBesideTheCardAndFolds(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
 	s := screen(m)
 	// The card keeps its prism and words; the drawer shows the scene in front, full size.
-	for _, want := range []string{"Explain what this project does", showcaseScenes[0].name, "●", "▸"} {
+	for _, want := range []string{"Explain this project", showcaseScenes[0].name, "●", "▸"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("home lacks %q:\n%s", want, s)
 		}
@@ -69,7 +69,7 @@ func TestTheTourDrawerSlidesAndTheScenesTakeTurns(t *testing.T) {
 		m.Update(animTickMsg{})
 		widths = append(widths, m.tourRight(160, 40))
 	}
-	full := tourDrawerWidth(160, 40)
+	full := m.tourDrawerWidth(160, 40)
 	if widths[0] >= full || widths[len(widths)-1] != full {
 		t.Fatalf("the drawer should slide out to %d: %v", full, widths)
 	}
@@ -82,14 +82,19 @@ func TestTheTourDrawerSlidesAndTheScenesTakeTurns(t *testing.T) {
 		t.Fatal("the next scene's name is not shown")
 	}
 	// The card stays usable: never covered by the drawer.
-	if !strings.Contains(screen(m), "find anything") {
+	if !strings.Contains(screen(m), "a start") {
 		t.Fatal(screen(m))
 	}
 }
 
 func TestTheTourDrawerOnlyWhereTheCardKeepsItsRoom(t *testing.T) {
 	m, _ := newTestModel(t)
-	for _, size := range [][2]int{{100, 30}, {121, 40}, {160, 16}} {
+	// It stays down to a laptop's width (100x30 has it); below that, or too short, it goes.
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	if m.tourDrawerWidth(98, 27) == 0 {
+		t.Fatalf("100x30 should keep the drawer:\n%s", screen(m))
+	}
+	for _, size := range [][2]int{{80, 24}, {160, 16}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		if s := screen(m); strings.Contains(s, "▸") || strings.Contains(s, " ◂ ") {
 			t.Fatalf("%dx%d has no room for the drawer:\n%s", size[0], size[1], s)

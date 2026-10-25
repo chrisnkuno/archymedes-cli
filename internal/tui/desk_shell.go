@@ -27,6 +27,17 @@ func (p *pager) key() string       { return "reader:" + p.label }
 func (f *filesView) title() string { return "Files" }
 func (f *filesView) key() string   { return "files" }
 
+// windowOf is the open window of type T, if there is one.
+func windowOf[T window](m *Model) (T, bool) {
+	for _, w := range m.windows {
+		if t, ok := w.(T); ok {
+			return t, true
+		}
+	}
+	var none T
+	return none, false
+}
+
 // activeWindow is the focused app window, or nil when Chat is focused.
 func (m *Model) activeWindow() window {
 	if m.active <= 0 || m.active > len(m.windows) {
@@ -73,7 +84,7 @@ func (m *Model) shellKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		id      string
 	}{
 		{k.Start, "start"}, {k.Finder, "finder"}, {k.Chat, "chat"}, {k.Files, "files"}, {k.Search, "search"}, {k.Sessions, "sessions"},
-		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Tasks, "tasks"}, {k.Settings, "settings"}, {k.Providers, "providers"}, {k.TourDrawer, "tour-drawer"}, {k.Undo, "undo"}, {k.Retry, "retry"}, {k.Copy, "copy"}, {k.Notifications, "notifications"}, {k.Help, "help"},
+		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Tasks, "tasks"}, {k.Settings, "settings"}, {k.Providers, "providers"}, {k.TourDrawer, "tour-drawer"}, {k.Welcome, "welcome"}, {k.Undo, "undo"}, {k.Retry, "retry"}, {k.Copy, "copy"}, {k.Notifications, "notifications"}, {k.Help, "help"},
 		{k.NextWindow, "next-window"}, {k.PrevWindow, "prev-window"}, {k.CloseWindow, "close-window"},
 	} {
 		if !key.Matches(msg, b.binding) {
@@ -115,7 +126,7 @@ func (m *Model) runAction(id string) tea.Cmd {
 	case "models":
 		return m.cmdModel("")
 	case "themes":
-		m.openOverlay(newThemePicker(m))
+		m.openWindow(newThemePicker(m))
 	case "keys":
 		m.openWindow(newKeysApp(m))
 	case "changes":
@@ -126,6 +137,8 @@ func (m *Model) runAction(id string) tea.Cmd {
 		return m.openShowcase()
 	case "tour-drawer":
 		return m.toggleTourDrawer()
+	case "welcome":
+		return m.openOnboarding()
 	case "stats":
 		for _, w := range m.windows {
 			if s, ok := w.(*statsApp); ok {
@@ -149,7 +162,7 @@ func (m *Model) runAction(id string) tea.Cmd {
 	case "notifications":
 		m.openWindow(&notesApp{})
 	case "help":
-		m.openOverlay(helpOverlay{})
+		return m.openHelp()
 	case "next-window":
 		m.focus(m.active + 1)
 	case "prev-window":

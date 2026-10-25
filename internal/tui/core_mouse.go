@@ -44,6 +44,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 			m.overlay = nil // a click outside a dialog closes it, as esc does
 			return nil
 		}
+		if cmd, ok := m.dialogButtonClick(msg); ok {
+			return cmd
+		}
 		if c, ok := m.overlay.(interface {
 			click(*Model, tea.MouseClickMsg) tea.Cmd
 		}); ok {
@@ -59,6 +62,11 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	frame := m.zones.frame
+	if m.activeWindow() == nil {
+		if cmd, ok := m.composerClick(msg); ok {
+			return cmd
+		}
+	}
 	if m.activeWindow() == nil && frame.Get("composer").InBounds(msg) {
 		x, y := frame.Get("composer").Pos(msg)
 		m.input.placeCursor(x, y)
@@ -85,17 +93,34 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		}
 	}
 	if w := m.activeWindow(); w != nil {
-		if c, ok := w.(windowClicker); ok {
-			return c.click(m, msg)
+		if cmd, ok := m.windowChromeClick(msg); ok {
+			return cmd
 		}
-		return nil
+		if cmd, ok := m.buttonClick(msg); ok {
+			return cmd
+		}
+		var cmd tea.Cmd
+		if c, ok := w.(windowClicker); ok {
+			m.within(func() { cmd = c.click(m, msg) })
+		}
+		return cmd
 	}
 	if m.landingVisible() {
+		if cmd, ok := m.deskClick(msg); ok {
+			return cmd
+		}
 		for i := range m.starters() {
 			if frame.Get(fmt.Sprintf("starter:%d", i)).InBounds(msg) {
 				m.useStarter(i)
 				return nil
 			}
+		}
+	}
+	for i, s := range m.shownSteps() {
+		if frame.Get(fmt.Sprintf("step:%d", i)).InBounds(msg) {
+			m.input.take()
+			m.input.area.InsertString(s.Text)
+			return nil
 		}
 	}
 	if m.landingVisible() {
@@ -106,12 +131,8 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(gallery.IndexOf(m.homePhoto())) // the photo, full size
 	}
-	for _, it := range m.tr.items {
-		if t, ok := it.(*toolItem); ok && t.done && frame.Get("tool:"+t.id).InBounds(msg) {
-			t.open = !t.open
-			t.touch()
-			return nil
-		}
+	if cmd, ok := m.itemClick(msg); ok {
+		return cmd
 	}
 	return nil
 }
@@ -123,32 +144,4 @@ func (p *startMenu) choose(m *Model, i int) tea.Cmd {
 	p.cursor = i
 	_, cmd := p.handle(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	return cmd
-}
-
-func (p *modelPicker) rowCount() int { return len(p.shown) }
-func (p *modelPicker) choose(m *Model, i int) tea.Cmd {
-	if p.pending {
-		return nil
-	}
-	p.cursor = i
-	_, cmd := p.handle(m, tea.KeyPressMsg{Code: tea.KeyEnter})
-	return cmd
-}
-
-func (p *resumePicker) rowCount() int { return len(p.shown) }
-func (p *resumePicker) choose(m *Model, i int) tea.Cmd {
-	p.cursor = i
-	closed, cmd := p.handle(m, tea.KeyPressMsg{Code: tea.KeyEnter})
-	if closed && m.overlay == p {
-		m.overlay = nil
-	}
-	return cmd
-}
-
-func (t *themePicker) rowCount() int { return len(t.names) }
-func (t *themePicker) choose(m *Model, i int) tea.Cmd {
-	t.grid.cursor = i
-	m.applyTheme(t.names[i])
-	m.overlay = nil
-	return m.toast(toastInfo, "Theme: "+t.names[i])
 }

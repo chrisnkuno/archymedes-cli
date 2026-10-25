@@ -66,14 +66,27 @@ looks inside one, and enter opens it. In Files, enter goes into a folder and bac
 - `/theme`: each theme as a small screen in its colours
 - `/wallpaper`: each picture as a preview; tab jumps to the next theme
 - `/mode`: the four modes and what each may do
-- `/welcome`: the first-run walkthrough
+- `/welcome` (`alt+w`): the first-run walkthrough
 - Providers: each one in use, ready, or what it needs
 - Settings: a tile per section, opening into its list
 
 **First run.** Friday opens on a walkthrough of six steps, each one tile grid or one question. It
 asks for a name (kept on this machine, for the greeting), then a theme and a mode. You try four keys
 in place, see what it is connected to, and choose whether installs are counted. Last you pick a
-first request. enter goes on, backspace goes back, and esc skips the rest. `/welcome` opens it again.
+first request. enter goes on, backspace goes back, and esc skips the rest. `alt+w` or `/welcome` opens it again.
+
+**Suggestions.** A turn that changed files ends with up to three next steps, each with why now:
+alt+1..3 put one in the input, and tab on an empty input does too. Each edit carries ⚑ notes, such
+as a `TODO` left behind or an exported signature changed. While you type, the row above the input
+offers the command, earlier request or file you seem headed for, and tab takes it. With
+`TYPESAFE_API_KEY` set, Jev weighs all three; `ARCHYMEDES_SUGGEST=off` turns them off.
+
+**A desktop.** Friday is driven by the arrows and the mouse. The home screen has desktop icons
+down its left edge; ↑ steps onto them, and enter opens one. A click selects, a second click opens.
+Each app is a window floating on the wallpaper, its body frosted glass, with ▢ to zoom and ✕ to
+close. Its keys are buttons along its foot. esc steps out to the bars, where the arrows walk the
+tabs and the dock. In a conversation ↑ steps onto the newest message or tool call; earlier messages
+are ctrl+↑. The wheel scrolls what is under the pointer.
 
 **Arrow keys.** In lists ↑/↓ move and enter picks. In Settings the side arrows
 step a choice in place, saved as you go, and in the model list they switch all, free and ready. In

@@ -31,10 +31,10 @@ type settingsApp struct {
 	input   textinput.Model
 	saving  bool
 	note    string
-	rowTop  int // first drawn row, for click mapping
+	// rows is the drawn list: the visible settings with their sections' names between them.
+	rows listView
 	// armed is the key a first "d" asked to clear; a second "d" on it clears, any other key disarms.
-	armed      string
-	rowIndexes []int
+	armed string
 	// section is the one open: "" is the home grid of sections, settingsAll every row.
 	section string
 	home    tileGrid
@@ -182,6 +182,52 @@ func (s *settingsApp) visible() []int {
 	return out
 }
 
+// display is the list as drawn: for each row, its index in visible(), or -1 for a section's name.
+func (s *settingsApp) display() []int {
+	var pos []int
+	last := ""
+	for i, idx := range s.visible() {
+		if r := s.list.Rows[idx]; r.Section != last {
+			last = r.Section
+			pos = append(pos, -1)
+		}
+		pos = append(pos, i)
+	}
+	return pos
+}
+
+// moveRows applies a navigation key to the drawn rows, stepping over the sections' names.
+func (s *settingsApp) moveRows(key string) bool {
+	pos := s.display()
+	s.rows.skip = func(i int) bool { return pos[i] < 0 }
+	for i, p := range pos {
+		if p == s.cursor {
+			s.rows.cursor = i
+		}
+	}
+	if !s.rows.move(key, len(pos)) {
+		return false
+	}
+	if s.rows.cursor < len(pos) && pos[s.rows.cursor] >= 0 {
+		s.cursor = pos[s.rows.cursor]
+	}
+	return true
+}
+
+func (s *settingsApp) wheel(m *Model, up bool) tea.Cmd {
+	if s.atHome() {
+		s.home.wheel(up)
+		return nil
+	}
+	pos := s.display()
+	s.rows.skip = func(i int) bool { return pos[i] < 0 }
+	s.rows.wheel(up, len(pos))
+	if s.rows.cursor < len(pos) && pos[s.rows.cursor] >= 0 {
+		s.cursor = pos[s.rows.cursor]
+	}
+	return nil
+}
+
 func (s *settingsApp) current() *acp.SettingRow {
 	vis := s.visible()
 	if len(vis) == 0 {
@@ -244,18 +290,8 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			return false, nil
 		}
 		return true, nil
-	case "up", "k":
-		s.cursor--
-	case "down", "j":
-		s.cursor++
-	case "pgup":
-		s.cursor -= 10
-	case "pgdown":
-		s.cursor += 10
-	case "home":
-		s.cursor = 0
-	case "end":
-		s.cursor = 1 << 20
+	case "up", "k", "down", "j", "pgup", "pgdown", "home", "end":
+		s.moveRows(key)
 	case "/":
 		s.filtering = true
 	case "r":
@@ -271,6 +307,12 @@ func (s *settingsApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "enter", "e":
 		return false, s.begin(m)
 	case "left", "h":
+		if r := s.current(); r == nil || r.Kind != "choice" {
+			if s.filter == "" && s.section != "" {
+				s.section = "" // ← on a row with nothing to step: back to the sections
+			}
+			return false, nil
+		}
 		return false, s.step(m, -1)
 	case "right", "l":
 		return false, s.step(m, 1)
@@ -453,19 +495,20 @@ func (m *Model) settingSaved(msg settingSavedMsg) tea.Cmd {
 
 func (s *settingsApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 	if s.atHome() {
-		if i, ok := s.home.clicked(m, msg); ok {
-			s.home.cursor = i
+		if i, ok := s.home.clicked(m, msg); ok && s.home.clickTile(i) {
 			s.openSection(s.home.tiles[i].id)
 		}
 		return nil
 	}
-	for pos := range s.rowIndexes {
-		if m.zones.frame.Get(fmt.Sprintf("setting:%d", pos)).InBounds(msg) {
-			if s.editing || s.saving {
-				return nil
-			}
-			s.cursor = pos
-			return s.begin(m)
+	if s.editing || s.saving {
+		return nil
+	}
+	pos := s.display()
+	if i, ok := s.rows.clicked(m.zones.frame, msg, len(pos)); ok && pos[i] >= 0 {
+		open := s.cursor == pos[i]
+		s.cursor = pos[i]
+		if open {
+			return s.begin(m) // a second click on a row edits it, as enter does
 		}
 	}
 	return nil
@@ -477,7 +520,7 @@ func (s *settingsApp) view(m *Model) string {
 	if s.list != nil {
 		head += th.Faint.Render("  " + ansi.Truncate(s.list.File, max(width-40, 10), "…"))
 	}
-	hint := "↑/↓ move · ←/→ change a choice · enter edit · d clear · / filter · r reload · esc sections"
+	hint := "←/→ change a choice · d clear · esc sections"
 	switch {
 	case s.armed != "":
 		hint = "press d again to clear " + s.armed + " · any other key keeps it"
@@ -499,24 +542,36 @@ func (s *settingsApp) view(m *Model) string {
 		return strings.Join(fitLines(lines, width, height), "\n")
 	}
 	if s.atHome() {
-		lines[1] = " " + th.Faint.Render("↑↓←→ move · enter open · / search every setting · r reload · esc close")
+		lines = lines[:1]
 		s.home.tiles, s.home.inWindow = s.homeTiles(m), true
-		for _, line := range strings.Split(s.home.view(m, max(width-2, 1), max(height-len(lines)-1, 1)), "\n") {
+		for _, line := range strings.Split(s.home.view(m, max(width-2, 1), max(height-len(lines)-2, 1)), "\n") {
 			lines = append(lines, " "+line)
 		}
-		return strings.Join(fitLines(lines, width, height), "\n")
+		lines = fitLines(lines, width, height-1)
+		return strings.Join(append(lines, m.hintBar(width, button{"enter", "open"}, button{"/", "search every setting"}, button{"r", "reload"}, button{"q", "close"})), "\n")
 	}
 	vis := s.visible()
 	s.current()
-	var rows []string // drawn rows, with section headers between
-	var pos []int     // for each drawn row: its index in vis, or -1 for a header
-	last := ""
-	for i, idx := range vis {
-		r := s.list.Rows[idx]
-		if r.Section != last {
-			last = r.Section
-			rows, pos = append(rows, " "+th.Title.Render(r.Section)), append(pos, -1)
+	pos := s.display()
+	s.rows.zone, s.rows.skip = "setting", func(i int) bool { return pos[i] < 0 }
+	for i, p := range pos {
+		if p == s.cursor {
+			s.rows.cursor = i
 		}
+	}
+	editorRows := 0
+	var editor []string
+	if s.editing {
+		editor = s.editor(m, width)
+		editorRows = len(editor) + 1
+	}
+	from, to := s.rows.window(len(pos), max(height-len(lines)-editorRows-1, 1))
+	for i := from; i < to; i++ {
+		if pos[i] < 0 {
+			lines = append(lines, " "+th.Title.Render(s.list.Rows[vis[pos[i+1]]].Section))
+			continue
+		}
+		r := s.list.Rows[vis[pos[i]]]
 		value := th.Faint.Render("not set")
 		if r.IsSet {
 			value = th.Body.Render(r.Value)
@@ -525,35 +580,7 @@ func (s *settingsApp) view(m *Model) string {
 			value += th.Warn.Render("  (environment overrides)")
 		}
 		label := padRight(ansi.Truncate(r.Label, max(width/2-4, 12), "…"), max(width/2-3, 13))
-		line := "   " + th.Body.Render(label) + value
-		if i == s.cursor {
-			line = " " + th.Title.Render("› ") + th.Strong.Render(label) + value
-		}
-		rows, pos = append(rows, ansi.Truncate(line, width, "…")), append(pos, i)
-	}
-	editorRows := 0
-	var editor []string
-	if s.editing {
-		editor = s.editor(m, width)
-		editorRows = len(editor) + 1
-	}
-	room := max(height-len(lines)-editorRows-1, 1)
-	// Keep the cursor row in view.
-	cursorAt := 0
-	for i, p := range pos {
-		if p == s.cursor {
-			cursorAt = i
-		}
-	}
-	top := max(0, min(cursorAt-room/2, len(rows)-room))
-	s.rowIndexes = s.rowIndexes[:0]
-	for i := top; i < min(top+room, len(rows)); i++ {
-		row := rows[i]
-		if pos[i] >= 0 {
-			row = mark(m.zones.frame, fmt.Sprintf("setting:%d", pos[i]), row)
-			s.rowIndexes = append(s.rowIndexes, pos[i])
-		}
-		lines = append(lines, row)
+		lines = append(lines, s.rows.row(m, m.zones.frame, i, "   "+th.Body.Render(label)+value, width))
 	}
 	if len(vis) == 0 {
 		lines = append(lines, "", " "+th.Faint.Render("No setting matches."))
@@ -565,7 +592,8 @@ func (s *settingsApp) view(m *Model) string {
 	if s.err != "" {
 		lines = append(lines, " "+th.Bad.Render(ansi.Truncate(s.err, width-2, "…")))
 	}
-	return strings.Join(fitLines(lines, width, height), "\n")
+	lines = fitLines(lines, width, height-1)
+	return strings.Join(append(lines, m.hintBar(width, button{"enter", "edit"}, button{"/", "filter"}, button{"r", "reload"}, button{"esc", "sections"})), "\n")
 }
 
 // editor is the choice list or the text field for the row being edited.

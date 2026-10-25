@@ -48,6 +48,8 @@ type filesView struct {
 	truncated bool
 	preview   map[string][]string // rendered preview by path, for the current width
 	width     int
+	shownPath string // the file the preview shows, and how far it is scrolled
+	scroll    int
 }
 
 func (m *Model) openFiles() tea.Cmd {
@@ -88,7 +90,7 @@ func (m *Model) filesLoaded(msg filesLoadedMsg) {
 		s.files = msg.files // the start menu searches files as soon as they are known
 		s.refilter()
 	}
-	if f, ok := m.overlay.(*finder); ok {
+	if f, ok := windowOf[*finder](m); ok {
 		f.reload(m)
 	}
 	var f *filesView
@@ -185,7 +187,7 @@ func (f *filesView) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			return true, m.toast(toastInfo, "@"+entry.path+" added to your message")
 		}
 		return false, nil
-	case "enter", "right", "l":
+	case "enter", "right", "l", "space":
 		if ok && !entry.dir {
 			return false, m.openFile(entry.path)
 		}
@@ -193,6 +195,52 @@ func (f *filesView) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	var cmd tea.Cmd
 	f.tree, cmd = f.tree.Update(msg)
 	return false, cmd
+}
+
+// treeWidth is the tree's width beside the preview in a window width wide.
+func treeWidth(width int) int { return max(min(width*2/5, 48), min(width, 16)) }
+
+// wheelAt scrolls the pane under the pointer: the tree moves the selection, the preview its text.
+func (f *filesView) wheelAt(m *Model, up bool, x, _ int) tea.Cmd {
+	if !f.loaded || f.err != "" {
+		return nil
+	}
+	if x < treeWidth(m.width) {
+		if up {
+			f.tree.Up()
+		} else {
+			f.tree.Down()
+		}
+		return nil
+	}
+	f.scroll = max(f.scroll+map[bool]int{true: -wheelStep, false: wheelStep}[up], 0)
+	return nil
+}
+
+// click selects a row of the tree; a second click on it opens the file, or folds the folder.
+func (f *filesView) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	if !f.loaded || f.err != "" {
+		return nil
+	}
+	for i := range max(m.windowHeight()-2, 1) {
+		if !m.zones.frame.Get(fmt.Sprintf("ftree:%d", i)).InBounds(msg) {
+			continue
+		}
+		target := f.tree.ViewportYOffset() + i
+		if target >= f.tree.Root().Size() {
+			return nil
+		}
+		if target != f.tree.YOffset() {
+			f.tree.SetYOffset(target)
+			return nil
+		}
+		if entry, ok := f.selected(); ok && !entry.dir {
+			return m.openFile(entry.path)
+		}
+		f.tree.ToggleCurrentNode()
+		return nil
+	}
+	return nil
 }
 
 // openFile shows a file in a reader window, highlighted for its language.
@@ -223,7 +271,7 @@ func (m *Model) codeLines(rel, text string, width int) []string {
 func (f *filesView) view(m *Model) string {
 	th := m.th
 	height := max(m.windowHeight()-2, 1)
-	treeWidth := max(min(m.width*2/5, 48), min(m.width, 16))
+	treeWidth := treeWidth(m.width)
 	previewWidth := max(m.width-treeWidth-3, 0)
 
 	title := " " + th.Title.Render("files") + th.Faint.Render("  "+path.Base(m.projectRoot()))
@@ -246,23 +294,28 @@ func (f *filesView) view(m *Model) string {
 		f.tree.SetSize(treeWidth, height)
 		left = strings.Split(f.tree.View(), "\n")
 		if entry, ok := f.selected(); ok && previewWidth > 10 {
+			if entry.path != f.shownPath {
+				f.shownPath, f.scroll = entry.path, 0 // another file: from its top
+			}
 			if entry.dir {
 				preview = f.directorySummary(m, previewWidth)
 			} else {
 				preview = f.previewOf(m, entry.path, previewWidth)
 			}
+			f.scroll = min(f.scroll, max(len(preview)-height, 0))
+			preview = preview[f.scroll:]
 		}
 	}
 	rule := lipgloss.NewStyle().Foreground(th.BorderColor).Render("│")
 	rows := []string{header}
 	for i := 0; i < height; i++ {
-		row := padRight(ansi.Truncate(at(left, i), treeWidth, "…"), treeWidth)
+		row := mark(m.zones.frame, fmt.Sprintf("ftree:%d", i), padRight(ansi.Truncate(at(left, i), treeWidth, "…"), treeWidth))
 		if previewWidth > 0 {
 			row += " " + rule + " " + ansi.Truncate(at(preview, i), previewWidth, "")
 		}
 		rows = append(rows, row)
 	}
-	rows = append(rows, " "+th.Faint.Render(ansi.Truncate("↑/↓ move · enter open · @ mention · ←/→ fold · esc close", max(m.width-2, 0), "")))
+	rows = append(rows, m.hintBar(m.width, button{"enter", "open"}, button{"←", "fold"}, button{"→", "unfold"}, button{"@", "mention"}, button{"q", "close"}))
 	return strings.Join(rows, "\n")
 }
 

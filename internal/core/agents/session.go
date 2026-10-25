@@ -19,6 +19,7 @@ import (
 
 	"charm.land/fantasy"
 
+	"github.com/chrisnkuno/friday-cli/internal/core/advise"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
@@ -31,7 +32,7 @@ import (
 
 // Notice is something a session tells its client. Kind is the `_archymedes/event` type it becomes.
 type Notice struct {
-	Kind string // runtime | subagent | thread | compaction | steering_unread | rules_problems
+	Kind string // runtime | subagent | thread | compaction | steering_unread | rules_problems | suggestions | edit_notes
 	// Event is the runtime event, for runtime, subagent and compaction.
 	Event *loop.Event
 	// ParentToolCallID and Agent place a sub-agent's event under the call that started it.
@@ -40,6 +41,12 @@ type Notice struct {
 	Thread           *ThreadInfo
 	Messages         []string
 	Problems         []string
+	// Steps are a finished turn's suggested next steps (suggestions).
+	Steps []advise.Step
+	// ToolCallID, Path and Notes are what is worth knowing about one edit (edit_notes).
+	ToolCallID string
+	Path       string
+	Notes      []advise.Note
 }
 
 // ThreadInfo is a child thread as the interface sees it.
@@ -86,6 +93,7 @@ type Session struct {
 	profiles []roles.Profile
 	inbox    *loop.Inbox
 	slots    chan struct{}
+	jev      *advise.Jev // nil without a TypeSafe key
 
 	mu       sync.Mutex
 	models   *llm.Models
@@ -181,6 +189,9 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 		cfg: cfg, store: store, ws: ws, profiles: profiles, inbox: loop.NewInbox(),
 		slots: make(chan struct{}, cfg.MaxChildren), messages: messages, meta: meta, models: cfg.Models,
 		children: map[string]*child{},
+	}
+	if s.suggesting() {
+		s.jev = advise.NewJev(cfg.Env.Get)
 	}
 	s.turnCond = sync.NewCond(&s.turnMu)
 	s.nextTurn = 1
@@ -406,12 +417,17 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	if ledger.Mode() != policy.Plan {
 		verify = gate.New(s.cfg.TestFirst)
 	}
+	rec := newTurnRecord(text)
+	emit := func(ev loop.Event) { s.emitRoot(ev) }
+	if s.suggesting() {
+		emit = func(ev loop.Event) { s.emitRoot(ev); s.observe(rec, ev) }
+	}
 	result := loop.Run(ctx, loop.Request{
 		ThreadID: thread.Root, Root: s.cfg.Root, Model: model,
 		System:  s.rootSystemPrompt(ledger.Mode(), catalog),
 		History: history, Prompt: text, Tools: catalog,
 		Approve: ledger.Decide, Gate: verify, Inbox: s.inbox, Budgets: s.cfg.Budgets,
-		Emit:       func(ev loop.Event) { s.emitRoot(ev) },
+		Emit:       emit,
 		Checkpoint: func(m []fantasy.Message) { s.saveRoot(m) },
 		Compact:    s.compactor(),
 	})
@@ -428,6 +444,9 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	s.meta.Approvals = ledger.Snapshot()
 	_ = s.store.SaveMeta(s.meta)
 	s.mu.Unlock()
+	if s.suggesting() {
+		s.suggestAfter(rec, result)
+	}
 	return result
 }
 

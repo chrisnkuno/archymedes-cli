@@ -49,6 +49,10 @@ func extensionEvent(n agents.Notice) map[string]any {
 		return map[string]any{"type": "steering_unread", "messages": n.Messages}
 	case "rules_problems":
 		return map[string]any{"type": "rules_problems", "problems": n.Problems}
+	case "suggestions":
+		return map[string]any{"type": "suggestions", "steps": n.Steps}
+	case "edit_notes":
+		return map[string]any{"type": "edit_notes", "toolCallId": n.ToolCallID, "path": n.Path, "notes": n.Notes}
 	}
 	return nil
 }

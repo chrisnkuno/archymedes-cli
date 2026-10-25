@@ -81,6 +81,7 @@ func TestTheTaskManagerSaysHowHardTheModelWasAskedToThink(t *testing.T) {
 	m, _ := unconfigured(t)
 	m.overlay = nil
 	m.handleRuntime(acp.RuntimeEvent{Type: "model_turn", Effort: "medium", EffortReason: "run_command failed: understand why"})
+	m.Update(tea.WindowSizeMsg{Width: 150, Height: 30})
 	m.runAction("tasks")
 	if s := screen(m); !strings.Contains(s, "thinking: medium (run_command failed: understand why)") {
 		t.Fatalf("tasks:\n%s", s)

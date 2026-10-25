@@ -53,8 +53,10 @@ type changesApp struct {
 	notRepo bool
 	files   []project.Change
 	cursor  int
-	scroll  int // the diff's first row
-	line    int // the diff row chosen for a comment; -1 is none
+	list    listView // the file list's place: cursor is c.cursor, kept in step
+	scroll  int      // the diff's first row
+	line    int      // the diff row chosen for a comment; -1 is none
+	onDiff  bool     // the arrows are on the diff (→), not the file list (←)
 	diffs   map[string]*fileDiff
 
 	showBranches bool
@@ -194,16 +196,46 @@ func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return false, c.br.loadDetail(m)
 	case "r":
 		return false, c.reload(m)
+	case "left", "h":
+		c.onDiff = false
+	case "right", "l":
+		// Onto the diff: ↑/↓ then pick a line, and enter comments on it.
+		if f, ok := c.selected(); ok && c.diffs[f.Path] != nil {
+			c.onDiff = true
+			if c.line < 0 {
+				c.moveLine(m, 1)
+			}
+		}
 	case "up", "k":
+		if c.onDiff {
+			c.moveLine(m, -1)
+			return false, nil
+		}
 		return false, c.choose(m, c.cursor-1)
 	case "down", "j":
+		if c.onDiff {
+			c.moveLine(m, 1)
+			return false, nil
+		}
 		return false, c.choose(m, c.cursor+1)
-	case "pgdown", "space", "shift+down":
+	case "pgdown", "shift+down":
 		c.scroll += page
 	case "pgup", "shift+up":
 		c.scroll = max(c.scroll-page, 0)
 	case "home", "g":
-		c.scroll = 0
+		if c.onDiff {
+			c.scroll = 0
+			return false, nil
+		}
+		return false, c.choose(m, 0)
+	case "end":
+		if c.onDiff {
+			c.scroll = 1 << 20 // clamped when drawn
+			return false, nil
+		}
+		return false, c.choose(m, len(c.files)-1)
+	case "space":
+		return false, c.read(m) // look at the whole diff, in the reader
 	case "n", "p":
 		c.jumpHunk(msg.String() == "n")
 	case "]", "[":
@@ -216,13 +248,38 @@ func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			return true, m.toast(toastInfo, "@"+f.Path+" added to your message")
 		}
 	case "enter":
-		if f, ok := c.selected(); ok {
-			if d := c.diffs[f.Path]; d != nil && d.text != "" {
-				m.openWindow(newPager(m, "diff "+f.Path, diffRows(m, d.text, max(m.width-12, 20))))
-			}
+		if c.onDiff {
+			return false, c.commentOnLine(m)
 		}
+		return false, c.read(m)
 	}
 	return false, nil
+}
+
+// read opens the selected file's diff in a reader.
+func (c *changesApp) read(m *Model) tea.Cmd {
+	if f, ok := c.selected(); ok {
+		if d := c.diffs[f.Path]; d != nil && d.text != "" {
+			m.openWindow(newPager(m, "diff "+f.Path, diffRows(m, d.text, max(m.width-12, 20))))
+		}
+	}
+	return nil
+}
+
+// listWidth is the file list's width beside the diff in a window width wide.
+func listWidth(width int) int { return max(min(width*2/5, 46), min(width, 18)) }
+
+// wheelAt scrolls the pane under the pointer: the list moves a file, the diff three rows.
+func (c *changesApp) wheelAt(m *Model, up bool, x, _ int) tea.Cmd {
+	if c.showBranches {
+		return c.br.wheelAt(m, up, x)
+	}
+	step := map[bool]int{true: -1, false: 1}[up]
+	if x < listWidth(m.width) {
+		return c.choose(m, c.cursor+step)
+	}
+	c.scroll = max(c.scroll+step*wheelStep, 0)
+	return nil
 }
 
 // jumpHunk scrolls to the next (or previous) hunk of the shown diff.
@@ -268,9 +325,23 @@ func (c *changesApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 	if c.showBranches {
 		return c.br.click(m, msg)
 	}
-	for i := range c.files {
-		if m.zones.frame.Get(fmt.Sprintf("chg:%d", i)).InBounds(msg) {
-			return c.choose(m, i)
+	if i, ok := c.list.clicked(m.zones.frame, msg, len(c.files)); ok {
+		c.onDiff = false
+		if i == c.cursor {
+			return c.read(m) // a second click on the file reads its diff
+		}
+		return c.choose(m, i)
+	}
+	if f, ok := c.selected(); ok && c.diffs[f.Path] != nil {
+		for row, ref := range c.diffs[f.Path].refs {
+			if row >= c.scroll && ref.ok && m.zones.frame.Get(fmt.Sprintf("chgline:%d", row)).InBounds(msg) {
+				open := c.onDiff && c.line == row
+				c.onDiff, c.line = true, row
+				if open {
+					return c.commentOnLine(m) // a second click on the line comments on it
+				}
+				return nil
+			}
 		}
 	}
 	return nil
@@ -287,8 +358,7 @@ func (c *changesApp) view(m *Model) string {
 	if c.showBranches {
 		rows := []string{spread(title, right, width)}
 		rows = append(rows, c.br.body(m, width, height-2)...)
-		hint := "↑/↓ select · pgup/pgdn scroll · enter read · R review a branch · b files · r refresh · esc close"
-		return strings.Join(append(rows, " "+th.Faint.Render(ansi.Truncate(hint, max(width-2, 0), "…"))), "\n")
+		return strings.Join(append(rows, m.hintBar(width, button{"enter", "read"}, button{"R", "review a branch"}, button{"b", "files"}, button{"r", "refresh"}, button{"q", "close"})), "\n")
 	}
 	var added, removed int
 	for _, f := range c.files {
@@ -318,11 +388,15 @@ func (c *changesApp) view(m *Model) string {
 	default:
 		rows = append(rows, c.split(m, width, body)...)
 	}
-	hint := "↑/↓ file · pgup/pgdn scroll · n/p hunk · [/] line · c comment · enter read · @ mention · b branches · r refresh · esc close"
-	if len(m.comments) > 0 {
-		hint = plural(len(m.comments), "comment") + " for your next message · " + hint
+	buttons := []button{{"enter", "read"}, {"→", "lines"}, {"c", "comment"}, {"@", "mention"}, {"b", "branches"}, {"r", "refresh"}, {"q", "close"}}
+	if c.onDiff {
+		buttons = []button{{"enter", "comment"}, {"←", "files"}, {"n", "next hunk"}, {"space", "read"}, {"q", "close"}}
 	}
-	rows = append(rows, " "+th.Faint.Render(ansi.Truncate(hint, max(width-2, 0), "…")))
+	foot := m.hintBar(width, buttons...)
+	if len(m.comments) > 0 {
+		foot = " " + th.Highlight.Render(plural(len(m.comments), "comment")+" for your next message") + foot
+	}
+	rows = append(rows, ansi.Truncate(foot, width, "…"))
 	return strings.Join(rows, "\n")
 }
 
@@ -355,23 +429,28 @@ func (c *changesApp) headLine(m *Model) string {
 // split is the file list beside the selected file's diff.
 func (c *changesApp) split(m *Model, width, height int) []string {
 	th := m.th
-	listWidth := max(min(width*2/5, 46), min(width, 18))
+	height = max(height, 0)
+	listWidth := listWidth(width)
 	diffWidth := max(width-listWidth-3, 0)
-	// The list scrolls to keep the cursor in view.
-	first := max(c.cursor-height+1, 0)
 	most := 1
 	for _, f := range c.files {
 		most = max(most, f.Added+f.Removed)
 	}
+	c.list.zone, c.list.cursor = "chg", c.cursor
+	from, to := c.list.window(len(c.files), height)
 	var left []string
-	for i := first; i < len(c.files) && len(left) < height; i++ {
-		left = append(left, mark(m.zones.frame, fmt.Sprintf("chg:%d", i), c.fileRow(m, c.files[i], i == c.cursor, listWidth, most)))
+	for i := from; i < to; i++ {
+		left = append(left, mark(m.zones.frame, fmt.Sprintf("chg:%d", i), c.fileRow(m, c.files[i], i == c.cursor && !c.onDiff, listWidth, most)))
 	}
 	var right []string
 	if f, ok := c.selected(); ok && diffWidth > 10 {
 		right = c.diffView(m, f, diffWidth, height)
 	}
-	rule := lipgloss.NewStyle().Foreground(th.BorderColor).Render("│")
+	edge := th.BorderColor
+	if c.onDiff {
+		edge = th.BorderFocus // the diff has the arrows
+	}
+	rule := lipgloss.NewStyle().Foreground(edge).Render("│")
 	out := make([]string, 0, height)
 	for i := 0; i < height; i++ {
 		row := padRight(at(left, i), listWidth)
@@ -477,6 +556,11 @@ func (c *changesApp) diffView(m *Model, f project.Change, width, height int) []s
 	}
 	c.scroll = min(c.scroll, max(len(d.rows)-height, 0))
 	shown := slices.Clone(d.rows[c.scroll:min(c.scroll+height, len(d.rows))])
+	defer func() {
+		for i := range shown {
+			shown[i] = mark(m.zones.frame, fmt.Sprintf("chgline:%d", c.scroll+i), shown[i]) // a line is a click target
+		}
+	}()
 	// The chosen line and the commented ones are marked in the gutter's first column.
 	for i := range shown {
 		row := c.scroll + i

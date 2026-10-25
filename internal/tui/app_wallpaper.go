@@ -26,6 +26,33 @@ type wallpaperPicker struct {
 	original string
 }
 
+func (w *wallpaperPicker) title() string { return "Wallpaper" }
+func (w *wallpaperPicker) key() string   { return "wallpaper" }
+
+// wheel previews the next row of pictures, or the one before.
+func (w *wallpaperPicker) wheel(m *Model, up bool) tea.Cmd {
+	w.grid.wheel(up)
+	m.wallChoice = w.choices[w.grid.cursor]
+	return nil
+}
+
+// click previews a picture; a second click on it keeps it, as enter does.
+func (w *wallpaperPicker) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
+	i, ok := w.grid.clicked(m, msg)
+	if !ok {
+		return nil
+	}
+	if !w.grid.clickTile(i) {
+		m.wallChoice = w.choices[i]
+		return nil
+	}
+	closed, cmd := w.handle(m, keyPress("enter"))
+	if closed {
+		m.closeWindow(m.windowIndex(w))
+	}
+	return cmd
+}
+
 func newWallpaperPicker(m *Model) *wallpaperPicker {
 	choices := []string{""}
 	// Abstract first: the theme most people come here for.
@@ -168,7 +195,7 @@ func (w *wallpaperPicker) label(choice string) (string, string) {
 
 func (w *wallpaperPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "ctrl+c":
+	case "esc", "q", "ctrl+c":
 		m.wallChoice = w.original // a preview is not a choice
 		return true, nil
 	case "enter":
@@ -180,7 +207,7 @@ func (w *wallpaperPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) 
 		w.grid.cursor = w.groupStart(-1)
 	default:
 		_, h := tileOuter()
-		if !w.grid.move(msg.String(), max((m.height-8)/h, 1)) {
+		if !w.grid.move(msg.String(), max((m.windowHeight()-4)/h, 1)) {
 			return false, nil
 		}
 	}
@@ -227,23 +254,20 @@ func (w *wallpaperPicker) groupStart(by int) int {
 	return i % n
 }
 
-func (w *wallpaperPicker) rowCount() int { return len(w.choices) }
-func (w *wallpaperPicker) choose(m *Model, i int) tea.Cmd {
-	w.grid.cursor = i
-	m.overlay = nil
-	title, _ := w.label(w.choices[i])
-	return m.setWallpaper(w.choices[i], "Wallpaper: "+title)
-}
-
 func (w *wallpaperPicker) view(m *Model) string {
 	th := m.th
-	width := gridWidth(m, 4)
-	inner := max(width-4, 10)
-	grid := w.grid.view(m, inner, max(m.height-8, 1))
+	width, height := m.width, max(m.windowHeight(), 1)
+	inner := max(width-2, 10)
+	w.grid.inWindow = true
+	lines := strings.Split(w.grid.view(m, inner, max(height-3, 1)), "\n")
+	for i := range lines {
+		lines[i] = " " + lines[i]
+	}
 	// The tile under the cursor in full: its title, who made it, its theme.
 	title, detail := w.label(w.choices[w.grid.cursor])
 	text := ansi.Truncate(title, inner, "…")
-	about := th.Strong.Render(text) + th.Faint.Render(ansi.Truncate(" · "+detail, max(inner-ansi.StringWidth(text), 0), "…"))
-	hint := th.Faint.Render(ansi.Truncate("↑↓←→ preview · tab next theme · enter keep · esc revert", inner, "…"))
-	return frame(th, "Wallpaper", grid+"\n"+about+"\n"+hint, width)
+	about := " " + th.Strong.Render(text) + th.Faint.Render(ansi.Truncate(" · "+detail, max(inner-ansi.StringWidth(text), 0), "…"))
+	lines = append(fitLines(lines, width, height-2), about,
+		m.hintBar(width, button{"enter", "keep"}, button{"tab", "next theme"}, button{"esc", "put back"}))
+	return strings.Join(lines, "\n")
 }

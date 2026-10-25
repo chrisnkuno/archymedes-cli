@@ -49,7 +49,7 @@ func init() {
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
 		{"gallery", "", "The pictures, full size: built-in photos, live originals from Unsplash, and art drawn by code", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
-		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openOverlay(newWallpaperPicker(m)); return nil }},
+		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openWindow(newWallpaperPicker(m)); return nil }},
 		{"finder", "", "Everything Friday opens, as a grid of icons: apps, commands, sessions, files, themes, modes (alt+g)", func(m *Model, _ string) tea.Cmd { return m.openFinder() }},
 		{"welcome", "", "The first-run walkthrough again: name, look, mode, keys, connection, a first request", func(m *Model, _ string) tea.Cmd { return m.openOnboarding() }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
@@ -146,8 +146,7 @@ func (m *Model) runCommand(input string) (tea.Cmd, bool) {
 }
 
 func (m *Model) cmdHelp(string) tea.Cmd {
-	m.openOverlay(helpOverlay{})
-	return nil
+	return m.openHelp()
 }
 
 func (m *Model) cmdMode(arg string) tea.Cmd {
@@ -165,7 +164,7 @@ func (m *Model) cmdModel(arg string) tea.Cmd {
 	if arg != "" {
 		return m.loadModels(false, arg)
 	}
-	m.openOverlay(newModelPicker(m, ""))
+	m.openWindow(newModelPicker(m, ""))
 	return m.loadModels(false, "")
 }
 
@@ -188,7 +187,7 @@ func (m *Model) cmdCat(arg string) tea.Cmd {
 }
 
 func (m *Model) cmdResume(string) tea.Cmd {
-	m.openOverlay(newResumePicker(m))
+	m.openWindow(newResumePicker(m))
 	return m.loadSessions()
 }
 
@@ -199,7 +198,7 @@ func (m *Model) cmdExpand(string) tea.Cmd {
 
 func (m *Model) cmdTheme(arg string) tea.Cmd {
 	if arg == "" || arg == "list" {
-		m.openOverlay(newThemePicker(m))
+		m.openWindow(newThemePicker(m))
 		return nil
 	}
 	if !slices.Contains(theme.Names(), strings.ToLower(arg)) {

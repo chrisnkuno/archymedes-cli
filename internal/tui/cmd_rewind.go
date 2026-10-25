@@ -37,6 +37,13 @@ type rewindPicker struct {
 	cursor  int
 	diffs   map[int]string // by turn index; "" is "asked, changed nothing"
 	pending map[int]bool
+	// reading is the selected turn's whole diff, read in the dialog; esc comes back to the turns.
+	reading *pager
+}
+
+// readerSize is the room a diff is read in inside the dialog.
+func (p *rewindPicker) readerSize(m *Model) (int, int) {
+	return max(overlayWidth(m, 100)-4, 8), max(m.height-8, 4)
 }
 
 func (m *Model) cmdRewind(arg string) tea.Cmd {
@@ -109,6 +116,16 @@ func (p *rewindPicker) diffLoaded(msg turnDiffMsg) {
 }
 
 func (p *rewindPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	if p.reading != nil {
+		var closed bool
+		var cmd tea.Cmd
+		w, h := p.readerSize(m)
+		m.sized(w, h, func() { closed, cmd = p.reading.handle(m, msg) })
+		if closed {
+			p.reading = nil // back to the turns
+		}
+		return false, cmd
+	}
 	count := max(len(p.turns), 1)
 	switch msg.String() {
 	case "esc", "ctrl+c", "q":
@@ -134,7 +151,8 @@ func (p *rewindPicker) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if !ok || strings.TrimSpace(patch) == "" {
 			return false, nil
 		}
-		m.openOverlay(newPager(m, "Turn "+fmt.Sprint(turn.Index+1)+": "+turn.Label, render.Excerpt(m.th, patch, max(m.width-4, 20), 0)))
+		w, _ := p.readerSize(m)
+		p.reading = newPager(m, "Turn "+fmt.Sprint(turn.Index+1)+": "+turn.Label, render.Excerpt(m.th, patch, max(w-8, 20), 0))
 		return false, nil
 	}
 	return false, nil
@@ -144,6 +162,12 @@ func (p *rewindPicker) view(m *Model) string {
 	th := m.th
 	width := overlayWidth(m, 100)
 	inner := max(width-4, 8)
+	if p.reading != nil {
+		var body string
+		w, h := p.readerSize(m)
+		m.sized(w, h, func() { body = p.reading.view(m) })
+		return frame(th, "Rewind · the turn's diff", body, width)
+	}
 	var b strings.Builder
 	switch {
 	case !p.loaded:
@@ -169,7 +193,7 @@ func (p *rewindPicker) view(m *Model) string {
 		}
 		b.WriteString("\n" + p.previewLines(m, inner))
 	}
-	b.WriteString(th.Faint.Render(ansi.Truncate("enter files + conversation · c files · v conversation · d read the diff · esc close", inner, "")))
+	b.WriteString(m.dialogHintBar(inner, button{"enter", "files + conversation"}, button{"c", "files"}, button{"v", "conversation"}, button{"d", "read the diff"}, button{"esc", "close"}))
 	return frame(th, "Rewind to before a turn", b.String(), width)
 }
 
@@ -192,4 +216,13 @@ func (p *rewindPicker) rowCount() int { return len(p.turns) }
 func (p *rewindPicker) choose(m *Model, i int) tea.Cmd {
 	p.cursor = i
 	return p.preview(m)
+}
+
+// wheel scrolls the diff being read, or moves through the turns.
+func (p *rewindPicker) wheel(m *Model, up bool) tea.Cmd {
+	if p.reading != nil {
+		return p.reading.wheel(m, up)
+	}
+	_, cmd := p.handle(m, keyPress(map[bool]string{true: "up", false: "down"}[up]))
+	return cmd
 }

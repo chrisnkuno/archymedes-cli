@@ -46,9 +46,15 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return tea.Batch(cmd, m.animate())
 	}
+	if m.bar.on {
+		if cmd, ok := m.barKey(msg); ok {
+			return tea.Batch(cmd, m.animate())
+		}
+	}
 	w := m.activeWindow()
 	if c, ok := w.(capturing); ok && c.capturing() {
-		_, cmd := w.handle(m, msg)
+		var cmd tea.Cmd
+		m.within(func() { _, cmd = w.handle(m, msg) })
 		return cmd
 	}
 	if cmd, ok := m.shellKey(msg); ok {
@@ -56,7 +62,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return tea.Batch(cmd, m.animate())
 	}
 	if w != nil {
-		if closed, cmd := w.handle(m, msg); closed {
+		var closed bool
+		var cmd tea.Cmd
+		m.within(func() { closed, cmd = w.handle(m, msg) })
+		if closed && msg.String() == "esc" {
+			m.stepOut() // esc steps out to the bars; q, ctrl+w or ✕ close the window
+			return cmd
+		}
+		if closed {
 			if i := m.windowIndex(w); i > 0 {
 				m.closeWindow(i)
 			}
@@ -82,6 +95,20 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := m.keys
 	if !key.Matches(msg, k.Interrupt) {
 		m.quitArmed = false
+	}
+	if m.tr.sel != nil {
+		if cmd, ok := m.transcriptKey(msg); ok {
+			return cmd
+		}
+	}
+	if m.desk.focused && m.landingVisible() {
+		if cmd, ok := m.deskKey(msg); ok {
+			return cmd
+		}
+	}
+	if msg.String() == "up" && m.input.value() == "" && m.landingVisible() && len(m.input.complete) == 0 {
+		m.desk.focused = true // ↑ from an empty input: onto the desktop's icons
+		return nil
 	}
 	switch {
 	case key.Matches(msg, k.Interrupt):
@@ -109,6 +136,8 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 			return m.scrollTo(0)
 		case m.phase == busy:
 			return m.cancelTurn()
+		case m.input.value() == "":
+			m.stepOut() // nothing to stop or close: esc steps out to the bars
 		}
 		return nil
 	case key.Matches(msg, k.Send):
@@ -124,6 +153,18 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.submit()
 	case key.Matches(msg, k.Complete) && len(m.input.complete) == 0 && m.offerStarter():
 		return nil // on the home screen tab offers a request to start from
+	case key.Matches(msg, k.Complete) && len(m.input.complete) == 0 && len(m.shownHints()) > 0:
+		m.applyHint(m.shownHints()[0])
+		return nil
+	case key.Matches(msg, k.Complete) && len(m.input.complete) == 0 && m.offerNextStep():
+		return nil // after a turn tab offers its next steps
+	case key.Matches(msg, k.Suggest1, k.Suggest2, k.Suggest3):
+		for i, b := range []key.Binding{k.Suggest1, k.Suggest2, k.Suggest3} {
+			if key.Matches(msg, b) {
+				m.useSuggestion(i)
+			}
+		}
+		return nil
 	case key.Matches(msg, k.Complete) && m.input.accept():
 		return nil
 	case key.Matches(msg, k.Mode):
@@ -145,17 +186,23 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, k.Bottom):
 		return m.scrollTo(0)
-	case key.Matches(msg, k.History):
+	case (msg.String() == "up" || msg.String() == "down") && len(m.input.complete) > 0:
 		delta := map[string]int{"up": -1, "down": 1}[msg.String()]
-		if len(m.input.complete) > 0 {
-			m.input.compPos = (m.input.compPos + delta + len(m.input.complete)) % len(m.input.complete)
-			return nil
+		m.input.compPos = (m.input.compPos + delta + len(m.input.complete)) % len(m.input.complete)
+		return nil
+	case msg.String() == "up" && m.input.value() == "" && m.enterTranscript():
+		return nil // ↑ from an empty input: onto the newest block of the conversation
+	case key.Matches(msg, k.History):
+		delta := -1
+		if strings.HasSuffix(msg.String(), "down") {
+			delta = 1
 		}
 		if m.input.browse(delta) {
 			return nil
 		}
 	}
-	cmd := m.input.update(msg)
+	before := m.input.value()
+	cmd := tea.Batch(m.input.update(msg), m.typed(before))
 	// The first @ typed reads the project's files, so the paths can be completed.
 	if _, _, ok := mentionFragment(m.input.value()); ok && m.knownFiles == nil && !m.filesLoading {
 		return tea.Batch(cmd, m.listFiles())

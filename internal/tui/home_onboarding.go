@@ -30,7 +30,7 @@ import (
 // machine), the look (theme tiles, previewed as you move), the mode (four tiles), the keys (press
 // each to try it), the connection (and whether installs are counted), and a first request to
 // start from. enter goes on, backspace goes back, esc keeps what is chosen and skips the rest.
-// /welcome runs it again. The agent starts behind it; a missing provider waits for the end, where
+// /welcome or alt+w runs it again. The agent starts behind it; a missing provider waits for the end, where
 // the connect dialog takes over.
 
 type onboardStep int
@@ -94,9 +94,10 @@ func (m *Model) beginFirstRun(state config.State) {
 	}
 }
 
-// shouldOnboard is a first run with somewhere to remember it: never in a one-shot prompt.
+// shouldOnboard is the first start since the walkthrough arrived, with somewhere to remember it:
+// someone who used Friday before it existed sees it once too. Never in a one-shot prompt.
 func shouldOnboard(opts Options, state config.State) bool {
-	return opts.ConfigDir != "" && !state.Onboarded && !state.Welcomed && opts.Prompt == ""
+	return opts.ConfigDir != "" && !state.Onboarded && opts.Prompt == ""
 }
 
 func newOnboarding(m *Model) *onboarding {
@@ -288,6 +289,14 @@ func (ob *onboarding) choose(m *Model, i int) tea.Cmd {
 	if g == nil || i >= len(g.tiles) {
 		return nil
 	}
+	if g.cursor == i {
+		// A second click on the chosen tile goes on, as enter does.
+		closed, cmd := ob.handle(m, keyPress("enter"))
+		if closed && m.overlay == ob {
+			m.overlay = nil
+		}
+		return cmd
+	}
 	g.cursor = i
 	if ob.step == obLook {
 		m.applyTheme(g.tiles[i].id)
@@ -336,7 +345,7 @@ func (ob *onboarding) finish(m *Model, request string) tea.Cmd {
 	if name != "" {
 		greeting += ", " + name
 	}
-	return tea.Batch(append(cmds, m.toast(toastInfo, greeting+" · /welcome shows this again"))...)
+	return tea.Batch(append(cmds, m.toast(toastInfo, greeting+" · "+keyLabel(m.keys.Welcome.Keys())+" shows this again"))...)
 }
 
 // saveSettingLater saves a setting through the agent, or once it has started.
@@ -459,9 +468,20 @@ func (ob *onboarding) view(m *Model) string {
 	case obStart:
 		body = ob.stepView(th, "Where to start", "Pick a first request; it goes in the input for you to send or change.", ob.starts.view(m, inner, tileArtRows+3))
 	}
-	help := m.help
-	help.SetWidth(inner)
-	foot := help.ShortHelpView(ob.bindings())
+	// The keys as buttons; the arrows are said, not pressed.
+	var buttons []button
+	arrows := ""
+	for _, b := range ob.bindings() {
+		if strings.ContainsAny(b.Help().Key, "←↑↓→") {
+			arrows = th.Key.Render(b.Help().Key) + th.Faint.Render(" "+b.Help().Desc+" ·")
+			continue
+		}
+		buttons = append(buttons, button{b.Help().Key, b.Help().Desc})
+	}
+	foot := m.dialogHintBar(inner, buttons...)
+	if arrows != "" {
+		foot = " " + arrows + foot
+	}
 	title := "Welcome to Friday"
 	if ob.nameValue != "" && ob.step != obHello {
 		title = "Welcome, " + strings.TrimSpace(ob.nameValue)
@@ -485,7 +505,8 @@ func (ob *onboarding) helloView(m *Model, width int) string {
 		th.Body.Render("runs commands. Every change is shown,"),
 		th.Body.Render("can be undone, and waits on your mode."),
 		"",
-		th.Faint.Render("Six short steps. esc skips them."),
+		th.Faint.Render("Six short steps. esc skips them;"),
+		th.Faint.Render(keyLabel(m.keys.Welcome.Keys()) + " or /welcome brings them back."),
 	}
 	text := strings.Join(about, "\n")
 	if solid := render.Geometry(m.angle, false); width >= 23+4+40 {

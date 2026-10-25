@@ -188,6 +188,7 @@ describe("settings validation invariants", () => {
     MODEL_PRICE_CURRENCY: ["EUR"],
     ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
     ARCHYMEDES_REASONING: ["auto", "minimal", "LOW", "medium", "high"],
+    ARCHYMEDES_SUGGEST: ["on", "OFF"],
     ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
     ARCHYMEDES_CODE_COLORS: ["vscode", "theme"],
     ARCHYMEDES_CODE_LINE_NUMBERS: ["on", "OFF"],

@@ -39,13 +39,21 @@ func (m *Model) landingVisible() bool {
 func (m *Model) landing(width, height int) []string {
 	// The tour drawer (home_drawer.go) takes the right edge; the card centres in what is left, so it
 	// slides over as the drawer slides in.
+	layout := m.layoutHome(width, height)
 	right := m.tourRight(width, height)
-	cardWidth := width - right
-	card := m.homeCard(cardWidth, height)
+	cardWidth := width - right - layout.iconsW
+	card := m.homeCard(cardWidth, height, layout.prism)
 	if card == nil {
-		return m.withTourDrawer(centre(m.homeInfo(cardWidth, height), cardWidth, height), width, height)
+		card = m.homeInfo(cardWidth, height)
 	}
-	out := m.withTourDrawer(centre(card, cardWidth, height), width, height)
+	out := centre(card, cardWidth, height)
+	if layout.iconCols > 0 {
+		icons := m.desktopIcons(layout.iconCols, height)
+		for y := range out {
+			out[y] = padRight(icons[y], layout.iconsW) + out[y]
+		}
+	}
+	out = m.withTourDrawer(out, width, height)
 	if m.opts.NoPhotos || m.wallChoice == wallpaperNone || height < len(card)+1 {
 		return out
 	}
@@ -72,14 +80,14 @@ func splice(row, over string, x, width int) string {
 // homeCard is the home screen's card: the mark beside what it says where there is room, in a box
 // filled with the theme's ground so the wallpaper never shows through between the words. Nil when
 // even the smallest card does not fit.
-func (m *Model) homeCard(width, height int) []string {
+func (m *Model) homeCard(width, height int, prism bool) []string {
 	th := m.th
 	inner := min(width-8, 76)
 	if inner < 30 || height < 9 {
 		return nil
 	}
 	solid := render.Geometry(m.angle, false)
-	withMark := inner >= 23+4+40 && height-2 >= len(solid)
+	withMark := prism && inner >= 23+4+30 && height-2 >= len(solid)
 	textWidth := inner
 	if withMark {
 		textWidth = inner - 23 - 4
@@ -115,8 +123,9 @@ func onGround(block string, bg color.Color) string {
 	return strings.Join(lines, "\n")
 }
 
-// homeInfo is what the home screen says, most important first, fitted to width×height: sections
-// that do not fit are left out, lowest priority first, so a short window keeps the essentials.
+// homeInfo is what the home screen says, most important first, fitted to width×height: the name,
+// what it runs on, a hello, requests to start from and one line of keys. Sections that do not fit
+// are left out, lowest priority first. Everything else is a desktop icon, or a window away.
 func (m *Model) homeInfo(width, height int) []string {
 	th := m.th
 	fit := func(lines ...string) []string {
@@ -130,34 +139,12 @@ func (m *Model) homeInfo(width, height int) []string {
 		lines    []string
 	}
 	sections := []section{
-		{0, fit(
-			theme.Gradient("F R I D A Y", th.Primary, th.Secondary, true)+m.versionLabel(),
-			th.Faint.Render("a coding agent that shows its work"),
-		)},
-		{2, append(fit(th.Strong.Render(greeting(time.Now(), m.firstRun.name))), wrapped(th.Highlight, spark(m.photoIndex), width)...)},
+		{0, fit(theme.Gradient("F R I D A Y", th.Primary, th.Secondary, true) + m.versionLabel())},
 		{1, fit(m.homeFacts(width)...)},
-	}
-	if !m.welcomed {
-		// A first run: what to do, in order, rather than a list of keys.
-		sections = append(sections, section{3, fit(
-			th.Strong.Render("New here? Three things:"),
-			step(th, "1", "Ask about this project — "+keyLabel(m.keys.Complete.Keys())+" picks a start"),
-			step(th, "2", keyLabel(m.keys.Mode.Keys())+" sets how much it may do alone"),
-			step(th, "3", "Apps are on the dock; "+keyLabel(m.keys.Start.Keys())+" finds anything"),
-			// Said once, where a new person reads: what platform/install-cue.ts sends, and how to stop it.
-			th.Faint.Render("Counts installs anonymously (version, OS) · off: Settings or DO_NOT_TRACK=1"),
-		)})
-	} else {
-		sections = append(sections, section{3, fit(
-			tip(th, "enter", "ask anything"),
-			tip(th, m.newlineKey(), "new line"),
-			tip(th, keyLabel(m.keys.Start.Keys()), "find anything"),
-			tip(th, keyLabel(m.keys.Mode.Keys()), "plan · build · auto"),
-			tip(th, keyLabel(m.keys.Changes.Keys()), "what changed"),
-		)})
+		{3, fit(th.Strong.Render(greeting(time.Now(), m.firstRun.name)))},
 	}
 	if m.phase != connecting {
-		lines := []string{th.Faint.Render("try one — " + keyLabel(m.keys.Complete.Keys()) + " or click")}
+		var lines []string
 		for i, starter := range m.starters() {
 			row := th.Key.Render("› ") + th.Body.Render(ansi.Truncate(starter, width-2, "…"))
 			if m.input.value() == starter {
@@ -165,8 +152,31 @@ func (m *Model) homeInfo(width, height int) []string {
 			}
 			lines = append(lines, mark(m.zones.frame, fmt.Sprintf("starter:%d", i), row))
 		}
-		sections = append(sections, section{4, lines})
+		sections = append(sections, section{2, lines})
 	}
+	// The keys worth knowing, as many to a line as fit: a narrow card wraps them between parts.
+	var lines []string
+	line := ""
+	for _, part := range []string{
+		th.Key.Render("↑") + th.Faint.Render(" desktop"),
+		th.Key.Render(keyLabel(m.keys.Complete.Keys())) + th.Faint.Render(" a start"),
+		th.Key.Render(keyLabel(m.keys.Start.Keys())) + th.Faint.Render(" find"),
+	} {
+		switch {
+		case line == "":
+			line = part
+		case ansi.StringWidth(line)+3+ansi.StringWidth(part) <= width:
+			line += th.Faint.Render(" · ") + part
+		default:
+			lines, line = append(lines, line), part
+		}
+	}
+	lines = fit(append(lines, line)...)
+	if !m.welcomed {
+		// Said once, where a new person reads: what platform/install-cue.ts sends, and how to stop it.
+		lines = append(lines, fit(th.Faint.Render("Counts installs anonymously (version, OS) · off: Settings or DO_NOT_TRACK=1"))...)
+	}
+	sections = append(sections, section{4, lines})
 	// Leave out the lowest-priority sections until what is left fits, a blank line between each.
 	for limit := 4; limit >= 0; limit-- {
 		var out []string
@@ -186,56 +196,35 @@ func (m *Model) homeInfo(width, height int) []string {
 	return nil
 }
 
-// homeFacts is what is in front of you: the model and who serves it, the mode and what it allows,
-// where the work happens, and what the agent can do there.
+// homeFacts is what is in front of you, on one line: the model, the mode, and the project.
 func (m *Model) homeFacts(width int) []string {
 	th := m.th
-	// Pills carry a cell of padding; a plain value gets the same, so every value starts in one column.
-	label := func(name string) string { return th.Faint.Render(padRight(name, 7)) }
 	if m.phase == connecting {
 		return []string{th.Highlight.Render(m.spin.View() + " starting the agent…")}
 	}
-	var lines []string
 	info := m.session.Info
+	var parts []string
 	if info.Model != "" {
-		served := ""
-		if info.ProviderLabel != "" {
-			served = th.Faint.Render(" on ") + th.Body.Render(info.ProviderLabel)
-		}
-		lines = append(lines, label("model")+th.SoftPill(info.Model, th.Secondary)+served)
+		parts = append(parts, th.SoftPill(info.Model, th.Secondary))
 	}
-	lines = append(lines, label("mode")+th.Pill(m.mode, th.ModeColor(m.mode))+" "+th.Faint.Render(modeBlurb[m.mode]))
+	parts = append(parts, th.Pill(m.mode, th.ModeColor(m.mode)))
 	where := info.Root
 	if where == "" {
 		where = m.opts.Cwd
 	}
 	if where != "" {
-		place := th.Body.Render(" " + filepath.Base(where))
-		if info.WorkspaceLabel != "" && info.Workspace != "local" {
-			place += th.Faint.Render(" · " + info.WorkspaceLabel)
-		}
-		lines = append(lines, label("in")+place)
+		parts = append(parts, th.Body.Render(filepath.Base(where)))
 	}
-	lines = append(lines, label("can")+th.Body.Render(" "+ansi.Truncate(abilities(m.mode), max(width-8, 8), "…")))
-	return lines
+	line := strings.Join(parts, " ")
+	if ansi.StringWidth(line) > width && len(parts) > 1 {
+		return []string{parts[0], strings.Join(parts[1:], " ")}
+	}
+	return []string{line}
 }
 
 // wrapped is text in style, wrapped to width.
 func wrapped(style lipgloss.Style, text string, width int) []string {
 	return strings.Split(style.Width(width).Render(text), "\n")
-}
-
-// abilities is what the agent can do in a mode, in a phrase.
-func abilities(mode string) string {
-	switch mode {
-	case "plan":
-		return "read, search, plan; changes nothing"
-	case "auto":
-		return "read, edit, run and verify, unasked"
-	case "defender":
-		return "triage, scan for secrets, playbooks"
-	}
-	return "read, edit, run; you approve changes"
 }
 
 // greeting is hello for the time of day, to name when there is one.
@@ -256,36 +245,6 @@ func greeting(now time.Time, name string) string {
 	}
 }
 
-// sparks are the lines that turn with the photo: something to start on.
-var sparks = []string{
-	"What will you build today?",
-	"Pick a corner of the code you have never read. Start there.",
-	"Ship something small before lunch.",
-	"Break it, read the error, fix it. That is the job.",
-	"Curiosity compiles.",
-	"Explore. Make. Repeat.",
-	"A good question is half a program.",
-	"Today's experiment is tomorrow's feature.",
-	"Leave the code a little better than you found it.",
-	"Write the test first. Thank yourself later.",
-	"Big systems are small ideas that kept going.",
-	"Try the thing. See what happens.",
-	"Make something you would want to use.",
-	"Every bug is a question the code is asking.",
-	"Start rough. Refine later.",
-	"The best way to learn a codebase is to change it.",
-}
-
-// spark is the line for the photo at index i.
-func spark(i int) string {
-	return sparks[((i%len(sparks))+len(sparks))%len(sparks)]
-}
-
-// step is one numbered first-run step.
-func step(th theme.Theme, n, text string) string {
-	return th.Key.Render(n+"  ") + th.Body.Render(text)
-}
-
 // centreLines pads each line so the block sits centred in width.
 func centreLines(lines []string, width int) []string {
 	blockWidth := 0
@@ -300,12 +259,9 @@ func centreLines(lines []string, width int) []string {
 	return out
 }
 
-func tip(th theme.Theme, key, desc string) string {
-	return th.Key.Render(padRight(key, max(11, ansi.StringWidth(key)+1))) + th.Faint.Render(desc)
-}
-
 // centre places block in the middle of a width×height area, clipping what does not fit.
 func centre(block []string, width, height int) []string {
+	height = max(height, 0)
 	blockWidth := 0
 	for _, line := range block {
 		blockWidth = max(blockWidth, ansi.StringWidth(line))

@@ -141,7 +141,7 @@ provider's hint is what fixed it.
 
 Each forwards to the TypeScript agent or answers that it is not available here: Claude Code and
 Codex engines, MCP and LSP clients, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
-`/cost`, `/diff`, Jev, the free gateway (keyless free mode) and Archymedes Cloud providers, money
+`/cost`, `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own
 limits, not reserved from the parent's remaining budget as in the TypeScript agent. Forwarded to

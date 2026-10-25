@@ -66,6 +66,10 @@ func (m *Model) handleEvent(ev acp.Event) {
 	case "steering_unread":
 		// The turn ended before reading these: they go first in the queue, as turns of their own.
 		m.queue = append(slices.Clone(ev.Messages), m.queue...)
+	case "suggestions":
+		m.takeSuggestions(ev.Steps)
+	case "edit_notes":
+		m.noteEdit(ev)
 	case "jev-review":
 		m.notice(noticeWarn, fmt.Sprintf("Jev disagreed (%s, %.0f%%); asking the agent to check its work", ev.Outcome, ev.Probability*100))
 	}

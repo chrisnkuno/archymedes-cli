@@ -48,7 +48,7 @@ func TestAGeneratedWallpaperIsCreditedToFridayNotUnsplash(t *testing.T) {
 	m.wallChoice = "art-synthwave"
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 32})
 	s := screen(m)
-	if !strings.Contains(s, "Synthwave horizon") || !strings.Contains(s, "drawn by Friday") || strings.Contains(s, "Unsplash") || !strings.Contains(s, "▀") {
+	if !strings.Contains(s, "Synthwave horizon") || !strings.Contains(s, "drawn by Friday") || strings.Contains(s, "Unsplash") || !photoShown(s) {
 		t.Fatalf("a generated wallpaper should be drawn and credited to Friday:\n%s", s)
 	}
 }
@@ -58,33 +58,53 @@ func TestTheHomeCardSaysWhatIsInFrontOfYou(t *testing.T) {
 	m.photoIndex = 0 // a photograph, credited to Unsplash
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	s := screen(m)
-	for _, want := range []string{"model", m.session.Info.Model, "mode", modeBlurb["build"], "can", abilities("build"), "Unsplash"} {
+	for _, want := range []string{m.session.Info.Model, "build", "Unsplash", "↑ desktop"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("the home card lacks %q:\n%s", want, s)
 		}
 	}
 	// The card is filled with the theme's ground: no styled run ends in a bare reset that would
 	// let the wallpaper, or the terminal's own background, through between the words.
-	card := strings.Join(m.homeCard(130, 30), "\n")
+	card := strings.Join(m.homeCard(130, 30, true), "\n")
 	if strings.Contains(card, "\x1b[m ") {
 		t.Fatal("a run inside the card ends without the ground behind it")
 	}
 }
 
-func TestTheHomeLineTurnsWithThePhoto(t *testing.T) {
+func TestTheDesktopIconsOpenByArrowAndClick(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
-	before := spark(m.photoIndex)
-	m.photoIndex++
-	// Its first words: a long line wraps inside the card.
-	after := spark(m.photoIndex)
-	fields := strings.Fields(after)
-	head := strings.Join(fields[:min(3, len(fields))], " ")
-	if after == before || !strings.Contains(screen(m), head) {
-		t.Fatalf("the line did not turn with the photo: %q then %q", before, after)
+	for _, name := range []string{"Changes", "Sessions", "Finder", "Settings", "Tour"} {
+		if !strings.Contains(screen(m), name) {
+			t.Fatalf("no %s icon:\n%s", name, screen(m))
+		}
 	}
-	if spark(-1) == "" {
-		t.Fatal("a negative index has no line")
+	press(m, tea.KeyUp, 0)
+	if !m.desk.focused || m.desk.cursor != 0 {
+		t.Fatal("↑ on an empty input did not step onto the icons")
+	}
+	press(m, tea.KeyDown, 0) // Changes
+	press(m, tea.KeyEnter, 0)
+	if _, ok := m.activeWindow().(*changesApp); !ok || m.desk.focused {
+		t.Fatalf("enter on Changes opened %T", m.activeWindow())
+	}
+	m.focus(0)
+	// Typing leaves the icons for the input.
+	press(m, tea.KeyUp, 0)
+	typeText(m, "x")
+	if m.desk.focused || m.input.value() != "x" {
+		t.Fatalf("typing on the desktop: focused=%v input=%q", m.desk.focused, m.input.value())
+	}
+	m.input.take()
+	// A click selects; a second click opens.
+	x, y := cellOf(t, m, "Settings")
+	click(m, x, y)
+	if !m.desk.focused || m.desktopApps()[m.desk.cursor].id != "settings" || m.activeWindow() != nil {
+		t.Fatal("the first click should only select")
+	}
+	click(m, x, y)
+	if _, ok := m.activeWindow().(*settingsApp); !ok {
+		t.Fatalf("the second click opened %T", m.activeWindow())
 	}
 }
 
@@ -92,7 +112,7 @@ func TestAShortHomeScreenKeepsTheEssentials(t *testing.T) {
 	m := projectModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	s := screen(m)
-	for _, want := range []string{"F R I D A Y", "mode", strings.Fields(greeting(time.Now(), ""))[0]} { // the greeting follows the clock
+	for _, want := range []string{"F R I D A Y", "build", strings.Fields(greeting(time.Now(), ""))[0]} { // the greeting follows the clock
 		if !strings.Contains(s, want) {
 			t.Errorf("a short home screen lost %q:\n%s", want, s)
 		}
@@ -122,7 +142,7 @@ func TestPhotosCanBeTurnedOff(t *testing.T) {
 	m := projectModel(t)
 	m.opts.NoPhotos = true
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 32})
-	if s := screen(m); strings.Contains(s, "Unsplash") || strings.Contains(s, "▄") {
+	if s := screen(m); strings.Contains(s, "Unsplash") || photoShown(s) {
 		t.Fatalf("photos drawn with ARCHYMEDES_PHOTOS=off:\n%s", s)
 	}
 }
@@ -160,7 +180,7 @@ func TestAFirstRunSaysWhatToDoAndOffersRequestsToStartFrom(t *testing.T) {
 	m, dir := firstRunModel(t)
 	m.Update(projectStateMsg{changed: 2})
 	s := screen(m)
-	for _, want := range []string{"New here? Three things:", "tab picks a start", "Review my 2 uncommitted changes for risks", "Explain what this project does"} {
+	for _, want := range []string{"tab a start", "Counts installs anonymously", "Review my 2 changes for risks", "Explain this project"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("first-run home lacks %q:\n%s", want, s)
 		}
@@ -175,7 +195,7 @@ func TestAFirstRunSaysWhatToDoAndOffersRequestsToStartFrom(t *testing.T) {
 		t.Fatalf("second tab gave %q", got)
 	}
 	// A click on a starter puts that one in.
-	x, y := cellOf(t, m, "Find the riskiest code here")
+	x, y := cellOf(t, m, "Find the riskiest code")
 	click(m, x+2, y)
 	if got := m.input.value(); got != m.starters()[2] {
 		t.Fatalf("click gave %q", got)
@@ -200,13 +220,13 @@ func TestAFirstRunSaysWhatToDoAndOffersRequestsToStartFrom(t *testing.T) {
 
 func TestOnceWelcomedTheHomeScreenListsKeysAndTabTypesAsBefore(t *testing.T) {
 	dir := t.TempDir()
-	config.SaveState(dir, config.State{Welcomed: true})
+	config.SaveState(dir, config.State{Welcomed: true, Onboarded: true})
 	agent := &fakeAgent{messages: make(chan any, 16)}
 	m := New(Options{NoWallpaper: true, Start: func(context.Context) (Agent, error) { return agent, nil }, ConfigDir: dir})
 	m.Update(tea.WindowSizeMsg{Width: 130, Height: 34})
 	m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	m.Update(connectedMsg{session: acp.Session{ID: "s1"}})
-	if s := screen(m); strings.Contains(s, "New here?") || !strings.Contains(s, "what changed") {
+	if s := screen(m); strings.Contains(s, "Counts installs anonymously") || !strings.Contains(s, "a start") {
 		t.Fatalf("welcomed home:\n%s", s)
 	}
 	typeText(m, "my own words")
@@ -373,7 +393,7 @@ func TestDiffRowsNumberEveryLineFromItsHunk(t *testing.T) {
 func TestTheModelPickerNarrowsToFreeOrReadyAndExplainsALockedModel(t *testing.T) {
 	m := projectModel(t)
 	run(m, m.runAction("models"))
-	p, ok := m.overlay.(*modelPicker)
+	p, ok := m.activeWindow().(*modelPicker)
 	if !ok || p.list == nil {
 		t.Fatalf("models did not open: %T", m.overlay)
 	}
@@ -394,7 +414,7 @@ func TestTheModelPickerNarrowsToFreeOrReadyAndExplainsALockedModel(t *testing.T)
 		}
 	}
 	press(m, tea.KeyTab, 0) // back to all
-	for p.shown[p.cursor].Provider != "google" {
+	for p.shown[p.rows.cursor].Provider != "google" {
 		press(m, tea.KeyDown, 0)
 	}
 	agent := m.agent.(*fakeAgent)

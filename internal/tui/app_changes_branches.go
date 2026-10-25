@@ -243,7 +243,7 @@ func (b *branchesView) handle(m *Model, c *changesApp, msg tea.KeyPressMsg) (boo
 		return false, b.choose(m, b.step(b.cursor, -1))
 	case "down", "j":
 		return false, b.choose(m, b.step(b.cursor, 1))
-	case "pgdown", "space", "shift+down":
+	case "pgdown", "shift+down":
 		b.scroll += page
 	case "pgup", "shift+up":
 		b.scroll = max(b.scroll-page, 0)
@@ -258,28 +258,49 @@ func (b *branchesView) handle(m *Model, c *changesApp, msg tea.KeyPressMsg) (boo
 			}
 			return true, m.cmdReview("branch " + branch.Name)
 		}
-	case "enter":
-		if r, ok := b.selected(); ok {
-			if d := b.details[r.id()]; d != nil && !d.loading {
-				m.openWindow(newPager(m, b.label(r), b.detailRows(m, r, d, max(m.width-12, 20))))
-			}
-		}
+	case "enter", "space":
+		b.read(m)
 	}
 	return false, nil
 }
 
+// read opens the selected entry's detail in a reader.
+func (b *branchesView) read(m *Model) {
+	if r, ok := b.selected(); ok {
+		if d := b.details[r.id()]; d != nil && !d.loading {
+			m.openWindow(newPager(m, b.label(r), b.detailRows(m, r, d, max(m.width-12, 20))))
+		}
+	}
+}
+
+// click selects an entry; a second click on it reads its detail.
 func (b *branchesView) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 	for i := range b.rows {
 		if m.zones.frame.Get(fmt.Sprintf("br:%d", i)).InBounds(msg) {
+			if i == b.cursor {
+				b.read(m)
+				return nil
+			}
 			return b.choose(m, i)
 		}
 	}
 	return nil
 }
 
+// wheelAt scrolls the pane under the pointer: the list moves an entry, the detail three rows.
+func (b *branchesView) wheelAt(m *Model, up bool, x int) tea.Cmd {
+	step := map[bool]int{true: -1, false: 1}[up]
+	if x < listWidth(m.width) {
+		return b.choose(m, b.step(b.cursor, step))
+	}
+	b.scroll = max(b.scroll+step*wheelStep, 0)
+	return nil
+}
+
 // body is the view under the title: the list beside the selected entry's detail.
 func (b *branchesView) body(m *Model, width, height int) []string {
 	th := m.th
+	height = max(height, 0)
 	switch {
 	case !b.loaded:
 		return centre([]string{m.spin.View() + th.Faint.Render(" reading the branches…")}, width, height)

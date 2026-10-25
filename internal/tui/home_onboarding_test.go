@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -135,13 +136,38 @@ func TestEscSkipsTheWalkthroughAndAStrayClickDoesNot(t *testing.T) {
 	if m.overlay != nil || !config.LoadState(dir).Onboarded {
 		t.Fatalf("esc did not end it: %T", m.overlay)
 	}
-	// /welcome brings it back; a welcomed person never gets it unasked.
-	run(m, m.openOnboarding())
+	// alt+w brings it back; once seen, it never opens unasked.
+	press(m, 'w', tea.ModAlt)
 	walkthrough(t, m)
 	again := New(Options{ConfigDir: dir})
 	if _, ok := again.overlay.(*onboarding); ok {
 		t.Fatal("the walkthrough opened twice")
 	}
+}
+
+func TestSomeoneWhoUsedFridayBeforeTheWalkthroughSeesItOnce(t *testing.T) {
+	dir := t.TempDir()
+	config.SaveState(dir, config.State{Welcomed: true})
+	m := New(Options{NoWallpaper: true, ConfigDir: dir})
+	if _, ok := m.overlay.(*onboarding); !ok {
+		t.Fatalf("an upgrade did not get the walkthrough: %T", m.overlay)
+	}
+	if one := New(Options{NoWallpaper: true, ConfigDir: dir, Prompt: "fix it"}); one.overlay != nil {
+		t.Fatal("a one-shot prompt got the walkthrough")
+	}
+}
+
+func TestTheWalkthroughIsInTheKeysAndTheStartMenu(t *testing.T) {
+	m, _, _ := onboardModel(t)
+	if !strings.Contains(fmt.Sprint(m.keys.fullHelp()), "walkthrough") {
+		t.Fatal("help does not list the walkthrough key")
+	}
+	for _, e := range newStartMenu(m).entries {
+		if e.label == "/welcome" && strings.HasPrefix(e.hint, "alt+w") {
+			return
+		}
+	}
+	t.Fatal("the start menu's /welcome does not show alt+w")
 }
 
 func TestTheGreetingNamesThePerson(t *testing.T) {

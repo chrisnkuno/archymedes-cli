@@ -25,11 +25,11 @@ type keyMap struct {
 	// Typing (locked).
 	Send, Newline, Complete, Cancel, Interrupt, History key.Binding
 	// Apps.
-	Start, Finder, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer key.Binding
+	Start, Finder, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer, Welcome key.Binding
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
-	Mode, Expand, Quit, Undo, Retry, Copy key.Binding
+	Mode, Expand, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
 	// Reading.
 	PageUp, PageDown, LineUp, LineDown, Top, Bottom key.Binding
 }
@@ -55,6 +55,7 @@ var actions = []action{
 	{"settings", "settings", "Apps", []string{"alt+s"}, false, func(k *keyMap) *key.Binding { return &k.Settings }},
 	{"tour-drawer", "tour drawer", "Apps", []string{"alt+o"}, false, func(k *keyMap) *key.Binding { return &k.TourDrawer }},
 	{"finder", "finder", "Apps", []string{"alt+g"}, false, func(k *keyMap) *key.Binding { return &k.Finder }},
+	{"welcome", "walkthrough", "Apps", []string{"alt+w"}, false, func(k *keyMap) *key.Binding { return &k.Welcome }},
 
 	{"next-window", "next window", "Windows", []string{"ctrl+pgdown", "alt+]"}, false, func(k *keyMap) *key.Binding { return &k.NextWindow }},
 	{"prev-window", "previous window", "Windows", []string{"ctrl+pgup", "alt+["}, false, func(k *keyMap) *key.Binding { return &k.PrevWindow }},
@@ -65,6 +66,9 @@ var actions = []action{
 	{"undo", "undo last turn", "Session", []string{"alt+z"}, false, func(k *keyMap) *key.Binding { return &k.Undo }},
 	{"retry", "send again", "Session", []string{"alt+r"}, false, func(k *keyMap) *key.Binding { return &k.Retry }},
 	{"copy", "copy last reply", "Session", []string{"alt+y"}, false, func(k *keyMap) *key.Binding { return &k.Copy }},
+	{"suggestion-1", "take suggestion 1", "Session", []string{"alt+1"}, false, func(k *keyMap) *key.Binding { return &k.Suggest1 }},
+	{"suggestion-2", "take suggestion 2", "Session", []string{"alt+2"}, false, func(k *keyMap) *key.Binding { return &k.Suggest2 }},
+	{"suggestion-3", "take suggestion 3", "Session", []string{"alt+3"}, false, func(k *keyMap) *key.Binding { return &k.Suggest3 }},
 	{"quit", "quit", "Session", []string{"ctrl+d"}, false, func(k *keyMap) *key.Binding { return &k.Quit }},
 
 	{"page-up", "page up", "Reading", []string{"pgup"}, false, func(k *keyMap) *key.Binding { return &k.PageUp }},
@@ -77,7 +81,7 @@ var actions = []action{
 	{"send", "send", "Typing", []string{"enter"}, true, func(k *keyMap) *key.Binding { return &k.Send }},
 	{"newline", "new line", "Typing", []string{"shift+enter", "alt+enter", "ctrl+j"}, true, func(k *keyMap) *key.Binding { return &k.Newline }},
 	{"complete", "complete", "Typing", []string{"tab"}, true, func(k *keyMap) *key.Binding { return &k.Complete }},
-	{"history", "earlier messages", "Typing", []string{"up", "down"}, true, func(k *keyMap) *key.Binding { return &k.History }},
+	{"history", "earlier messages", "Typing", []string{"ctrl+up", "ctrl+down"}, true, func(k *keyMap) *key.Binding { return &k.History }},
 	{"cancel", "stop · close · live", "Typing", []string{"esc"}, true, func(k *keyMap) *key.Binding { return &k.Cancel }},
 	{"interrupt", "stop · clear · quit", "Typing", []string{"ctrl+c"}, true, func(k *keyMap) *key.Binding { return &k.Interrupt }},
 }
@@ -133,6 +137,9 @@ func keyLabel(keys []string) string {
 	}
 	if len(keys) == 2 && keys[0] == "up" && keys[1] == "down" {
 		return "↑/↓"
+	}
+	if len(keys) == 2 && keys[0] == "ctrl+up" && keys[1] == "ctrl+down" {
+		return "ctrl+↑/↓"
 	}
 	return prettyKey(keys[0])
 }

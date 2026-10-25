@@ -102,8 +102,9 @@ type toolItem struct {
 	result         string
 	open           bool // this card's output shown in full (a click), independent of ctrl+o
 	denied         bool
-	started, ended time.Time    // for the task manager
-	sub            *subagentRun // a delegation call's sub-agent, once it has done something
+	started, ended time.Time      // for the task manager
+	sub            *subagentRun   // a delegation call's sub-agent, once it has done something
+	notes          []acp.EditNote // what the engine found worth knowing about this edit
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -151,6 +152,7 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	}
 	head += th.Faint.Render(" · ") + summary
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
+	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open
 	if delegationTools[t.name] {
 		lines = append(lines, subagentActivity(ctx, t, expanded)...)

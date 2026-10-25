@@ -82,8 +82,13 @@ const SANDBOX_NETWORK_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — sandboxed commands may use the network" },
 ];
 
+const SUGGEST_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — next steps after a turn, notes on edits, hints while typing (default)" },
+  { value: "off", label: "Off — no suggestions" },
+];
+
 const JEV_CHOICES: readonly SettingChoice[] = [
-  { value: "on", label: "On — judge turns and annotate approvals when TYPESAFE_API_KEY is set (default)" },
+  { value: "on", label: "On — judge turns, suggestions and edits when TYPESAFE_API_KEY is set (default)" },
   { value: "off", label: "Off — never call Jev, even with a key configured" },
 ];
 
@@ -172,6 +177,9 @@ export const SETTING_FIELDS = [
   // instant, and this buys two extra project-specific ones for a small model call per turn. A
   // feature that quietly bills a person for a hint is a feature they turn off once and distrust
   // afterwards.
+  // The Go engine's suggestions (internal/core/advise): free and on by default, because rules and
+  // word matching cost nothing; the model and Jev are the parts that can cost, and have their own rows.
+  { key: "ARCHYMEDES_SUGGEST", label: "Suggestions — next steps, notes on edits, hints while typing", choices: SUGGEST_CHOICES },
   { key: "ARCHYMEDES_SUGGEST_MODEL", label: "Ask the model for extra suggestions (a small extra call per turn)", choices: ON_OFF_CHOICES },
   // Three states rather than a switch: looking and installing are different decisions, and the one
   // people want to make separately is whether Archymedes may replace itself without being asked.
@@ -179,7 +187,7 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: ON_OFF_CHOICES },
   // On by default: writing the tests first is how Friday builds, and the setting is the way out.
   { key: "ARCHYMEDES_TEST_FIRST", label: "Build test first — tests, then code, then static analysis", choices: TEST_FIRST_CHOICES },
-  { key: "ARCHYMEDES_JEV", label: "Jev second opinion — post-turn verdicts and pre-tool checks", choices: JEV_CHOICES },
+  { key: "ARCHYMEDES_JEV", label: "Jev second opinion — verdicts, tool checks, ranked suggestions", choices: JEV_CHOICES },
   { key: "ARCHYMEDES_KEYS", label: "Key bindings, e.g. /diff=alt+d,/wander=off" },
   { key: "ARCHYMEDES_SANDBOX", label: "Command sandbox (Linux, bubblewrap): commands write only to the project and /tmp", choices: SANDBOX_CHOICES },
   { key: "ARCHYMEDES_SANDBOX_NETWORK", label: "Network inside the command sandbox", choices: SANDBOX_NETWORK_CHOICES },
@@ -340,6 +348,7 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_RESUME: ["ask", "always", "never"],
   ARCHYMEDES_WEB_SEARCH: WEB_SEARCH_CHOICES,
   ARCHYMEDES_EDITOR_AUTOSAVE: ["on", "off"],
+  ARCHYMEDES_SUGGEST: ["on", "off"],
   ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
   ARCHYMEDES_TELEMETRY: ["on", "off"],

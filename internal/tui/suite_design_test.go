@@ -32,9 +32,9 @@ func TestEveryViewFitsTheTerminal(t *testing.T) {
 	m, _ := newTestModel(t)
 	views := map[string]func(){
 		"landing": func() {},
-		"help":    func() { m.openOverlay(helpOverlay{}) },
+		"help":    func() { m.openHelp() },
 		"palette": func() { m.openOverlay(newStartMenu(m)) },
-		"themes":  func() { m.openOverlay(newThemePicker(m)) },
+		"themes":  func() { m.openWindow(newThemePicker(m)) },
 		"toasts": func() {
 			m.toast(toastInfo, strings.Repeat("a very long toast ", 10))
 			m.toast(toastWarn, "second")
@@ -54,7 +54,7 @@ func TestLandingShowsTheMarkThenGivesWayToTheConversation(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	s := screen(m)
-	for _, want := range []string{"◇", "F R I D A Y", "ctrl+space", "find anything"} {
+	for _, want := range []string{"◇", "F R I D A Y", "ctrl+space", "find"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("landing lacks %q:\n%s", want, s)
 		}
@@ -164,7 +164,7 @@ func TestQuestionMarkIsHelpOnlyOnAnEmptyInput(t *testing.T) {
 	}
 	m.input.take()
 	typeText(m, "?")
-	if _, ok := m.overlay.(helpOverlay); !ok {
+	if p, ok := m.activeWindow().(*pager); !ok || p.label != "Help" {
 		t.Fatal("? on an empty input opens help")
 	}
 }
@@ -210,7 +210,7 @@ func TestFloatingBoxesFitBeforeCompositing(t *testing.T) {
 		if w := ansi.StringWidth(strings.Split(dialog, "\n")[0]); w > width-1 {
 			t.Fatalf("approval at %d is %d wide", width, w)
 		}
-		for name, o := range map[string]overlay{"help": helpOverlay{}, "palette": newStartMenu(m), "themes": newThemePicker(m)} {
+		for name, o := range map[string]overlay{"palette": newStartMenu(m)} {
 			if w := lipgloss.Width(o.view(m)); w > width {
 				t.Fatalf("%s at %d is %d wide", name, width, w)
 			}

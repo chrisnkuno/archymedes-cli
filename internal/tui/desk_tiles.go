@@ -223,3 +223,20 @@ func wrapTo(text string, width, n int) []string {
 	}
 	return lines
 }
+
+// clickTile selects tile i and reports whether it was already selected: a second click opens, as
+// a click on a list's selected row does (desk_list.go).
+func (g *tileGrid) clickTile(i int) (open bool) {
+	open = g.cursor == i
+	g.cursor = i
+	return open
+}
+
+// wheel moves the cursor a row up or down, as ↑/↓ do.
+func (g *tileGrid) wheel(up bool) {
+	if up {
+		g.move("up", 1)
+	} else {
+		g.move("down", 1)
+	}
+}

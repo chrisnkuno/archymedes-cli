@@ -15,7 +15,7 @@ func TestModelPickerFiltersAndSwitchesKeepingTheConversation(t *testing.T) {
 	m.notice(noticeInfo, "earlier conversation")
 	typeText(m, "/model")
 	run(m, press(m, tea.KeyEnter, 0))
-	if _, ok := m.overlay.(*modelPicker); !ok {
+	if _, ok := m.activeWindow().(*modelPicker); !ok {
 		t.Fatal("/model opens the picker")
 	}
 	s := screen(m)
@@ -44,7 +44,7 @@ func TestModelCommandSwitchesStraightToAnUnambiguousName(t *testing.T) {
 	// Ambiguous: two Anthropic models match, so the picker opens on the query instead of guessing.
 	typeText(m, "/model claude")
 	run(m, press(m, tea.KeyEnter, 0))
-	p, ok := m.overlay.(*modelPicker)
+	p, ok := m.activeWindow().(*modelPicker)
 	if !ok || len(p.shown) != 2 || len(agent.models) != 1 {
 		t.Fatalf("overlay=%T switched=%v", m.overlay, agent.models)
 	}
@@ -91,7 +91,7 @@ func TestLeftAndRightSwitchTheModelViewsUntilSomethingIsTyped(t *testing.T) {
 	m, _ := newTestModel(t)
 	typeText(m, "/model")
 	run(m, press(m, tea.KeyEnter, 0))
-	p := m.overlay.(*modelPicker)
+	p := m.activeWindow().(*modelPicker)
 	press(m, tea.KeyRight, 0)
 	if pickerViews[p.narrow] != "free" {
 		t.Fatalf("→ = %s", pickerViews[p.narrow])

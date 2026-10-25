@@ -21,23 +21,15 @@ import (
 const (
 	tourDwell     = 14.0 // seconds each scene stays in the drawer
 	tourSlideSecs = 0.8  // seconds one scene takes to slide over the last
-	tourCardRoom  = 86   // what the card needs beside the drawer: its widest, with a margin
-	tourPhotoRoom = 16   // and the wallpaper keeps at least this much width showing between them
-	tourMinWidth  = 36   // narrower than this a scene no longer reads
+	tourPhotoRoom = 2    // the wallpaper keeps at least this much width showing between card and drawer
+	tourMinWidth  = 34   // narrower than this a scene no longer reads
 	tourMaxWidth  = 72
 	tourTabWidth  = 3
 )
 
-// tourDrawerWidth is the drawer's full width on a width×height home screen; 0 when it does not fit.
-func tourDrawerWidth(width, height int) int {
-	if height < 18 {
-		return 0
-	}
-	if w := min(tourMaxWidth, width-tourCardRoom-tourPhotoRoom); w >= tourMinWidth {
-		return w
-	}
-	return 0
-}
+// tourDrawerWidth is the drawer's full width on a width×height home screen, as the home screen's
+// layout gives it (home_desktop.go); 0 when it does not fit.
+func (m *Model) tourDrawerWidth(width, height int) int { return m.layoutHome(width, height).drawer }
 
 // tourShown is how far the drawer is out, 0 (folded) to 1 (open). Under reduced motion it is
 // wherever it is going, with no slide.
@@ -78,7 +70,7 @@ func (m *Model) toggleTourDrawer() tea.Cmd {
 
 // tourRight is how many columns on the right the drawer (or its tab) takes on a home screen.
 func (m *Model) tourRight(width, height int) int {
-	full := tourDrawerWidth(width, height)
+	full := m.tourDrawerWidth(width, height)
 	if full == 0 {
 		return 0
 	}
@@ -88,9 +80,9 @@ func (m *Model) tourRight(width, height int) int {
 // withTourDrawer lays the drawer, or its tab, down the right of a home screen already drawn in
 // out (width×height), leaving the top and bottom rows to the bars' margin and the photo's credit.
 func (m *Model) withTourDrawer(out []string, width, height int) []string {
-	full := tourDrawerWidth(width, height)
-	if full == 0 {
-		return out
+	full := m.tourDrawerWidth(width, height)
+	if _, walkthrough := m.overlay.(*onboarding); full == 0 || walkthrough {
+		return out // the walkthrough has the screen to itself
 	}
 	shown := int(math.Round(float64(full) * m.tourShown()))
 	var block []string

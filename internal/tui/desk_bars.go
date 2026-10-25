@@ -43,7 +43,11 @@ func (m *Model) systemChips(room int) string {
 		if win := m.activeWindow(); win != nil && strings.EqualFold(win.title(), app.name) {
 			style = th.Strong
 		}
-		chips = append(chips, mark(m.zones.frame, "app:"+app.id, style.Render(label)))
+		chip := style.Render(label)
+		if m.barFocused(-1, app.id) {
+			chip = m.barCursor(label)
+		}
+		chips = append(chips, mark(m.zones.frame, "app:"+app.id, chip))
 		used += w
 	}
 	return strings.Join(chips, "")
@@ -74,7 +78,9 @@ func (m *Model) topBar() string {
 		}
 		label = " " + ansi.Truncate(label, 18, "…") + " "
 		var tab string
-		if i == m.active {
+		if m.barFocused(i, "") {
+			tab = m.barCursor(label)
+		} else if i == m.active {
 			tab = lipgloss.NewStyle().Foreground(th.Text).Background(th.Tint(th.Primary, 0.35)).Bold(true).Render(label)
 		} else {
 			tab = th.Faint.Render(label)
@@ -173,13 +179,24 @@ func (m *Model) dock() string {
 			if (app.id == "chat" && m.active == 0) || (m.activeWindow() != nil && strings.EqualFold(m.activeWindow().title(), app.name)) {
 				styled = th.Strong.Render(label)
 			}
+			if m.barFocused(-1, app.id) {
+				styled = m.barCursor(label)
+			}
 			b.WriteString(mark(m.zones.frame, "app:"+app.id, styled))
 			x += ansi.StringWidth(label)
 		}
-		fits := x <= m.width
+		reserve := 0
+		if m.bar.on {
+			reserve = ansi.StringWidth(right) + 2 // the hint must show while the keys are here
+		}
+		fits := x <= m.width-reserve
 		if fits || i == len(forms)-1 {
 			// The system apps take whatever the main ones leave, keeping two columns for the hint's gap.
-			left := b.String() + m.systemChips(m.width-x-2)
+			room := m.width - x - 2
+			if m.bar.on {
+				room -= ansi.StringWidth(right) // on the bars, what the keys do comes before the chips
+			}
+			left := b.String() + m.systemChips(room)
 			if ansi.StringWidth(left)+ansi.StringWidth(right)+2 > m.width {
 				right = ""
 			}
@@ -193,6 +210,9 @@ func (m *Model) dockHint() string {
 	th := m.th
 	hint := ""
 	switch {
+	case m.bar.on:
+		hint = th.Key.Render("←→") + th.Faint.Render(" move · ") + th.Key.Render("enter") + th.Faint.Render(" open · ") +
+			th.Key.Render("delete") + th.Faint.Render(" close · ") + th.Key.Render("↑") + th.Faint.Render(" back")
 	case m.quitArmed:
 		hint = th.Warn.Render("ctrl+c again to quit")
 	case m.active == 0:

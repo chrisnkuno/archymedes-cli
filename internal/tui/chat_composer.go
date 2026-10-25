@@ -219,10 +219,11 @@ func (c *composer) update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// dropup draws the completion list that opens above the input, at most rows tall.
-func (c *composer) dropup(th theme.Theme, width, rows int) []string {
+// dropup draws the completion list that opens above the input, at most rows tall, and says which
+// completion its first row is.
+func (c *composer) dropup(th theme.Theme, width, rows int) ([]string, int) {
 	if len(c.complete) == 0 || rows <= 0 {
-		return nil
+		return nil, 0
 	}
 	start := max(0, min(c.compPos-rows+1, len(c.complete)-rows))
 	end := min(start+rows, len(c.complete))
@@ -244,7 +245,7 @@ func (c *composer) dropup(th theme.Theme, width, rows int) []string {
 			out = append(out, th.Faint.Render("  "+text))
 		}
 	}
-	return out
+	return out, start
 }
 
 func padRight(s string, width int) string {
