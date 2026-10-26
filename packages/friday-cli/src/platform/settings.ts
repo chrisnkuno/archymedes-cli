@@ -60,11 +60,11 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
 
 // Go is the default and the way back is one setting, read by the `friday` binary itself before
 // anything starts (cmd/friday/engine.go): no flag to remember. Friday still runs a session on the
-// TypeScript engine on its own when the session needs what only it has (Claude Code, Codex, a
-// Docker or E2B sandbox, Archymedes Cloud, keyless free mode).
+// TypeScript engine on its own when the session needs what only it has (Codex, a Docker or E2B
+// sandbox, Archymedes Cloud, keyless free mode).
 const ENGINE_CHOICES: readonly SettingChoice[] = [
   { value: "go", label: "Go — Friday's engine: background sub-agents, steering, restart-safe sessions (default)" },
-  { value: "ts", label: "TypeScript — the earlier engine: Claude Code, Codex, sandboxes, /undo, /cost, /review" },
+  { value: "ts", label: "TypeScript — the earlier engine: Codex, sandboxes, /undo, /cost, /review" },
 ];
 
 const TEST_FIRST_CHOICES: readonly SettingChoice[] = [

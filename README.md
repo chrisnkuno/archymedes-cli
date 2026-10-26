@@ -10,8 +10,8 @@ friday "fix the failing test in src/parser.ts"
 
 Friday's engine is written in Go and runs inside the `friday` binary: helpers (sub-agents) that
 keep working in the background, steering mid-turn, sessions that survive a crash, and cheap work on
-a cheap model. Sessions that need what only the earlier TypeScript engine has (Claude Code, Codex,
-sandboxes, `/undo`) run there on their own. **Documentation: [`docs/engine/`](docs/engine/README.md)**
+a cheap model. It drives Claude Code on your subscription too. Sessions that need what only the
+earlier TypeScript engine has (Codex, sandboxes, `/undo`) run there on their own. **Documentation: [`docs/engine/`](docs/engine/README.md)**
 — a [user guide](docs/engine/USER_GUIDE.md), [configuration](docs/engine/CONFIGURATION.md),
 [tools](docs/engine/TOOLS.md), [sub-agents](docs/engine/SUBAGENTS.md),
 [editors](docs/engine/EDITORS.md), [architecture](docs/engine/ARCHITECTURE.md),
