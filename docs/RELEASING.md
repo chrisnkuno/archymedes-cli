@@ -61,8 +61,10 @@ The binary packages first, so the main package never names a version npm does no
 for p in darwin-arm64 darwin-x64 linux-arm64 linux-x64 win32-arm64 win32-x64; do
   npm publish artifacts/npm/friday-$p --access public
 done
-npm publish artifacts/archymedes-friday-<version>.tgz --access public
+npm publish ./artifacts/archymedes-friday-<version>.tgz --access public
 ```
+
+The `./` matters: without it npm reads `artifacts/archymedes-friday-…` as a GitHub repository.
 
 Publish the archive `release:check` verified; do not build it again in between.
 
