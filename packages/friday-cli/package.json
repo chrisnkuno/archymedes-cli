@@ -1,7 +1,7 @@
 {
   "name": "@archymedes/friday",
   "version": "3.11.1",
-  "description": "Friday CLI \u2014 a coding agent that shows its work. Runs against your working tree or an isolated remote sandbox, with guarded approvals, git checkpoints, and exact, measured cost accounting.",
+  "description": "Friday \u2014 a coding agent for your terminal that shows its work, asks before it changes anything, and proves a change works. Any model: ten providers, free models, your Claude subscription or your ChatGPT plan.",
   "keywords": [
     "cli",
     "coding-agent",
@@ -10,7 +10,13 @@
     "agent",
     "archymedes",
     "anthropic",
-    "openai"
+    "openai",
+    "claude",
+    "claude-code",
+    "codex",
+    "sub-agents",
+    "tui",
+    "acp"
   ],
   "license": "Apache-2.0",
   "author": "chrisnkuno",
@@ -22,7 +28,7 @@
   "bugs": {
     "url": "https://github.com/chrisnkuno/archymedes-cli/issues"
   },
-  "homepage": "https://github.com/chrisnkuno/archymedes-cli/tree/main/packages/friday-cli#readme",
+  "homepage": "https://github.com/chrisnkuno/archymedes-cli/tree/master/packages/friday-cli#readme",
   "type": "module",
   "bin": {
     "friday": "bin/friday.mjs"
