@@ -660,14 +660,19 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
     what: "A literal content search across the project, as the grep_files tool performs it",
     metric: "milliseconds",
     budget: { max: 250 },
-    // Warm-cache, measured by this probe. Cold, the same search was 401ms before these changes and
-    // 93ms after — the structural win is in the remediation, this number is the regression guard.
-    baseline: { value: 14, on: "2026-08-22" },
+    // Warm-cache on the probe's fixed tree (300 files, 2.4 MB, plus coverage/), measured 2026-10-27.
+    // On the repository it was 14ms (2026-08-22) and had grown to 155ms by October with the code.
+    baseline: { value: 0, on: "2026-10-27" },
     evidence: "archymedes-cli/workspace-grep.ts grepWorkspace",
     remediation:
       "Three things got it here and any of them regressing shows up as this number: generated directories excluded from ignoredDirectories (coverage/ alone was 30% of every byte read), files read concurrently rather than one at a time, and a raw Buffer.indexOf prefilter that rules a file out before decoding it into a line array (~3x the file's size, allocated and thrown away).",
-    measure: async ({ root }) => {
+    // A tree of fixed size, not the repository: the repository doubled after this budget was set
+    // and its search time grew with it, which is not what this guards. The tree holds what the
+    // remediation names: many small files to read concurrently, and a coverage/ folder of large
+    // files that must never be read.
+    measure: async () => {
       const { grepWorkspace } = await import("./workspace-grep");
+      const root = await grepFixture();
       await grepWorkspace(root, "compactionUrgency", {});
       // The best of several, stopping once one is well inside the budget: load on the machine (a
       // parallel test run) inflates a sample but not every sample, while a real regression is slow
@@ -695,6 +700,29 @@ export const OPTIMIZATION_TARGETS: readonly OptimizationTarget[] = [
 ];
 
 /** Runs every measurable target against the live code. Never throws: a probe that fails is a result. */
+let grepTree: Promise<string> | undefined;
+
+/** The grep probe's tree, made once per process: 12 folders of 25 source files, and coverage/. */
+function grepFixture(): Promise<string> {
+  grepTree ??= (async () => {
+    const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const root = await mkdtemp(path.join(tmpdir(), "friday-grep-probe-"));
+    const line = "export function step(value: number): number { return value * 2 + 1; }\n";
+    const body = line.repeat(110); // about 8 KB, a typical source file
+    for (let dir = 0; dir < 12; dir += 1) {
+      await mkdir(path.join(root, "src", `m${dir}`), { recursive: true });
+      await Promise.all(Array.from({ length: 25 }, (_, file) => writeFile(path.join(root, "src", `m${dir}`, `f${file}.ts`), dir === 7 && file < 3 ? `${body}const compactionUrgency = 1;\n` : body)));
+    }
+    await mkdir(path.join(root, "coverage"), { recursive: true });
+    const big = line.repeat(5_000); // 350 KB each, under the read limit: only the ignore list keeps them out
+    await Promise.all(Array.from({ length: 50 }, (_, file) => writeFile(path.join(root, "coverage", `r${file}.ts`), big)));
+    return root;
+  })();
+  return grepTree;
+}
+
 export async function runOptimizationProbes(context: ProbeContext, only?: readonly string[]): Promise<ProbeResult[]> {
   const selected = only?.length ? OPTIMIZATION_TARGETS.filter((target) => only.includes(target.id)) : OPTIMIZATION_TARGETS;
   const results: ProbeResult[] = [];
