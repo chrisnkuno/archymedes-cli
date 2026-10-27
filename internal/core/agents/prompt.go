@@ -122,6 +122,9 @@ func (s *Session) rootSystemPrompt(mode policy.Mode, catalog *tool.Catalog) stri
 	if found, _ := s.Skills(); len(found) > 0 {
 		parts = append(parts, skills.Prompt(found))
 	}
+	if servers := s.mcp.Prompt(); servers != "" {
+		parts = append(parts, servers)
+	}
 	return strings.Join(parts, "\n\n")
 }
 

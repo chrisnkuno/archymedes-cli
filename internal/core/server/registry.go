@@ -107,6 +107,9 @@ var sessionCommands = []sessionCommand{
 	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
 	}},
+	{"mcp", "The MCP servers declared for this project: tools, whether running, and any problem", func(sess *session, _ string) map[string]any {
+		return map[string]any{"kind": "text", "text": mcpText(sess.core.MCP())}
+	}},
 	{"skills", "The skills found for this project: name, where from, what each is for", func(sess *session, _ string) map[string]any {
 		found, problems := sess.core.Skills()
 		return map[string]any{"kind": "text", "text": skillsText(found, problems)}

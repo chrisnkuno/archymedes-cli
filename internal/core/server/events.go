@@ -101,6 +101,12 @@ func toolKind(name string) string {
 
 func toolTitle(name string, args map[string]any) string {
 	label := strings.TrimSpace(strings.ReplaceAll(name, "_", " "))
+	if rest, ok := strings.CutPrefix(name, "mcp__"); ok {
+		// mcp__github__create_issue reads "create issue · github MCP".
+		if server, tool, found := strings.Cut(rest, "__"); found {
+			label = strings.ReplaceAll(tool, "_", " ") + " · " + server + " MCP"
+		}
+	}
 	for _, key := range []string{"path", "command", "pattern", "query", "task"} {
 		if v, ok := args[key].(string); ok && strings.TrimSpace(v) != "" {
 			if r := []rune(v); len(r) > 120 {

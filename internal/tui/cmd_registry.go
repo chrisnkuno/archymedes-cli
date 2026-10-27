@@ -56,6 +56,7 @@ func init() {
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
 		{"skills", "", "Skills Friday can load for this project, and where each came from", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("skills", "") }},
+		{"mcp", "", "MCP servers for this project: their tools, and whether each is running", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("mcp", "") }},
 		{"key", "[provider]", "Set or replace an API key: pick a provider, paste the key", (*Model).cmdKey},
 		{"copy", "[code]", "Copy the last reply, or its last code block, to the clipboard", (*Model).cmdCopy},
 		{"select", "", "Let the terminal select text with the mouse (toggle)", (*Model).cmdSelect},

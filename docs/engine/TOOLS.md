@@ -21,6 +21,7 @@ auto and defender have them all; defender also has `read_playbook`.
 - [Security](#security)
 - [Sub-agents](#sub-agents)
 - [Skills](#skills)
+- [MCP tools](#mcp-tools)
 - [Finding more tools](#finding-more-tools)
 - [Paths, sizes and what is skipped](#paths-sizes-and-what-is-skipped)
 
@@ -284,6 +285,13 @@ it; the model reads those with `read_file` as the skill directs. Changes nothing
 | Argument | | |
 | --- | --- | --- |
 | `name` | required | the skill's name, as the prompt lists it |
+
+## MCP tools
+
+A declared MCP server's tools join as `mcp__<server>__<tool>`, deferred (see
+[MCP servers](USER_GUIDE.md#mcp-servers)). Each takes the arguments its server describes, counts as
+an action outside the project for approvals, and is offered in plan mode only when the server
+marks it read-only.
 
 ## Finding more tools
 

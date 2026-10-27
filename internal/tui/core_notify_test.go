@@ -161,3 +161,11 @@ func TestTheContextGaugeMeasuresWhatCompactionMeasures(t *testing.T) {
 		}
 	}
 }
+
+func TestAnMCPToolReadsAsItsToolAndServer(t *testing.T) {
+	for name, want := range map[string]string{"mcp__github__create_issue": "create issue · github MCP", "read_file": "read file", "mcp__odd": "mcp  odd"} {
+		if got := toolLabel(name); got != want {
+			t.Errorf("toolLabel(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

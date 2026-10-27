@@ -17,6 +17,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
+	"github.com/chrisnkuno/friday-cli/internal/core/mcp"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/skills"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
@@ -567,6 +568,20 @@ func threadsText(threads []thread.Thread) string {
 	}
 	lines = append(lines, fmt.Sprintf("Sub-agents used %s tokens: %s in (%s from cache), %s out.",
 		groupDigits(total.InputTokens+total.OutputTokens), groupDigits(total.InputTokens), groupDigits(total.CachedInputTokens), groupDigits(total.OutputTokens)))
+	return strings.Join(lines, "\n")
+}
+
+// mcpText is `/mcp`: each server and its state, then any declaration skipped and why.
+func mcpText(m *mcp.Manager) string {
+	lines := m.Status()
+	if len(m.Servers()) == 0 {
+		lines = append(lines, "No MCP servers. Declare them in .mcp.json or .archymedes/mcp.json in the project, or mcp.json in Friday's config directory, as {\"mcpServers\": {\"name\": {\"command\": \"…\"}}}.")
+	} else {
+		lines = append(lines, "Their tools are not sent with every request: Friday finds them with tool_search when a task needs one.")
+	}
+	for _, p := range m.Problems() {
+		lines = append(lines, "Skipped "+p)
+	}
 	return strings.Join(lines, "\n")
 }
 

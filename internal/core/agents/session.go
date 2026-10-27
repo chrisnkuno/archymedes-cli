@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
+	"github.com/chrisnkuno/friday-cli/internal/core/mcp"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/roles"
 	"github.com/chrisnkuno/friday-cli/internal/core/skills"
@@ -98,6 +100,7 @@ type Session struct {
 	inbox    *loop.Inbox
 	slots    chan struct{}
 	jev      *advise.Jev // nil without a TypeSafe key
+	mcp      *mcp.Manager
 
 	mu       sync.Mutex
 	models   *llm.Models
@@ -197,6 +200,12 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 	if s.suggesting() {
 		s.jev = advise.NewJev(cfg.Env.Get)
 	}
+	cacheDir := ""
+	if cfg.ConfigDir != "" {
+		cacheDir = filepath.Join(cfg.ConfigDir, "mcp-cache")
+	}
+	s.mcp = mcp.NewManager(mcp.Files(cfg.Root, cfg.ConfigDir), cfg.Env.Get, os.Environ(), cacheDir)
+	s.mcp.Tools() // a server never listed is listed now, in the background, ready by the first turn
 	s.turnCond = sync.NewCond(&s.turnMu)
 	s.nextTurn = 1
 	s.life, s.endLife = context.WithCancel(context.Background())
@@ -395,7 +404,11 @@ func (s *Session) Close() {
 		c.stop()
 		<-c.done
 	}
+	s.mcp.Close()
 }
+
+// MCP is the session's MCP servers.
+func (s *Session) MCP() *mcp.Manager { return s.mcp }
 
 // runRoot is one turn of the root thread.
 func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
@@ -416,6 +429,10 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	if err != nil {
 		return loop.Result{Status: loop.Failed, Err: err}
 	}
+	// A server still being listed (just added, never cached) gets a moment, so this turn has its tools.
+	wait, cancel := context.WithTimeout(ctx, 10*time.Second)
+	s.mcp.WaitListed(wait)
+	cancel()
 	catalog := s.rootTools(ledger.Mode())
 	var verify *gate.Gate
 	if ledger.Mode() != policy.Plan {
@@ -507,6 +524,11 @@ func (s *Session) rootTools(mode policy.Mode) *tool.Catalog {
 	list = append(list, s.delegationTools(mode)...)
 	if found, _ := s.Skills(); len(found) > 0 {
 		list = append(list, skills.Tool(func() []skills.Skill { found, _ := s.Skills(); return found }))
+	}
+	for _, t := range s.mcp.Tools() { // deferred: tool_search finds them, or the model names one
+		if allowed[t.Capability] {
+			list = append(list, t)
+		}
 	}
 	deferTools(list, s.cfg.Env.Get("ARCHYMEDES_DEFER_TOOLS"))
 	// The secret scan is defender mode's from the start; elsewhere tool_search finds it.

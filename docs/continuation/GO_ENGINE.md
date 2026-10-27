@@ -112,7 +112,7 @@ approach; a further repeat stops the run as `stuck`.
 
 **Deferred tools:** a tool may be deferred. Deferred tools are not sent with each request; when any
 exist, `tool_search` is, and finds them by name and description and loads the matches for the next
-step. Calling a deferred tool by its exact name loads it too. The MCP client, when ported, registers
+step. Calling a deferred tool by its exact name loads it too. The MCP client (`internal/core/mcp`, WS-52.5) registers
 its tools deferred.
 
 ## Protocol
@@ -141,7 +141,7 @@ provider's hint is what fixed it.
 ## Not yet in the Go engine
 
 Each forwards to the TypeScript agent or answers that it is not available here: the Codex
-engine (Claude Code runs here: `internal/core/claude`, WS-49), MCP and LSP clients, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
+engine (Claude Code runs here: `internal/core/claude`, WS-49), the LSP client, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
 prices in `/cost` (tokens are counted: WS-52.3), `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own

@@ -188,6 +188,25 @@ Friday looks where other agents look, so a skill written for one works here:
 `/skills` lists what was found, and says why a folder was skipped (no frontmatter, a name that is
 not lower-case words joined by hyphens). A skill added during a session is found at the next turn.
 
+## MCP servers
+
+Friday uses the MCP servers a project or you declare, in the files other agents read:
+
+| File | Shape |
+| --- | --- |
+| `.mcp.json` in the project | `{"mcpServers": {"github": {"command": "github-mcp", "args": ["stdio"], "env": {"TOKEN": "${GITHUB_TOKEN}"}}}}`; a URL server is `{"type": "http", "url": "https://…", "headers": {…}}` |
+| `.archymedes/mcp.json` in the project | the same, or `{"servers": [{"id": "github", "command": "…"}]}` (wins over `.mcp.json`) |
+| `mcp.json` in Friday's config directory | the same shape, for every project |
+
+`${VAR}` and `${VAR:-default}` take values from your environment, so tokens stay out of the file.
+
+An MCP server costs nothing until it is used. Its tools are not sent with each request: Friday
+finds the one a task needs with `tool_search`, or by name. Its tool list is kept after the first
+time, so later sessions do not start the server at all until one of its tools is called. Each
+call is approved like any action outside the project; tools are named
+`mcp__<server>__<tool>`. `/mcp` shows each server, how many tools it has, whether it is running,
+and why a declaration was skipped.
+
 ## Sub-agents
 
 A **sub-agent** is a helper Friday starts for one part of the task. It gets a brief, works on its

@@ -130,7 +130,7 @@ func (t *toolItem) render(ctx renderCtx) []string {
 		glyph = th.OK.Render("✓")
 		summary = render.LinkURLs(th.Faint, render.SummarizeToolResult(t.name, t.result, false))
 	}
-	label := strings.ReplaceAll(t.name, "_", " ")
+	label := toolLabel(t.name)
 	if delegationTools[t.name] {
 		// A sub-agent is named by its role ("explore"), and its header counts what it has done.
 		label = "agent · " + subagentRole(t)
@@ -273,4 +273,14 @@ func compact(n int) string {
 		return fmt.Sprintf("%.1fk", float64(n)/1_000)
 	}
 	return fmt.Sprint(n)
+}
+
+// toolLabel is how a tool's name reads on its card: words, and an MCP tool as "<tool> · <server> MCP".
+func toolLabel(name string) string {
+	if rest, ok := strings.CutPrefix(name, "mcp__"); ok {
+		if server, tool, found := strings.Cut(rest, "__"); found {
+			return strings.ReplaceAll(tool, "_", " ") + " · " + server + " MCP"
+		}
+	}
+	return strings.ReplaceAll(name, "_", " ")
 }

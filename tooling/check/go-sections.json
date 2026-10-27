@@ -62,6 +62,10 @@
       "core/tool",
       "conform"
     ],
+    "core/mcp": [
+      "core/tool",
+      "conform"
+    ],
     "core/thread": [
       "conform"
     ],
@@ -83,6 +87,7 @@
       "core/gate",
       "core/llm",
       "core/loop",
+      "core/mcp",
       "core/policy",
       "core/roles",
       "core/skills",
@@ -107,6 +112,7 @@
       "core/gate",
       "core/llm",
       "core/loop",
+      "core/mcp",
       "core/policy",
       "core/settings",
       "core/skills",

@@ -134,6 +134,7 @@ Params: `sessionId`, `command`, `argument`. Replies with a `kind` and its fields
 | `todos` | `{"kind":"todos","items":[{"text":"…","status":"pending|in_progress|done"}]}`, or `{"kind":"text","text":"No plan yet."}` |
 | `tools` | `{"kind":"text","text":"Tools in build mode: …"}` |
 | `compact` | `{"kind":"text","text":"Compacted the conversation: 12 → 3 messages."}`; `argument` is the focus to keep |
+| `mcp` | `{"kind":"text","text":"github: 26 tools · not started (its tools are known) (.mcp.json)\n…"}`: each MCP server, its tools and state, then any declaration skipped and why |
 | `skills` | `{"kind":"text","text":"release   project   Cut a release of this project\n…"}`: each skill found, where from and what for, then any skipped and why |
 | `cost` | `{"kind":"text","text":"Main conversation: 12 model calls · 48,210 tokens in (30,100 from cache) · 2,300 out\n…"}`: the main conversation, each sub-agent and the total; no prices yet |
 | `subagents` (also `threads`, `agents`) | `{"kind":"text","text":"t-k3x9ab  explore  done  background  4.2k tok  map the API\nSub-agents used …"}` |
