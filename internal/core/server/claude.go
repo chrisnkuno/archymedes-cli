@@ -3,11 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
 	"github.com/chrisnkuno/friday-cli/internal/core/claude"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
@@ -51,7 +54,7 @@ func (s *Server) openClaude(ctx context.Context, sess *session, model string) (*
 		preface = claude.Since(messages, seen)
 	}
 	opts := claude.Options{
-		Root: sess.cwd, Executable: claude.Find(sess.env.Get), Environ: claude.Environment(s.opts.Environ),
+		Root: sess.cwd, Executable: claude.Find(sess.env.Get), Environ: claudeEnviron(s.opts.Environ, sess.env),
 		Mode: sess.core.Mode(), Model: model, Resume: meta.ClaudeSession, Preface: preface,
 		Transcript: func() string { return claude.Preface(sess.core.Messages()) },
 		TestFirst:  gate.TestFirstFromEnv(sess.env.Get),
@@ -179,7 +182,7 @@ func (s *Server) connectProvider(ctx context.Context, params json.RawMessage) (a
 	if executable == "" {
 		return map[string]any{"ok": false, "error": "Install Claude Code first: " + claude.InstallURL}, nil
 	}
-	auth, err := claude.SignedIn(ctx, executable, claude.Environment(s.opts.Environ))
+	auth, err := claude.SignedIn(ctx, executable, claudeEnviron(s.opts.Environ, s.env()))
 	if err != nil || !auth.LoggedIn {
 		return map[string]any{"ok": false, "error": "Sign in to Claude first: enter runs `claude auth login`, Claude Code's own sign-in."}, nil
 	}
@@ -192,4 +195,19 @@ func (s *Server) forward(ctx context.Context, method string, params json.RawMess
 		return nil, errorf(codeMethodNotFound, "%s needs the TypeScript agent, which is not installed", method)
 	}
 	return s.opts.Forward(ctx, method, params)
+}
+
+// claudeEnviron is the environment Claude Code runs in, with the profile's CLAUDE_CONFIG_DIR: a
+// profile can be another Claude account, which Claude Code keeps in a config folder of its own.
+func claudeEnviron(environ []string, env llm.Env) []string {
+	out := claude.Environment(environ)
+	if dir := env.Get("CLAUDE_CONFIG_DIR"); dir != "" {
+		if rest, ok := strings.CutPrefix(dir, "~/"); ok { // a settings file has no shell to expand it
+			if home, err := os.UserHomeDir(); err == nil {
+				dir = filepath.Join(home, rest)
+			}
+		}
+		out = append(out, "CLAUDE_CONFIG_DIR="+dir)
+	}
+	return out
 }

@@ -223,6 +223,8 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_LOW_BALANCE", label: "Low-balance alert threshold, in the balance currency" },
   { key: "ARCHYMEDES_CRITICAL_BALANCE", label: "Critical-balance threshold, in the balance currency" },
   { key: "ARCHYMEDES_PROVIDER", label: "Default provider", choices: PROVIDER_CHOICES, section: "Providers" },
+  // Read by the Go engine (internal/core/llm.LoadEnv).
+  { key: "ARCHYMEDES_PROFILE", label: "Profile — keys and choices from profiles/<name>.json, laid over these settings" },
   { key: "ARCHYMEDES_FALLBACK_MODEL", label: "Fallback after transient provider failure — ask, or provider:model" },
   { key: "CLAUDE_MODEL", label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for the default" },
   { key: "CODEX_MODEL", label: "Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default" },
@@ -435,6 +437,7 @@ export function validateSetting(key: SettingKey, raw: string): string {
   if (key === "ARCHYMEDES_LANGUAGE" && !CONTROL_LANGUAGE_CODES.has(value.toLowerCase())) throw new Error(`Choose one of: ${[...CONTROL_LANGUAGE_CODES].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER" && !isProviderId(value.toLowerCase()) && !OUTSIDE_ENGINE_IDS.includes(value.toLowerCase())) throw new Error(`Choose one of: ${[...PROVIDER_IDS, ...OUTSIDE_ENGINE_IDS].join(", ")}.`);
   if (key === "ARCHYMEDES_PROVIDER") return value.toLowerCase();
+  if (key === "ARCHYMEDES_PROFILE" && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value)) throw new Error("A profile name is letters, digits, dots, dashes and underscores, as its file is named (profiles/<name>.json).");
   if (key === "ARCHYMEDES_ENGINE" && !["go", "ts"].includes(value.toLowerCase())) throw new Error("Choose go or ts.");
   if (key === "ARCHYMEDES_ENGINE") return value.toLowerCase();
   if ((key === "ARCHYMEDES_JEV" || key === "ARCHYMEDES_TEST_FIRST") && !["on", "off"].includes(value.toLowerCase())) throw new Error("Choose on or off.");

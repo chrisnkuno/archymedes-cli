@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -93,21 +94,22 @@ type Env map[string]string
 // Get is one trimmed value, "" when unset.
 func (e Env) Get(key string) string { return strings.TrimSpace(e[key]) }
 
-// LoadEnv reads <configDir>/settings.json (flat keys to strings, as platform/settings.ts writes it)
-// and lays environ ("KEY=value" pairs) over it: a variable set in the shell wins, as it does for
-// the TypeScript agent. A missing or broken file is no settings.
+// LoadEnv reads <configDir>/settings.json (flat keys to strings, as platform/settings.ts writes it),
+// lays the active profile over it (profiles/<name>.json, ARCHYMEDES_PROFILE), and lays environ
+// ("KEY=value" pairs) over both: a variable set in the shell wins, as it does for the TypeScript
+// agent. A missing or broken file is no settings.
 func LoadEnv(configDir string, environ []string) Env {
 	env := Env{}
 	if configDir != "" {
-		if data, err := os.ReadFile(filepath.Join(configDir, "settings.json")); err == nil {
-			var values map[string]any
-			if json.Unmarshal(data, &values) == nil {
-				for k, v := range values {
-					if s, ok := v.(string); ok {
-						env[k] = s
-					}
-				}
+		readFlat(filepath.Join(configDir, "settings.json"), env)
+		profile := env.Get("ARCHYMEDES_PROFILE")
+		for _, kv := range environ {
+			if k, v, ok := strings.Cut(kv, "="); ok && k == "ARCHYMEDES_PROFILE" {
+				profile = strings.TrimSpace(v)
 			}
+		}
+		if ProfileName.MatchString(profile) {
+			readFlat(ProfileFile(configDir, profile), env)
 		}
 	}
 	for _, kv := range environ {
@@ -116,6 +118,42 @@ func LoadEnv(configDir string, environ []string) Env {
 		}
 	}
 	return env
+}
+
+// ProfileName is what a profile may be called: a file name, no paths.
+var ProfileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
+
+// ProfileFile is where a profile is kept: settings laid over settings.json while it is active.
+func ProfileFile(configDir, name string) string {
+	return filepath.Join(configDir, "profiles", name+".json")
+}
+
+// Profiles are the profiles in configDir, sorted.
+func Profiles(configDir string) []string {
+	entries, _ := os.ReadDir(filepath.Join(configDir, "profiles"))
+	var out []string
+	for _, e := range entries {
+		if name, ok := strings.CutSuffix(e.Name(), ".json"); ok && ProfileName.MatchString(name) && !e.IsDir() {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// readFlat lays a flat JSON object of strings into env.
+func readFlat(file string, env Env) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var values map[string]any
+	if json.Unmarshal(data, &values) == nil {
+		for k, v := range values {
+			if s, ok := v.(string); ok {
+				env[k] = s
+			}
+		}
+	}
 }
 
 // Missing is what is still needed before p can run.

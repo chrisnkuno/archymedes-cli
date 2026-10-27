@@ -54,6 +54,8 @@ type SessionInfo struct {
 	Engine string `json:"engine"`
 	// ContextLimit is the window the engine compacts against, past CompactAt of it; ContextKnown is
 	// false when the limit is assumed. Zero when the engine does not say (Claude Code, TypeScript).
+	// Profile is the settings profile in use, "" for none.
+	Profile      string  `json:"profile"`
 	ContextLimit int     `json:"contextLimit"`
 	CompactAt    float64 `json:"compactAt"`
 	ContextKnown bool    `json:"contextKnown"`

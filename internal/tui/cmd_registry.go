@@ -56,6 +56,7 @@ func init() {
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
 		{"vim", "", "Turn vim keys in the input on or off: esc for normal mode, i to type", (*Model).cmdVim},
+		{"profile", "[name|none]", "List your settings profiles, or choose one for the sessions that follow", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("profile", arg) }},
 		{"btw", "<question>", "Ask a side question, even while Friday works; the answer stays out of the conversation", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("btw", arg) }},
 		{"skills", "", "Skills Friday can load for this project, and where each came from", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("skills", "") }},
 		{"mcp", "", "MCP servers for this project: their tools, and whether each is running", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("mcp", "") }},

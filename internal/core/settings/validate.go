@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"golang.org/x/text/currency"
+
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 )
 
 // enums are settings whose answer is one of a few words: checked case-insensitively and stored
@@ -110,6 +112,11 @@ func Validate(key, raw string) (value, refusal string) {
 			return "", "Choose one of: " + strings.Join(providerIDs(), ", ") + "."
 		}
 		return lower(value), ""
+	case "ARCHYMEDES_PROFILE":
+		if !llm.ProfileName.MatchString(value) {
+			return "", "A profile name is letters, digits, dots, dashes and underscores, as its file is named (profiles/<name>.json)."
+		}
+		return value, ""
 	case "ARCHYMEDES_ENGINE":
 		if v := lower(value); v != "go" && v != "ts" {
 			return "", "Choose go or ts."

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
+	"github.com/chrisnkuno/friday-cli/internal/core/settings"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -110,6 +113,9 @@ var sessionCommands = []sessionCommand{
 	}},
 	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
+	}},
+	{"profile", "List the profiles, or choose one (none to clear) for the sessions that follow", func(sess *session, arg string) map[string]any {
+		return profileCommand(sess.server, strings.TrimSpace(arg))
 	}},
 	{"btw", "Answer a side question from the conversation so far, without tools, even mid-turn", func(sess *session, question string) map[string]any {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -219,4 +225,49 @@ func firstOf(fields []string) string {
 		return ""
 	}
 	return fields[0]
+}
+
+// profileCommand is /profile: the profiles and which is active, or a switch for later sessions.
+func profileCommand(s *Server, name string) map[string]any {
+	dir := s.opts.ConfigDir
+	active := s.env().Get("ARCHYMEDES_PROFILE")
+	fromShell := false
+	for _, kv := range s.opts.Environ {
+		if k, v, ok := strings.Cut(kv, "="); ok && k == "ARCHYMEDES_PROFILE" && strings.TrimSpace(v) != "" {
+			fromShell = true
+		}
+	}
+	profiles := llm.Profiles(dir)
+	if name == "" {
+		if len(profiles) == 0 {
+			return map[string]any{"kind": "text", "text": "No profiles yet. A profile is a file of settings, " + llm.ProfileFile(dir, "<name>") + ", laid over your settings while it is active: other keys, another provider or model, CLAUDE_CONFIG_DIR for another Claude account. /profile <name> chooses one."}
+		}
+		var lines []string
+		for _, p := range profiles {
+			mark := "  "
+			if p == active {
+				mark = "● "
+			}
+			lines = append(lines, mark+p)
+		}
+		lines = append(lines, "/profile <name> chooses one for the sessions that follow; /profile none clears it.")
+		return map[string]any{"kind": "text", "text": strings.Join(lines, "\n")}
+	}
+	value := name
+	if name == "none" || name == "off" {
+		value = ""
+	} else if !slices.Contains(profiles, name) {
+		return map[string]any{"kind": "error", "text": "No profile named " + name + " (" + llm.ProfileFile(dir, name) + "). The profiles are: " + strings.Join(profiles, ", ") + "."}
+	}
+	if r := settings.Set(dir, "ARCHYMEDES_PROFILE", value); !r.OK {
+		return map[string]any{"kind": "error", "text": r.Error}
+	}
+	text := "Profile " + name + " from the next session (/new opens one now)."
+	if value == "" {
+		text = "No profile from the next session (/new opens one now)."
+	}
+	if fromShell {
+		text += " ARCHYMEDES_PROFILE is set in your shell, and it wins over this until you unset it."
+	}
+	return map[string]any{"kind": "text", "text": text}
 }

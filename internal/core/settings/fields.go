@@ -37,6 +37,7 @@ var Fields = []Field{
 	{Key: "ARCHYMEDES_LOW_BALANCE", Label: "Low-balance alert threshold, in the balance currency"},
 	{Key: "ARCHYMEDES_CRITICAL_BALANCE", Label: "Critical-balance threshold, in the balance currency"},
 	{Key: "ARCHYMEDES_PROVIDER", Label: "Default provider", Section: "Providers", Choices: providerChoices()},
+	{Key: "ARCHYMEDES_PROFILE", Label: "Profile — keys and choices from profiles/<name>.json, laid over these settings"},
 	{Key: "ARCHYMEDES_FALLBACK_MODEL", Label: "Fallback after transient provider failure — ask, or provider:model"},
 	{Key: "CLAUDE_MODEL", Label: "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for the default"},
 	{Key: "CODEX_MODEL", Label: "Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default"},

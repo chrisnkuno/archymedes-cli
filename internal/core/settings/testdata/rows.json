@@ -804,6 +804,12 @@
     ]
   },
   {
+    "key": "ARCHYMEDES_PROFILE",
+    "label": "Profile — keys and choices from profiles/<name>.json, laid over these settings",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
     "key": "ARCHYMEDES_FALLBACK_MODEL",
     "label": "Fallback after transient provider failure — ask, or provider:model",
     "section": "Providers",

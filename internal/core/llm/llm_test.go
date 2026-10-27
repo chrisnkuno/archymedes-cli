@@ -106,3 +106,24 @@ func TestModelsRouteRolesAndStayFree(t *testing.T) {
 		t.Fatalf("switch: %+v %v", models.Selection(), err)
 	}
 }
+
+func TestAProfileIsLaidOverTheSettings(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"ARCHYMEDES_PROFILE":"work","GROQ_API_KEY":"personal","GROQ_MODEL":"small"}`), 0o600)
+	os.MkdirAll(filepath.Join(dir, "profiles"), 0o700)
+	os.WriteFile(filepath.Join(dir, "profiles", "work.json"), []byte(`{"GROQ_API_KEY":"work-key","CLAUDE_CONFIG_DIR":"/home/me/.claude-work"}`), 0o600)
+	os.WriteFile(filepath.Join(dir, "profiles", "home.json"), []byte(`{"GROQ_API_KEY":"home-key"}`), 0o600)
+	env := LoadEnv(dir, nil)
+	if env.Get("GROQ_API_KEY") != "work-key" || env.Get("GROQ_MODEL") != "small" || env.Get("CLAUDE_CONFIG_DIR") != "/home/me/.claude-work" {
+		t.Fatalf("with the work profile: %v", env)
+	}
+	if env := LoadEnv(dir, []string{"ARCHYMEDES_PROFILE=home"}); env.Get("GROQ_API_KEY") != "home-key" {
+		t.Fatalf("the shell's profile did not win: %v", env)
+	}
+	if env := LoadEnv(dir, []string{"ARCHYMEDES_PROFILE=../settings"}); env.Get("GROQ_API_KEY") != "personal" {
+		t.Fatalf("a profile name with a path was read: %v", env)
+	}
+	if got := Profiles(dir); len(got) != 2 || got[0] != "home" || got[1] != "work" {
+		t.Fatalf("profiles %v", got)
+	}
+}

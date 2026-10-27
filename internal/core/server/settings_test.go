@@ -2,9 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/settings"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 )
@@ -69,5 +73,38 @@ func TestPromptImagesBecomeFileParts(t *testing.T) {
 	}
 	if _, err := promptImages([]json.RawMessage{json.RawMessage(`{"type":"image","mimeType":"image/png","data":"!!"}`)}); err == nil {
 		t.Fatal("bad base64 passed")
+	}
+}
+
+func TestProfileListsSwitchesAndRefusesAnUnknownName(t *testing.T) {
+	dir := t.TempDir()
+	s := New(nil, Options{ConfigDir: dir})
+	if r := profileCommand(s, ""); !strings.Contains(r["text"].(string), "No profiles yet") {
+		t.Fatalf("no profiles: %v", r)
+	}
+	os.MkdirAll(filepath.Join(dir, "profiles"), 0o700)
+	os.WriteFile(filepath.Join(dir, "profiles", "work.json"), []byte(`{}`), 0o600)
+	if r := profileCommand(s, "work"); r["kind"] != "text" || !strings.Contains(r["text"].(string), "Profile work from the next session") {
+		t.Fatalf("switch: %v", r)
+	}
+	if settings.Load(dir)["ARCHYMEDES_PROFILE"] != "work" {
+		t.Fatal("the profile was not saved")
+	}
+	if r := profileCommand(s, ""); !strings.Contains(r["text"].(string), "● work") {
+		t.Fatalf("list: %v", r)
+	}
+	if r := profileCommand(s, "play"); r["kind"] != "error" || !strings.Contains(r["text"].(string), "No profile named play") {
+		t.Fatalf("unknown: %v", r)
+	}
+	if r := profileCommand(s, "none"); r["kind"] != "text" || settings.Load(dir)["ARCHYMEDES_PROFILE"] != "" {
+		t.Fatalf("clear: %v", r)
+	}
+	env := claudeEnviron([]string{"PATH=/bin"}, llm.Env{"CLAUDE_CONFIG_DIR": "/c/work"})
+	if !slices.Contains(env, "CLAUDE_CONFIG_DIR=/c/work") {
+		t.Fatalf("claude environ %v", env)
+	}
+	home, _ := os.UserHomeDir()
+	if env := claudeEnviron(nil, llm.Env{"CLAUDE_CONFIG_DIR": "~/.claude-work"}); !slices.Contains(env, "CLAUDE_CONFIG_DIR="+filepath.Join(home, ".claude-work")) {
+		t.Fatalf("~ not expanded: %v", env)
 	}
 }

@@ -28,7 +28,9 @@ type Invocation struct {
 	Theme string
 	Agent string
 	// Engine is which agent runs the session: "go" for the Go engine, "" or "ts" for the TypeScript one.
-	Engine  string
+	Engine string
+	// Profile is --profile: the settings profile for this run (ARCHYMEDES_PROFILE).
+	Profile string
 	Cwd     string
 	NoMouse bool
 	Help    bool
@@ -62,7 +64,7 @@ var (
 )
 
 // goOnlyFlags are read by the Go binary and never reach the agent.
-var goOnlyFlags = []string{"--theme", "--agent", "--engine", "-C", "--cwd", "--no-mouse", "--help", "-h", "--version", "-v", "--resume"}
+var goOnlyFlags = []string{"--theme", "--agent", "--engine", "--profile", "-C", "--cwd", "--no-mouse", "--help", "-h", "--version", "-v", "--resume"}
 
 // sessionFlags are the agent's switches for a session that take no value (the mode, free models).
 var sessionFlags = []string{"--plan", "-p", "--build", "--auto", "-y", "--defender", "--free", "--slow", "--pace", "--sandbox"}
@@ -115,6 +117,8 @@ func Parse(argv []string, interactive bool) Invocation {
 			inv.Agent, i = flagValue(hasValue, value, next, i)
 		case name == "--engine":
 			inv.Engine, i = flagValue(hasValue, value, next, i)
+		case name == "--profile":
+			inv.Profile, i = flagValue(hasValue, value, next, i)
 		case name == "-C" || name == "--cwd":
 			inv.Cwd, i = flagValue(hasValue, value, next, i)
 			flag("--cwd", inv.Cwd)

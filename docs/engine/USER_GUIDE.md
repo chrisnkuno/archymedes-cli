@@ -152,6 +152,22 @@ normal mode esc does what it always does: stop the turn, or step out to the bars
 | `u` | undo |
 | `i` `a` `I` `A` `o` `O` | back to typing |
 
+## Profiles
+
+A profile is another set of settings, for another account or way of working: a file in Friday's
+config directory, `profiles/<name>.json`, in the same shape as `settings.json`, laid over it while
+the profile is active.
+
+```json
+{"ANTHROPIC_API_KEY": "sk-ant-…work", "ARCHYMEDES_PROVIDER": "anthropic", "CLAUDE_CONFIG_DIR": "~/.claude-work"}
+```
+
+`/profile` lists them, `/profile work` chooses one for the sessions that follow (`/new` opens one
+now), `/profile none` goes back to plain settings, and `friday --profile work` uses one for a single
+run. The status bar names the profile in use. `CLAUDE_CONFIG_DIR` in a profile makes Claude Code run
+as another Claude account (sign that account in once with
+`CLAUDE_CONFIG_DIR=~/.claude-work claude auth login`).
+
 ## Side questions
 
 `/btw <question>` asks something on the side, even while Friday is working: "/btw what does

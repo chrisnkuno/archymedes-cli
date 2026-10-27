@@ -95,6 +95,7 @@ A session that remembered free mode never falls through to a paid provider when 
 | --- | --- | --- |
 | `ARCHYMEDES_CLAUDE_PATH` | the `PATH`, then `~/.local/bin` and `~/.claude/local` | where the `claude` program is |
 | `ARCHYMEDES_CLAUDE_BILLING` | — | `api` passes `ANTHROPIC_API_KEY` to Claude Code, which then bills that key instead of your plan |
+| `CLAUDE_CONFIG_DIR` | Claude Code's own | the folder Claude Code keeps its sign-in in; set in a [profile](USER_GUIDE.md#profiles), it runs another Claude account |
 | `CLAUDE_MODEL` | `default` | the model new Claude sessions start on: `default`, `opus`, `sonnet`, `haiku` or a model id |
 | `ARCHYMEDES_REASONING` | each model's own | the reasoning effort: `low`, `medium`, `high`, `xhigh` or `max` (`minimal` is `low`, `auto` is Claude Code's default). A change applies at the next turn: Claude Code is restarted on the same conversation |
 
@@ -265,6 +266,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_LOW_BALANCE` | Money | Low-balance alert threshold, in the balance currency |
 | `ARCHYMEDES_CRITICAL_BALANCE` | Money | Critical-balance threshold, in the balance currency |
 | `ARCHYMEDES_PROVIDER` | Providers | Default provider |
+| `ARCHYMEDES_PROFILE` | Providers | Profile — keys and choices from profiles/<name>.json, laid over these settings |
 | `ARCHYMEDES_FALLBACK_MODEL` | Providers | Fallback after transient provider failure — ask, or provider:model |
 | `CLAUDE_MODEL` | Providers | Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for the default |
 | `CODEX_MODEL` | Providers | Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default |

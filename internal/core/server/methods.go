@@ -33,6 +33,8 @@ type session struct {
 	cwd  string
 	core *agents.Session
 	env  llm.Env
+	// server is the connection the session belongs to, for commands that read its options.
+	server *Server
 
 	mu     sync.Mutex
 	claude *claude.Session // set while the person's Claude Code runs the session (claude.go)
@@ -158,7 +160,7 @@ func (s *Server) newSession(ctx context.Context, params json.RawMessage, resume 
 	if err != nil {
 		return nil, errorf(codeInvalidRequest, "%s", err.Error())
 	}
-	sess := &session{id: core.ID(), cwd: cwd, core: core, env: env}
+	sess := &session{id: core.ID(), cwd: cwd, core: core, env: env, server: s}
 	if sel.Provider.Kind == llm.KindClaudeCode {
 		c, err := s.openClaude(ctx, sess, sel.Model)
 		if err != nil {
@@ -237,6 +239,9 @@ func (s *Server) info(sess *session) map[string]any {
 	info := map[string]any{
 		"sessionId": sess.id, "provider": sel.Provider.ID, "providerLabel": sel.Provider.Label, "model": sel.Model,
 		"mode": string(sess.core.Mode()), "root": sess.cwd, "workspace": "local", "workspaceLabel": "this computer", "engine": "go",
+	}
+	if profile := sess.env.Get("ARCHYMEDES_PROFILE"); profile != "" {
+		info["profile"] = profile
 	}
 	if sess.outside() == nil {
 		// The window compaction measures against, so the status line's % is the one that matters;

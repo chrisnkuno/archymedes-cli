@@ -49,6 +49,10 @@ func run(args []string) int {
 		return 0
 	}
 
+	if inv.Profile != "" {
+		// For this run only: the engine and the agents it starts read it from the environment.
+		_ = os.Setenv("ARCHYMEDES_PROFILE", inv.Profile)
+	}
 	cwd := inv.Cwd
 	if cwd == "" {
 		cwd, _ = os.Getwd()
@@ -243,6 +247,7 @@ How much Friday may do on its own (shift+tab switches in a session):
   --defender        find and fix security problems; every change asks
 
 Which model:
+  --profile <name>  use a settings profile (profiles/<name>.json in the config folder) for this run
   --provider <id>   anthropic, openai, openrouter, google, xai, deepseek, mistral, groq,
                     ollama, openai-compatible, claude (Claude Code), codex
   --model <id>      a model of that provider
