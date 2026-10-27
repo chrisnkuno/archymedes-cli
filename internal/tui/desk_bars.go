@@ -135,6 +135,9 @@ func (m *Model) tray() string {
 		tray += th.SoftPill(where, th.Warning) + " "
 	}
 	tray += m.gauge()
+	if m.vim.on && m.vim.normal {
+		tray += th.SoftPill("NORMAL", th.Secondary) + " "
+	}
 	if m.unread > 0 {
 		tray += mark(m.zones.frame, "notes", th.SoftPill(fmt.Sprintf("● %d", m.unread), th.Warning)) + " "
 	}

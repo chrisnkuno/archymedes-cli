@@ -27,6 +27,7 @@ var enums = map[string][]string{
 	"ARCHYMEDES_AUTO_UPDATE":       {"install", "check", "off"},
 	"ARCHYMEDES_TELEMETRY":         {"on", "off"},
 	"ARCHYMEDES_NOTIFY":            {"auto", "always", "off"},
+	"ARCHYMEDES_VIM":               {"on", "off"},
 	"ARCHYMEDES_REASONING":         {"auto", "minimal", "low", "medium", "high", "xhigh", "max"},
 }
 

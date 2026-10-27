@@ -214,6 +214,22 @@
     ]
   },
   {
+    "key": "ARCHYMEDES_VIM",
+    "label": "Vim keys in the input — esc for normal mode, i to type (/vim switches)",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "off",
+        "label": "Off — the input types as it always has (default)"
+      },
+      {
+        "value": "on",
+        "label": "On — esc enters normal mode; hjkl, w, b, dd, cw, p, u and the rest"
+      }
+    ]
+  },
+  {
     "key": "ARCHYMEDES_SUGGEST",
     "label": "Suggestions — next steps, notes on edits, hints while typing",
     "section": "Behaviour",

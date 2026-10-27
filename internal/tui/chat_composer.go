@@ -254,3 +254,26 @@ func padRight(s string, width int) string {
 	}
 	return s
 }
+
+// runes is the input's text and where its cursor is, as an offset into it.
+func (c *composer) runes() ([]rune, int) {
+	lines := strings.Split(c.area.Value(), "\n")
+	offset := 0
+	for i := 0; i < c.area.Line() && i < len(lines); i++ {
+		offset += len([]rune(lines[i])) + 1
+	}
+	return []rune(c.area.Value()), offset + c.area.Column()
+}
+
+// setRunes replaces the input's text and puts the cursor at an offset into it.
+func (c *composer) setRunes(text []rune, cursor int) {
+	c.area.SetValue(string(text))
+	row := strings.Count(string(text[:clampCursor(text, cursor)]), "\n")
+	col := clampCursor(text, cursor) - lineStart(text, clampCursor(text, cursor))
+	c.area.MoveToBegin()
+	for steps := 0; c.area.Line() < row && steps < 100_000; steps++ {
+		c.area.CursorDown() // by screen row: a wrapped line takes several steps
+	}
+	c.area.SetCursorColumn(col)
+	c.refreshCompletions()
+}

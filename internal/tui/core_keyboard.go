@@ -110,6 +110,11 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.desk.focused = true // ↑ from an empty input: onto the desktop's icons
 		return nil
 	}
+	if m.vim.on {
+		if cmd, ok := m.vimKey(msg); ok {
+			return cmd
+		}
+	}
 	switch {
 	case key.Matches(msg, k.Interrupt):
 		switch {

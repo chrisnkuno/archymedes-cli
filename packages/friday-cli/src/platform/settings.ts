@@ -58,6 +58,11 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+const VIM_CHOICES: readonly SettingChoice[] = [
+  { value: "off", label: "Off — the input types as it always has (default)" },
+  { value: "on", label: "On — esc enters normal mode; hjkl, w, b, dd, cw, p, u and the rest" },
+];
+
 const NOTIFY_CHOICES: readonly SettingChoice[] = [
   { value: "auto", label: "Auto — only while the terminal is not focused (default)" },
   { value: "always", label: "Always — even while you are looking" },
@@ -192,6 +197,7 @@ export const SETTING_FIELDS = [
   // afterwards.
   // The Go engine's suggestions (internal/core/advise): free and on by default, because rules and
   // word matching cost nothing; the model and Jev are the parts that can cost, and have their own rows.
+  { key: "ARCHYMEDES_VIM", label: "Vim keys in the input — esc for normal mode, i to type (/vim switches)", choices: VIM_CHOICES },
   { key: "ARCHYMEDES_SUGGEST", label: "Suggestions — next steps, notes on edits, hints while typing", choices: SUGGEST_CHOICES },
   { key: "ARCHYMEDES_SUGGEST_MODEL", label: "Ask the model for extra suggestions (a small extra call per turn)", choices: ON_OFF_CHOICES },
   // Three states rather than a switch: looking and installing are different decisions, and the one
@@ -382,6 +388,7 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
   ARCHYMEDES_TELEMETRY: ["on", "off"],
   ARCHYMEDES_NOTIFY: ["auto", "always", "off"],
+  ARCHYMEDES_VIM: ["on", "off"],
   ARCHYMEDES_REASONING: ["auto", "minimal", "low", "medium", "high", "xhigh", "max"],
 };
 

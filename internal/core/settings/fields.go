@@ -15,6 +15,7 @@ var Fields = []Field{
 	{Key: "ARCHYMEDES_RESUME", Label: "Continue your last chat at startup", Section: "Behaviour", Choices: resumeChoices},
 	{Key: "ARCHYMEDES_ENGINE", Label: "Engine — what runs your sessions (applies to the next session)", Choices: engineChoices},
 	{Key: "ARCHYMEDES_EDITOR_AUTOSAVE", Label: "Auto-save in /edit", Choices: autosaveChoices},
+	{Key: "ARCHYMEDES_VIM", Label: "Vim keys in the input — esc for normal mode, i to type (/vim switches)", Choices: vimChoices},
 	{Key: "ARCHYMEDES_SUGGEST", Label: "Suggestions — next steps, notes on edits, hints while typing", Choices: suggestChoices},
 	{Key: "ARCHYMEDES_SUGGEST_MODEL", Label: "Ask the model for extra suggestions (a small extra call per turn)", Choices: onOffChoices},
 	{Key: "ARCHYMEDES_NOTIFY", Label: "Notifications — when a turn ends or Friday waits for you", Choices: notifyChoices},
@@ -205,4 +206,9 @@ var notifyChoices = []Choice{
 	{"auto", "Auto — only while the terminal is not focused (default)"},
 	{"always", "Always — even while you are looking"},
 	{"off", "Off — no notifications"},
+}
+
+var vimChoices = []Choice{
+	{"off", "Off — the input types as it always has (default)"},
+	{"on", "On — esc enters normal mode; hjkl, w, b, dd, cw, p, u and the rest"},
 }

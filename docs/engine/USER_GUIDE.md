@@ -129,6 +129,14 @@ question waits: a notification from your terminal, or its bell. Set a push URL i
 (`ARCHYMEDES_NOTIFY_URL`, an [ntfy](https://ntfy.sh) topic for example) and your phone hears it
 too. See [Notifications](CONFIGURATION.md#notifications).
 
+## Vim keys in the input
+
+`/vim` (or Settings → `ARCHYMEDES_VIM`) turns on vim keys in the input. esc on a non-empty input
+enters normal mode, shown as NORMAL in the status bar: `h` `j` `k` `l`, `w` `b` `e`, `0` `^` `$`, `gg`
+`G` move; `x` `X` `dd` `dw` `D` delete; `cw` `cc` `C` change; `yy` `p` `P` copy and paste; `u` undoes;
+`i` `a` `I` `A` `o` `O` go back to typing. enter sends in either mode, and esc in normal mode does
+what it always does (stop the turn, step out to the bars).
+
 ## Side questions
 
 `/btw <question>` asks something on the side, even while Friday is working: "/btw what does

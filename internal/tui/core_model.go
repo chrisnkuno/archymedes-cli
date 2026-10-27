@@ -198,17 +198,18 @@ type Model struct {
 	composing *acp.RuntimeEvent
 	testFirst *acp.TestFirstState // this turn's test-first progress; nil until a test or code is written
 	// The running retry's wait, drawn as a countdown bar (Bubbles progress).
-	retryStart  time.Time
-	retryDelay  time.Duration
-	retryBar    progress.Model
-	quitArmed   bool
-	limited     map[string]time.Time // models that answered 429 lately, for the picker
-	sel         selection
-	bodyLines   []string // what the transcript last drew, for selection
-	limits      limitTracker
-	limitBar    progress.Model
-	forecast    forecast
-	notifier    notifier
+	retryStart time.Time
+	retryDelay time.Duration
+	retryBar   progress.Model
+	quitArmed  bool
+	limited    map[string]time.Time // models that answered 429 lately, for the picker
+	sel        selection
+	bodyLines  []string // what the transcript last drew, for selection
+	limits     limitTracker
+	limitBar   progress.Model
+	forecast   forecast
+	notifier   notifier
+	vim        vimState
 	// contextUsed is the main conversation's size at its last model call (input and output), the
 	// figure compaction measures; 0 after a compaction until the next call.
 	contextUsed int
@@ -227,6 +228,7 @@ func New(opts Options) *Model {
 	th, _ := theme.Load(opts.Theme)
 	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th)}
 	m.keyOverrides = map[string][]string{}
+	m.vim.on = vimOn(opts.ConfigDir)
 	if opts.ConfigDir != "" {
 		overrides, err := config.LoadKeys(opts.ConfigDir)
 		if err != nil {

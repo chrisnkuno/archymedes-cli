@@ -243,6 +243,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_RESUME` | Behaviour | Continue your last chat at startup |
 | `ARCHYMEDES_ENGINE` | Behaviour | Engine — what runs your sessions (applies to the next session) |
 | `ARCHYMEDES_EDITOR_AUTOSAVE` | Behaviour | Auto-save in /edit |
+| `ARCHYMEDES_VIM` | Behaviour | Vim keys in the input — esc for normal mode, i to type (/vim switches) |
 | `ARCHYMEDES_SUGGEST` | Behaviour | Suggestions — next steps, notes on edits, hints while typing |
 | `ARCHYMEDES_SUGGEST_MODEL` | Behaviour | Ask the model for extra suggestions (a small extra call per turn) |
 | `ARCHYMEDES_NOTIFY` | Behaviour | Notifications — when a turn ends or Friday waits for you |
