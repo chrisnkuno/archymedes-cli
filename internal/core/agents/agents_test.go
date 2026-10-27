@@ -13,6 +13,7 @@ import (
 
 	"charm.land/fantasy"
 
+	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
@@ -719,5 +720,64 @@ func TestASkillIsListedThenLoadedWhenTheModelAsks(t *testing.T) {
 	}
 	if !strings.Contains(loaded, "Bump the version, tag it, write the notes.") {
 		t.Fatalf("load_skill returned %q", loaded)
+	}
+}
+
+// TestUndoPutsTheFilesAndTheConversationBack: a turn that wrote a file, undone, leaves neither the
+// file nor the turn behind; rewinding for code only keeps what was said.
+func TestUndoPutsTheFilesAndTheConversationBack(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	os.WriteFile(filepath.Join(root, "keep.md"), []byte("before\n"), 0o644)
+	h := newHarness(t, root, policy.Auto, func(_ string, call fantasy.Call) reply {
+		role, text := lastOf(call)
+		if role == fantasy.MessageRoleUser && strings.HasPrefix(text, "write ") {
+			name := strings.TrimPrefix(text, "write ")
+			return reply{calls: [][2]string{{"write_file", `{"path":"` + name + `","content":"made by friday\n"}`}}}
+		}
+		return reply{text: "done"}
+	})
+	s := h.create()
+	h.prompt(s, "write a.md")
+	before := len(s.Messages())
+	h.prompt(s, "write b.md")
+	if _, err := os.Stat(filepath.Join(root, "b.md")); err != nil {
+		t.Fatal("the turn did not write b.md")
+	}
+	if turns := s.Turns(); len(turns) != 2 || turns[1].Label != "write b.md" {
+		t.Fatalf("turns = %+v", turns)
+	}
+	c, conversation, err := s.Back(context.Background(), -1, checkpoint.Both)
+	if err != nil || !conversation || c.Label != "write b.md" {
+		t.Fatalf("undo = %+v %v %v", c, conversation, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "b.md")); !os.IsNotExist(err) {
+		t.Fatal("undo left b.md")
+	}
+	if got := len(s.Messages()); got != before {
+		t.Fatalf("conversation %d messages after undo, want %d", got, before)
+	}
+	said := len(s.Messages())
+	if _, _, err := s.Back(context.Background(), 0, checkpoint.Code); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "a.md")); !os.IsNotExist(err) || len(s.Messages()) != said {
+		t.Fatalf("code-only rewind: a.md still there or the conversation changed (%d → %d)", said, len(s.Messages()))
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "keep.md")); string(data) != "before\n" {
+		t.Fatalf("a file no turn touched changed: %q", data)
+	}
+}
+
+func TestUndoSaysWhyOutsideAGitRepository(t *testing.T) {
+	h := newHarness(t, t.TempDir(), policy.Build, func(string, fantasy.Call) reply { return reply{text: "ok"} })
+	s := h.create()
+	h.prompt(s, "hi")
+	if _, _, err := s.Back(context.Background(), -1, checkpoint.Both); err == nil || !strings.Contains(err.Error(), "git repository") {
+		t.Fatalf("err = %v", err)
 	}
 }

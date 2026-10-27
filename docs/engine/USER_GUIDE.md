@@ -207,6 +207,22 @@ call is approved like any action outside the project; tools are named
 `mcp__<server>__<tool>`. `/mcp` shows each server, how many tools it has, whether it is running,
 and why a declaration was skipped.
 
+## Going back
+
+Before every turn Friday snapshots the project, so a turn can be taken back:
+
+| Command | Does |
+| --- | --- |
+| `/undo` | the last turn's file changes and its part of the conversation; again for the turn before |
+| `/undo code`, `/undo conversation` | only the files, or only the conversation |
+| `/rewind` | picks any turn of the session to go back to, showing what each changed |
+| `/diff`, `/diff stat`, `/diff turn N` | what changed since your last message, a summary per file, or what one turn changed |
+
+Files a turn created are removed, files it deleted come back. Your own staged changes are left as
+they were, and Friday's sessions are never part of a snapshot. Snapshots need a git repository;
+outside one, `/undo` says so. After a long conversation is summarized, older turns can still give
+their files back, but not their conversation.
+
 ## Sub-agents
 
 A **sub-agent** is a helper Friday starts for one part of the task. It gets a brief, works on its

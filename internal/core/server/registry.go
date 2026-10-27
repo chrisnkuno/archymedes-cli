@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
+	"strconv"
+	"strings"
 )
 
 // The engine's protocol surface, as two tables: every method it answers, and every session
@@ -107,6 +110,52 @@ var sessionCommands = []sessionCommand{
 	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
 	}},
+	{"undo", "Go back to before the last turn: its files and the conversation, or only code or conversation", func(sess *session, arg string) map[string]any {
+		return back(sess, -1, arg, "/undo takes no argument, code or conversation")
+	}},
+	{"rewind", "Go back to before turn N (from turns), with code or conversation to restore only that", func(sess *session, arg string) map[string]any {
+		fields := strings.Fields(arg)
+		index, err := strconv.Atoi(firstOf(fields))
+		if err != nil || index < 0 || len(fields) > 2 {
+			return map[string]any{"kind": "error", "text": "/rewind takes a turn number (see the turns list) and optionally code or conversation"}
+		}
+		return back(sess, index, strings.Join(fields[1:], " "), "/rewind takes a turn number and optionally code or conversation")
+	}},
+	{"turns", "The turns that can be gone back to, each with its request", func(sess *session, _ string) map[string]any {
+		turns := []map[string]any{}
+		for i, c := range sess.core.Turns() {
+			turns = append(turns, map[string]any{"index": i, "label": c.Label, "createdAt": c.CreatedAt.UnixMilli()})
+		}
+		return map[string]any{"kind": "turns", "turns": turns}
+	}},
+	{"diff", "What changed since your last message, as a patch; stat for a summary, turn N for one turn", func(sess *session, arg string) map[string]any {
+		ctx := context.Background()
+		arg = strings.TrimSpace(arg)
+		if rest, ok := strings.CutPrefix(arg, "turn"); ok {
+			index, err := strconv.Atoi(strings.TrimSpace(rest))
+			if err != nil {
+				return map[string]any{"kind": "error", "text": "/diff turn takes a turn number"}
+			}
+			patch, err := sess.core.TurnPatch(ctx, index)
+			switch {
+			case err != nil:
+				return map[string]any{"kind": "error", "text": err.Error()}
+			case strings.TrimSpace(patch) == "":
+				return map[string]any{"kind": "text", "text": "That turn changed no files."}
+			}
+			return map[string]any{"kind": "diff", "patch": patch}
+		}
+		patch, err := sess.core.Diff(ctx, arg == "stat")
+		switch {
+		case err != nil:
+			return map[string]any{"kind": "error", "text": err.Error()}
+		case strings.TrimSpace(patch) == "":
+			return map[string]any{"kind": "text", "text": "Nothing changed since your last message."}
+		case arg == "stat":
+			return map[string]any{"kind": "text", "text": strings.TrimRight(patch, "\n")}
+		}
+		return map[string]any{"kind": "diff", "patch": patch}
+	}},
 	{"mcp", "The MCP servers declared for this project: tools, whether running, and any problem", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": mcpText(sess.core.MCP())}
 	}},
@@ -117,4 +166,44 @@ var sessionCommands = []sessionCommand{
 	{"subagents", "The session's sub-agents: role, status, tokens, brief and branch", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": threadsText(sess.core.Threads())}
 	}},
+}
+
+// back is /undo and /rewind: the checkpoint gone back to, and what was restored.
+func back(sess *session, index int, scopeWord, usage string) map[string]any {
+	scope := checkpoint.Both
+	switch strings.TrimSpace(scopeWord) {
+	case "":
+	case "code":
+		scope = checkpoint.Code
+	case "conversation":
+		scope = checkpoint.Conversation
+	default:
+		return map[string]any{"kind": "error", "text": usage + ", not " + strconv.Quote(scopeWord)}
+	}
+	if index < 0 && len(sess.core.Turns()) == 0 {
+		return map[string]any{"kind": "text", "text": "Nothing to undo."}
+	}
+	c, conversation, err := sess.core.Back(context.Background(), index, scope)
+	if err != nil {
+		return map[string]any{"kind": "error", "text": err.Error()}
+	}
+	what := "the files and the conversation"
+	switch {
+	case scope == checkpoint.Code:
+		what = "the files"
+	case scope == checkpoint.Conversation && conversation:
+		what = "the conversation"
+	case scope == checkpoint.Conversation:
+		return map[string]any{"kind": "text", "text": "The conversation was summarized since \"" + c.Label + "\", so only the files can go back to it."}
+	case !conversation:
+		what = "the files (the conversation was summarized since, so it stays)"
+	}
+	return map[string]any{"kind": "text", "text": "Went back to before \"" + c.Label + "\": " + what + "."}
+}
+
+func firstOf(fields []string) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }

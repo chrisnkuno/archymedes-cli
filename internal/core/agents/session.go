@@ -21,6 +21,7 @@ import (
 	"charm.land/fantasy"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/advise"
+	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
@@ -101,6 +102,7 @@ type Session struct {
 	slots    chan struct{}
 	jev      *advise.Jev // nil without a TypeSafe key
 	mcp      *mcp.Manager
+	cps      *checkpoint.Store // nil outside a git repository
 
 	mu       sync.Mutex
 	models   *llm.Models
@@ -206,6 +208,9 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 	}
 	s.mcp = mcp.NewManager(mcp.Files(cfg.Root, cfg.ConfigDir), cfg.Env.Get, os.Environ(), cacheDir)
 	s.mcp.Tools() // a server never listed is listed now, in the background, ready by the first turn
+	if store != nil {
+		s.cps = checkpoint.Open(cfg.Root, store.Dir(), meta.ID)
+	}
 	s.turnCond = sync.NewCond(&s.turnMu)
 	s.nextTurn = 1
 	s.life, s.endLife = context.WithCancel(context.Background())
@@ -429,6 +434,7 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	if err != nil {
 		return loop.Result{Status: loop.Failed, Err: err}
 	}
+	s.captureTurn(ctx, text, len(history))
 	// A server still being listed (just added, never cached) gets a moment, so this turn has its tools.
 	wait, cancel := context.WithTimeout(ctx, 10*time.Second)
 	s.mcp.WaitListed(wait)

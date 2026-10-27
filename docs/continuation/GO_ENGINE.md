@@ -141,8 +141,8 @@ provider's hint is what fixed it.
 ## Not yet in the Go engine
 
 Each forwards to the TypeScript agent or answers that it is not available here: the Codex
-engine (Claude Code runs here: `internal/core/claude`, WS-49), the LSP client, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
-prices in `/cost` (tokens are counted: WS-52.3), `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
+engine (Claude Code runs here: `internal/core/claude`, WS-49), the LSP client, Docker/E2B workspaces, `/review`,
+prices in `/cost` (tokens are counted: WS-52.3), Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own
 limits, not reserved from the parent's remaining budget as in the TypeScript agent. Forwarded to

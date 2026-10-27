@@ -44,6 +44,9 @@ func (s *Session) compactorFocused(focus string) func(context.Context, []fantasy
 			return nil, errors.New("the summary came back empty")
 		}
 		tail := thread.Complete(messages[cut:])
+		if s.cps != nil {
+			s.cps.ForgetConversation() // the old lengths point into a conversation that is gone
+		}
 		first := tail[0]
 		first.Content = append([]fantasy.MessagePart{fantasy.TextPart{Text: "Summary of the conversation so far:\n" + summary + "\n\n---\n"}}, first.Content...)
 		return append([]fantasy.Message{first}, tail[1:]...), nil

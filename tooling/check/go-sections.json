@@ -66,6 +66,9 @@
       "core/tool",
       "conform"
     ],
+    "core/checkpoint": [
+      "conform"
+    ],
     "core/thread": [
       "conform"
     ],
@@ -84,6 +87,7 @@
     ],
     "core/agents": [
       "core/advise",
+      "core/checkpoint",
       "core/gate",
       "core/llm",
       "core/loop",
@@ -108,6 +112,7 @@
     "core/server": [
       "core/advise",
       "core/agents",
+      "core/checkpoint",
       "core/claude",
       "core/gate",
       "core/llm",

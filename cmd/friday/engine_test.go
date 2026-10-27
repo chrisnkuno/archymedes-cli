@@ -250,7 +250,7 @@ func TestContractPlanModeSteeringCommandsAndResume(t *testing.T) {
 	if err != nil || todos.Kind != "todos" || len(todos.Items) != 2 {
 		t.Fatalf("todos = %+v, %v", todos, err)
 	}
-	if res, _ := c.Command(context.Background(), sess.ID, "undo", ""); res.Kind != "error" || !strings.Contains(res.Text, "Go engine") {
+	if res, _ := c.Command(context.Background(), sess.ID, "review", ""); res.Kind != "error" || !strings.Contains(res.Text, "Go engine") {
 		t.Fatalf("an unported command should say so: %+v", res)
 	}
 	list, err := c.Sessions(context.Background(), root)
