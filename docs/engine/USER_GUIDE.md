@@ -38,6 +38,22 @@ Friday works in the folder you start it in (or `-C <dir>`). It can read anything
 and it changes nothing outside it: paths outside the project, `~` paths, and links that lead out of
 it are refused by every file tool.
 
+## From a script
+
+```sh
+friday --print "fix the failing test"        # the answer on stdout, progress on stderr
+echo "summarize the README" | friday         # a request from a pipe
+friday --json --auto "bump the version"      # one JSON object per line, for another program
+```
+
+A scripted run is one turn in the current folder, saved as a session (`--resume` continues it).
+Nobody can answer an approval there, so a call that would ask is refused and the model is told so:
+choose the mode for what it may do (`--plan`, `--auto`) or allow commands with
+[command rules](CONFIGURATION.md#command-rules). With `--json`, stdout carries `session`, `text`,
+`tool_call`, `tool_result`, `refused` and a final `result` (`status`, `text`, `session`, `usage`), and
+nothing else. The exit code is 0 when the turn completed, 1 when it failed or got stuck, 2 when it
+could not start, 130 when interrupted.
+
 ## What happens when you send a request
 
 One request is one **turn**. A turn is a loop of **steps**:

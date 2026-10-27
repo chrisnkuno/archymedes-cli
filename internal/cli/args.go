@@ -50,7 +50,7 @@ var interactiveRefused = map[string]string{
 var subcommands = []string{"acp", "bridge", "login", "logout", "account", "keys", "update", "settings", "history", "doctor"}
 
 // passthroughFlags put the agent in a mode that is not a terminal session.
-var passthroughFlags = []string{"--acp", "--json", "--headless", "--doctor", "--update", "--check-update", "--settings", "--providers", "--sessions", "--estimate"}
+var passthroughFlags = []string{"--acp", "--json", "--headless", "--print", "--doctor", "--update", "--check-update", "--settings", "--providers", "--sessions", "--estimate"}
 
 // valueFlags always consume the next argument.
 var valueFlags = []string{"--package-manager", "--cwd", "--image", "--sandbox-minutes", "--docker-image", "--budget", "--max-rwf", "--model", "--location", "--country", "--language", "--lang", "--provider", "--currency", "--layout"}

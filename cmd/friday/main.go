@@ -13,9 +13,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -54,7 +56,13 @@ func run(args []string) int {
 	cwd, _ = filepath.Abs(cwd)
 
 	agent, agentErr := agentCommand(firstNonEmpty(inv.Agent, os.Getenv("ARCHYMEDES_AGENT")), cwd)
-	choice, err := chooseEngine(engineFactsFor(inv.Engine, inv.Args, cwd, inv.Resume, agentErr == nil))
+	// A scripted run is judged by its session flags, not by --json, which is the run's own.
+	scripted, asJSON, isScripted := scriptedRun(args, interactive)
+	factsArgs, resume := inv.Args, inv.Resume
+	if isScripted {
+		factsArgs, resume = scripted.Args, scripted.Resume
+	}
+	choice, err := chooseEngine(engineFactsFor(inv.Engine, factsArgs, cwd, resume, agentErr == nil))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "friday:", err)
 		return 2
@@ -73,6 +81,18 @@ func run(args []string) int {
 		}
 		return serveGoEngine(opts, &lazyAgent{argv: agent, cwd: cwd})
 	}
+	if goEngine && isScripted {
+		opts, oerr := engineOptions(scripted.Args, cwd)
+		if oerr != nil {
+			fmt.Fprintln(os.Stderr, "friday:", oerr)
+			return 2
+		}
+		var stdin io.Reader
+		if !term.IsTerminal(os.Stdin.Fd()) {
+			stdin = os.Stdin
+		}
+		return runScripted(scripted, asJSON, opts, &lazyAgent{argv: agent, cwd: cwd}, stdin, os.Stdout, os.Stderr)
+	}
 	// The TypeScript agent is needed for the modes it alone serves; the Go engine only borrows it,
 	// for settings and providers, when it is there.
 	if agentErr != nil && (inv.Passthrough || !goEngine) {
@@ -80,7 +100,8 @@ func run(args []string) int {
 		return 2
 	}
 	if inv.Passthrough {
-		return execAgent(append(agent, inv.Args...))
+		// --print is the Go engine's word for a plain scripted run; the TypeScript agent's is none.
+		return execAgent(append(agent, slices.DeleteFunc(slices.Clone(inv.Args), func(a string) bool { return a == "--print" })...))
 	}
 	if inv.Refused != "" {
 		fmt.Fprintln(os.Stderr, "friday:", inv.Refused)
@@ -203,8 +224,10 @@ Start:
   friday --resume latest        continue your last session here (or --resume <id>)
 
 Without opening a session:
-  friday --json "request"       run one request and print what happens as JSON lines (for scripts)
-  echo "request" | friday       the same, with the request from a pipe
+  friday --print "request"      run one request and print the answer (progress goes to stderr)
+  friday --json "request"       the same, as JSON lines on stdout for another program to read
+  echo "request" | friday       a request from a pipe; with no terminal, friday "request" too
+                                (nobody can approve here: what would ask is refused; --auto allows more)
   friday settings               set API keys, models and preferences
   friday history                list earlier sessions (friday history search <words> to find one)
   friday doctor                 check your keys, connection and setup, and say what is wrong
