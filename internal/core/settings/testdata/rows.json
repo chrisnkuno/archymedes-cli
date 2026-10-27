@@ -1,0 +1,1182 @@
+[
+  {
+    "key": "ARCHYMEDES_THEME",
+    "label": "Theme — colours for the whole CLI (/theme <name> also saves it)",
+    "section": "Appearance",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CODE_COLORS",
+    "label": "Code colours",
+    "section": "Appearance",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "vscode",
+        "label": "VS Code colours — Dark+ or Light+ to match the theme (default)"
+      },
+      {
+        "value": "theme",
+        "label": "Theme colours — code painted in the theme's own palette"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_CODE_LINE_NUMBERS",
+    "label": "Line numbers in code blocks",
+    "section": "Appearance",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_SIMPLE",
+    "label": "Simple mode — quiet start, short help",
+    "section": "Appearance",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — a quiet start and a short /help (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — the full banner, tips and grouped help"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_LANGUAGE",
+    "label": "Control language",
+    "section": "Appearance",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "en",
+        "label": "English"
+      },
+      {
+        "value": "zh",
+        "label": "中文"
+      },
+      {
+        "value": "hi",
+        "label": "हिन्दी"
+      },
+      {
+        "value": "es",
+        "label": "Español"
+      },
+      {
+        "value": "fr",
+        "label": "Français"
+      },
+      {
+        "value": "ar",
+        "label": "العربية"
+      },
+      {
+        "value": "bn",
+        "label": "বাংলা"
+      },
+      {
+        "value": "pt",
+        "label": "Português"
+      },
+      {
+        "value": "ru",
+        "label": "Русский"
+      },
+      {
+        "value": "ur",
+        "label": "اردو"
+      },
+      {
+        "value": "ja",
+        "label": "日本語"
+      },
+      {
+        "value": "ko",
+        "label": "한국어"
+      },
+      {
+        "value": "de",
+        "label": "Deutsch"
+      },
+      {
+        "value": "id",
+        "label": "Bahasa Indonesia"
+      },
+      {
+        "value": "vi",
+        "label": "Tiếng Việt"
+      },
+      {
+        "value": "tr",
+        "label": "Türkçe"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_REASONING",
+    "label": "Reasoning effort — clear it to leave each model at its own default",
+    "section": "Appearance",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "auto",
+        "label": "Auto (experimental) — lower the effort on routine steps, leave hard ones to the model"
+      },
+      {
+        "value": "minimal",
+        "label": "Minimal — never think more than needed"
+      },
+      {
+        "value": "low",
+        "label": "Low"
+      },
+      {
+        "value": "medium",
+        "label": "Medium"
+      },
+      {
+        "value": "high",
+        "label": "High"
+      },
+      {
+        "value": "xhigh",
+        "label": "Extra high — deeper than high, for hard problems"
+      },
+      {
+        "value": "max",
+        "label": "Max — the deepest the model offers, and the slowest"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_RESUME",
+    "label": "Continue your last chat at startup",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "ask",
+        "label": "Ask — offer to continue the last chat in this folder (default)"
+      },
+      {
+        "value": "always",
+        "label": "Always — continue the last chat automatically"
+      },
+      {
+        "value": "never",
+        "label": "Never — always start fresh"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_ENGINE",
+    "label": "Engine — what runs your sessions (applies to the next session)",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "go",
+        "label": "Go — Friday's engine: background sub-agents, steering, restart-safe sessions (default)"
+      },
+      {
+        "value": "ts",
+        "label": "TypeScript — the earlier engine: Codex, sandboxes, /undo, /cost, /review"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_EDITOR_AUTOSAVE",
+    "label": "Auto-save in /edit",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "off",
+        "label": "Off — save with ctrl+s (default)"
+      },
+      {
+        "value": "on",
+        "label": "On — save a second after you stop typing"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_SUGGEST",
+    "label": "Suggestions — next steps, notes on edits, hints while typing",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — next steps after a turn, notes on edits, hints while typing (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — no suggestions"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_SUGGEST_MODEL",
+    "label": "Ask the model for extra suggestions (a small extra call per turn)",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "off",
+        "label": "Off — rule-based suggestions only"
+      },
+      {
+        "value": "on",
+        "label": "On — the model may add up to two more"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_NOTIFY",
+    "label": "Notifications — when a turn ends or Friday waits for you",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "auto",
+        "label": "Auto — only while the terminal is not focused (default)"
+      },
+      {
+        "value": "always",
+        "label": "Always — even while you are looking"
+      },
+      {
+        "value": "off",
+        "label": "Off — no notifications"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_NOTIFY_URL",
+    "label": "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)",
+    "section": "Behaviour",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_AUTO_UPDATE",
+    "label": "Automatic updates — install daily by default",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "install",
+        "label": "Check daily and install automatically (default)"
+      },
+      {
+        "value": "check",
+        "label": "Check daily and tell me only"
+      },
+      {
+        "value": "off",
+        "label": "Never check"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_TELEMETRY",
+    "label": "Install count — one anonymous cue per new version (event, version, OS)",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — one anonymous cue when a new version first runs (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — nothing is sent"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_TEST_FIRST",
+    "label": "Build test first — tests, then code, then static analysis",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — tests that define done, then the code, then a light static check (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — verify with whatever the change needs"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_JEV",
+    "label": "Jev second opinion — verdicts, tool checks, ranked suggestions",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — judge turns, suggestions and edits when TYPESAFE_API_KEY is set (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — never call Jev, even with a key configured"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_KEYS",
+    "label": "Key bindings, e.g. /diff=alt+d,/wander=off",
+    "section": "Behaviour",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_SANDBOX",
+    "label": "Command sandbox (Linux, bubblewrap): commands write only to the project and /tmp",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "off",
+        "label": "Off — commands run as you would run them (default)"
+      },
+      {
+        "value": "on",
+        "label": "On — writes only in the project and /tmp, no network; a way out is asked for each time"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_SANDBOX_NETWORK",
+    "label": "Network inside the command sandbox",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "off",
+        "label": "Off — no network inside the sandbox (default)"
+      },
+      {
+        "value": "on",
+        "label": "On — sandboxed commands may use the network"
+      }
+    ]
+  },
+  {
+    "key": "FREE_MODEL",
+    "label": "Free mode model (openrouter/free or publisher/model:free)",
+    "section": "Free mode",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_TOKEN_SAVER",
+    "label": "Free mode token saver",
+    "section": "Free mode",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — trim prompts and history to stretch free limits (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — send everything, as with a paid model"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_TOKEN_METER",
+    "label": "Token meter in the status line",
+    "section": "Free mode",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — show tokens used in the status line"
+      },
+      {
+        "value": "off",
+        "label": "Off"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_COUNTRY",
+    "label": "Location — sets the currency costs are shown in",
+    "section": "Money",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "AU",
+        "label": "Australia (AU) — AUD"
+      },
+      {
+        "value": "BE",
+        "label": "Belgium (BE) — EUR"
+      },
+      {
+        "value": "BR",
+        "label": "Brazil (BR) — BRL"
+      },
+      {
+        "value": "CA",
+        "label": "Canada (CA) — CAD"
+      },
+      {
+        "value": "CN",
+        "label": "China (CN) — CNY"
+      },
+      {
+        "value": "CZ",
+        "label": "Czechia (CZ) — CZK"
+      },
+      {
+        "value": "DK",
+        "label": "Denmark (DK) — DKK"
+      },
+      {
+        "value": "EG",
+        "label": "Egypt (EG) — EGP"
+      },
+      {
+        "value": "ET",
+        "label": "Ethiopia (ET) — ETB"
+      },
+      {
+        "value": "FR",
+        "label": "France (FR) — EUR"
+      },
+      {
+        "value": "DE",
+        "label": "Germany (DE) — EUR"
+      },
+      {
+        "value": "GH",
+        "label": "Ghana (GH) — GHS"
+      },
+      {
+        "value": "IN",
+        "label": "India (IN) — INR"
+      },
+      {
+        "value": "IL",
+        "label": "Israel (IL) — ILS"
+      },
+      {
+        "value": "IT",
+        "label": "Italy (IT) — EUR"
+      },
+      {
+        "value": "JP",
+        "label": "Japan (JP) — JPY"
+      },
+      {
+        "value": "KE",
+        "label": "Kenya (KE) — KES"
+      },
+      {
+        "value": "MX",
+        "label": "Mexico (MX) — MXN"
+      },
+      {
+        "value": "NL",
+        "label": "Netherlands (NL) — EUR"
+      },
+      {
+        "value": "NZ",
+        "label": "New Zealand (NZ) — NZD"
+      },
+      {
+        "value": "NG",
+        "label": "Nigeria (NG) — NGN"
+      },
+      {
+        "value": "NO",
+        "label": "Norway (NO) — NOK"
+      },
+      {
+        "value": "PL",
+        "label": "Poland (PL) — PLN"
+      },
+      {
+        "value": "RW",
+        "label": "Rwanda (RW) — RWF"
+      },
+      {
+        "value": "SA",
+        "label": "Saudi Arabia (SA) — SAR"
+      },
+      {
+        "value": "SG",
+        "label": "Singapore (SG) — SGD"
+      },
+      {
+        "value": "ZA",
+        "label": "South Africa (ZA) — ZAR"
+      },
+      {
+        "value": "ES",
+        "label": "Spain (ES) — EUR"
+      },
+      {
+        "value": "SE",
+        "label": "Sweden (SE) — SEK"
+      },
+      {
+        "value": "CH",
+        "label": "Switzerland (CH) — CHF"
+      },
+      {
+        "value": "TZ",
+        "label": "Tanzania (TZ) — TZS"
+      },
+      {
+        "value": "TR",
+        "label": "Türkiye (TR) — TRY"
+      },
+      {
+        "value": "UG",
+        "label": "Uganda (UG) — UGX"
+      },
+      {
+        "value": "AE",
+        "label": "United Arab Emirates (AE) — AED"
+      },
+      {
+        "value": "GB",
+        "label": "United Kingdom (GB) — GBP"
+      },
+      {
+        "value": "US",
+        "label": "United States (US) — USD"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_CURRENCY",
+    "label": "Display currency (overrides the one your location implies)",
+    "section": "Money",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "AED",
+        "label": "AED"
+      },
+      {
+        "value": "AUD",
+        "label": "AUD"
+      },
+      {
+        "value": "BRL",
+        "label": "BRL"
+      },
+      {
+        "value": "CAD",
+        "label": "CAD"
+      },
+      {
+        "value": "CHF",
+        "label": "CHF"
+      },
+      {
+        "value": "CNY",
+        "label": "CNY"
+      },
+      {
+        "value": "CZK",
+        "label": "CZK"
+      },
+      {
+        "value": "DKK",
+        "label": "DKK"
+      },
+      {
+        "value": "EGP",
+        "label": "EGP"
+      },
+      {
+        "value": "ETB",
+        "label": "ETB"
+      },
+      {
+        "value": "EUR",
+        "label": "EUR"
+      },
+      {
+        "value": "GBP",
+        "label": "GBP"
+      },
+      {
+        "value": "GHS",
+        "label": "GHS"
+      },
+      {
+        "value": "ILS",
+        "label": "ILS"
+      },
+      {
+        "value": "INR",
+        "label": "INR"
+      },
+      {
+        "value": "JPY",
+        "label": "JPY"
+      },
+      {
+        "value": "KES",
+        "label": "KES"
+      },
+      {
+        "value": "MXN",
+        "label": "MXN"
+      },
+      {
+        "value": "NGN",
+        "label": "NGN"
+      },
+      {
+        "value": "NOK",
+        "label": "NOK"
+      },
+      {
+        "value": "NZD",
+        "label": "NZD"
+      },
+      {
+        "value": "PLN",
+        "label": "PLN"
+      },
+      {
+        "value": "RWF",
+        "label": "RWF"
+      },
+      {
+        "value": "SAR",
+        "label": "SAR"
+      },
+      {
+        "value": "SEK",
+        "label": "SEK"
+      },
+      {
+        "value": "SGD",
+        "label": "SGD"
+      },
+      {
+        "value": "TRY",
+        "label": "TRY"
+      },
+      {
+        "value": "TZS",
+        "label": "TZS"
+      },
+      {
+        "value": "UGX",
+        "label": "UGX"
+      },
+      {
+        "value": "USD",
+        "label": "USD"
+      },
+      {
+        "value": "ZAR",
+        "label": "ZAR"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_ACCOUNT_BALANCE",
+    "label": "Tracked spend balance — drawn down by each turn's measured cost",
+    "section": "Money",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_ACCOUNT_BALANCE_CURRENCY",
+    "label": "Currency of the tracked balance (defaults to the display currency)",
+    "section": "Money",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_LOW_BALANCE",
+    "label": "Low-balance alert threshold, in the balance currency",
+    "section": "Money",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CRITICAL_BALANCE",
+    "label": "Critical-balance threshold, in the balance currency",
+    "section": "Money",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_PROVIDER",
+    "label": "Default provider",
+    "section": "Providers",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "anthropic",
+        "label": "Anthropic"
+      },
+      {
+        "value": "openai",
+        "label": "OpenAI"
+      },
+      {
+        "value": "archymedes-cloud",
+        "label": "Archymedes Cloud"
+      },
+      {
+        "value": "openrouter",
+        "label": "OpenRouter"
+      },
+      {
+        "value": "google",
+        "label": "Google Gemini"
+      },
+      {
+        "value": "xai",
+        "label": "xAI Grok"
+      },
+      {
+        "value": "deepseek",
+        "label": "DeepSeek"
+      },
+      {
+        "value": "mistral",
+        "label": "Mistral"
+      },
+      {
+        "value": "groq",
+        "label": "Groq"
+      },
+      {
+        "value": "ollama",
+        "label": "Ollama (local)"
+      },
+      {
+        "value": "openai-compatible",
+        "label": "OpenAI-compatible"
+      },
+      {
+        "value": "free",
+        "label": "Free models (OpenRouter)"
+      },
+      {
+        "value": "claude",
+        "label": "Claude (your subscription, through Claude Code)"
+      },
+      {
+        "value": "codex",
+        "label": "Codex (your ChatGPT plan, through the Codex CLI)"
+      }
+    ]
+  },
+  {
+    "key": "ARCHYMEDES_FALLBACK_MODEL",
+    "label": "Fallback after transient provider failure — ask, or provider:model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "CLAUDE_MODEL",
+    "label": "Claude model (your subscription) — opus, sonnet, haiku or a model id; empty for the default",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "CODEX_MODEL",
+    "label": "Codex model (your ChatGPT plan) — a model id from Codex's list; empty for Codex's default",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ANTHROPIC_API_KEY",
+    "label": "Anthropic API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "ANTHROPIC_BASE_URL",
+    "label": "Anthropic base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ANTHROPIC_MODEL",
+    "label": "Anthropic model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENAI_API_KEY",
+    "label": "OpenAI API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "OPENAI_BASE_URL",
+    "label": "OpenAI-compatible base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENAI_MODEL",
+    "label": "OpenAI model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_TOKEN",
+    "label": "Archymedes Cloud access token",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_BASE_URL",
+    "label": "Archymedes Cloud base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_MODEL",
+    "label": "Archymedes Cloud route (default auto)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_MAXIMUM_MICROS",
+    "label": "Maximum cloud credits reserved per model call, in micros",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_CURRENCY",
+    "label": "Cloud credit currency",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_REGION",
+    "label": "Cloud routing region",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_DATA_POLICY",
+    "label": "Cloud data policy",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_QUALITY_FLOOR",
+    "label": "Cloud routing quality floor (0 to 1)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_CLOUD_TASK_KIND",
+    "label": "Cloud task kind (coding, design, architecture, security, research, deployment)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "GOOGLE_API_KEY",
+    "label": "Google Gemini API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "GOOGLE_BASE_URL",
+    "label": "Google Gemini base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "GOOGLE_MODEL",
+    "label": "Google Gemini model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "XAI_API_KEY",
+    "label": "xAI (Grok) API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "XAI_BASE_URL",
+    "label": "xAI base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "XAI_MODEL",
+    "label": "xAI (Grok) model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "DEEPSEEK_API_KEY",
+    "label": "DeepSeek API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "DEEPSEEK_BASE_URL",
+    "label": "DeepSeek base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "DEEPSEEK_MODEL",
+    "label": "DeepSeek model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "MISTRAL_API_KEY",
+    "label": "Mistral API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "MISTRAL_BASE_URL",
+    "label": "Mistral base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "MISTRAL_MODEL",
+    "label": "Mistral model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "GROQ_API_KEY",
+    "label": "Groq API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "GROQ_BASE_URL",
+    "label": "Groq base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "GROQ_MODEL",
+    "label": "Groq model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENAI_COMPATIBLE_API_KEY",
+    "label": "OpenAI-compatible API key",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "OPENAI_COMPATIBLE_BASE_URL",
+    "label": "OpenAI-compatible base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENAI_COMPATIBLE_MODEL",
+    "label": "OpenAI-compatible model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OLLAMA_BASE_URL",
+    "label": "Ollama base URL (default http://localhost:11434/v1)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OLLAMA_MODEL",
+    "label": "Ollama model",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENROUTER_API_KEY",
+    "label": "OpenRouter API key (direct + free mode)",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "OPENROUTER_MODEL",
+    "label": "OpenRouter model (default openrouter/auto; any publisher/model id)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENROUTER_BASE_URL",
+    "label": "OpenRouter base URL",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENROUTER_HTTP_REFERER",
+    "label": "OpenRouter app URL for rankings (optional)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "OPENROUTER_APP_TITLE",
+    "label": "OpenRouter app title for rankings (optional)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "TYPESAFE_API_KEY",
+    "label": "TypeSafe API key for Jev verdicts (optional)",
+    "section": "Providers",
+    "kind": "secret"
+  },
+  {
+    "key": "TYPESAFE_MODEL",
+    "label": "Jev model (default jev-latest)",
+    "section": "Providers",
+    "kind": "text"
+  },
+  {
+    "key": "E2B_API_KEY",
+    "label": "E2B API key",
+    "section": "Tools & voice",
+    "kind": "secret"
+  },
+  {
+    "key": "E2B_CODING_TEMPLATE",
+    "label": "E2B template",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "EXA_API_KEY",
+    "label": "Exa search API key",
+    "section": "Tools & voice",
+    "kind": "secret"
+  },
+  {
+    "key": "EXA_BASE_URL",
+    "label": "Exa base URL",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "ARCHYMEDES_WEB_SEARCH",
+    "label": "Web search without Exa",
+    "section": "Tools & voice",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "auto",
+        "label": "Automatic — any key set below, else DuckDuckGo, then Stack Overflow (default)"
+      },
+      {
+        "value": "brave",
+        "label": "Brave Search only (needs its key)"
+      },
+      {
+        "value": "tavily",
+        "label": "Tavily only (needs its key)"
+      },
+      {
+        "value": "searxng",
+        "label": "SearXNG only (needs its URL)"
+      },
+      {
+        "value": "duckduckgo",
+        "label": "DuckDuckGo, then Stack Overflow (no key)"
+      },
+      {
+        "value": "off",
+        "label": "Off — no web search without Exa"
+      }
+    ]
+  },
+  {
+    "key": "BRAVE_SEARCH_API_KEY",
+    "label": "Brave Search API key",
+    "section": "Tools & voice",
+    "kind": "secret"
+  },
+  {
+    "key": "TAVILY_API_KEY",
+    "label": "Tavily API key",
+    "section": "Tools & voice",
+    "kind": "secret"
+  },
+  {
+    "key": "SEARXNG_URL",
+    "label": "SearXNG instance URL (JSON output enabled)",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "VOICE_TRANSCRIPTION_URL",
+    "label": "Speech-to-text URL",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "VOICE_MODEL",
+    "label": "Speech-to-text model",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "VOICE_INPUT_DEVICE",
+    "label": "Microphone device override",
+    "section": "Tools & voice",
+    "kind": "text"
+  },
+  {
+    "key": "MODEL_INPUT_PER_MILLION",
+    "label": "Input price per million tokens",
+    "section": "Price overrides",
+    "kind": "text"
+  },
+  {
+    "key": "MODEL_OUTPUT_PER_MILLION",
+    "label": "Output price per million tokens",
+    "section": "Price overrides",
+    "kind": "text"
+  },
+  {
+    "key": "MODEL_CACHED_INPUT_PER_MILLION",
+    "label": "Cached input price per million tokens",
+    "section": "Price overrides",
+    "kind": "text"
+  },
+  {
+    "key": "MODEL_PRICE_CURRENCY",
+    "label": "Model price currency",
+    "section": "Price overrides",
+    "kind": "text"
+  },
+  {
+    "key": "MODEL_PRICE_MODEL",
+    "label": "Model the price override applies to",
+    "section": "Price overrides",
+    "kind": "text"
+  }
+]

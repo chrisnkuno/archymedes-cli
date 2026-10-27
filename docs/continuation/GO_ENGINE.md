@@ -50,10 +50,11 @@ verification gate and steering need to decide what happens after the model says 
 | `roles` | Sub-agent roles: built-ins, role files, which tools a role gets, the delegation guidance (`subagents.ts`), plus each role's model and background default | `tool` |
 | `tools` | Built-in tools on a local workspace: files, search, commands, todos, git | `tool`, `policy`, `gate` |
 | `llm` | Which provider and model, from settings.json and the environment, as Fantasy models; the main/small pair | — |
+| `settings` | The Settings list: fields, choices, validation, masking, settings.json (WS-50.2, ported from `platform/settings.ts`) | `llm` |
 | `loop` | One run: stream the model, run tools, fold in steering, detect loops, hold to the gate, compact | `tool`, `policy`, `gate` |
 | `thread` | The thread tree on disk: an append-only log per session, fork modes, recovery of runs in flight | — |
 | `agents` | The coordinator (accept, prompt, cancel, queue, summarize), sub-agents in the foreground or background, worktrees, prompts, compaction, titles | `tool`, `policy`, `gate`, `roles`, `tools`, `llm`, `loop`, `thread` |
-| `server` | ACP v1 over a reader and writer: the methods the interface calls, events, forwarding the rest | `agents`, `llm`, `loop`, `thread`, `policy`, `gate` |
+| `server` | ACP v1 over a reader and writer: the methods the interface calls, events, forwarding the rest | `agents`, `llm`, `loop`, `thread`, `policy`, `gate`, `settings` |
 
 The matrix is enforced: `tooling/check/go-sections.json` lists each as `core/<pkg>`, and the
 `go-layering` guard reads packages under `internal/core` as sections of their own.
@@ -141,9 +142,9 @@ provider's hint is what fixed it.
 
 Each forwards to the TypeScript agent or answers that it is not available here: the Codex
 engine (Claude Code runs here: `internal/core/claude`, WS-49), MCP and LSP clients, Docker/E2B workspaces, checkpoints and `/undo`, `/review`,
-`/cost`, `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
+prices in `/cost` (tokens are counted: WS-52.3), `/diff`, Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own
 limits, not reserved from the parent's remaining budget as in the TypeScript agent. Forwarded to
-the TypeScript agent when it is installed: settings, providers, setup, the model list and the
-startup update check.
+the TypeScript agent when it is installed: providers, setup, the model list and the startup
+update check (being ported: WS-50). Settings are the Go engine's own since WS-50.2.

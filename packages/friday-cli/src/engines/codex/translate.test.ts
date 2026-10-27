@@ -18,6 +18,9 @@ describe("Codex's stream, as Friday's events", () => {
   it("reads the provider's sentence out of Codex's JSON error", () => {
     expect(codexErrorText(JSON.stringify({ type: "error", status: 400, error: { message: "Not on your plan." } }))).toBe("Not on your plan.");
     expect(codexErrorText("plain words")).toBe("plain words");
+    // The refusal a ChatGPT account gives for a model its plan lacks says what to do next.
+    const refused = codexErrorText(JSON.stringify({ type: "error", status: 400, error: { message: "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.", code: "model_not_found" } }));
+    expect(refused).toMatch(/^The 'gpt-6.1-sol' model is not supported .*model picker \(\/model\).*config\.toml\.$/);
   });
 
   it("sends a message's text once whether it streamed or arrived whole", () => {

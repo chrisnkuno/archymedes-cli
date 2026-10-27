@@ -52,6 +52,11 @@ type SessionInfo struct {
 	Notice string `json:"notice"`
 	// Engine is "go" for the Go engine, empty for the TypeScript one.
 	Engine string `json:"engine"`
+	// ContextLimit is the window the engine compacts against, past CompactAt of it; ContextKnown is
+	// false when the limit is assumed. Zero when the engine does not say (Claude Code, TypeScript).
+	ContextLimit int     `json:"contextLimit"`
+	CompactAt    float64 `json:"compactAt"`
+	ContextKnown bool    `json:"contextKnown"`
 }
 
 // Session is what `session/new` returned.
@@ -182,6 +187,9 @@ type ThreadInfo struct {
 	Brief            string `json:"brief"`
 	Report           string `json:"report"`
 	Branch           string `json:"branch"`
+	// Model is the model it runs on; Usage is every token it has used so far.
+	Model string `json:"model"`
+	Usage *Usage `json:"usage"`
 }
 
 // PermissionOption is one choice the agent offers for an approval.

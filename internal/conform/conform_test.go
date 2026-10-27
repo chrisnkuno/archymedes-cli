@@ -65,6 +65,8 @@ func TestHelpLines(t *testing.T) {
 	has(t, Help(strings.Repeat("a", 101)), "at most 100")
 	has(t, Help("Shows WARNINGS"), "shouts")
 	clean(t, Help("Read the JSON and the README"))
+	clean(t, Help("中文")) // a script without letter case starts as it is written
+	clean(t, Help("العربية"))
 	has(t, Help(""), "empty")
 }
 

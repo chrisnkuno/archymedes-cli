@@ -98,8 +98,10 @@ describe("predictEffort", () => {
 describe("reasoningFromEnvironment", () => {
   it("accepts auto and the four fixed levels, in any case", () => {
     for (const value of ["auto", "minimal", "low", "medium", "high"]) expect(reasoningFromEnvironment({ ARCHYMEDES_REASONING: value.toUpperCase() })).toBe(value);
+    // Claude Code's and Codex's deepest levels are this engine's deepest.
+    for (const value of ["xhigh", "max"]) expect(reasoningFromEnvironment({ ARCHYMEDES_REASONING: value })).toBe("high");
   });
   it("ignores anything else", () => {
-    for (const value of [undefined, "", "max", "off", "fast"]) expect(reasoningFromEnvironment({ ARCHYMEDES_REASONING: value })).toBeUndefined();
+    for (const value of [undefined, "", "off", "fast"]) expect(reasoningFromEnvironment({ ARCHYMEDES_REASONING: value })).toBeUndefined();
   });
 });

@@ -51,6 +51,7 @@ func (m *Model) handleEvent(ev acp.Event) {
 			m.handleRuntime(*ev.Event)
 		}
 	case "compaction":
+		m.contextUsed = 0
 		if ev.MessagesBefore == 0 && ev.TokensBefore > 0 {
 			// Claude Code compacts its own conversation and says only how long it was.
 			m.notice(noticeFaint, fmt.Sprintf("Compacted the conversation (it was %s tokens)", compact(ev.TokensBefore)))
@@ -111,6 +112,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			m.limits.allowance(*a.RemainingRequests, *a.RequestLimit)
 		}
 		if ev.Usage != nil {
+			m.contextUsed = ev.Usage.InputTokens + ev.Usage.OutputTokens
 			m.stats.call(ev.Usage.InputTokens, ev.Usage.OutputTokens, time.Now())
 			m.turnUsage.input += ev.Usage.InputTokens
 			m.turnUsage.output += ev.Usage.OutputTokens

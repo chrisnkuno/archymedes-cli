@@ -160,10 +160,10 @@ func TestContractATurnWithAnApprovedEdit(t *testing.T) {
 	c := engine(t, root, func(call fantasy.Call) (string, [][2]string) {
 		role, text := lastMessage(call)
 		switch {
-		case role == fantasy.MessageRoleUser && text == "make hello.txt":
-			return "Writing it.", [][2]string{{"write_file", `{"path":"hello.txt","content":"hi"}`}}
-		case role == fantasy.MessageRoleUser: // the gate asking for evidence
-			return " Nothing to run for a text file.", nil
+		case role == fantasy.MessageRoleUser && text == "make hello.json":
+			return "Writing it.", [][2]string{{"write_file", `{"path":"hello.json","content":"{}"}`}}
+		case role == fantasy.MessageRoleUser: // the gate asking for evidence (config is held to it; prose is not)
+			return " Nothing to run for a config file.", nil
 		}
 		return "Done: " + text, nil
 	}, nil)
@@ -174,14 +174,14 @@ func TestContractATurnWithAnApprovedEdit(t *testing.T) {
 	if sess.Info.Provider != "groq" || sess.Info.Mode != "build" || sess.Info.Root != root || sess.ID == "" {
 		t.Fatalf("session info = %+v", sess)
 	}
-	got := turn(t, c, sess.ID, "make hello.txt", "allow")
-	if got.stop != "end_turn" || !strings.Contains(got.text, "Writing it.") || !strings.Contains(got.text, "Done: Wrote hello.txt") || !strings.Contains(got.text, "Nothing to run") {
+	got := turn(t, c, sess.ID, "make hello.json", "allow")
+	if got.stop != "end_turn" || !strings.Contains(got.text, "Writing it.") || !strings.Contains(got.text, "Done: Wrote hello.json") || !strings.Contains(got.text, "Nothing to run") {
 		t.Fatalf("turn = %+v", got)
 	}
-	if len(got.asked) != 1 || got.asked[0].ToolCall.Kind != "edit" || !strings.Contains(got.asked[0].ToolCall.Title, "hello.txt") || len(got.asked[0].Options) != 4 {
+	if len(got.asked) != 1 || got.asked[0].ToolCall.Kind != "edit" || !strings.Contains(got.asked[0].ToolCall.Title, "hello.json") || len(got.asked[0].Options) != 4 {
 		t.Fatalf("approval = %+v", got.asked)
 	}
-	if data, _ := os.ReadFile(filepath.Join(root, "hello.txt")); string(data) != "hi" {
+	if data, _ := os.ReadFile(filepath.Join(root, "hello.json")); string(data) != "{}" {
 		t.Fatalf("file = %q", data)
 	}
 	types := strings.Join(runtimeTypes(got.events), ",")
@@ -329,18 +329,29 @@ func TestContractForwardsWhatTheGoEngineDoesNotHave(t *testing.T) {
 		asked = append(asked, method)
 		mu.Unlock()
 		switch method {
-		case "_archymedes/settings/list":
-			return json.RawMessage(`{"file":"/x/settings.json","rows":[]}`), nil
+		case "_archymedes/providers":
+			return json.RawMessage(`{"providers":[]}`), nil
 		case "_archymedes/startup":
 			return json.RawMessage(`{"notices":["update available"]}`), nil
 		}
 		return nil, errors.New("unexpected " + method)
 	}
 	c := engine(t, t.TempDir(), func(fantasy.Call) (string, [][2]string) { return "x", nil }, forward)
-	list, err := c.Settings(context.Background())
-	if err != nil || list.File != "/x/settings.json" {
-		t.Fatalf("settings = %+v, %v", list, err)
+	if raw, err := c.CallRaw(context.Background(), "_archymedes/providers", json.RawMessage(`{}`)); err != nil || string(raw) != `{"providers":[]}` {
+		t.Fatalf("providers = %s, %v", raw, err)
 	}
+	// Settings are the Go engine's own since WS-50.2: answered here, never forwarded.
+	list, err := c.Settings(context.Background())
+	if err != nil || len(list.Rows) < 60 || !strings.HasSuffix(list.File, "settings.json") {
+		t.Fatalf("settings = %d rows in %q, %v", len(list.Rows), list.File, err)
+	}
+	mu.Lock()
+	for _, method := range asked {
+		if strings.HasPrefix(method, "_archymedes/settings/") {
+			t.Errorf("%s was forwarded", method)
+		}
+	}
+	mu.Unlock()
 	notices, err := c.Startup(context.Background())
 	if err != nil || len(notices) != 1 || notices[0] != "update available" {
 		t.Fatalf("startup = %v, %v", notices, err)

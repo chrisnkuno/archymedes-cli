@@ -138,9 +138,11 @@ function decide(s: EffortSignals): EffortDecision {
 
 /**
  * `ARCHYMEDES_REASONING`: `auto`, a fixed level, or undefined for each provider's own default.
- * Anything else is ignored rather than guessed at.
+ * `xhigh` and `max` (Claude Code's and Codex's deepest levels) are `high` here, the deepest this
+ * engine sends, so choosing more never quietly means the default. Anything else is ignored.
  */
 export function reasoningFromEnvironment(environment: Record<string, string | undefined>): "auto" | "minimal" | "low" | "medium" | "high" | undefined {
   const value = environment.ARCHYMEDES_REASONING?.trim().toLowerCase();
+  if (value === "xhigh" || value === "max") return "high";
   return value === "auto" || value === "minimal" || value === "low" || value === "medium" || value === "high" ? value : undefined;
 }

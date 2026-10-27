@@ -1,6 +1,6 @@
 # The codebase, section by section
 
-Updated 2026-10-23 (WS-35: the Go engine). This is the current map: what each part owns, what it may depend on,
+Updated 2026-10-27 (WS-50: one engine, Go). This is the current map: what each part owns, what it may depend on,
 and where new code goes. The rules here are checked by `bun run recheck` (see
 [WORKFLOW.md](WORKFLOW.md)); when this page and a guard disagree, the guard is right and this page
 is stale.
@@ -24,7 +24,9 @@ cmd/friday ──▶ internal/tui ──ACP over stdio──▶ packages/friday-
 to the same interface, and forwarding what it lacks to the TypeScript agent; a session that needs
 the TypeScript engine runs there by itself (`cmd/friday/engine.go`). Its design is in
 [GO_ENGINE.md](GO_ENGINE.md), its documentation in [`docs/engine/`](../engine/README.md). The
-TypeScript engines below remain for what the Go engine does not have yet.
+TypeScript engines below remain for what the Go engine does not have yet, and are being ported and
+then deleted (WS-50): **new behaviour goes into Go only**, and the TypeScript side changes only to
+keep working until its part is ported.
 
 Three engines run a session: Friday's own agent (`core/cli/agent.ts` on any provider), Claude Code
 (`engines/claude/`; on the Go engine `internal/core/claude`, which speaks Claude Code's stream-JSON
@@ -118,10 +120,11 @@ policy modules such as `permissions.ts`; it implements the types in `engines/con
 | A command that should run unasked (it only reads) | `core/cli/command-readonly.ts` (read by run_command's `effectFor`, `PermissionLedger.decide` and the Claude bridge) |
 | A provider | `core/providers/<vendor>.ts`, dialect quirks in `chat-dialects.ts` |
 | An ACP method | `core/cli/acp.ts` (protocol), handler in `friday-cli/src/server/`, client in `internal/acp` |
-| The hosted/remote bridge, accounts | `friday-cli/src/bridge/` (sandbox side), `friday-cli/src/account/` (login, keys); Worker in the site repo `workers/app/`; design in REMOTE.md |
+| The hosted/remote bridge, accounts | Not ported: dropped with the TypeScript engine (WS-50); the design is archived in [history/REMOTE.md](history/REMOTE.md) |
 | An engine | `friday-cli/src/engines/<name>/`, implementing `engines/contract.ts`, registered in `server/session.ts` |
 | A command-line flag | `cli/args.ts`, handled in `cli/startup-commands.ts` (exits) or `run/` (runs a turn) |
 | An app, dialog or command in the interface | `internal/tui/<prefix>_<name>.go` (above) |
+| A setting | A row in `internal/core/settings/fields.go` (its rule in `validate.go`), and its row in [docs/engine/CONFIGURATION.md](../engine/CONFIGURATION.md#the-settings-list) |
 | A tool, role, provider or ACP method of the Go engine | `internal/core/tools`, `core/roles`, `core/llm`, `core/server` (see [GO_ENGINE.md](GO_ENGINE.md)); the TypeScript one stays the reference until a method is ported |
 | A rule of the mechanism design system | `internal/conform` (the rule), a `TestConform…` beside the registry it judges, and [docs/mechanisms](../mechanisms/README.md) |
 | A guard | `tooling/check/guards.ts` (CLI) or `repo-guards.ts` (core, Go), with a test and a baseline entry |

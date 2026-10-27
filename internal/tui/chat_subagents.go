@@ -53,6 +53,10 @@ func (m *Model) handleThread(th *acp.ThreadInfo) {
 		t.sub = &subagentRun{}
 	}
 	t.sub.agent, t.sub.thread, t.sub.background, t.sub.status = th.Agent, th.ID, th.Background, th.Status
+	if u := th.Usage; u != nil && u.InputTokens+u.OutputTokens > t.sub.tokens {
+		// The engine's count is the whole of it, steps before a restart included.
+		t.sub.tokens = u.InputTokens + u.OutputTokens
+	}
 	if th.Background && ended {
 		t.result, t.isError, t.ended = th.Report, th.Status == "failed", time.Now()
 		if m.phase != busy {

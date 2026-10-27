@@ -5,10 +5,11 @@ import type { PermissionDecision } from "@archymedes/core/cli/permissions";
 import type { SessionRecord } from "@archymedes/core/cli/session";
 import { command, completed, FakeCodex, fileChange, replyWith, type FakeScript } from "./fake-codex";
 import { CodexSession, codexPolicy } from "./session";
+import { codexEffort } from "./backend";
 
 const ROOT = "/work/project";
 
-function setup(script: FakeScript, options: { record?: SessionRecord; decide?: (request: AcpApprovalRequest) => PermissionDecision; mode?: "plan" | "build" | "auto" } = {}) {
+function setup(script: FakeScript, options: { record?: SessionRecord; decide?: (request: AcpApprovalRequest) => PermissionDecision; mode?: "plan" | "build" | "auto"; effort?: () => string | undefined } = {}) {
   const codex = new FakeCodex(script);
   const events: ArchymedesEvent[] = [];
   const asked: AcpApprovalRequest[] = [];
@@ -20,6 +21,7 @@ function setup(script: FakeScript, options: { record?: SessionRecord; decide?: (
     approve: async (request) => { asked.push(request); return options.decide?.(request) ?? "allow"; },
     save: async (record) => { saved.push(structuredClone(record)); },
     onModels: (list) => models.push(list),
+    ...(options.effort ? { effort: options.effort } : {}),
     transport: codex.transport,
     // No repository here: checkpoints quietly do nothing, as they do outside git.
     git: async () => ({ exitCode: 128, stdout: "", stderr: "not a git repository" }),
@@ -111,7 +113,9 @@ describe("a session run by Codex", () => {
   it("says Codex's own reason when a turn fails, not the JSON around it", async () => {
     const providerError = JSON.stringify({ type: "error", status: 400, error: { type: "invalid_request_error", message: "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account." } });
     const { session } = setup(() => [{ notify: "error", params: { error: { message: providerError }, willRetry: false } }, completed("failed", providerError)]);
-    expect(await session.send("hi")).toEqual({ status: "failed", summary: "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account." });
+    const failed = await session.send("hi");
+    expect(failed.status).toBe("failed");
+    expect(failed.summary).toMatch(/^The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account\. Choose another Codex model/);
   });
 
   it("starts Codex again after it crashes, resuming the same thread", async () => {
@@ -161,6 +165,18 @@ describe("a session run by Codex", () => {
     expect(turns[0]).toMatchObject({ approvalPolicy: "untrusted" });
     expect(turns[1]).toMatchObject({ approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, model: "gpt-6-luna" });
     expect(session.info()).toMatchObject({ provider: "codex", model: "gpt-6-luna", mode: "plan" });
+  });
+
+  it("sends the reasoning effort as it is at each turn, and none when it is Codex's default", async () => {
+    let effort: string | undefined = "xhigh";
+    const { codex, session } = setup(() => [...replyWith("ok"), completed()], { effort: () => effort });
+    await session.send("one");
+    effort = undefined;
+    await session.send("two");
+    const turns = codex.requests.filter((request) => request.method === "turn/start").map((request) => request.params as Record<string, unknown>);
+    expect(turns[0]).toMatchObject({ effort: "xhigh" });
+    expect(turns[1]).not.toHaveProperty("effort");
+    expect([codexEffort("XHIGH"), codexEffort("minimal"), codexEffort("auto"), codexEffort(undefined)]).toEqual(["xhigh", "low", undefined, undefined]);
   });
 
   it("says why Codex did not start", async () => {

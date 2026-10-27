@@ -238,15 +238,21 @@ export function unwrapShell(command: string): string {
 
 /** Codex wraps the provider's error in JSON; the provider's own sentence is what to say. */
 export function codexErrorText(message: string): string {
+  let text = message;
   try {
     const parsed = asRecord(JSON.parse(message));
     const inner = asRecord(parsed.error);
-    if (typeof inner.message === "string" && inner.message) return inner.message;
-    if (typeof parsed.message === "string" && parsed.message) return parsed.message;
+    if (typeof inner.message === "string" && inner.message) text = inner.message;
+    else if (typeof parsed.message === "string" && parsed.message) text = parsed.message;
   } catch {
     // not JSON: it is the sentence
   }
-  return message;
+  // A model the person's plan does not have (often one set in ~/.codex/config.toml) fails every
+  // turn; say how to get out of it.
+  if (/model_not_found|model is not supported/i.test(message)) {
+    text += " Choose another Codex model in the model picker (/model), which lists the ones your plan offers, or change `model` in ~/.codex/config.toml.";
+  }
+  return text;
 }
 
 function failureKind(text: string): "timeout" | "rate_limit" | "server" | "network" | "unknown" {

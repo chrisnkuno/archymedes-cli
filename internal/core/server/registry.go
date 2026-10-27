@@ -23,11 +23,10 @@ var methods []method
 // methodByName indexes methods.
 var methodByName = map[string]method{}
 
-// forwarded are the methods the TypeScript agent answers while this engine does not: settings,
-// providers and setup, all of which only read and write the shared settings file.
+// forwarded are the methods the TypeScript agent answers while this engine does not: providers
+// and setup, which only read and write the shared settings file (ported in WS-50.3).
 var forwarded = map[string]bool{
-	"_archymedes/settings/list": true, "_archymedes/settings/set": true,
-	"_archymedes/providers": true, "_archymedes/providers/connect": true, "_archymedes/providers/models": true,
+	"_archymedes/providers/models":         true,
 	"_archymedes/providers/remember-model": true, "_archymedes/setup/save": true,
 }
 
@@ -53,6 +52,10 @@ func init() {
 		{"_archymedes/startup", "Say what the startup check found, such as an update", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.startup(ctx, p) }},
 		{"_archymedes/setup/status", "Say whether a provider is ready, and which could be", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.setupStatus(ctx, p) }},
 		{"_archymedes/suggest", "Weigh the completions offered for a request being typed, when Jev is set up", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.suggest(ctx, p), nil }},
+		{"_archymedes/settings/list", "List every setting with its value, secrets masked", func(s *Server, _ context.Context, _ json.RawMessage) (any, error) { return s.settingsList(), nil }},
+		{"_archymedes/settings/set", "Save one setting, or clear it with an empty value", func(s *Server, _ context.Context, p json.RawMessage) (any, error) { return s.settingsSet(p), nil }},
+		{"_archymedes/providers", "List every provider, what it needs and whether it is ready", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.providers(ctx, p) }},
+		{"_archymedes/providers/connect", "Check and save what a provider needs, and list its models", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.connectProvider(ctx, p) }},
 		{"_archymedes/models", "List the models the session can switch to", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.models(ctx, p) }},
 	}
 	for _, m := range methods {
@@ -101,7 +104,14 @@ var sessionCommands = []sessionCommand{
 		}
 		return map[string]any{"kind": "text", "text": fmt.Sprintf("Compacted the conversation: %d → %d messages", before, after)}
 	}},
-	{"subagents", "The session's sub-agents: role, status, brief and branch", func(sess *session, _ string) map[string]any {
+	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
+		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
+	}},
+	{"skills", "The skills found for this project: name, where from, what each is for", func(sess *session, _ string) map[string]any {
+		found, problems := sess.core.Skills()
+		return map[string]any{"kind": "text", "text": skillsText(found, problems)}
+	}},
+	{"subagents", "The session's sub-agents: role, status, tokens, brief and branch", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": threadsText(sess.core.Threads())}
 	}},
 }

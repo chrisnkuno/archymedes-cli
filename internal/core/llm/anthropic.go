@@ -282,7 +282,8 @@ func decodeAnthropicStream(body io.Reader, yield func(fantasy.StreamPart) bool) 
 				return
 			}
 		case "message_start":
-			usage.InputTokens = e.Message.Usage.InputTokens + e.Message.Usage.CacheCreation + e.Message.Usage.CacheRead
+			// Fantasy's convention: cache reads apart (the loop adds them back), cache writes in.
+			usage.InputTokens = e.Message.Usage.InputTokens + e.Message.Usage.CacheCreation
 			usage.CacheReadTokens = e.Message.Usage.CacheRead
 			usage.CacheCreationTokens = e.Message.Usage.CacheCreation
 			usage.OutputTokens = e.Message.Usage.OutputTokens

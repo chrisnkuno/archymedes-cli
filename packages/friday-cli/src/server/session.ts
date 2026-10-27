@@ -16,7 +16,7 @@ import { runSessionCommand } from "./session-commands";
 import { claudeIsDefault, claudeModel, claudeRuntime, learnClaudeModels } from "../engines/claude/backend";
 import { CLAUDE_PROVIDER } from "../engines/claude/identity";
 import { ClaudeSession } from "../engines/claude/session";
-import { codexEnvironment, codexIsDefault, codexModel, codexReadiness, learnCodexModels } from "../engines/codex/backend";
+import { codexEffort, codexEnvironment, codexIsDefault, codexModel, codexReadiness, learnCodexModels } from "../engines/codex/backend";
 import { CODEX_PROVIDER } from "../engines/codex/identity";
 import { CodexSession } from "../engines/codex/session";
 import { jevOptionsFromEnvironment } from "../setup/jev";
@@ -225,6 +225,7 @@ async function codexEngine(context: SessionContext, record: SessionRecord | unde
     root: context.root, executable: readiness.executable, environment: codexEnvironment(process.env as Record<string, string | undefined>), mode, record,
     ...(model && model !== "default" ? { model } : {}),
     onEvent: context.onEvent, approve: context.approve, ...(context.ask ? { ask: context.ask } : {}), warn: context.warn, onModels: learnCodexModels,
+    effort: () => codexEffort(context.environment.ARCHYMEDES_REASONING),
   });
   await session.open();
   return session;

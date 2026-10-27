@@ -625,3 +625,99 @@ func TestABackgroundChildStoppedByQuittingResumesNextTime(t *testing.T) {
 		t.Fatalf("resumed with %v", resumedWith)
 	}
 }
+
+// TestASubagentsTokensAreCountedStoredAndReported: each sub-agent's model calls are added up as
+// they happen, kept with its thread, and sent with its status, so its spend is known after it ends.
+func TestASubagentsTokensAreCountedStoredAndReported(t *testing.T) {
+	h := newHarness(t, t.TempDir(), policy.Build, func(_ string, call fantasy.Call) reply {
+		if isChild(call) {
+			return reply{text: "found it"}
+		}
+		role, _ := lastOf(call)
+		if role == fantasy.MessageRoleUser {
+			return reply{calls: [][2]string{{"delegate_readonly_task", `{"task":"find Add"}`}}}
+		}
+		return reply{text: "done"}
+	})
+	s := h.create()
+	h.prompt(s, "go")
+	var last *ThreadInfo
+	for _, n := range h.of("thread") {
+		last = n.Thread
+	}
+	want := loop.Usage{InputTokens: 10, OutputTokens: 5}
+	if last == nil || last.Status != thread.Done || last.Usage == nil || *last.Usage != want || last.Model != "little" {
+		t.Fatalf("last thread notice = %+v", last)
+	}
+	var child thread.Thread
+	for _, th := range s.Threads() {
+		if th.ID != thread.Root {
+			child = th
+		}
+	}
+	if child.Usage == nil || loop.Usage(*child.Usage) != want {
+		t.Fatalf("stored thread = %+v", child)
+	}
+}
+
+func TestAThreadsTokensSurviveARestart(t *testing.T) {
+	root := t.TempDir()
+	store, err := thread.Create(root, thread.Meta{ID: thread.NewID(time.Now()), Cwd: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Spawn(thread.Thread{ID: "c1", Parent: thread.Root, Status: thread.Running}); err != nil {
+		t.Fatal(err)
+	}
+	_ = store.SetUsage("c1", thread.Usage{InputTokens: 100, OutputTokens: 7})
+	_ = store.SetUsage("c1", thread.Usage{InputTokens: 250, OutputTokens: 20, CachedInputTokens: 90})
+	got, ok := store.Thread("c1")
+	if !ok || got.Usage == nil || *got.Usage != (thread.Usage{InputTokens: 250, OutputTokens: 20, CachedInputTokens: 90}) {
+		t.Fatalf("replayed %+v", got)
+	}
+}
+
+func TestTheMainConversationsTokensAreKeptWithTheSession(t *testing.T) {
+	h := newHarness(t, t.TempDir(), policy.Build, func(string, fantasy.Call) reply { return reply{text: "hi"} })
+	s := h.create()
+	h.prompt(s, "one")
+	h.prompt(s, "two")
+	meta := s.Meta()
+	if meta.ModelCalls != 2 || meta.Usage == nil || *meta.Usage != (thread.Usage{InputTokens: 20, OutputTokens: 10}) {
+		t.Fatalf("meta = %d calls, %+v", meta.ModelCalls, meta.Usage)
+	}
+}
+
+// TestASkillIsListedThenLoadedWhenTheModelAsks: the prompt names the project's skill in one line,
+// and load_skill hands the model its instructions.
+func TestASkillIsListedThenLoadedWhenTheModelAsks(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".agents", "skills", "release")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: release\ndescription: Cut a release of this project\n---\nBump the version, tag it, write the notes.\n"), 0o644)
+	var system, loaded string
+	var mu sync.Mutex
+	h := newHarness(t, root, policy.Build, func(_ string, call fantasy.Call) reply {
+		role, text := lastOf(call)
+		mu.Lock()
+		defer mu.Unlock()
+		if role == fantasy.MessageRoleUser {
+			system = textOf(call.Prompt[0])
+			return reply{calls: [][2]string{{"load_skill", `{"name":"release"}`}}}
+		}
+		loaded = text
+		return reply{text: "released"}
+	})
+	s := h.create()
+	h.prompt(s, "cut a release")
+	mu.Lock()
+	defer mu.Unlock()
+	if !strings.Contains(system, "- release: Cut a release of this project") {
+		t.Fatalf("the prompt does not list the skill:\n%s", system)
+	}
+	if !strings.Contains(loaded, "Bump the version, tag it, write the notes.") {
+		t.Fatalf("load_skill returned %q", loaded)
+	}
+}

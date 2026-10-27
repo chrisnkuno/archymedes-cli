@@ -72,6 +72,16 @@ type Thread struct {
 	Report    string    `json:"report,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// Usage is every token the thread's model calls have used, across restarts.
+	Usage *Usage `json:"usage,omitempty"`
+}
+
+// Usage is a thread's tokens, in the names the interface reads (loop.Usage, acp.Usage).
+type Usage struct {
+	InputTokens       int `json:"inputTokens"`
+	OutputTokens      int `json:"outputTokens"`
+	CachedInputTokens int `json:"cachedInputTokens"`
+	ReasoningTokens   int `json:"reasoningTokens"`
 }
 
 // Meta is what a session is.
@@ -88,8 +98,12 @@ type Meta struct {
 	// EngineSeen is, per outside engine, how many root messages it has seen: what it is told on
 	// coming back is only what came after (the TypeScript record's engineSeen).
 	EngineSeen map[string]int `json:"engineSeen,omitempty"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+	// Usage and ModelCalls are what the main conversation's model calls have used (sub-agents keep
+	// their own, on their threads).
+	Usage      *Usage    `json:"usage,omitempty"`
+	ModelCalls int       `json:"modelCalls,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // Store is one session's directory.
@@ -191,6 +205,11 @@ func (s *Store) SetStatus(id, status, report string) error {
 	return s.appendRecord(record{Kind: "status", ID: id, Status: status, Report: report, At: time.Now()})
 }
 
+// SetUsage records a thread's tokens so far: the whole total, which replaces the last one.
+func (s *Store) SetUsage(id string, u Usage) error {
+	return s.appendRecord(record{Kind: "usage", ID: id, Usage: &u, At: time.Now()})
+}
+
 // SaveMessages replaces a thread's conversation.
 func (s *Store) SaveMessages(id string, messages []fantasy.Message) error {
 	return s.writeJSON(id+".json", messages)
@@ -246,6 +265,11 @@ func (s *Store) Threads() ([]Thread, error) {
 					t.Report = rec.Report
 				}
 			}
+		case "usage":
+			if t := byID[rec.ID]; t != nil && rec.Usage != nil {
+				u := *rec.Usage
+				t.Usage = &u
+			}
 		}
 	}
 	out := make([]Thread, 0, len(order))
@@ -293,6 +317,7 @@ type record struct {
 	ID     string    `json:"id,omitempty"`
 	Status string    `json:"status,omitempty"`
 	Report string    `json:"report,omitempty"`
+	Usage  *Usage    `json:"usage,omitempty"`
 	At     time.Time `json:"at,omitzero"`
 }
 

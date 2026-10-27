@@ -64,12 +64,13 @@ All under `internal/core/`. Each is a layering section of its own (`core/<pkg>` 
 | `gate` | The **verification gate**: what a run must show before it may end (proof of changes; tests first, red, green, static check) | `tool` |
 | `roles` | Sub-agent **roles**: built-ins, role files, which tools a role gets, the delegation guidance in the prompt | `tool` |
 | `llm` | Which **provider and model** (settings under the environment, the TypeScript agent's order), opened as Fantasy models; the main/small pair; the native Anthropic streamer | — |
+| `settings` | The **Settings list**: every setting, its choices, how a value is checked, `settings.json` | `llm` |
 | `thread` | The **session on disk**: meta, the append-only thread log, message snapshots, fork modes, recovery | — |
 | `tools` | The **built-in tools** on a local workspace | `tool`, `policy` |
 | `loop` | **One run**: steps, streaming, tool execution and batching, the inbox, the loop detector, retries and the idle watchdog, compaction, wrap-up | `tool`, `gate` |
 | `advise` | **Suggestions** beside the work: next steps after a turn, notes on an edit, weighing what is being typed. The Jev client | — |
 | `agents` | The **coordinator**: a Session's turns in order, cancel, steering, sub-agents in the foreground and background, worktrees, prompts, compaction, titles | everything above |
-| `server` | **ACP**: framing, methods, requests to the client, events, forwarding | `agents`, `advise`, `llm`, `loop`, `policy`, `gate`, `thread`, `tool` |
+| `server` | **ACP**: framing, methods, requests to the client, events, forwarding | `agents`, `advise`, `llm`, `loop`, `policy`, `gate`, `settings`, `thread`, `tool` |
 
 `cmd/friday/engine.go` chooses the engine and wires the server to the interface or to stdio.
 

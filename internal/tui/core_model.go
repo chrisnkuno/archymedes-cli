@@ -208,6 +208,10 @@ type Model struct {
 	limits      limitTracker
 	limitBar    progress.Model
 	forecast    forecast
+	notifier    notifier
+	// contextUsed is the main conversation's size at its last model call (input and output), the
+	// figure compaction measures; 0 after a compaction until the next call.
+	contextUsed int
 	lastLevel   limitLevel
 	limitWarned time.Time
 	shellCancel context.CancelFunc // the !command running, if any
@@ -595,12 +599,24 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case agentMsg:
 		if end, ok := msg.msg.(acp.TurnEnded); ok {
-			return m, m.finishTurn(promptDoneMsg{stop: end.StopReason})
+			return m, tea.Batch(m.finishTurn(promptDoneMsg{stop: end.StopReason}), m.flushNotifications())
 		}
 		m.handleAgent(msg.msg)
-		return m, nil
+		return m, m.flushNotifications()
 	case promptDoneMsg:
-		return m, m.finishTurn(msg)
+		return m, tea.Batch(m.finishTurn(msg), m.flushNotifications())
+	case tea.FocusMsg:
+		m.notifier.blurred = false
+		return m, nil
+	case tea.BlurMsg:
+		m.notifier.blurred = true
+		return m, nil
+	case notifyFailedMsg:
+		if !m.notifier.failed {
+			m.notifier.failed = true
+			m.notice(noticeFaint, "The notification URL did not take the notification ("+msg.err+"); check ARCHYMEDES_NOTIFY_URL in Settings")
+		}
+		return m, nil
 	case modeSetMsg:
 		if msg.err != nil {
 			m.notice(noticeError, "Mode change failed: "+msg.err.Error())
@@ -690,6 +706,7 @@ func (m *Model) send(text string) tea.Cmd {
 
 func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 	m.stats.endTurn(msg.stop, time.Now())
+	m.notifyTurnEnded(msg)
 	var reread tea.Cmd
 	if c := m.changesWindow(); c != nil {
 		reread = c.reload(m) // the turn's edits have landed

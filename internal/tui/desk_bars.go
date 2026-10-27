@@ -8,6 +8,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/NimbleMarkets/ntcharts/v2/sparkline"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // The two bars of the desktop. The top bar is the menu bar and the tray: the start button, a tab
@@ -122,6 +124,13 @@ func (m *Model) tray() string {
 	if info := m.session.Info; info.Model != "" {
 		tray += th.SoftPill(info.Model, th.Secondary) + " "
 	}
+	if text, near := contextGauge(m.contextUsed, m.session.Info); text != "" {
+		style := th.Faint
+		if near {
+			style = th.Warn
+		}
+		tray += style.Render(text) + " "
+	}
 	if where := m.session.Info.Workspace; where != "" && where != "local" {
 		tray += th.SoftPill(where, th.Warning) + " "
 	}
@@ -231,4 +240,24 @@ func (m *Model) modePill() string {
 		pill += m.th.Faint.Render(" → ") + m.th.SoftPill(m.pendingMode, m.th.ModeColor(m.pendingMode))
 	}
 	return mark(m.zones.frame, "mode", pill)
+}
+
+// contextGauge is how full the conversation is against the window the engine compacts at:
+// "ctx 46%", or "ctx ~46%" when the window is assumed, and near once it is within a tenth of the
+// point where compaction starts. Empty before the first call or when the engine does not say.
+func contextGauge(used int, info acp.SessionInfo) (text string, near bool) {
+	if used <= 0 || info.ContextLimit <= 0 {
+		return "", false
+	}
+	share := float64(used) / float64(info.ContextLimit)
+	pct := int(share*100 + 0.5)
+	approx := ""
+	if !info.ContextKnown {
+		approx = "~"
+	}
+	compactAt := info.CompactAt
+	if compactAt <= 0 {
+		compactAt = 1
+	}
+	return fmt.Sprintf("ctx %s%d%%", approx, pct), share >= compactAt*0.9-1e-9
 }

@@ -56,6 +56,7 @@ func (s *Server) openClaude(ctx context.Context, sess *session, model string) (*
 		Transcript: func() string { return claude.Preface(sess.core.Messages()) },
 		TestFirst:  gate.TestFirstFromEnv(sess.env.Get),
 		Rules:      policy.LoadCommandRules(sess.cwd, s.opts.ConfigDir).Rules,
+		Effort:     func() string { return s.env().Get("ARCHYMEDES_REASONING") },
 		Notify:     func(n agents.Notice) { s.publish(sess.id, n) },
 		Approve: func(ctx context.Context, r policy.Request) (policy.Decision, error) {
 			return s.askPermission(ctx, sess.id, r)
@@ -97,6 +98,18 @@ func claudeChoices(get func(string) string) []any {
 	return out
 }
 
+// sdkOnly says a TypeScript readiness answer lacks nothing but Anthropic's Agent SDK. The
+// TypeScript agent checks the sign-in first, so such an answer also means signed in.
+func sdkOnly(missing any) bool {
+	list, _ := missing.([]any)
+	for _, m := range list {
+		if text, _ := m.(string); !strings.Contains(text, "Agent SDK") {
+			return false
+		}
+	}
+	return len(list) > 0
+}
+
 // unlockClaude opens Claude's rows in the TypeScript agent's model list when all they lack is
 // Anthropic's Agent SDK: the TypeScript engine drives Claude Code through it, this engine does not.
 func unlockClaude(raw json.RawMessage, get func(string) string) json.RawMessage {
@@ -106,15 +119,6 @@ func unlockClaude(raw json.RawMessage, get func(string) string) json.RawMessage 
 	var listing map[string]any
 	if json.Unmarshal(raw, &listing) != nil {
 		return raw
-	}
-	sdkOnly := func(missing any) bool {
-		list, _ := missing.([]any)
-		for _, m := range list {
-			if text, _ := m.(string); !strings.Contains(text, "Agent SDK") {
-				return false
-			}
-		}
-		return len(list) > 0
 	}
 	changed := false
 	choices, _ := listing["choices"].([]any)
@@ -138,4 +142,54 @@ func unlockClaude(raw json.RawMessage, get func(string) string) json.RawMessage 
 		return raw
 	}
 	return mustJSON(listing)
+}
+
+// providers answers `_archymedes/providers` from the TypeScript agent, with Claude's row as this
+// engine sees it: ready when Claude Code is installed and signed in, whatever the Agent SDK.
+func (s *Server) providers(ctx context.Context, params json.RawMessage) (any, error) {
+	raw, err := s.forward(ctx, "_archymedes/providers", params)
+	if err != nil || claude.Find(s.env().Get) == "" {
+		return raw, err
+	}
+	var overview map[string]any
+	if json.Unmarshal(raw, &overview) != nil {
+		return raw, nil
+	}
+	rows, _ := overview["providers"].([]any)
+	for _, entry := range rows {
+		if row, ok := entry.(map[string]any); ok && row["id"] == claude.Provider && row["configured"] == false && sdkOnly(row["missing"]) {
+			row["configured"], row["missing"] = true, []any{}
+			return mustJSON(overview), nil
+		}
+	}
+	return raw, nil
+}
+
+// connectProvider answers `_archymedes/providers/connect`. Claude is checked here, so choosing it
+// never installs the Agent SDK this engine does not use; every other provider is forwarded.
+func (s *Server) connectProvider(ctx context.Context, params json.RawMessage) (any, error) {
+	var p struct {
+		Provider string `json:"provider"`
+	}
+	_ = json.Unmarshal(params, &p)
+	if !strings.EqualFold(p.Provider, claude.Provider) {
+		return s.forward(ctx, "_archymedes/providers/connect", params)
+	}
+	executable := claude.Find(s.env().Get)
+	if executable == "" {
+		return map[string]any{"ok": false, "error": "Install Claude Code first: " + claude.InstallURL}, nil
+	}
+	auth, err := claude.SignedIn(ctx, executable, claude.Environment(s.opts.Environ))
+	if err != nil || !auth.LoggedIn {
+		return map[string]any{"ok": false, "error": "Sign in to Claude first: enter runs `claude auth login`, Claude Code's own sign-in."}, nil
+	}
+	return map[string]any{"ok": true, "file": "", "models": claude.Models()}, nil
+}
+
+// forward sends a method to the TypeScript agent, or says it is not there to answer.
+func (s *Server) forward(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+	if s.opts.Forward == nil {
+		return nil, errorf(codeMethodNotFound, "%s needs the TypeScript agent, which is not installed", method)
+	}
+	return s.opts.Forward(ctx, method, params)
 }

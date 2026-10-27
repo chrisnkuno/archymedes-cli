@@ -73,3 +73,16 @@ func TestABackgroundSubagentsCardFollowsItsThreadUntilTheReport(t *testing.T) {
 		t.Fatalf("a finished background card shows its report:\n%s", s)
 	}
 }
+
+// TestTheEnginesTokenCountIsTheCardsCount: a thread's usage is the whole of it (steps before a
+// restart, steps whose events never arrived), so it replaces a smaller count on the card.
+func TestTheEnginesTokenCountIsTheCardsCount(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.phase = busy
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "d1", ToolName: "delegate_readonly_task", Arguments: map[string]any{"task": "find", "agent": "explore"}})
+	m.handleEvent(subagentEvent("d1", "explore", acp.RuntimeEvent{Type: "model_turn", Usage: &acp.Usage{InputTokens: 100, OutputTokens: 20}}))
+	m.handleThread(&acp.ThreadInfo{ID: "t-1", ParentToolCallID: "d1", Agent: "explore", Status: "done", Usage: &acp.Usage{InputTokens: 12000, OutputTokens: 400}})
+	if s := screen(m); !strings.Contains(s, "12.4k tokens") {
+		t.Fatalf("the card does not show the engine's count:\n%s", s)
+	}
+}

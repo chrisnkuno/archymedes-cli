@@ -25,6 +25,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/roles"
+	"github.com/chrisnkuno/friday-cli/internal/core/skills"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 	"github.com/chrisnkuno/friday-cli/internal/core/tools"
@@ -59,6 +60,9 @@ type ThreadInfo struct {
 	Brief            string `json:"brief,omitempty"`
 	Report           string `json:"report,omitempty"`
 	Branch           string `json:"branch,omitempty"`
+	// Model is the model it runs on; Usage is every token it has used so far.
+	Model string      `json:"model,omitempty"`
+	Usage *loop.Usage `json:"usage,omitempty"`
 }
 
 // Asker puts a question to the person; "" with no error is a dismissal.
@@ -460,11 +464,28 @@ func (s *Session) saveRoot(messages []fantasy.Message) {
 }
 
 func (s *Session) emitRoot(ev loop.Event) {
+	if ev.Type == loop.EventModelTurn && ev.Usage != nil {
+		s.countRoot(*ev.Usage)
+	}
 	if ev.Type == loop.EventCompaction {
 		s.cfg.Notify(Notice{Kind: "compaction", Event: &ev})
 		return
 	}
 	s.cfg.Notify(Notice{Kind: "runtime", Event: &ev})
+}
+
+// countRoot adds one main-conversation model call to the session's totals, kept in session.json.
+func (s *Session) countRoot(u loop.Usage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	total := loop.Usage{}
+	if s.meta.Usage != nil {
+		total = loop.Usage(*s.meta.Usage)
+	}
+	total.Add(u)
+	t := thread.Usage(total)
+	s.meta.Usage, s.meta.ModelCalls = &t, s.meta.ModelCalls+1
+	_ = s.store.SaveMeta(s.meta)
 }
 
 // rootTools is what the root thread may call in a mode: the built-ins its capabilities allow,
@@ -484,6 +505,9 @@ func (s *Session) rootTools(mode policy.Mode) *tool.Catalog {
 		list = append(list, s.askTool())
 	}
 	list = append(list, s.delegationTools(mode)...)
+	if found, _ := s.Skills(); len(found) > 0 {
+		list = append(list, skills.Tool(func() []skills.Skill { found, _ := s.Skills(); return found }))
+	}
 	deferTools(list, s.cfg.Env.Get("ARCHYMEDES_DEFER_TOOLS"))
 	// The secret scan is defender mode's from the start; elsewhere tool_search finds it.
 	for _, t := range list {
@@ -492,6 +516,13 @@ func (s *Session) rootTools(mode policy.Mode) *tool.Catalog {
 		}
 	}
 	return tool.NewCatalog(list...)
+}
+
+// Skills are the skills found now in the project and the person's skills folders, and what was
+// wrong with any skipped. Read again each time, so a skill added mid-session is found.
+func (s *Session) Skills() ([]skills.Skill, []string) {
+	home, _ := os.UserHomeDir()
+	return skills.Discover(skills.Folders(s.cfg.Root, home, s.cfg.ConfigDir))
 }
 
 // Tools is what the root thread may call in the session's mode now, as the model sees them.

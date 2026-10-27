@@ -106,6 +106,13 @@ understood by the Go engine and the other way round.
 For decisions you make every day, write **command rules** instead (`allow`, `ask` or `forbid` a
 command by its first words). See [Configuration → Command rules](CONFIGURATION.md#command-rules).
 
+## When Friday needs you
+
+Look away while Friday works, and it tells you when the turn ends or when an approval or a
+question waits: a notification from your terminal, or its bell. Set a push URL in Settings
+(`ARCHYMEDES_NOTIFY_URL`, an [ntfy](https://ntfy.sh) topic for example) and your phone hears it
+too. See [Notifications](CONFIGURATION.md#notifications).
+
 ## Talking to Friday while it works
 
 You do not have to wait. While a turn runs:
@@ -125,8 +132,9 @@ Two things hold a turn back from ending:
 **Proof.** If the turn changed files and nothing has shown the change works, Friday asks the model,
 once, to run the smallest relevant test or check and report the real result. A passing build or
 typecheck counts as the weakest proof; Friday asks once more for tests that run the changed
-behaviour. Running something that only prints, or reading a test file, is not proof. Changes with
-nothing to test (documentation, configuration) are allowed to say so and finish.
+behaviour. Running something that only prints, or reading a test file, is not proof. A turn that
+changed only prose (Markdown and text files, a changelog, a license) is not asked at all; other
+changes with nothing to test, such as configuration, may say so and finish.
 
 **Tests first** (on by default; Settings → Behaviour → Build test first). For a code change, the
 order is: write the tests that define done and see them fail, write the smallest code that makes
@@ -162,6 +170,23 @@ do the same work, and nothing leaves your machine for it.
 **The small model.** With `ARCHYMEDES_SUGGEST_MODEL` on, the small model proposes up to two next
 steps of its own after each turn, for one small call. It is off by default, because it costs a call
 per turn. `ARCHYMEDES_SUGGEST=off` turns all three off.
+
+## Skills
+
+A skill is a folder of instructions for one kind of task: a `SKILL.md` whose frontmatter has a
+`name` and a `description` (when to use it), and any scripts or references beside it. Friday lists
+each skill in a line, and when a task matches one it loads the instructions and follows them, so a
+skill costs almost nothing until it is used.
+
+Friday looks where other agents look, so a skill written for one works here:
+
+| Where | For |
+| --- | --- |
+| `.agents/skills/<name>/SKILL.md`, `.claude/skills/…`, `.archymedes/skills/…` in the project | this project (wins over a personal skill of the same name) |
+| `~/.agents/skills/…`, `~/.claude/skills/…`, `skills/…` in Friday's config directory | every project |
+
+`/skills` lists what was found, and says why a folder was skipped (no frontmatter, a name that is
+not lower-case words joined by hyphens). A skill added during a session is found at the next turn.
 
 ## Sub-agents
 

@@ -25,6 +25,7 @@ import (
 
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
+	"github.com/chrisnkuno/friday-cli/internal/core/settings"
 )
 
 // ProtocolVersion is the ACP major version spoken.
@@ -50,6 +51,8 @@ type Options struct {
 	Open llm.Opener
 	// Version is shown in the startup notice.
 	Version string
+	// Themes are the interface's themes, offered for the theme setting.
+	Themes []settings.Choice
 }
 
 // frame is one line on the wire.

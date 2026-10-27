@@ -86,6 +86,18 @@ func ClassifyPath(path string) string {
 	return "other"
 }
 
+var (
+	proseExtension = regexp.MustCompile(`(?i)\.(md|mdx|markdown|txt|rst|adoc)$`)
+	proseName      = regexp.MustCompile(`(?i)(^|/)(changelog|changes|license|licence|notice|authors|contributors)$`)
+)
+
+// IsProse says whether a path is prose with nothing to run: documentation and notes by extension,
+// or a changelog, license or authors file without one.
+func IsProse(path string) bool {
+	normalized := strings.ReplaceAll(path, `\`, "/")
+	return proseExtension.MatchString(normalized) || proseName.MatchString(normalized)
+}
+
 var offSetting = regexp.MustCompile(`(?i)^(?:off|false|0|no)$`)
 
 // TestFirstFromEnv reads ARCHYMEDES_TEST_FIRST: on unless it says off.
@@ -146,8 +158,13 @@ func (g *Gate) Record(r Record) string {
 	}
 	note := ""
 	if r.Effect == tool.EffectWorkspace {
-		g.needsVerification = true
 		path := pathOf(r.Args)
+		// Prose (a changelog, a README) has nothing to run: reading it back is the check, and
+		// asking for a test after it sends the model hunting for one. Code, config and whatever a
+		// command changed are still held to the evidence rule.
+		if path == "" || !IsProse(path) {
+			g.needsVerification = true
+		}
 		kind := "other"
 		if path != "" {
 			kind = ClassifyPath(path)

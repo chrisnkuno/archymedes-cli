@@ -91,6 +91,16 @@ export function codexIsDefault(environment: Record<string, string | undefined>):
   return environment.ARCHYMEDES_PROVIDER?.trim().toLowerCase() === CODEX_PROVIDER;
 }
 
+/**
+ * Friday's reasoning setting (`ARCHYMEDES_REASONING`) as Codex's effort: its five levels as they
+ * are, minimal as low, and undefined (Codex's own default for the model) for auto or nothing.
+ */
+export function codexEffort(setting: string | undefined): string | undefined {
+  const level = setting?.trim().toLowerCase();
+  if (level === "low" || level === "medium" || level === "high" || level === "xhigh" || level === "max") return level;
+  return level === "minimal" ? "low" : undefined;
+}
+
 export function codexModel(environment: Record<string, string | undefined>): string {
   return environment.CODEX_MODEL?.trim() || "default";
 }

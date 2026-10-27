@@ -84,10 +84,18 @@ func (r *run) prepare(c tool.Call, index int) prepared {
 	}
 	t, ok := r.req.Tools.Lookup(c.Name)
 	if !ok {
+		// A name that is ours under another spelling or namespace (repo_browser.run_command) is run
+		// as ours rather than refused: the model meant it, and a refusal costs a step.
+		if ours, found := tool.Resolve(r.req.Tools, c.Name); found {
+			p.call.Name = ours
+			t, ok = r.req.Tools.Lookup(ours)
+		}
+	}
+	if !ok {
 		return fail(fmt.Sprintf("There is no tool named %q. Available: %s.", c.Name, strings.Join(visibleNames(r.req.Tools), ", ")))
 	}
 	// A deferred tool called by its exact name is as good as found.
-	r.req.Tools.Load(c.Name)
+	r.req.Tools.Load(p.call.Name)
 	p.tool = t
 	p.effect = t.CallEffect(p.call.Args)
 	return p

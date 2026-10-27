@@ -16,7 +16,9 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/server"
+	"github.com/chrisnkuno/friday-cli/internal/core/settings"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 	"github.com/chrisnkuno/friday-cli/internal/tui"
 )
 
@@ -109,7 +111,7 @@ func engineFactsFor(flag string, args []string, cwd, resume string, tsAvailable 
 // engineOptions reads the session flags the Go engine honours and refuses the ones it would ignore:
 // a run in a Docker sandbox must never quietly run on the host instead.
 func engineOptions(args []string, cwd string) (server.Options, error) {
-	opts := server.Options{Cwd: cwd, ConfigDir: config.Default(), Environ: os.Environ(), Version: version}
+	opts := server.Options{Cwd: cwd, ConfigDir: config.Default(), Environ: os.Environ(), Version: version, Themes: themeChoices()}
 	for i := 0; i < len(args); i++ {
 		name, value, hasValue := strings.Cut(args[i], "=")
 		next := func() string {
@@ -231,4 +233,13 @@ func serveGoEngine(opts server.Options, ts *lazyAgent) int {
 		return 1
 	}
 	return 0
+}
+
+// themeChoices are the interface's built-in themes, which the Settings list offers for the theme.
+func themeChoices() []settings.Choice {
+	var out []settings.Choice
+	for _, name := range theme.Names() {
+		out = append(out, settings.Choice{Value: name, Label: name})
+	}
+	return out
 }

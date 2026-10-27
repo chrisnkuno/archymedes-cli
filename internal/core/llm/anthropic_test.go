@@ -102,7 +102,8 @@ func TestAnthropicStreamYieldsTextToolCallAndUsage(t *testing.T) {
 	if text != "Reading it." || call.ID != "toolu_1" || call.ToolCallName != "read_file" || call.ToolCallInput != `{"path":"a.go"}` {
 		t.Fatalf("text %q, call %+v", text, call)
 	}
-	if finish.FinishReason != fantasy.FinishReasonToolCalls || finish.Usage.InputTokens != 112 || finish.Usage.CacheReadTokens != 100 || finish.Usage.OutputTokens != 30 {
+	// Fantasy's convention, as its own providers report it: cache reads apart from InputTokens.
+	if finish.FinishReason != fantasy.FinishReasonToolCalls || finish.Usage.InputTokens != 12 || finish.Usage.CacheReadTokens != 100 || finish.Usage.OutputTokens != 30 {
 		t.Fatalf("finish = %+v", finish)
 	}
 }

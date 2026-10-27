@@ -189,8 +189,11 @@ start of the session names it and why.
   the helper does after the call returned; its report replaces "started in the background" when it
   finishes. If you are between turns, a line says a report is waiting for your next message.
 - **`/subagents`** lists every helper of the session: id, role, status, foreground or background,
-  the brief's first line, and the branch for an editing background helper.
-- A helper's tokens count toward the session's, in the status line and in Stats.
+  the tokens it used, the brief's first line, and the branch for an editing background helper. Its
+  last line is what all helpers used together: in, from cache, out.
+- A helper's tokens count toward the session's, in the status line and in Stats, and its card
+  shows its own. Each helper's total is kept with the session, so it survives a restart and a
+  resumed helper counts on from where it was.
 
 ## Comparison with other agents
 

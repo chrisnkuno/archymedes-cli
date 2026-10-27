@@ -172,14 +172,35 @@ func TestCodeBeforeTestsNotedOnce(t *testing.T) {
 	}
 }
 
-func TestDocsHeldOnlyToOrdinaryEvidence(t *testing.T) {
+func TestConfigHeldOnlyToOrdinaryEvidence(t *testing.T) {
 	g := New(true)
-	if note := g.Record(write("README.md")); note != "" {
+	if note := g.Record(write("package.json")); note != "" {
 		t.Fatalf("note %q", note)
 	}
 	expectOne(t, drain(g), "without running anything")
 	if state := g.TakeState(); state != nil {
 		t.Fatalf("state %+v", state)
+	}
+}
+
+// TestProseAsksForNothing: a changelog or a README has nothing to run; asking for a test after
+// one sent a real run hunting for tests and a Makefile for three minutes.
+func TestProseAsksForNothing(t *testing.T) {
+	g := New(true)
+	g.Record(write("README.md"))
+	g.Record(write("CHANGELOG"))
+	g.Record(write("docs/guide.rst"))
+	if asked := drain(g); len(asked) != 0 {
+		t.Fatalf("asked %v after prose only", asked)
+	}
+	g.Record(write("src/a.ts"))
+	if asked := drain(g); len(asked) == 0 {
+		t.Fatal("code after prose was not held to evidence")
+	}
+	for path, want := range map[string]bool{"README.md": true, "notes.txt": true, "LICENSE": true, "docs/x.mdx": true, "CHANGELOG.md": true, "main.go": false, "config.yaml": false, "Makefile": false, "readme.go": false} {
+		if IsProse(path) != want {
+			t.Errorf("IsProse(%q) = %v", path, !want)
+		}
 	}
 }
 

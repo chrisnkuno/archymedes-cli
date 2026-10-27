@@ -31,6 +31,27 @@ type child struct {
 	result    loop.Result
 	report    string
 	collected bool
+	// usage is every token its model calls have used, earlier runs included (resumed after a
+	// restart); model is the model it runs on.
+	usage loop.Usage
+	model string
+}
+
+// spent is the child's tokens so far, for a thread notice.
+func (c *child) spent() *loop.Usage {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	u := c.usage
+	return &u
+}
+
+// count folds one model call into the child's total and records the total, so a restart keeps it.
+func (c *child) count(s *Session, u loop.Usage) {
+	c.mu.Lock()
+	c.usage.Add(u)
+	total := c.usage
+	c.mu.Unlock()
+	_ = s.store.SetUsage(c.t.ID, thread.Usage(total))
 }
 
 func (c *child) stop() {
@@ -94,6 +115,9 @@ func (s *Session) launch(turnCtx context.Context, t thread.Thread, profile roles
 	}
 	ctx, cancel := context.WithCancel(base)
 	c := &child{t: t, profile: profile, inbox: loop.NewInbox(), ws: ws, done: make(chan struct{}), cancel: cancel}
+	if t.Usage != nil {
+		c.usage = loop.Usage(*t.Usage)
+	}
 	s.childMu.Lock()
 	s.children[t.ID] = c
 	s.childMu.Unlock()
@@ -119,6 +143,9 @@ func (s *Session) runChild(ctx context.Context, c *child, history []fantasy.Mess
 		c.finish(s, loop.Result{Status: loop.Failed, Err: err}, "")
 		return
 	}
+	c.mu.Lock()
+	c.model = modelID
+	c.mu.Unlock()
 	mode := s.Mode()
 	catalog := tool.NewCatalog(roles.ToolsFor(c.profile, filterByMode(c.ws.Builtins(), mode), policy.CapabilitiesForMode(policy.Plan))...)
 	var verify *gate.Gate
@@ -138,6 +165,9 @@ func (s *Session) runChild(ctx context.Context, c *child, history []fantasy.Mess
 		History: history, Prompt: prompt, Tools: catalog,
 		Approve: ledger.Decide, Gate: verify, Inbox: c.inbox, Budgets: budgets, WrapUp: roles.WrapUp,
 		Emit: func(ev loop.Event) {
+			if ev.Type == loop.EventModelTurn && ev.Usage != nil {
+				c.count(s, *ev.Usage)
+			}
 			if subagentEvents[ev.Type] {
 				ev := ev
 				s.cfg.Notify(Notice{Kind: "subagent", Event: &ev, ParentToolCallID: c.t.CallID, Agent: c.profile.Name})
@@ -205,9 +235,13 @@ func (c *child) finish(s *Session, result loop.Result, extra string) {
 }
 
 func (s *Session) noticeThread(c *child, status, report string) {
+	c.mu.Lock()
+	model := c.model
+	c.mu.Unlock()
 	s.cfg.Notify(Notice{Kind: "thread", Thread: &ThreadInfo{
 		ID: c.t.ID, ParentToolCallID: c.t.CallID, Agent: c.profile.Name, Status: status,
 		Background: c.t.Background, Brief: c.t.Brief, Report: report, Branch: c.t.Branch,
+		Model: model, Usage: c.spent(),
 	}})
 }
 

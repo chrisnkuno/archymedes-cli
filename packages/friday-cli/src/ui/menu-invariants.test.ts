@@ -198,6 +198,7 @@ describe("settings validation invariants", () => {
     ARCHYMEDES_TOKEN_SAVER: ["on", "off"],
     ARCHYMEDES_TOKEN_METER: ["on", "off"],
     ARCHYMEDES_TELEMETRY: ["on", "off"],
+    ARCHYMEDES_NOTIFY: ["auto", "OFF"],
     ARCHYMEDES_KEYS: ["/diff=alt+d"],
     ARCHYMEDES_WEB_SEARCH: ["auto", "duckduckgo", "off"],
     OPENAI_MODEL: ["gpt-5.6-terra"],

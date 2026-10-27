@@ -58,6 +58,17 @@ const ON_OFF_CHOICES: readonly SettingChoice[] = [
   { value: "on", label: "On — the model may add up to two more" },
 ];
 
+const NOTIFY_CHOICES: readonly SettingChoice[] = [
+  { value: "auto", label: "Auto — only while the terminal is not focused (default)" },
+  { value: "always", label: "Always — even while you are looking" },
+  { value: "off", label: "Off — no notifications" },
+];
+
+const TELEMETRY_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — one anonymous cue when a new version first runs (default)" },
+  { value: "off", label: "Off — nothing is sent" },
+];
+
 // Go is the default and the way back is one setting, read by the `friday` binary itself before
 // anything starts (cmd/friday/engine.go): no flag to remember. Friday still runs a session on the
 // TypeScript engine on its own when the session needs what only it has (Codex, a Docker or E2B
@@ -142,7 +153,9 @@ const REASONING_CHOICES: readonly SettingChoice[] = [
   { value: "minimal", label: "Minimal — never think more than needed" },
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
-  { value: "high", label: "High — slowest" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high — deeper than high, for hard problems" },
+  { value: "max", label: "Max — the deepest the model offers, and the slowest" },
 ];
 
 /** Claude is not a model provider but Claude Code run on the person's own subscription (see `engines/claude`). */
@@ -183,8 +196,11 @@ export const SETTING_FIELDS = [
   { key: "ARCHYMEDES_SUGGEST_MODEL", label: "Ask the model for extra suggestions (a small extra call per turn)", choices: ON_OFF_CHOICES },
   // Three states rather than a switch: looking and installing are different decisions, and the one
   // people want to make separately is whether Archymedes may replace itself without being asked.
+  // Read by the Go interface (internal/tui/core_notify.go).
+  { key: "ARCHYMEDES_NOTIFY", label: "Notifications — when a turn ends or Friday waits for you", choices: NOTIFY_CHOICES },
+  { key: "ARCHYMEDES_NOTIFY_URL", label: "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)", url: true },
   { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — install daily by default", choices: AUTO_UPDATE_CHOICES },
-  { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: ON_OFF_CHOICES },
+  { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: TELEMETRY_CHOICES },
   // On by default: writing the tests first is how Friday builds, and the setting is the way out.
   { key: "ARCHYMEDES_TEST_FIRST", label: "Build test first — tests, then code, then static analysis", choices: TEST_FIRST_CHOICES },
   { key: "ARCHYMEDES_JEV", label: "Jev second opinion — verdicts, tool checks, ranked suggestions", choices: JEV_CHOICES },
@@ -329,6 +345,19 @@ export function mergedEnvironment(settings: ArchymedesSettings, environment: Rec
   return { ...settings, ...environment };
 }
 
+/**
+ * Lays settings.json over a live environment again, in place: a value saved by another process (the
+ * Go engine answers `_archymedes/settings/set` since WS-50.2) applies here too, and a cleared one
+ * leaves. Variables the real environment sets still win; nothing but setting keys is touched.
+ */
+export async function reloadSettingsInto(live: Record<string, string | undefined>, processEnvironment: Record<string, string | undefined> = process.env): Promise<void> {
+  const fresh = mergedEnvironment(await loadSettings(processEnvironment), processEnvironment);
+  for (const key of [...SETTING_FIELDS.map((field) => field.key), ...INTERNAL_SETTING_KEYS]) {
+    if (fresh[key] === undefined) delete live[key];
+    else live[key] = fresh[key];
+  }
+}
+
 export function maskSetting(value: string | undefined): string {
   if (!value) return "not set";
   if (value.length <= 8) return "set (hidden)";
@@ -352,7 +381,8 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_SUGGEST_MODEL: ["on", "off"],
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
   ARCHYMEDES_TELEMETRY: ["on", "off"],
-  ARCHYMEDES_REASONING: ["auto", "minimal", "low", "medium", "high"],
+  ARCHYMEDES_NOTIFY: ["auto", "always", "off"],
+  ARCHYMEDES_REASONING: ["auto", "minimal", "low", "medium", "high", "xhigh", "max"],
 };
 
 /** Returned by `SettingsPrompts.ask` when the person pressed Esc: leave this field as it was. */

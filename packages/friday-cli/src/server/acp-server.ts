@@ -47,6 +47,12 @@ export type AcpServerOptions = {
    * protocol channel. Absent: the session's own directory, locally.
    */
   createWorkspace?: () => Promise<{ workspace: ArchymedesWorkspace } | { error: string }>;
+  /**
+   * Lays settings.json over `environment` again. The Go engine saves settings itself (WS-50.2), so
+   * this runs before each answer and each new session; otherwise a key saved in Settings would stay
+   * missing here until a restart. Absent: the environment is used as given (tests).
+   */
+  reloadSettings?: () => Promise<void>;
 };
 
 /** One `friday acp` process: reads until stdin closes, then disposes every live session. */
@@ -56,9 +62,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
 
   let startup: Promise<string[]> | undefined;
   const claude = { environment: options.environment, processEnvironment: process.env as Record<string, string | undefined> };
+  const reload = options.reloadSettings ?? (async () => {});
+  type Handler = (params: Record<string, unknown>) => Promise<unknown>;
+  const fresh = (handler: Handler): Handler => async (params) => {
+    await reload();
+    return handler(params);
+  };
   const connection = new AcpConnection({
     send,
-    extensions: {
+    extensions: Object.fromEntries(Object.entries({
       // Claude (the person's own Claude Code) is answered beside the model providers: see engines/claude.
       // Claude and Codex (the person's own Claude Code and Codex) are answered beside the model
       // providers: see engines/claude and engines/codex.
@@ -99,9 +111,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
         const root = typeof params.cwd === "string" && params.cwd ? params.cwd : options.defaultRoot;
         return withOpenElsewhere(root, await listSessions(root, 50));
       },
-    },
+    } satisfies Record<string, Handler>).map(([method, handler]) => [method, fresh(handler)])),
     createSession: async ({ cwd, onEvent, approve, ask, resumeSessionId }): Promise<AcpSession> =>
-      openSession({
+      reload().then(() => openSession({
         root: cwd || options.defaultRoot,
         environment: options.environment,
         provider: options.provider,
@@ -112,7 +124,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
         ...(ask ? { ask } : {}),
         createWorkspace: options.createWorkspace,
         warn,
-      }, resumeSessionId),
+      }, resumeSessionId)),
   });
 
   try {

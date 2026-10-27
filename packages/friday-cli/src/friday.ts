@@ -20,7 +20,7 @@ import { detectColorDepth } from "./text/color-depth";
 import { escapeCodeTimeoutMs } from "./platform/escape-timeout";
 import { sendInstallCue } from "./platform/install-cue";
 import { resolveCurrencyPreference } from "./platform/local-currency";
-import { loadSettings, mergedEnvironment, saveSettings } from "./platform/settings";
+import { loadSettings, mergedEnvironment, saveSettings, reloadSettingsInto } from "./platform/settings";
 import { runFreeModeSetup } from "./setup/free-setup";
 import { WorkspaceController } from "./session/tabs";
 import { TabSink } from "./terminal/output";
@@ -137,6 +137,8 @@ async function main(): Promise<number> {
       environment, provider: args.provider, model: args.model,
       defaultRoot: args.root,
       mode: args.mode,
+      // The Go engine saves settings itself (WS-50.2): read the file again before answering.
+      reloadSettings: () => reloadSettingsInto(environment, processEnvironment),
       // Silent: in ACP mode stdout is the protocol, so sandbox progress must not be printed there.
       ...(args.backend !== "local" ? { createWorkspace: () => createWorkspaceFactory(args, environment)({ backend: args.backend, announce: false }) } : {}),
     });

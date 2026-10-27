@@ -37,6 +37,7 @@ func (m *Model) transcriptHeight() int {
 func (m *Model) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
+	v.ReportFocus = true // notifications wait for the person to look away (core_notify.go)
 	v.WindowTitle = m.windowTitle()
 	v.ProgramStatus, v.ProgressBar = m.terminalStatus()
 	if m.opts.Mouse && !m.selecting {

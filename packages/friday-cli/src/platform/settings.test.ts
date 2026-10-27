@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PROVIDER_IDS } from "@archymedes/core/providers/agent-matrix";
-import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, sectionOf, maskSetting, mergedEnvironment, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
+import { MODEL_FIELD_PROVIDER, SETTING_CANCELLED, SETTING_FIELDS, loadSettings, sectionOf, maskSetting, mergedEnvironment, reloadSettingsInto, saveSettings, settingsDirectory, validateSetting, type SettingChoice, type SettingKey } from "./settings";
 import { runSettingsMenu } from "../ui/settings-menu";
 import { settingChoices } from "../setup/setting-choices";
 
@@ -433,5 +433,20 @@ describe("picking a model in the settings menu", () => {
     // applies to. Offering a chat-model list for either would be a menu of wrong answers.
     expect(MODEL_FIELD_PROVIDER.VOICE_MODEL).toBeUndefined();
     expect(MODEL_FIELD_PROVIDER.MODEL_PRICE_MODEL).toBeUndefined();
+  });
+});
+
+describe("reloadSettingsInto", () => {
+  it("takes what another process saved, drops what it cleared, and lets the real environment win", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "friday-reload-"));
+    roots.push(root);
+    const processEnvironment = { ARCHYMEDES_CONFIG_DIR: root, GROQ_MODEL: "from-shell" };
+    const live: Record<string, string | undefined> = { ...processEnvironment, ARCHYMEDES_SIMPLE: "on", PATH: "/bin" };
+    await saveSettings({ GROQ_API_KEY: "gsk_saved_elsewhere", GROQ_MODEL: "from-file" }, processEnvironment);
+    await reloadSettingsInto(live, processEnvironment);
+    expect(live.GROQ_API_KEY).toBe("gsk_saved_elsewhere");
+    expect(live.GROQ_MODEL).toBe("from-shell");
+    expect(live.ARCHYMEDES_SIMPLE).toBeUndefined();
+    expect(live.PATH).toBe("/bin");
   });
 });

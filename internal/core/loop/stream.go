@@ -230,8 +230,10 @@ func (r *run) streamOnce(parent context.Context, tools []*tool.Tool) (step stepR
 			step.calls = append(step.calls, c)
 		case fantasy.StreamPartTypeFinish:
 			step.finish = part.FinishReason
+			// Fantasy counts cache reads apart from InputTokens (OpenAI's prompt_tokens include them;
+			// its providers subtract them). Ours is the whole prompt, what compaction measures.
 			step.usage = Usage{
-				InputTokens:       int(part.Usage.InputTokens),
+				InputTokens:       int(part.Usage.InputTokens + part.Usage.CacheReadTokens),
 				OutputTokens:      int(part.Usage.OutputTokens),
 				CachedInputTokens: int(part.Usage.CacheReadTokens),
 				ReasoningTokens:   int(part.Usage.ReasoningTokens),

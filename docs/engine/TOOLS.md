@@ -20,6 +20,7 @@ auto and defender have them all; defender also has `read_playbook`.
 - [Asking you](#asking-you)
 - [Security](#security)
 - [Sub-agents](#sub-agents)
+- [Skills](#skills)
 - [Finding more tools](#finding-more-tools)
 - [Paths, sizes and what is skipped](#paths-sizes-and-what-is-skipped)
 
@@ -271,6 +272,18 @@ keeping everything it read, in the foreground or background as it ran before.
 ### `close_agent`
 
 Stop a running helper (`id`); what it found so far becomes its report. Found with `tool_search`.
+
+## Skills
+
+### `load_skill`
+
+Present when the project or your skills folders hold a skill (see
+[Skills](USER_GUIDE.md#skills)). Returns the skill's instructions, its folder and the other files in
+it; the model reads those with `read_file` as the skill directs. Changes nothing, in any mode.
+
+| Argument | | |
+| --- | --- | --- |
+| `name` | required | the skill's name, as the prompt lists it |
 
 ## Finding more tools
 

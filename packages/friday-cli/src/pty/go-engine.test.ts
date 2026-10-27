@@ -176,7 +176,7 @@ describe.skipIf(!goAvailable() || CONPTY)("plain friday runs on the Go engine", 
   it("says plainly when a command is not in the Go engine yet, and how to get it", async () => {
     const { proc, screen } = boot(120, 32);
     await proc.waitFor("claude-sonnet", { timeoutMs: 60_000 });
-    proc.write("/cost\r");
+    proc.write("/undo\r");
     // A toast, gone again after a few seconds: seen once is the assertion.
     await screenShows(screen, "not in the Go engine yet");
   }, 120_000);

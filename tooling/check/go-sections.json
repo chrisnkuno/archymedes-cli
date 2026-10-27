@@ -54,6 +54,14 @@
     "core/llm": [
       "conform"
     ],
+    "core/settings": [
+      "core/llm",
+      "conform"
+    ],
+    "core/skills": [
+      "core/tool",
+      "conform"
+    ],
     "core/thread": [
       "conform"
     ],
@@ -71,15 +79,16 @@
       "conform"
     ],
     "core/agents": [
-      "core/tool",
-      "core/policy",
+      "core/advise",
       "core/gate",
-      "core/roles",
-      "core/tools",
       "core/llm",
       "core/loop",
+      "core/policy",
+      "core/roles",
+      "core/skills",
       "core/thread",
-      "core/advise",
+      "core/tool",
+      "core/tools",
       "conform"
     ],
     "core/claude": [
@@ -92,15 +101,17 @@
       "conform"
     ],
     "core/server": [
+      "core/advise",
       "core/agents",
       "core/claude",
+      "core/gate",
       "core/llm",
       "core/loop",
       "core/policy",
-      "core/gate",
+      "core/settings",
+      "core/skills",
       "core/thread",
       "core/tool",
-      "core/advise",
       "conform"
     ],
     "conform": []

@@ -84,23 +84,51 @@ func TestConformEveryVariableIsDocumented(t *testing.T) {
 }
 
 var settingRead = regexp.MustCompile(`config\.Setting\([^,]+, "([A-Z0-9_]+)"\)`)
-var settingField = regexp.MustCompile(`\{ key: "([A-Z0-9_]+)"`)
+var settingField = regexp.MustCompile(`\{Key: "([A-Z0-9_]+)"`)
 
 // TestConformSettingsTheBinaryReadsExist: a key the Go binary reads from settings.json must be a
-// row of the Settings list (packages/friday-cli/src/platform/settings.ts), or nobody can set it.
+// row of the Settings list (internal/core/settings/fields.go), or nobody can set it.
 func TestConformSettingsTheBinaryReadsExist(t *testing.T) {
 	fields := map[string]bool{}
-	for _, m := range settingField.FindAllStringSubmatch(docs(t, "packages/friday-cli/src/platform/settings.ts"), -1) {
+	for _, m := range settingField.FindAllStringSubmatch(docs(t, "internal/core/settings/fields.go"), -1) {
 		fields[m[1]] = true
 	}
 	if len(fields) < 20 {
-		t.Fatalf("only %d settings found; the scan is not seeing settings.ts", len(fields))
+		t.Fatalf("only %d settings found; the scan is not seeing fields.go", len(fields))
 	}
 	for path, src := range goSource(t) {
 		for _, m := range settingRead.FindAllStringSubmatch(src, -1) {
 			if !fields[m[1]] {
 				t.Errorf("%s reads setting %s, which is not a row of the Settings list", strings.TrimPrefix(path, root+"/"), m[1])
 			}
+		}
+	}
+}
+
+var (
+	tsSettingRow = regexp.MustCompile(`\{ key: "([A-Z0-9_]+)", label: "([^"]*)"`)
+	goSettingRow = regexp.MustCompile(`\{Key: "([A-Z0-9_]+)", Label: "([^"]*)"`)
+)
+
+// TestConformTheTwoSettingsListsAgree: until the TypeScript engine is deleted (WS-50.10) both
+// engines save settings.json and each drops the keys its own list lacks, so the two lists must name
+// the same settings, in the same order, in the same words. Delete this test with settings.ts.
+func TestConformTheTwoSettingsListsAgree(t *testing.T) {
+	ts := tsSettingRow.FindAllStringSubmatch(docs(t, "packages/friday-cli/src/platform/settings.ts"), -1)
+	gs := goSettingRow.FindAllStringSubmatch(docs(t, "internal/core/settings/fields.go"), -1)
+	if len(ts) < 60 || len(gs) < 60 {
+		t.Fatalf("found %d TypeScript and %d Go rows; the scan is not seeing the lists", len(ts), len(gs))
+	}
+	for i := 0; i < max(len(ts), len(gs)); i++ {
+		var tsRow, goRow string
+		if i < len(ts) {
+			tsRow = ts[i][1] + ": " + ts[i][2]
+		}
+		if i < len(gs) {
+			goRow = gs[i][1] + ": " + gs[i][2]
+		}
+		if tsRow != goRow {
+			t.Errorf("row %d differs:\n settings.ts %s\n fields.go   %s", i, tsRow, goRow)
 		}
 	}
 }
@@ -189,22 +217,6 @@ func TestConformErrorsToolTextAndStderr(t *testing.T) {
 	}
 	if counts["error"] < 50 || counts["tool"] < 20 || counts["stderr"] < 5 {
 		t.Fatalf("the scan found too little (%v); it is not seeing the source", counts)
-	}
-}
-
-var settingLabel = regexp.MustCompile(`label: "([^"]*)"`)
-
-// TestConformSettingsLabels: the Settings list's rows and choices are read like help lines.
-func TestConformSettingsLabels(t *testing.T) {
-	src := docs(t, "packages/friday-cli/src/platform/settings.ts")
-	labels := settingLabel.FindAllStringSubmatch(src, -1)
-	if len(labels) < 60 {
-		t.Fatalf("only %d labels found; the scan is not seeing settings.ts", len(labels))
-	}
-	for _, m := range labels {
-		for _, p := range Help(m[1]) {
-			t.Error(p)
-		}
 	}
 }
 

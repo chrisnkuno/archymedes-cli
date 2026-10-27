@@ -11,6 +11,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/roles"
+	"github.com/chrisnkuno/friday-cli/internal/core/skills"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 	"github.com/chrisnkuno/friday-cli/internal/core/tools"
 )
@@ -117,6 +118,9 @@ func (s *Session) rootSystemPrompt(mode policy.Mode, catalog *tool.Catalog) stri
 	parts = append(parts, s.environment(s.Models().Selection().Model))
 	if instructions := projectInstructions(s.cfg.Root); instructions != "" {
 		parts = append(parts, instructions)
+	}
+	if found, _ := s.Skills(); len(found) > 0 {
+		parts = append(parts, skills.Prompt(found))
 	}
 	return strings.Join(parts, "\n\n")
 }

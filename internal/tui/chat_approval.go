@@ -27,6 +27,7 @@ type approval struct {
 // tool calls ask together; replacing one request with the next left the first unanswered and its
 // turn waiting for a reply that could never come.
 func (m *Model) queueApproval(a *approval) {
+	m.notifyWaiting(a)
 	if m.approval == nil {
 		m.approval = a
 		return

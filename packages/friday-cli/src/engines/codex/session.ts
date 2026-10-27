@@ -50,6 +50,8 @@ export type CodexSessionOptions = {
   save?: (record: SessionRecord) => Promise<unknown>;
   warn?: (message: string) => void;
   onModels?: (models: string[]) => void;
+  /** The reasoning effort for the next turn, in Codex's words (`codexEffort`); undefined is Codex's default. */
+  effort?: () => string | undefined;
   /** For tests: the app-server's stdio. */
   transport?: () => CodexTransport & { stderr?: () => string };
   git?: GitRunner;
@@ -119,12 +121,14 @@ export class CodexSession {
     }
     const policy = codexPolicy(this.mode, this.options.root);
     const text = this.preface ? `${this.preface}\n\n${prompt}` : prompt;
+    const effort = this.options.effort?.();
     started.rpc.request<{ turn?: { id?: string } }>("turn/start", {
       threadId: started.threadId,
       input: [{ type: "text", text, text_elements: [] }],
       approvalPolicy: policy.approvalPolicy,
       sandboxPolicy: policy.sandboxPolicy,
       ...(this.model ? { model: this.model } : {}),
+      ...(effort ? { effort } : {}),
     }).then((response) => {
       if (this.turn !== turn) return;
       turn.id = response.turn?.id;

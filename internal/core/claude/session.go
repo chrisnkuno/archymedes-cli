@@ -62,7 +62,9 @@ type Options struct {
 	Transcript func() string
 	TestFirst  bool
 	Rules      []policy.CommandRule
-	Notify     func(agents.Notice)
+	// Effort is the reasoning setting as it is now (ARCHYMEDES_REASONING), read before each turn.
+	Effort func() string
+	Notify func(agents.Notice)
 	// Approve asks the person about a tool Claude Code wants to use; Ask puts AskUserQuestion to
 	// them. Without Ask, AskUserQuestion is approved like any tool.
 	Approve policy.Prompt
@@ -146,10 +148,35 @@ func (s *Session) ensure(ctx context.Context) (*process, error) {
 	return p, nil
 }
 
+// effort is --effort for the next start, from the setting as it is now.
+func (s *Session) effort() string {
+	if s.opts.Effort == nil {
+		return ""
+	}
+	return Effort(s.opts.Effort())
+}
+
+// retireIfEffortChanged stops a Claude Code started with another effort, between turns, so the
+// turn about to start runs on a new one that resumes the same conversation with the setting as it
+// is now. Claude Code takes its effort only when it starts.
+func (s *Session) retireIfEffortChanged() {
+	want := s.effort()
+	s.mu.Lock()
+	p := s.proc
+	if p == nil || p.effort == want || s.turn != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.proc = nil
+	p.retired.Store(true)
+	s.mu.Unlock()
+	p.close()
+}
+
 func (s *Session) startOptions(resume string) startOptions {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	opts := startOptions{executable: s.opts.Executable, root: s.opts.Root, environ: s.opts.Environ, model: s.model, mode: PermissionMode(s.mode), resume: resume}
+	opts := startOptions{executable: s.opts.Executable, root: s.opts.Root, environ: s.opts.Environ, model: s.model, mode: PermissionMode(s.mode), resume: resume, effort: s.effort()}
 	if s.opts.TestFirst {
 		opts.appendText = gate.TestFirstBrief
 	}
@@ -182,6 +209,9 @@ func (s *Session) pump(p *process) {
 		s.proc = nil
 	}
 	s.mu.Unlock()
+	if p.retired.Load() {
+		return // replaced on purpose (retire): the turn now running is the new process's
+	}
 	reason := "Claude Code exited."
 	if p.err != nil {
 		reason = "Claude Code stopped: " + p.err.Error()
@@ -221,6 +251,7 @@ func (s *Session) endTurn(result *message, reason string) {
 
 // Turn runs one prompt to its end. A cancelled ctx interrupts Claude Code, which ends the turn.
 func (s *Session) Turn(ctx context.Context, prompt string) agents.OutsideTurn {
+	s.retireIfEffortChanged()
 	t := &turn{done: make(chan outcome, 1)}
 	s.mu.Lock()
 	if s.turn != nil {

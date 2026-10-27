@@ -178,9 +178,21 @@ func TestScreenAnswersWhatFridaysOwnModelsWouldNotAsk(t *testing.T) {
 		{"leaving the sandbox asks", "Bash", map[string]any{"command": "go test ./...", "dangerouslyDisableSandbox": true}, policy.Auto, ask},
 		{"build asks", "Bash", map[string]any{"command": "go test ./..."}, policy.Build, ask},
 		{"an edit asks (acceptEdits is Claude Code's own)", "Edit", map[string]any{"file_path": "a"}, policy.Build, ask},
+		{"plan refuses an edit", "Write", map[string]any{"file_path": "a"}, policy.Plan, deny},
+		{"plan refuses a command that changes something", "Bash", map[string]any{"command": "go test ./..."}, policy.Plan, deny},
+		{"plan refuses leaving plan mode", "ExitPlanMode", map[string]any{"plan": "…"}, policy.Plan, deny},
+		{"plan still runs a read-only command", "Bash", map[string]any{"command": "git status"}, policy.Plan, allow},
+		{"plan still reads", "Grep", nil, policy.Plan, allow},
+		{"a forbidden command is refused for its rule, in plan too", "Bash", map[string]any{"command": "make deploy"}, policy.Plan, deny},
+		{"leaving plan mode asks outside plan", "ExitPlanMode", map[string]any{"plan": "…"}, policy.Build, ask},
+		{"an allow rule does not open a terminal in plan", "Bash", map[string]any{"command": "npm test"}, policy.Plan, deny},
 	}
 	for _, c := range cases {
-		if got, why := screen(c.tool, c.input, c.mode, rules); got != c.want || (got == deny && !strings.Contains(why, "deploys go through CI")) {
+		wantWhy := "deploys go through CI"
+		if c.mode == policy.Plan && c.input["command"] != "make deploy" {
+			wantWhy = "plan mode"
+		}
+		if got, why := screen(c.tool, c.input, c.mode, rules); got != c.want || (got == deny && !strings.Contains(why, wantWhy)) {
 			t.Errorf("%s: got %v %q, want %v", c.name, got, why, c.want)
 		}
 	}
@@ -407,5 +419,52 @@ func TestSignedOutSaysHowToSignIn(t *testing.T) {
 	opts.Executable = ""
 	if _, err := Open(context.Background(), opts); err == nil || !strings.Contains(err.Error(), InstallURL) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestEffortIsFridaysReasoningSettingInClaudeCodesWords(t *testing.T) {
+	for setting, want := range map[string]string{"low": "low", "Medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max", "minimal": "low", "auto": "", "": "", "bogus": ""} {
+		if got := Effort(setting); got != want {
+			t.Errorf("Effort(%q) = %q, want %q", setting, got, want)
+		}
+	}
+}
+
+// TestAChangedEffortAppliesAtTheNextTurn: Claude Code takes --effort only when it starts, so a
+// changed setting restarts it between turns, on the same conversation, and the turn still runs.
+func TestAChangedEffortAppliesAtTheNextTurn(t *testing.T) {
+	f := newFake(t)
+	opts := f.options(policy.Build)
+	effort := "high"
+	var mu sync.Mutex
+	opts.Effort = func() string { mu.Lock(); defer mu.Unlock(); return effort }
+	s, err := Open(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if turn := s.Turn(context.Background(), "hello"); turn.Result.Status != loop.Completed {
+		t.Fatalf("first turn: %+v", turn.Result)
+	}
+	if turn := s.Turn(context.Background(), "hello again"); turn.Result.Status != loop.Completed {
+		t.Fatalf("same effort: %+v", turn.Result)
+	}
+	if n := strings.Count(f.logged(), "start "); n != 1 {
+		t.Fatalf("restarted with the effort unchanged (%d starts):\n%s", n, f.logged())
+	}
+	mu.Lock()
+	effort = "xhigh"
+	mu.Unlock()
+	if turn := s.Turn(context.Background(), "think harder"); turn.Result.Status != loop.Completed {
+		t.Fatalf("after the change: %+v\n%s", turn.Result, f.logged())
+	}
+	var starts []string
+	for _, line := range strings.Split(f.logged(), "\n") {
+		if strings.HasPrefix(line, "start ") {
+			starts = append(starts, line)
+		}
+	}
+	if len(starts) != 2 || !strings.Contains(starts[0], "--effort high") || !strings.Contains(starts[1], "--effort xhigh") || !strings.Contains(starts[1], "--resume ") {
+		t.Fatalf("starts:\n%s", strings.Join(starts, "\n"))
 	}
 }

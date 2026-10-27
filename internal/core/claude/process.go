@@ -35,6 +35,7 @@ type startOptions struct {
 	mode       string // a Claude Code permission mode
 	resume     string // Claude's session id to continue, or ""
 	appendText string // added to Claude Code's own system prompt
+	effort     string // --effort, "" for Claude Code's own default
 }
 
 // toolRequest is Claude Code asking whether a tool may run.
@@ -72,6 +73,10 @@ type process struct {
 	canUseTool func(ctx context.Context, r toolRequest) map[string]any
 	// models are what initialize said Claude Code offers.
 	models []string
+	// effort is the --effort it was started with.
+	effort string
+	// retired is set when the session replaced it on purpose; its end then ends no turn.
+	retired atomic.Bool
 }
 
 type controlReply struct {
@@ -91,6 +96,9 @@ func start(ctx context.Context, opts startOptions, canUseTool func(context.Conte
 	if opts.resume != "" {
 		args = append(args, "--resume", opts.resume)
 	}
+	if opts.effort != "" {
+		args = append(args, "--effort", opts.effort)
+	}
 	// Not CommandContext: the process outlives the request that started it.
 	cmd := exec.Command(opts.executable, args...)
 	cmd.Dir, cmd.Env = opts.root, opts.environ
@@ -103,7 +111,7 @@ func start(ctx context.Context, opts startOptions, canUseTool func(context.Conte
 		return nil, err
 	}
 	p := &process{cmd: cmd, stdin: stdin, pending: map[string]chan controlReply{}, asked: map[string]context.CancelFunc{},
-		messages: make(chan json.RawMessage, 256), done: make(chan struct{}), canUseTool: canUseTool}
+		messages: make(chan json.RawMessage, 256), done: make(chan struct{}), canUseTool: canUseTool, effort: opts.effort}
 	cmd.Stderr = stderrTail{p}
 	if err := cmd.Start(); err != nil {
 		return nil, err

@@ -134,7 +134,9 @@ Params: `sessionId`, `command`, `argument`. Replies with a `kind` and its fields
 | `todos` | `{"kind":"todos","items":[{"text":"…","status":"pending|in_progress|done"}]}`, or `{"kind":"text","text":"No plan yet."}` |
 | `tools` | `{"kind":"text","text":"Tools in build mode: …"}` |
 | `compact` | `{"kind":"text","text":"Compacted the conversation: 12 → 3 messages."}`; `argument` is the focus to keep |
-| `subagents` (also `threads`, `agents`) | `{"kind":"text","text":"t-k3x9ab  explore  done  background  map the API"}` |
+| `skills` | `{"kind":"text","text":"release   project   Cut a release of this project\n…"}`: each skill found, where from and what for, then any skipped and why |
+| `cost` | `{"kind":"text","text":"Main conversation: 12 model calls · 48,210 tokens in (30,100 from cache) · 2,300 out\n…"}`: the main conversation, each sub-agent and the total; no prices yet |
+| `subagents` (also `threads`, `agents`) | `{"kind":"text","text":"t-k3x9ab  explore  done  background  4.2k tok  map the API\nSub-agents used …"}` |
 | anything else | `{"kind":"error","text":"/<command> is not in the Go engine yet. To use it, set Settings → Engine to TypeScript …"}` |
 
 ### `_archymedes/threads`
@@ -179,10 +181,29 @@ Answered by the TypeScript agent when it is installed (it has key links and the 
 catalog). Without it, the engine answers itself: whether a provider is ready and which could be,
 and one model per ready provider.
 
+### `_archymedes/settings/list` and `_archymedes/settings/set`
+
+The Settings list as data, for the interface to draw ([every row](CONFIGURATION.md#the-settings-list)).
+`settings/list` takes no params and returns `{"file": "<path>/settings.json", "rows": [...]}`; a row
+is `key`, `label`, `section`, `kind` (`choice`, `text` or `secret`), `choices` (`value` and `label`,
+for a choice), `value` (masked for a secret), `isSet` and `overriddenByEnvironment`. A secret's
+value never leaves the engine.
+
+`settings/set` takes `key` and `value` and saves it; an empty value clears it. The reply is
+`{"ok": true, "file", "value", "isSet"}`, or `{"ok": false, "error": "<what to enter instead>"}`
+when the value is refused. The next session reads the file again.
+
+### `_archymedes/providers` and `_archymedes/providers/connect`
+
+Answered with the TypeScript agent's help until they are ported (WS-50.3). Claude is the engine's
+own: its row in `providers` is ready when Claude Code is installed and signed in, and `connect`
+with `{"provider": "claude"}` checks the sign-in here and replies `{"ok": true, "models": [...]}`,
+or `{"ok": false, "error"}` saying what to do; nothing is installed. Every other provider is sent
+to the TypeScript agent as it is.
+
 ## Forwarded methods
 
-Sent to the TypeScript agent unchanged, started on first need: `_archymedes/settings/list`,
-`_archymedes/settings/set`, `_archymedes/providers`, `_archymedes/providers/connect`,
+Sent to the TypeScript agent unchanged, started on first need:
 `_archymedes/providers/models`, `_archymedes/providers/remember-model`, `_archymedes/setup/save`.
 They only read and write the shared settings file, which the Go engine reads when the next session
 opens. Without the TypeScript agent they are `-32601`.
@@ -239,7 +260,7 @@ Answer `{"answer":"SQLite"}`; `{"dismissed":true}` or an empty answer tells the 
 | --- | --- | --- |
 | `runtime` | `event`: a runtime event (below) | something in the main conversation's turn |
 | `subagent` | `parentToolCallId`, `agent`, `event` | a sub-agent's `tool_call`, `tool_result`, `model_turn` or `provider_retry`, under the call that started it |
-| `thread` | `thread`: `id`, `parentToolCallId`, `agent`, `status`, `background`, `brief`, `report`, `branch` | a sub-agent started (`running`) or ended (`done`, `failed`, `cancelled`), with its report |
+| `thread` | `thread`: `id`, `parentToolCallId`, `agent`, `status`, `background`, `brief`, `report`, `branch`, `model`, `usage` (every token it has used, across restarts) | a sub-agent started (`running`) or ended (`done`, `failed`, `cancelled`), with its report |
 | `compaction` | `tokensBefore`, `messagesBefore`, `messagesAfter` | the conversation was summarized |
 | `steering_unread` | `messages` | steering the turn accepted and ended before reading; send them as prompts |
 | `rules_problems` | `problems` | command rules or role files left out, and why |

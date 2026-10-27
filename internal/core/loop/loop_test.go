@@ -23,6 +23,8 @@ type turn struct {
 	calls  []scriptCall
 	err    error
 	finish fantasy.FinishReason
+	// cacheRead is how many prompt tokens the provider says came from its cache.
+	cacheRead int64
 	// during runs while the reply streams, after its text and before its calls.
 	during func()
 }
@@ -75,7 +77,7 @@ func (s *scripted) Stream(_ context.Context, call fantasy.Call) (fantasy.StreamR
 		if finish == "" {
 			finish = fantasy.FinishReasonStop
 		}
-		yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeFinish, FinishReason: finish, Usage: fantasy.Usage{InputTokens: 100, OutputTokens: 10}})
+		yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeFinish, FinishReason: finish, Usage: fantasy.Usage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: t.cacheRead}})
 	}, nil
 }
 
@@ -291,12 +293,12 @@ func TestNoticesWaitForTheNextRunAndSteeringIsHandedBack(t *testing.T) {
 func TestTheGateHoldsAnUnverifiedChangeOnce(t *testing.T) {
 	var ran atomic.Int32
 	model := &scripted{turns: []turn{
-		{calls: []scriptCall{{"write", `{"path":"README.md"}`}}},
+		{calls: []scriptCall{{"write", `{"path":"config.yaml"}`}}},
 		{text: "done"},
-		{text: "nothing to run: docs only"},
+		{text: "nothing to run: config only"},
 	}}
 	res := Run(context.Background(), Request{Model: model, Prompt: "x", Approve: allow, Gate: gate.New(false), Tools: tool.NewCatalog(writeTool("write", &ran))})
-	if res.Status != Completed || res.Text != "nothing to run: docs only" {
+	if res.Status != Completed || res.Text != "nothing to run: config only" {
 		t.Fatalf("result = %+v", res)
 	}
 }
@@ -552,5 +554,30 @@ func TestTruncateNeverSplitsACharacter(t *testing.T) {
 	}
 	if got := truncate(strings.Repeat("é", 100), 31); !strings.Contains(got, "characters left out") || !strings.HasPrefix(got, strings.Repeat("é", 10)) {
 		t.Fatalf("truncate = %q", got)
+	}
+}
+
+// TestANamespacedToolNameRunsTheToolItMeans: gpt-oss writes repo_browser.run_command; refusing it
+// cost a real run three steps.
+func TestANamespacedToolNameRunsTheToolItMeans(t *testing.T) {
+	var ran atomic.Int32
+	model := &scripted{turns: []turn{
+		{calls: []scriptCall{{"functions.write", `{"path":"config.yaml"}`}}},
+		{text: "done"},
+		{text: "checked"},
+	}}
+	res := Run(context.Background(), Request{Model: model, Prompt: "x", Approve: allow, Gate: gate.New(false), Tools: tool.NewCatalog(writeTool("write", &ran))})
+	if ran.Load() != 1 || res.Status != Completed {
+		t.Fatalf("ran %d, result %+v", ran.Load(), res)
+	}
+}
+
+// TestCachedTokensCountAsPartOfThePrompt: Fantasy reports cache reads apart from InputTokens; the
+// conversation's size (what compaction, the context gauge and /cost read) includes them.
+func TestCachedTokensCountAsPartOfThePrompt(t *testing.T) {
+	model := &scripted{turns: []turn{{text: "hi", cacheRead: 900}}}
+	res := Run(context.Background(), Request{Model: model, Prompt: "x", Approve: allow, Tools: tool.NewCatalog()})
+	if res.Usage.InputTokens != 1000 || res.Usage.CachedInputTokens != 900 {
+		t.Fatalf("usage = %+v", res.Usage)
 	}
 }

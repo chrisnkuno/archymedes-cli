@@ -74,6 +74,18 @@ func PermissionMode(mode policy.Mode) string {
 	return "default"
 }
 
+// Effort is Friday's reasoning setting (ARCHYMEDES_REASONING) as Claude Code's --effort: its five
+// levels as they are, minimal as low, and "" (Claude Code's own default) for auto or nothing.
+func Effort(setting string) string {
+	switch level := strings.ToLower(strings.TrimSpace(setting)); level {
+	case "low", "medium", "high", "xhigh", "max":
+		return level
+	case "minimal":
+		return "low"
+	}
+	return ""
+}
+
 // Find is Claude Code's path: ARCHYMEDES_CLAUDE_PATH, else the PATH, else where its installers put
 // it (~/.local/bin, ~/.claude/local). "" when it is not installed.
 func Find(getenv func(string) string) string {

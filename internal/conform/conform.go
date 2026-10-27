@@ -111,8 +111,10 @@ func startsUpper(text string) bool {
 		}
 	}
 	r, _ := utf8.DecodeRuneInString(text)
-	// A format opening with a value (%s) starts with whatever is put there: a name, a path.
-	return unicode.IsUpper(r) || unicode.IsDigit(r) || strings.ContainsRune("/!@$~.%", r)
+	// A format opening with a value (%s) starts with whatever is put there: a name, a path. A script
+	// without letter case (中文, हिन्दी, العربية) has no lower case to start in.
+	caseless := unicode.IsLetter(r) && !unicode.IsLower(r) && unicode.ToUpper(r) == unicode.ToLower(r)
+	return unicode.IsUpper(r) || caseless || unicode.IsDigit(r) || strings.ContainsRune("/!@$~.%", r)
 }
 
 // Help checks a help line: what a command, flag or app does, said so that someone who has never
