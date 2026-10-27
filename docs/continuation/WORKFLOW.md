@@ -19,11 +19,13 @@ Add the task before writing the code, and update the status as you go, not at th
 
 Every mechanism (a command, flag, key, setting, message, tool, role, protocol method, event) is built to [the mechanism design system](../mechanisms/README.md): its name, its words and its measures are checked.
 
-Where each kind of code lives, in Go and TypeScript, is [CODEBASE.md](CODEBASE.md).
+Where each kind of code lives is [CODEBASE.md](CODEBASE.md); the rules and the reading order are
+[START_HERE.md](START_HERE.md). There is one engine, Go: new behaviour goes into `internal/core`, never
+into the TypeScript engine, which is being ported and deleted (WS-50).
 
 - New behaviour goes in a focused module with explicit inputs, not into `friday.ts`.
 - Touching code in a large file? Extract the part you touch when that is practical.
-- Rendering takes colours from the `Palette` (`theme.ts`). Never use raw ANSI colour constants.
+- Drawing takes colours from the theme by role (`internal/theme`). Never use raw colour constants.
 - Pure logic (state, layout math, parsing) is separate from terminal I/O, so it can be unit-tested.
 - One task, one commit. The commit message names the task ID.
 

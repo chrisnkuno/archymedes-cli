@@ -1,5 +1,7 @@
 # Friday from a phone (WS-30)
 
+> Archived 2026-10-27 (WS-50.1). Kept for history; the current entry point is [START_HERE.md](../START_HERE.md).
+
 Design, 2026-10-19; revised 2026-10-20 after reading E2B's, Cloudflare's, OpenRouter's and Stripe's
 docs and running the spikes below. Each milestone is a TRACKER row, built and checked before the next.
 

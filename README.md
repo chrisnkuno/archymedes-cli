@@ -303,4 +303,4 @@ it, and what an install without the interface says. See the
 
 ## Continuing development
 
-See the [agent handoff](docs/continuation/START_HERE.md), [architecture map](docs/continuation/ARCHITECTURE.md), and [prioritized roadmap](docs/continuation/PRIORITIES.md) for current work, validation status, and concrete follow-up tasks.
+See [where to start](docs/continuation/START_HERE.md), the [codebase map](docs/continuation/CODEBASE.md) and the [tracker](docs/continuation/TRACKER.md) for current work, validation status, and concrete follow-up tasks.

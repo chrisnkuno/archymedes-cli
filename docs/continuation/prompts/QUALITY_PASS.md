@@ -45,7 +45,7 @@ the guard counts in `tooling/check/baseline.json` have fallen or held steady.
 
 ## Phase 0: Orient (read-only)
 
-1. Read `docs/continuation/START_HERE.md`, `WORKFLOW.md`, `TRACKER.md` and `ARCHITECTURE.md`.
+1. Read `docs/continuation/START_HERE.md`, `CODEBASE.md`, `WORKFLOW.md` and `TRACKER.md`.
 2. Run `git status --short`. Existing uncommitted work belongs to someone: do not overwrite it. If
    it overlaps the scope, ask whether to build on it.
 3. Run `bun run recheck` and record the starting guard counts, test counts and any pre-existing
@@ -111,7 +111,7 @@ Add a workstream to the tracker. Order tasks from safest to riskiest:
    - Every extraction must reduce the monolith's line count, which the size guard checks.
 5. **Optimize measured hot paths.** Measure before and after, and keep a change only if the numbers improve.
 6. **Remove dead code** with grep evidence in the tracker.
-7. **Documentation:** update `ARCHITECTURE.md`, `MODULE_MAP.md`, `START_HERE.md` and the guard baseline.
+7. **Documentation:** update `CODEBASE.md` (and `MODULE_MAP.md` for TypeScript) and the guard baseline.
 
 ## Phase 4: Execute a task (repeat)
 

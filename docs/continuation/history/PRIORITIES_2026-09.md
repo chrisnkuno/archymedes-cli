@@ -1,5 +1,7 @@
 # High-impact continuation roadmap
 
+> Archived 2026-10-27 (WS-50.1). Kept for history; the current entry point is [START_HERE.md](../START_HERE.md).
+
 Treat these as candidate work packages, not authorization to deploy, publish, or contact anyone. Re-evaluate against the current code and measured behavior before implementation.
 
 ## P0: preserve the verified baseline
