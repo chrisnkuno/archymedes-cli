@@ -73,7 +73,23 @@ type Request struct {
 	RetryDelay  func(attempt int) time.Duration
 	// IdleTimeout is how long a stream may send nothing before it is cut (default 3 minutes).
 	IdleTimeout time.Duration
+	// Hooks, when set, run the person's hooks around each call and before the run ends.
+	Hooks Hooks
 }
+
+// Hooks are the person's commands at a run's moments (internal/core/hooks implements them).
+type Hooks interface {
+	// BeforeTool is asked before a call (and before its approval); a reason stops it.
+	BeforeTool(ctx context.Context, call tool.Call, t *tool.Tool) string
+	// AfterTool is told the result; what it answers is added to the result for the model.
+	AfterTool(ctx context.Context, call tool.Call, t *tool.Tool, result tool.Result) string
+	// BeforeStop is asked when the model is done; a reason keeps the run going with it. again is
+	// true when the run already went on because of an earlier answer.
+	BeforeStop(ctx context.Context, again bool) string
+}
+
+// maxHookStops is how many times a Stop hook may keep one run going.
+const maxHookStops = 3
 
 // Result is how a run ended and what it left behind.
 type Result struct {
@@ -93,6 +109,8 @@ type run struct {
 	req      Request
 	budgets  Budgets
 	messages []fantasy.Message
+	// hookStops is how many times a Stop hook kept this run going.
+	hookStops int
 	usage    Usage
 	steps    int
 	calls    int
@@ -201,6 +219,13 @@ func (r *run) loop(ctx context.Context) (Status, error) {
 			if r.req.Gate != nil {
 				if nudge := r.req.Gate.BeforeFinish(); nudge != "" {
 					r.messages = append(r.messages, fantasy.NewUserMessage(nudge))
+					continue
+				}
+			}
+			if r.req.Hooks != nil && r.hookStops < maxHookStops {
+				if why := r.req.Hooks.BeforeStop(ctx, r.hookStops > 0); why != "" {
+					r.hookStops++
+					r.messages = append(r.messages, fantasy.NewUserMessage("A hook asks you to continue before finishing: "+why))
 					continue
 				}
 			}

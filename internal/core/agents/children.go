@@ -163,7 +163,7 @@ func (s *Session) runChild(ctx context.Context, c *child, history []fantasy.Mess
 		ThreadID: c.t.ID, Root: c.ws.Root, Model: model,
 		System:  s.childSystemPrompt(c, modelID),
 		History: history, Prompt: prompt, Tools: catalog,
-		Approve: ledger.Decide, Gate: verify, Inbox: c.inbox, Budgets: budgets, WrapUp: roles.WrapUp,
+		Approve: ledger.Decide, Gate: verify, Inbox: c.inbox, Budgets: budgets, WrapUp: roles.WrapUp, Hooks: childHooks{s.hooks},
 		Emit: func(ev loop.Event) {
 			if ev.Type == loop.EventModelTurn && ev.Usage != nil {
 				c.count(s, *ev.Usage)

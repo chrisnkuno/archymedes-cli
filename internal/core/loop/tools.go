@@ -136,6 +136,11 @@ func (r *run) runOne(ctx context.Context, p prepared) outcome {
 		return r.finish(p, *p.failed)
 	}
 	r.announce(p)
+	if r.req.Hooks != nil {
+		if why := r.req.Hooks.BeforeTool(ctx, p.call, p.tool); why != "" {
+			return r.finish(p, tool.Result{Content: "A hook stopped this call: " + why, IsError: true, Data: map[string]any{"declined": true}})
+		}
+	}
 	if p.effect != tool.EffectNone {
 		approved, err := r.approve(ctx, p)
 		if err != nil || !approved {
@@ -146,7 +151,13 @@ func (r *run) runOne(ctx context.Context, p prepared) outcome {
 			return r.finish(p, tool.Result{Content: text, IsError: true, Data: map[string]any{"declined": true}})
 		}
 	}
-	return r.finish(p, r.execute(ctx, p))
+	result := r.execute(ctx, p)
+	if r.req.Hooks != nil {
+		if said := r.req.Hooks.AfterTool(ctx, p.call, p.tool, result); said != "" {
+			result.Content += "\n\nA hook says: " + said
+		}
+	}
+	return r.finish(p, result)
 }
 
 // announce tells the interface a call is about to run (before any approval, so the card the

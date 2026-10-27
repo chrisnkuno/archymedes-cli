@@ -223,6 +223,35 @@ they were, and Friday's sessions are never part of a snapshot. Snapshots need a 
 outside one, `/undo` says so. After a long conversation is summarized, older turns can still give
 their files back, but not their conversation.
 
+## Hooks
+
+Hooks are your commands at Friday's moments. They are written as Claude Code writes them, so the
+ones you have keep working: a `"hooks"` object in `.archymedes/hooks.json`, `.claude/settings.json`
+or `.claude/settings.local.json` in the project, `hooks.json` in Friday's config directory, or
+`~/.claude/settings.json`.
+
+```json
+{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./scripts/guard.sh"}]}]}}
+```
+
+| Event | When | Exit 2 (or `{"decision": "block", "reason": …}` on stdout) |
+| --- | --- | --- |
+| `PreToolUse` | before a call, before it is asked about | stops the call; stderr is the reason the model gets |
+| `PostToolUse` | after a call | stderr is added to the result for the model |
+| `UserPromptSubmit` | when you send a request | refuses it; otherwise what it prints is added as context |
+| `Stop` | when the model is done | keeps the turn going with stderr, at most three times (`stop_hook_active` is true after the first) |
+| `SessionStart` | when a session opens | what it prints joins the model's instructions |
+| `SessionEnd` | when a session closes | — |
+
+A matcher is a pattern over the tool's name, Friday's or Claude Code's (`run_command` is `Bash`,
+`edit_file` is `Edit`, `write_file` is `Write`). The command gets the event as JSON on stdin, in
+Claude Code's fields (`tool_name`, `tool_input` with `file_path`, `tool_response`, `prompt`), runs
+in the project with `CLAUDE_PROJECT_DIR` and `FRIDAY_PROJECT_DIR` set, and has 60 seconds unless
+it says otherwise (`"timeout"`). Sub-agents run the tool hooks too. Scripts in
+`.archymedes/hooks/<phase>/` (`pre-tool-use`, `post-tool-use`, `pre-turn`, `post-turn`,
+`pre-session`, `post-session`) still work, any non-zero exit of a `pre-` script blocking; they also get the event base64-encoded in `ARCHYMEDES_HOOK_EVENT_B64`.
+`/hooks` lists what runs, and why a file or entry was skipped.
+
 ## Sub-agents
 
 A **sub-agent** is a helper Friday starts for one part of the task. It gets a brief, works on its

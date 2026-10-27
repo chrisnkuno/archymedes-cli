@@ -69,6 +69,10 @@
     "core/checkpoint": [
       "conform"
     ],
+    "core/hooks": [
+      "core/tool",
+      "conform"
+    ],
     "core/thread": [
       "conform"
     ],
@@ -89,6 +93,7 @@
       "core/advise",
       "core/checkpoint",
       "core/gate",
+      "core/hooks",
       "core/llm",
       "core/loop",
       "core/mcp",
@@ -115,6 +120,7 @@
       "core/checkpoint",
       "core/claude",
       "core/gate",
+      "core/hooks",
       "core/llm",
       "core/loop",
       "core/mcp",

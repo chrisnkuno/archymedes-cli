@@ -15,6 +15,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
 	"github.com/chrisnkuno/friday-cli/internal/core/claude"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
+	"github.com/chrisnkuno/friday-cli/internal/core/hooks"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/mcp"
@@ -568,6 +569,25 @@ func threadsText(threads []thread.Thread) string {
 	}
 	lines = append(lines, fmt.Sprintf("Sub-agents used %s tokens: %s in (%s from cache), %s out.",
 		groupDigits(total.InputTokens+total.OutputTokens), groupDigits(total.InputTokens), groupDigits(total.CachedInputTokens), groupDigits(total.OutputTokens)))
+	return strings.Join(lines, "\n")
+}
+
+// hooksText is `/hooks`: each hook, then any file or entry skipped and why.
+func hooksText(set *hooks.Set) string {
+	var lines []string
+	for _, h := range set.Hooks() {
+		which := ""
+		if h.Matcher != nil {
+			which = " [" + strings.TrimSuffix(strings.TrimPrefix(h.Matcher.String(), "^(?:"), ")$") + "]"
+		}
+		lines = append(lines, fmt.Sprintf("%s%s: %s (%s)", h.Event, which, h.Command, h.From))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, "No hooks. Declare them as Claude Code does, in .archymedes/hooks.json or .claude/settings.json (\"hooks\": {\"PreToolUse\": [{\"matcher\": \"Bash\", \"hooks\": [{\"type\": \"command\", \"command\": \"…\"}]}]}), or as scripts in .archymedes/hooks/<phase>/.")
+	}
+	for _, p := range set.Problems {
+		lines = append(lines, "Skipped "+p)
+	}
 	return strings.Join(lines, "\n")
 }
 

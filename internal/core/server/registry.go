@@ -156,6 +156,9 @@ var sessionCommands = []sessionCommand{
 		}
 		return map[string]any{"kind": "diff", "patch": patch}
 	}},
+	{"hooks", "The hooks that run for this project: event, which tools, command, and where declared", func(sess *session, _ string) map[string]any {
+		return map[string]any{"kind": "text", "text": hooksText(sess.core.HookSet())}
+	}},
 	{"mcp", "The MCP servers declared for this project: tools, whether running, and any problem", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": mcpText(sess.core.MCP())}
 	}},

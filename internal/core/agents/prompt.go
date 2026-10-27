@@ -125,6 +125,9 @@ func (s *Session) rootSystemPrompt(mode policy.Mode, catalog *tool.Catalog) stri
 	if servers := s.mcp.Prompt(); servers != "" {
 		parts = append(parts, servers)
 	}
+	if s.hookContext != "" {
+		parts = append(parts, "Context from the project's session-start hooks:\n"+s.hookContext)
+	}
 	return strings.Join(parts, "\n\n")
 }
 

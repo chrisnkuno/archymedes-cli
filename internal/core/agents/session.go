@@ -23,6 +23,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/advise"
 	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
 	"github.com/chrisnkuno/friday-cli/internal/core/gate"
+	"github.com/chrisnkuno/friday-cli/internal/core/hooks"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/mcp"
@@ -103,6 +104,9 @@ type Session struct {
 	jev      *advise.Jev // nil without a TypeSafe key
 	mcp      *mcp.Manager
 	cps      *checkpoint.Store // nil outside a git repository
+	hooks    *hooks.Set
+	// hookContext is what SessionStart hooks printed, added to the system prompt.
+	hookContext string
 
 	mu       sync.Mutex
 	models   *llm.Models
@@ -211,6 +215,9 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 	if store != nil {
 		s.cps = checkpoint.Open(cfg.Root, store.Dir(), meta.ID)
 	}
+	home, _ := os.UserHomeDir()
+	s.hooks = hooks.Load(cfg.Root, cfg.ConfigDir, home, meta.ID)
+	s.hookContext = s.hooks.SessionStarted(context.Background(), "startup")
 	s.turnCond = sync.NewCond(&s.turnMu)
 	s.nextTurn = 1
 	s.life, s.endLife = context.WithCancel(context.Background())
@@ -410,7 +417,17 @@ func (s *Session) Close() {
 		<-c.done
 	}
 	s.mcp.Close()
+	s.hooks.SessionEnded(context.Background())
 }
+
+// HookSet is the session's hooks.
+func (s *Session) HookSet() *hooks.Set { return s.hooks }
+
+// childHooks are the hooks a sub-agent runs under: every tool hook, so a blocking one cannot be
+// stepped around by delegating, but not Stop, which is about the person's turn.
+type childHooks struct{ *hooks.Set }
+
+func (childHooks) BeforeStop(context.Context, bool) string { return "" }
 
 // MCP is the session's MCP servers.
 func (s *Session) MCP() *mcp.Manager { return s.mcp }
@@ -434,6 +451,14 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	if err != nil {
 		return loop.Result{Status: loop.Failed, Err: err}
 	}
+	refusal, extra := s.hooks.PromptSubmitted(ctx, text)
+	if refusal != "" {
+		return loop.Result{Status: loop.Failed, Err: fmt.Errorf("a hook refused this request: %s", refusal)}
+	}
+	prompt := text
+	if extra != "" {
+		prompt += "\n\n<hook_context>\n" + extra + "\n</hook_context>"
+	}
 	s.captureTurn(ctx, text, len(history))
 	// A server still being listed (just added, never cached) gets a moment, so this turn has its tools.
 	wait, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -452,12 +477,13 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	result := loop.Run(ctx, loop.Request{
 		ThreadID: thread.Root, Root: s.cfg.Root, Model: model,
 		System:  s.rootSystemPrompt(ledger.Mode(), catalog),
-		History: history, Prompt: text, Tools: catalog,
+		History: history, Prompt: prompt, Tools: catalog, Hooks: s.hooks,
 		Approve: ledger.Decide, Gate: verify, Inbox: s.inbox, Budgets: s.cfg.Budgets,
 		Emit:       emit,
 		Checkpoint: func(m []fantasy.Message) { s.saveRoot(m) },
 		Compact:    s.compactor(),
 	})
+	s.hooks.TurnEnded(ctx, text, string(result.Status), result.Text)
 	s.saveRoot(result.Messages)
 	status := thread.Idle
 	if result.Status == loop.Failed {

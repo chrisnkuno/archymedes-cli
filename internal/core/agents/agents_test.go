@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -779,5 +780,44 @@ func TestUndoSaysWhyOutsideAGitRepository(t *testing.T) {
 	h.prompt(s, "hi")
 	if _, _, err := s.Back(context.Background(), -1, checkpoint.Both); err == nil || !strings.Contains(err.Error(), "git repository") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestAProjectHookStopsACallAndKeepsATurnGoing: a PreToolUse hook blocks the write before it is
+// asked about, and a Stop hook sends the model back once.
+func TestAProjectHookStopsACallAndKeepsATurnGoing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh hooks")
+	}
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".archymedes"), 0o755)
+	os.WriteFile(filepath.Join(root, ".archymedes", "hooks.json"), []byte(`{"hooks":{
+		"PreToolUse":[{"matcher":"Write","hooks":[{"type":"command","command":"echo 'writes go through review' >&2; exit 2"}]}],
+		"Stop":[{"hooks":[{"type":"command","command":"grep -q '\"stop_hook_active\":true' || { echo 'say goodbye' >&2; exit 2; }"}]}]}}`), 0o644)
+	var told []string
+	var mu sync.Mutex
+	h := newHarness(t, root, policy.Auto, func(_ string, call fantasy.Call) reply {
+		role, text := lastOf(call)
+		mu.Lock()
+		told = append(told, text)
+		mu.Unlock()
+		switch {
+		case role == fantasy.MessageRoleUser && text == "write it":
+			return reply{calls: [][2]string{{"write_file", `{"path":"a.go","content":"x"}`}}}
+		case strings.Contains(text, "say goodbye"):
+			return reply{text: "goodbye"}
+		}
+		return reply{text: "done"}
+	})
+	s := h.create()
+	res := h.prompt(s, "write it")
+	if _, err := os.Stat(filepath.Join(root, "a.go")); !os.IsNotExist(err) {
+		t.Fatal("the hook did not stop the write")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	joined := strings.Join(told, "\n")
+	if !strings.Contains(joined, "A hook stopped this call: writes go through review") || res.Text != "goodbye" {
+		t.Fatalf("result %q, model was told:\n%s", res.Text, joined)
 	}
 }
