@@ -10,8 +10,9 @@ friday "fix the failing test in src/parser.ts"
 
 Friday's engine is written in Go and runs inside the `friday` binary: helpers (sub-agents) that
 keep working in the background, steering mid-turn, sessions that survive a crash, and cheap work on
-a cheap model. It drives Claude Code on your subscription too. Sessions that need what only the
-earlier TypeScript engine has (Codex, sandboxes, `/undo`) run there on their own. **Documentation: [`docs/engine/`](docs/engine/README.md)**
+a cheap model. It has skills, MCP servers that cost no context until used, hooks, `/undo`, language
+server errors after each edit, and scripted runs. It drives Claude Code on your subscription too. Sessions
+that need what only the earlier TypeScript engine has (Codex) run there on their own. **Documentation: [`docs/engine/`](docs/engine/README.md)**
 — a [user guide](docs/engine/USER_GUIDE.md), [configuration](docs/engine/CONFIGURATION.md),
 [tools](docs/engine/TOOLS.md), [sub-agents](docs/engine/SUBAGENTS.md),
 [editors](docs/engine/EDITORS.md), [architecture](docs/engine/ARCHITECTURE.md),
@@ -144,8 +145,8 @@ totals by currency, retries, route switches, and calls without settlement data.
 exchange what kind of work it is routing. Billing and hosted execution are operated from isolated private services; this public
 repository contains only their client contract.
 
-`/balance` and `/route` are not in the Go interface yet (WS-7); `/cost` shows what a session has
-spent, and a one-shot `--json` run reports its own cost.
+`/balance` and `/route` are not in the Go interface yet (WS-7); `/cost` shows the tokens a session
+and each of its helpers used, and a `--json` run reports its own.
 
 ## Install count
 
@@ -199,8 +200,8 @@ binary (`internal/core/`, see [docs/engine](docs/engine/ARCHITECTURE.md)), drive
 Client Protocol with Friday's `_archymedes/*` extensions through in-process pipes. A session that
 needs what only the TypeScript agent has runs on it instead, as `friday acp` under Node, without
 being asked (`--engine ts`, `ARCHYMEDES_ENGINE=ts` or Settings → Engine choose it for every
-session). Non-interactive modes (`--json`, piped prompts, `doctor`, `update`, `history`,
-`settings`) go to the TypeScript agent unchanged. There is no TypeScript interface: the agent run with no
+session). Scripted runs (`--print`, `--json`, piped prompts) run on the Go engine; `doctor`,
+`update`, `history` and `settings` go to the TypeScript agent unchanged. There is no TypeScript interface: the agent run with no
 request says where the interface is. The npm package ships one static binary per platform as an
 optional dependency (`@archymedes/cli-<platform>-<arch>`). Where none can be used, the bundled
 agent still serves every non-interactive mode; asked for the interface, it says why there is none

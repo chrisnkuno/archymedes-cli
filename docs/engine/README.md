@@ -77,22 +77,26 @@ with `--provider claude`, and the Go engine drives your own Claude Code on your 
 replies stream in and its permission questions become Friday's approvals. Switching back to another
 model keeps the conversation. See [Claude Code](USER_GUIDE.md#claude-code).
 
-**Non-interactive modes** — `friday --json "…"`, a piped request, `friday doctor`, `update`,
-`history`, `settings`, `login` — are still served by the TypeScript agent, exactly as before.
+**From a script** — `friday --print "…"`, `friday --json "…"`, a piped request — runs on the Go
+engine ([From a script](USER_GUIDE.md#from-a-script)). `friday doctor`, `update`, `history`,
+`settings` and `login` are still served by the TypeScript agent.
 
 ## What the Go engine does not have yet
 
 These are on the TypeScript engine only. A command that is not there says so, and tells you how to
 switch:
 
-- Codex as an engine; Archymedes Cloud; keyless free mode
-- Docker and E2B sandboxes; the Linux command sandbox (bubblewrap)
-- Checkpoints and `/undo`, `/rewind`, `/diff`, `/cost`, `/review`, `/fork`, goals
-- MCP servers and LSP diagnostics
-- Jev, defender's knowledge index (`query_defensive_brain`), web search and fetch,
+- Codex as an engine (it moves to the TypeScript engine on its own); keyless free mode
+- `/review`, `/fork`, goals, `/context`, `/memory`
+- Jev's turn verdicts, defender's knowledge index (`query_defensive_brain`), web search and fetch,
   `start_application`
-- Money budgets and prices; reasoning effort per call; images
-- The headless `--json` mode (served by the TypeScript agent)
+- Prices in `/cost` (tokens are counted) and money budgets; reasoning effort for Friday's own models
+  (Claude Code and Codex take it)
+
+The Go engine has, since 3.12.0: skills, MCP servers, hooks, checkpoints with `/undo`, `/rewind` and
+`/diff`, `/cost` in tokens, language server errors after edits, images in a request, profiles,
+`/btw`, notifications and scripted runs. Docker and E2B sandboxes and Archymedes Cloud are being
+retired with the TypeScript engine.
 
 To use one of these, set **Settings → Engine** to **TypeScript** (or `ARCHYMEDES_ENGINE=ts`) and
 start a new session. Sessions do not move between engines.

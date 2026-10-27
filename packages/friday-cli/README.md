@@ -165,10 +165,14 @@ Type `/` in a session to see them all. The ones you will use most:
 | `!command` | run a shell command yourself; its output is not sent to Friday |
 | `@path` | mention a file in your message |
 
-Some commands still need the earlier TypeScript engine: `/undo`, `/rewind`, `/diff`, `/cost`,
-`/review`, `/fork`, `/goal`, `/context` and `/memory`. On Claude, `/undo` and `/cost` work through
-Claude Code.
-A command that is not available says so, and how to get it.
+| `/undo`, `/rewind`, `/diff` | take back the last turn (files, conversation or both), go back to any turn, see what changed |
+| `/btw <question>` | a side question, even while Friday works; the answer stays out of the conversation |
+| `/cost`, `/subagents` | tokens used, by the conversation and by each helper |
+| `/skills`, `/mcp`, `/hooks`, `/lsp` | what Friday found for this project |
+| `/profile [name]`, `/vim` | another set of keys and settings; vim keys in the input |
+
+`/review`, `/fork`, `/goal`, `/context` and `/memory` still need the earlier TypeScript engine. A
+command that is not available says so, and how to get it.
 
 ## What keeps your code safe
 
@@ -191,9 +195,11 @@ A command that is not available says so, and how to get it.
 ] }
 ```
 
-- **Sandboxes when you want them.** On the TypeScript engine, commands can run in a Linux sandbox
-  (`ARCHYMEDES_SANDBOX=on`), and whole sessions in Docker (`--sandbox docker`) or a remote E2B
-  sandbox (`--sandbox e2b`).
+- **Undo.** Friday snapshots the project before every turn (in a git repository), and `/undo` puts
+  the files back, created files removed and deleted ones restored. Your own staged changes are left
+  alone.
+- **Your hooks.** Commands of yours that run before and after each action can stop one, in the same
+  format as Claude Code's.
 
 ## Make it yours
 
@@ -206,8 +212,14 @@ Everything lives under `.archymedes/` in the project, so it travels with the rep
 | `.archymedes/agents/<name>.md` | a helper of your own: its instructions, tools, model and limits |
 | `.archymedes/rules.json` | which commands to allow, ask about, or forbid |
 
-On the TypeScript engine there are also skills (`.archymedes/skills/`), hooks, MCP servers
-(`.archymedes/mcp.json`) and plugins.
+| `.agents/skills/<name>/SKILL.md` (or `.claude/skills/`) | a skill: instructions Friday loads when a task needs them |
+| `.mcp.json` (or `.archymedes/mcp.json`) | MCP servers; their tools cost no context until one is needed |
+| `.claude/settings.json` or `.archymedes/hooks.json` | hooks, in Claude Code's format |
+
+Files other agents read work here as they are: AGENTS.md, Claude Code's skills, MCP servers and
+hooks. Friday also notifies you when a turn ends or it waits for you while you look elsewhere,
+sends pictures named in a request, and adds a language server's errors to each edit (gopls,
+pyright, typescript-language-server, rust-analyzer, clangd, when installed).
 
 ## Scripts and editors
 
@@ -220,8 +232,9 @@ On the TypeScript engine there are also skills (`.archymedes/skills/`), hooks, M
 **In scripts.** Friday runs without the interface and prints results:
 
 ```
-friday --json "add a health check"   one request; events and the result as JSON lines
-echo "add a health check" | friday   the same, from a pipe
+friday --print "add a health check"  one request; the answer on stdout, progress on stderr
+friday --json "add a health check"   the same, as JSON lines for another program
+echo "add a health check" | friday   a request from a pipe
 friday --provider groq --model openai/gpt-oss-120b
 friday settings                      keys, models, preferences
 friday history                       earlier sessions
@@ -233,8 +246,8 @@ friday login | logout                link this computer to your Friday account, 
 ## Questions
 
 **Which engine runs my session?** Friday's engine is written in Go and runs inside the `friday`
-binary. A session that needs something only the earlier TypeScript engine has (Codex, a Docker or
-E2B sandbox, `/undo`) runs there on its own. Settings → Engine chooses one for every session.
+binary. A session that needs something only the earlier TypeScript engine has (Codex, for one)
+runs there on its own. Settings → Engine chooses one for every session.
 
 **Can I use it without paying for a model?** Yes: `friday --free` with a free OpenRouter key uses
 free models only and never falls back to a paid one. Ollama runs models on your own computer.
