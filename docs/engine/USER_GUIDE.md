@@ -131,11 +131,18 @@ too. See [Notifications](CONFIGURATION.md#notifications).
 
 ## Vim keys in the input
 
-`/vim` (or Settings → `ARCHYMEDES_VIM`) turns on vim keys in the input. esc on a non-empty input
-enters normal mode, shown as NORMAL in the status bar: `h` `j` `k` `l`, `w` `b` `e`, `0` `^` `$`, `gg`
-`G` move; `x` `X` `dd` `dw` `D` delete; `cw` `cc` `C` change; `yy` `p` `P` copy and paste; `u` undoes;
-`i` `a` `I` `A` `o` `O` go back to typing. enter sends in either mode, and esc in normal mode does
-what it always does (stop the turn, step out to the bars).
+`/vim` (or Settings → `ARCHYMEDES_VIM`) turns on vim keys in the input. Pressing esc on a non-empty
+input enters normal mode, shown as NORMAL in the status bar. The enter key sends in either mode. In
+normal mode esc does what it always does: stop the turn, or step out to the bars.
+
+| Keys | Do |
+| --- | --- |
+| `h` `j` `k` `l`, `w` `b` `e`, `0` `^` `$`, `gg` `G` | move |
+| `x` `X`, `dd` `dw` `D` | delete |
+| `cw` `cc` `C` | change (and type) |
+| `yy`, `p` `P` | copy, paste |
+| `u` | undo |
+| `i` `a` `I` `A` `o` `O` | back to typing |
 
 ## Side questions
 
