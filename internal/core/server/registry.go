@@ -7,6 +7,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/checkpoint"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The engine's protocol surface, as two tables: every method it answers, and every session
@@ -109,6 +110,15 @@ var sessionCommands = []sessionCommand{
 	}},
 	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
+	}},
+	{"btw", "Answer a side question from the conversation so far, without tools, even mid-turn", func(sess *session, question string) map[string]any {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		answer, err := sess.core.Aside(ctx, question)
+		if err != nil {
+			return map[string]any{"kind": "error", "text": err.Error()}
+		}
+		return map[string]any{"kind": "text", "text": answer}
 	}},
 	{"undo", "Go back to before the last turn: its files and the conversation, or only code or conversation", func(sess *session, arg string) map[string]any {
 		return back(sess, -1, arg, "/undo takes no argument, code or conversation")

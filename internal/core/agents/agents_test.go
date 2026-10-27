@@ -821,3 +821,41 @@ func TestAProjectHookStopsACallAndKeepsATurnGoing(t *testing.T) {
 		t.Fatalf("result %q, model was told:\n%s", res.Text, joined)
 	}
 }
+
+// TestASideQuestionIsAnsweredWithoutJoiningTheConversation: /btw sees what was said, offers no
+// tools, and leaves the conversation as it was.
+func TestASideQuestionIsAnsweredWithoutJoiningTheConversation(t *testing.T) {
+	var sawTools int
+	var sawEarlier bool
+	var mu sync.Mutex
+	h := newHarness(t, t.TempDir(), policy.Build, func(_ string, call fantasy.Call) reply {
+		_, text := lastOf(call)
+		if strings.Contains(text, "Question: what did I ask first?") {
+			mu.Lock()
+			sawTools = len(call.Tools)
+			for _, m := range call.Prompt {
+				if strings.Contains(textOf(m), "rename the parser") {
+					sawEarlier = true
+				}
+			}
+			mu.Unlock()
+			return reply{text: "You asked to rename the parser."}
+		}
+		return reply{text: "done"}
+	})
+	s := h.create()
+	h.prompt(s, "rename the parser")
+	before := len(s.Messages())
+	answer, err := s.Aside(context.Background(), "what did I ask first?")
+	if err != nil || answer != "You asked to rename the parser." {
+		t.Fatalf("aside = %q, %v", answer, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if sawTools != 0 || !sawEarlier || len(s.Messages()) != before {
+		t.Fatalf("tools %d, saw earlier %v, messages %d → %d", sawTools, sawEarlier, before, len(s.Messages()))
+	}
+	if _, err := s.Aside(context.Background(), " "); err == nil {
+		t.Fatal("an empty side question was asked")
+	}
+}

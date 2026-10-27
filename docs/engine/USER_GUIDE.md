@@ -129,6 +129,13 @@ question waits: a notification from your terminal, or its bell. Set a push URL i
 (`ARCHYMEDES_NOTIFY_URL`, an [ntfy](https://ntfy.sh) topic for example) and your phone hears it
 too. See [Notifications](CONFIGURATION.md#notifications).
 
+## Side questions
+
+`/btw <question>` asks something on the side, even while Friday is working: "/btw what does
+`retryAfter` return?". Friday answers from the conversation and what it knows of the project, with
+no tools, and neither the question nor the answer joins the conversation, so the work carries on as
+it was.
+
 ## Talking to Friday while it works
 
 You do not have to wait. While a turn runs:

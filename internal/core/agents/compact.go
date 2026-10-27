@@ -10,6 +10,7 @@ import (
 
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
+	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 )
 
 const summaryRequest = `Summarize the conversation above for yourself, so you can continue the work with only this summary and the last exchange. Keep: the goal and every requirement the user stated; decisions made and why; files read and changed, with paths; commands run and what they showed; the current state; what remains, in order; open questions. Be specific (paths, names, numbers) and brief. No preamble.`
@@ -129,4 +130,32 @@ func (s *Session) nameSession(request string) {
 		_ = s.store.SaveMeta(s.meta)
 		s.mu.Unlock()
 	}()
+}
+
+// asideBrief is what the model is told for /btw: answer from what it knows, change nothing.
+const asideBrief = "A side question from the person, asked while you work on their request. Answer it briefly from this conversation and what you know of the project; you have no tools for this. It is not a change of task: your work on the request carries on afterwards."
+
+// Aside answers a side question (/btw) from the conversation so far, without tools and without
+// adding to the conversation: one call on the main model, even while a turn runs.
+func (s *Session) Aside(ctx context.Context, question string) (string, error) {
+	question = strings.TrimSpace(question)
+	if question == "" {
+		return "", errors.New("/btw needs a question, such as /btw what does the retry loop do")
+	}
+	model, _, err := s.Models().For(ctx, "main")
+	if err != nil {
+		return "", err
+	}
+	system := s.rootSystemPrompt(s.Mode(), tool.NewCatalog()) // no tools for an aside
+	history := thread.Complete(s.Messages())
+	prompt := append(fantasy.Prompt{fantasy.NewSystemMessage(system)}, history...)
+	prompt = append(prompt, fantasy.NewUserMessage(asideBrief+"\n\nQuestion: "+question))
+	answer, err := complete(ctx, model, prompt)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(answer) == "" {
+		return "", errors.New("the model gave no answer")
+	}
+	return strings.TrimSpace(answer), nil
 }

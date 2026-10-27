@@ -55,6 +55,7 @@ func init() {
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
 		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
+		{"btw", "<question>", "Ask a side question, even while Friday works; the answer stays out of the conversation", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("btw", arg) }},
 		{"skills", "", "Skills Friday can load for this project, and where each came from", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("skills", "") }},
 		{"mcp", "", "MCP servers for this project: their tools, and whether each is running", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("mcp", "") }},
 		{"hooks", "", "Hooks that run for this project: on which events and tools, and from where", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("hooks", "") }},
