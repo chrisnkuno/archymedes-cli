@@ -276,8 +276,8 @@ func (s *Session) Accept() Accepted {
 
 // Prompt runs one turn of the root thread for an accepted prompt, after every prompt accepted
 // before it. It returns how the turn ended; a prompt cancelled before it started ends Cancelled unrun.
-func (s *Session) Prompt(ctx context.Context, accepted Accepted, text string) loop.Result {
-	return s.inTurn(ctx, accepted, func(ctx context.Context) loop.Result { return s.runRoot(ctx, text) })
+func (s *Session) Prompt(ctx context.Context, accepted Accepted, text string, files ...fantasy.FilePart) loop.Result {
+	return s.inTurn(ctx, accepted, func(ctx context.Context) loop.Result { return s.runRoot(ctx, text, files) })
 }
 
 // inTurn runs work in an accepted slot. Slots run strictly in the order they were accepted (a
@@ -433,7 +433,7 @@ func (childHooks) BeforeStop(context.Context, bool) string { return "" }
 func (s *Session) MCP() *mcp.Manager { return s.mcp }
 
 // runRoot is one turn of the root thread.
-func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
+func (s *Session) runRoot(ctx context.Context, text string, files []fantasy.FilePart) loop.Result {
 	s.mu.Lock()
 	ledger := s.ledger
 	history := append([]fantasy.Message(nil), s.messages...)
@@ -477,7 +477,7 @@ func (s *Session) runRoot(ctx context.Context, text string) loop.Result {
 	result := loop.Run(ctx, loop.Request{
 		ThreadID: thread.Root, Root: s.cfg.Root, Model: model,
 		System:  s.rootSystemPrompt(ledger.Mode(), catalog),
-		History: history, Prompt: prompt, Tools: catalog, Hooks: s.hooks,
+		History: history, Prompt: prompt, Files: files, Tools: catalog, Hooks: s.hooks,
 		Approve: ledger.Decide, Gate: verify, Inbox: s.inbox, Budgets: s.cfg.Budgets,
 		Emit:       emit,
 		Checkpoint: func(m []fantasy.Message) { s.saveRoot(m) },

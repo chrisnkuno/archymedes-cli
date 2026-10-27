@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -82,6 +83,15 @@ func anthropicRequest(call fantasy.Call, model string) map[string]any {
 					continue
 				}
 				blocks = append(blocks, map[string]any{"type": "text", "text": p.Text})
+			case fantasy.FilePart:
+				kind := "image"
+				if p.MediaType == "application/pdf" {
+					kind = "document"
+				} else if !strings.HasPrefix(p.MediaType, "image/") {
+					continue // only images and PDFs travel to the Messages API
+				}
+				blocks = append(blocks, map[string]any{"type": kind, "source": map[string]any{
+					"type": "base64", "media_type": p.MediaType, "data": base64.StdEncoding.EncodeToString(p.Data)}})
 			case fantasy.ToolCallPart:
 				input := json.RawMessage(p.Input)
 				if !json.Valid(input) || len(bytes.TrimSpace(input)) == 0 {

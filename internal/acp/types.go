@@ -447,3 +447,10 @@ type SessionSummary struct {
 	// OpenElsewhere: another terminal has it open, so resuming it opens a copy.
 	OpenElsewhere bool `json:"openElsewhere"`
 }
+
+// Image is a picture sent with a request: its type, its bytes, and where it came from.
+type Image struct {
+	MimeType string
+	Data     []byte
+	URI      string
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -187,5 +188,30 @@ func TestPingsAndCommentsAreLife(t *testing.T) {
 	}
 	if alive != 4 { // message_start, the comment, the ping, message_delta
 		t.Fatalf("keepalives = %d", alive)
+	}
+}
+
+func TestAnImageTravelsAsAnImageBlock(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+	m := newAnthropic("k", srv.URL, "claude-x")
+	stream, err := m.Stream(context.Background(), fantasy.Call{Prompt: fantasy.Prompt{fantasy.NewUserMessage("look", fantasy.FilePart{Data: []byte("png"), MediaType: "image/png"}, fantasy.FilePart{Data: []byte("pdf"), MediaType: "application/pdf"})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range stream {
+	}
+	content := body["messages"].([]any)[0].(map[string]any)["content"].([]any)
+	if len(content) != 3 || content[1].(map[string]any)["type"] != "image" || content[2].(map[string]any)["type"] != "document" {
+		t.Fatalf("content %v", content)
+	}
+	src := content[1].(map[string]any)["source"].(map[string]any)
+	if src["media_type"] != "image/png" || src["data"] != "cG5n" {
+		t.Fatalf("source %v", src)
 	}
 }

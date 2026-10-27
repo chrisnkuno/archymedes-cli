@@ -54,3 +54,20 @@ func TestCostCountsTheMainConversationAndEachSubagent(t *testing.T) {
 		t.Errorf("a sub-agent that used nothing is listed:\n%s", text)
 	}
 }
+
+func TestPromptImagesBecomeFileParts(t *testing.T) {
+	blocks := []json.RawMessage{
+		json.RawMessage(`{"type":"text","text":"what is this"}`),
+		json.RawMessage(`{"type":"image","mimeType":"image/png","data":"iVBORw0K","uri":"file:///tmp/shot.png"}`),
+	}
+	files, err := promptImages(blocks)
+	if err != nil || len(files) != 1 || files[0].MediaType != "image/png" || files[0].Filename != "shot.png" || len(files[0].Data) == 0 {
+		t.Fatalf("files %+v, %v", files, err)
+	}
+	if _, err := promptImages([]json.RawMessage{json.RawMessage(`{"type":"image","mimeType":"text/html","data":"eA=="}`)}); err == nil {
+		t.Fatal("a non-image passed")
+	}
+	if _, err := promptImages([]json.RawMessage{json.RawMessage(`{"type":"image","mimeType":"image/png","data":"!!"}`)}); err == nil {
+		t.Fatal("bad base64 passed")
+	}
+}

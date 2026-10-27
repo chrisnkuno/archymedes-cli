@@ -43,7 +43,7 @@ type Agent interface {
 	Sessions(ctx context.Context, cwd string) ([]acp.SessionSummary, error)
 	CloseSession(ctx context.Context, sessionID string) error
 	Startup(ctx context.Context) ([]string, error)
-	Prompt(ctx context.Context, sessionID, text string) (string, error)
+	Prompt(ctx context.Context, sessionID, text string, images ...acp.Image) (string, error)
 	Cancel(sessionID string) error
 	SetMode(ctx context.Context, sessionID, mode string) error
 	Steer(ctx context.Context, sessionID, text string) (bool, error)
@@ -697,9 +697,16 @@ func (m *Model) send(text string) tea.Cmd {
 	m.phase, m.turnStart, m.turnUsage, m.current, m.retrying, m.composing, m.testFirst = busy, time.Now(), usageTotals{}, nil, "", nil, nil
 	m.nextSteps, m.typing.options, m.tr.sel = nil, nil, nil
 	agent, id := m.agent, m.session.ID
+	images, skipped := attachedImages(text, m.opts.Cwd)
+	if len(images) > 0 {
+		m.notice(noticeFaint, fmt.Sprintf("Sent %s with the request", plural(len(images), "image")))
+	}
+	for _, why := range skipped {
+		m.notice(noticeWarn, "Not sent: "+why)
+	}
 	return tea.Batch(func() tea.Msg {
 		// A finished turn arrives in the agent's stream (acp.TurnEnded); only a failure comes back here.
-		if _, err := agent.Prompt(context.Background(), id, text); err != nil {
+		if _, err := agent.Prompt(context.Background(), id, text, images...); err != nil {
 			return promptDoneMsg{err: err}
 		}
 		return nil

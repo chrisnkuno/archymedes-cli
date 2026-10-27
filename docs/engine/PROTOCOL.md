@@ -44,7 +44,7 @@ person (`ask_user`). The reply:
 ```json
 {"protocolVersion":1,"authMethods":[],
  "agentCapabilities":{"loadSession":true,
-   "promptCapabilities":{"image":false,"audio":false,"embeddedContext":true},
+   "promptCapabilities":{"image":true,"audio":false,"embeddedContext":true},
    "_meta":{"archymedes":{"events":1,"engine":"go"}}}}
 ```
 
@@ -76,7 +76,9 @@ resumes any sub-agent that was running or paused, then replies with `_meta.archy
 ### `session/prompt`
 
 Params: `sessionId`, `prompt` (content blocks). `text` blocks are joined; `resource` blocks become
-`<context uri="…">…</context>`; `resource_link` blocks become `@<uri>`; others are ignored. An empty
+`<context uri="…">…</context>`; `resource_link` blocks become `@<uri>`; `image` blocks (`mimeType`,
+base64 `data`, optionally `uri`) go to the model with the text, at most 8 of at most 5 MB each;
+others are ignored. An empty
 prompt is refused before it is queued.
 
 The prompt is accepted (given its place in line) when the request is read. It runs after every

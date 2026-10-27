@@ -49,7 +49,9 @@ func TestNoKeyOrOffMeansNoJudge(t *testing.T) {
 	if NewJev(func(k string) string { return off[k] }) != nil {
 		t.Fatal("ARCHYMEDES_JEV=off still made a judge")
 	}
-	j := NewJev(func(k string) string { return map[string]string{"TYPESAFE_API_KEY": "sk", "TYPESAFE_MODEL": "jev-preview"}[k] })
+	j := NewJev(func(k string) string {
+		return map[string]string{"TYPESAFE_API_KEY": "sk", "TYPESAFE_MODEL": "jev-preview"}[k]
+	})
 	if j == nil || j.model != "jev-preview" {
 		t.Fatalf("model setting not read: %+v", j)
 	}

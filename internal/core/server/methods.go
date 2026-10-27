@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,7 +90,7 @@ func (s *Server) initialize(params json.RawMessage) any {
 	s.events.Store(p.ClientCapabilities.Meta.Archymedes.Events)
 	s.questions.Store(p.ClientCapabilities.Meta.Archymedes.Questions)
 	s.initialized.Store(true)
-	caps := map[string]any{"loadSession": true, "promptCapabilities": map[string]any{"image": false, "audio": false, "embeddedContext": true}}
+	caps := map[string]any{"loadSession": true, "promptCapabilities": map[string]any{"image": true, "audio": false, "embeddedContext": true}}
 	if s.events.Load() {
 		caps["_meta"] = map[string]any{"archymedes": map[string]any{"events": 1, "engine": "go"}}
 	}
@@ -299,6 +301,7 @@ func textOf(m fantasy.Message) string {
 type acceptedPrompt struct {
 	sess     *session
 	text     string
+	files    []fantasy.FilePart // images attached to the request
 	accepted agents.Accepted
 }
 
@@ -319,10 +322,17 @@ func (s *Server) acceptPrompt(params json.RawMessage) (acceptedPrompt, error) {
 		return acceptedPrompt{}, errorf(codeInvalidParams, "no session %s", p.SessionID)
 	}
 	text := promptText(p.Prompt)
-	if strings.TrimSpace(text) == "" {
+	files, err := promptImages(p.Prompt)
+	if err != nil {
+		return acceptedPrompt{}, errorf(codeInvalidParams, "%v", err)
+	}
+	if strings.TrimSpace(text) == "" && len(files) == 0 {
 		return acceptedPrompt{}, errorf(codeInvalidParams, "the prompt has no text")
 	}
-	return acceptedPrompt{sess: sess, text: text, accepted: sess.core.Accept()}, nil
+	if strings.TrimSpace(text) == "" {
+		text = "(see the attached image)"
+	}
+	return acceptedPrompt{sess: sess, text: text, files: files, accepted: sess.core.Accept()}, nil
 }
 
 func (s *Server) prompt(ctx context.Context, p acceptedPrompt) (any, error) {
@@ -330,7 +340,7 @@ func (s *Server) prompt(ctx context.Context, p acceptedPrompt) (any, error) {
 	if c := p.sess.outside(); c != nil {
 		result = s.claudeTurn(ctx, p, c)
 	} else {
-		result = p.sess.core.Prompt(ctx, p.accepted, p.text)
+		result = p.sess.core.Prompt(ctx, p.accepted, p.text, p.files...)
 	}
 	return map[string]any{"stopReason": stopReason(result.Status)}, nil
 }
@@ -363,6 +373,43 @@ func promptText(blocks []json.RawMessage) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// maxImageBytes is the most one attached image may be, and maxImages how many a request may carry.
+const (
+	maxImageBytes = 5 << 20
+	maxImages     = 8
+)
+
+// promptImages are a prompt's image blocks (ACP: type image, mimeType, base64 data) as file parts.
+func promptImages(blocks []json.RawMessage) ([]fantasy.FilePart, error) {
+	var files []fantasy.FilePart
+	for _, raw := range blocks {
+		var b struct {
+			Type     string `json:"type"`
+			MimeType string `json:"mimeType"`
+			Data     string `json:"data"`
+			URI      string `json:"uri"`
+		}
+		if json.Unmarshal(raw, &b) != nil || b.Type != "image" {
+			continue
+		}
+		if !strings.HasPrefix(b.MimeType, "image/") {
+			return nil, fmt.Errorf("an attached image has type %q, not an image type", b.MimeType)
+		}
+		data, err := base64.StdEncoding.DecodeString(b.Data)
+		if err != nil {
+			return nil, fmt.Errorf("an attached image is not base64: %v", err)
+		}
+		if len(data) > maxImageBytes {
+			return nil, fmt.Errorf("an attached image is %d MB; at most %d MB", len(data)>>20, maxImageBytes>>20)
+		}
+		if len(files) == maxImages {
+			return nil, fmt.Errorf("at most %d images in one request", maxImages)
+		}
+		files = append(files, fantasy.FilePart{Filename: filepath.Base(b.URI), Data: data, MediaType: b.MimeType})
+	}
+	return files, nil
 }
 
 func stopReason(status loop.Status) string {

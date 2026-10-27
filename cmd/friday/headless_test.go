@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"charm.land/fantasy"
 
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/server"
@@ -131,5 +133,33 @@ func TestWhatCountsAsAScriptedRun(t *testing.T) {
 	}
 	if inv, _, _ := scriptedRun([]string{"--print", "-p", "x"}, true); !strings.Contains(strings.Join(inv.Args, " "), "-p") {
 		t.Errorf("plan mode lost: %v", inv.Args)
+	}
+}
+
+func TestAnImageSentWithAPromptReachesTheModel(t *testing.T) {
+	var seen []fantasy.FilePart
+	var mu sync.Mutex
+	c := engine(t, t.TempDir(), func(call fantasy.Call) (string, [][2]string) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, part := range call.Prompt[len(call.Prompt)-1].Content {
+			if f, ok := part.(fantasy.FilePart); ok {
+				seen = append(seen, f)
+			}
+		}
+		return "a cat", nil
+	}, nil)
+	sess, err := c.NewSession(context.Background(), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop, err := c.Prompt(context.Background(), sess.ID, "what is this", acp.Image{MimeType: "image/png", Data: []byte("png bytes"), URI: "file:///x/cat.png"})
+	if err != nil || stop != "end_turn" {
+		t.Fatalf("prompt = %q, %v", stop, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 1 || seen[0].MediaType != "image/png" || string(seen[0].Data) != "png bytes" || seen[0].Filename != "cat.png" {
+		t.Fatalf("model saw %+v", seen)
 	}
 }

@@ -30,6 +30,7 @@ type fakeAgent struct {
 	setError       string
 	mu             sync.Mutex
 	prompts        []string
+	images         []acp.Image
 	cancelled      int
 	modes          []string
 	messages       chan any
@@ -170,7 +171,8 @@ func (f *fakeAgent) SetSetting(_ context.Context, key, value string) (acp.Settin
 	return acp.SettingsSetResult{OK: true, File: "/cfg/settings.json", Value: value, IsSet: value != ""}, nil
 }
 
-func (f *fakeAgent) Prompt(_ context.Context, _ string, text string) (string, error) {
+func (f *fakeAgent) Prompt(_ context.Context, _ string, text string, images ...acp.Image) (string, error) {
+	f.images = append(f.images, images...)
 	f.mu.Lock()
 	f.prompts = append(f.prompts, text)
 	f.mu.Unlock()

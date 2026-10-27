@@ -50,7 +50,9 @@ type Request struct {
 	// History is the conversation so far; Prompt, when set, is appended as the person's message.
 	History []fantasy.Message
 	Prompt  string
-	Tools   *tool.Catalog
+	// Files are attached to the prompt (images the person sent with it).
+	Files []fantasy.FilePart
+	Tools *tool.Catalog
 	// Approve is asked about every call that changes something. Nil approves only calls that change nothing.
 	Approve Approver
 	// Gate, when set, holds the run until workspace changes are verified.
@@ -111,13 +113,13 @@ type run struct {
 	messages []fantasy.Message
 	// hookStops is how many times a Stop hook kept this run going.
 	hookStops int
-	usage    Usage
-	steps    int
-	calls    int
-	detector *Detector
-	text     string
-	stuck    string
-	emitMu   sync.Mutex
+	usage     Usage
+	steps     int
+	calls     int
+	detector  *Detector
+	text      string
+	stuck     string
+	emitMu    sync.Mutex
 }
 
 // Run performs one run to its end.
@@ -125,7 +127,7 @@ func Run(ctx context.Context, req Request) Result {
 	r := &run{req: req, budgets: withDefaults(req.Budgets), detector: NewDetector()}
 	r.messages = append([]fantasy.Message(nil), req.History...)
 	if strings.TrimSpace(req.Prompt) != "" {
-		r.messages = append(r.messages, fantasy.NewUserMessage(req.Prompt))
+		r.messages = append(r.messages, fantasy.NewUserMessage(req.Prompt, req.Files...))
 		// Saved before the first call: a request is never lost to a crash, and a sub-agent forked
 		// during this turn's first step sees what it was asked.
 		r.checkpoint()

@@ -3,6 +3,7 @@ package acp
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,11 +140,15 @@ func (c *Client) NewSession(ctx context.Context, cwd, resumeID string) (Session,
 }
 
 // Prompt runs one turn and returns ACP's stop reason. Events arrive on Messages meanwhile.
-func (c *Client) Prompt(ctx context.Context, sessionID, text string) (string, error) {
+func (c *Client) Prompt(ctx context.Context, sessionID, text string, images ...Image) (string, error) {
 	var result struct {
 		StopReason string `json:"stopReason"`
 	}
-	params := map[string]any{"sessionId": sessionID, "prompt": []any{map[string]any{"type": "text", "text": text}}}
+	blocks := []any{map[string]any{"type": "text", "text": text}}
+	for _, img := range images {
+		blocks = append(blocks, map[string]any{"type": "image", "mimeType": img.MimeType, "data": base64.StdEncoding.EncodeToString(img.Data), "uri": img.URI})
+	}
+	params := map[string]any{"sessionId": sessionID, "prompt": blocks}
 	err := c.call(ctx, "session/prompt", params, &result)
 	return result.StopReason, err
 }

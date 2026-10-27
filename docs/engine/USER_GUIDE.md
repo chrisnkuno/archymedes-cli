@@ -129,6 +129,14 @@ question waits: a notification from your terminal, or its bell. Set a push URL i
 (`ARCHYMEDES_NOTIFY_URL`, an [ntfy](https://ntfy.sh) topic for example) and your phone hears it
 too. See [Notifications](CONFIGURATION.md#notifications).
 
+## Images in a request
+
+Name a picture in your request and it is sent with it: type its path, mention it (`@shot.png`), or
+drop the file onto the terminal, which pastes its path. PNG, JPEG, GIF and WebP up to 5 MB each are
+sent, at most eight a request, and a line under your message says how many went. The path stays in
+the text, so the model knows which file it is. The model must be one that reads images. One that
+cannot will refuse the request, and its provider's words come back to you.
+
 ## Vim keys in the input
 
 `/vim` (or Settings → `ARCHYMEDES_VIM`) turns on vim keys in the input. Pressing esc on a non-empty
