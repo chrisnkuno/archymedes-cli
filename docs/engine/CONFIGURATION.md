@@ -130,6 +130,7 @@ Without a small model, the main model does everything. What runs on which:
 | `ARCHYMEDES_SUGGEST` (Settings → Suggestions) | `on` | next steps after a turn, notes on each edit and hints while you type ([User guide](USER_GUIDE.md#suggestions-while-you-work)). `off`: none of them |
 | `ARCHYMEDES_SUGGEST_MODEL` | `off` | `on`: the small model proposes up to two next steps of its own after each turn, for one small call |
 | `ARCHYMEDES_JEV` | `on` | with `TYPESAFE_API_KEY` set, Jev weighs the suggestions and notes edits; `off` never calls it. `TYPESAFE_MODEL` names the Jev model (`jev-latest` by default) |
+| `ARCHYMEDES_LSP` | on | after an edit, the file's language server (gopls, typescript-language-server, pyright, rust-analyzer, clangd, when installed) reports its errors to the model; `off`: never start one |
 | `ARCHYMEDES_DEFER_TOOLS` | `auto` | which tools are found on demand with `tool_search` instead of being sent with every request. `auto`: `git_log`, `git_show`, `todo_read`, `close_agent`. `off`: send every tool. A comma list: exactly those names |
 | `ARCHYMEDES_PROVIDER` | — | the provider to use when none is chosen; set for you when you pick one |
 

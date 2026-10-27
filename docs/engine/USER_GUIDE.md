@@ -152,6 +152,15 @@ normal mode esc does what it always does: stop the turn, or step out to the bars
 | `u` | undo |
 | `i` `a` `I` `A` `o` `O` | back to typing |
 
+## Errors after an edit
+
+When Friday edits a file that a language server covers, the server checks it, and its errors (and a
+few warnings) are added to the edit's result, so the model fixes what it broke before going on.
+Friday starts the server the first time a file of its language changes, if it is installed:
+gopls for Go, typescript-language-server for TypeScript and JavaScript, pyright for Python,
+rust-analyzer for Rust, clangd for C and C++. Nothing is installed for you. `/lsp` shows which are
+installed and running; `ARCHYMEDES_LSP=off` turns them off.
+
 ## Profiles
 
 A profile is another set of settings, for another account or way of working: a file in Friday's

@@ -147,7 +147,7 @@ func (s *Session) runChild(ctx context.Context, c *child, history []fantasy.Mess
 	c.model = modelID
 	c.mu.Unlock()
 	mode := s.Mode()
-	catalog := tool.NewCatalog(roles.ToolsFor(c.profile, filterByMode(c.ws.Builtins(), mode), policy.CapabilitiesForMode(policy.Plan))...)
+	catalog := tool.NewCatalog(roles.ToolsFor(c.profile, filterByMode(s.withDiagnostics(c.ws.Builtins()), mode), policy.CapabilitiesForMode(policy.Plan))...)
 	var verify *gate.Gate
 	if !c.profile.ReadOnly && mode != policy.Plan {
 		verify = gate.New(s.cfg.TestFirst)

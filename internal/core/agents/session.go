@@ -26,6 +26,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/hooks"
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
+	"github.com/chrisnkuno/friday-cli/internal/core/lsp"
 	"github.com/chrisnkuno/friday-cli/internal/core/mcp"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/roles"
@@ -105,6 +106,7 @@ type Session struct {
 	mcp      *mcp.Manager
 	cps      *checkpoint.Store // nil outside a git repository
 	hooks    *hooks.Set
+	lsp      *lsp.Manager // nil when ARCHYMEDES_LSP is off
 	// hookContext is what SessionStart hooks printed, added to the system prompt.
 	hookContext string
 
@@ -214,6 +216,9 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 	s.mcp.Tools() // a server never listed is listed now, in the background, ready by the first turn
 	if store != nil {
 		s.cps = checkpoint.Open(cfg.Root, store.Dir(), meta.ID)
+	}
+	if !strings.EqualFold(cfg.Env.Get("ARCHYMEDES_LSP"), "off") {
+		s.lsp = lsp.NewManager(cfg.Root)
 	}
 	home, _ := os.UserHomeDir()
 	s.hooks = hooks.Load(cfg.Root, cfg.ConfigDir, home, meta.ID)
@@ -417,7 +422,29 @@ func (s *Session) Close() {
 		<-c.done
 	}
 	s.mcp.Close()
+	if s.lsp != nil {
+		s.lsp.Close()
+	}
 	s.hooks.SessionEnded(context.Background())
+}
+
+// LSP is the session's language servers (nil when turned off).
+func (s *Session) LSP() *lsp.Manager { return s.lsp }
+
+// withDiagnostics has the editing tools report what the language server finds in the file they
+// changed.
+func (s *Session) withDiagnostics(tools []*tool.Tool) []*tool.Tool {
+	if s.lsp == nil {
+		return tools
+	}
+	out := make([]*tool.Tool, len(tools))
+	for i, t := range tools {
+		out[i] = t
+		if t.Name == "edit_file" || t.Name == "write_file" {
+			out[i] = lsp.Decorate(t, s.lsp)
+		}
+	}
+	return out
 }
 
 // HookSet is the session's hooks.
@@ -545,7 +572,7 @@ func (s *Session) rootTools(mode policy.Mode) *tool.Catalog {
 		allowed[c] = true
 	}
 	var list []*tool.Tool
-	for _, t := range s.ws.Builtins() {
+	for _, t := range s.withDiagnostics(s.ws.Builtins()) {
 		if allowed[t.Capability] {
 			list = append(list, t)
 		}

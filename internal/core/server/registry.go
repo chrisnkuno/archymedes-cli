@@ -114,6 +114,14 @@ var sessionCommands = []sessionCommand{
 	{"cost", "What this session's model calls used: tokens in, from cache and out, with each sub-agent", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": costText(sess.core.Meta(), sess.core.Threads())}
 	}},
+	{"lsp", "The language servers: which are installed, running, or failed, and for which files", func(sess *session, _ string) map[string]any {
+		m := sess.core.LSP()
+		if m == nil {
+			return map[string]any{"kind": "text", "text": "Language servers are off (ARCHYMEDES_LSP=off)."}
+		}
+		lines := append(m.Status(), "After an edit to a file one of them covers, its errors are added to the edit's result for the model.")
+		return map[string]any{"kind": "text", "text": strings.Join(lines, "\n")}
+	}},
 	{"profile", "List the profiles, or choose one (none to clear) for the sessions that follow", func(sess *session, arg string) map[string]any {
 		return profileCommand(sess.server, strings.TrimSpace(arg))
 	}},

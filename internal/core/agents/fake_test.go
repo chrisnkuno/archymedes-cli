@@ -85,7 +85,7 @@ func newHarness(t *testing.T, root string, mode policy.Mode, b brain) *harness {
 		t.Fatal(err)
 	}
 	h.cfg = Config{
-		Root: root, ConfigDir: t.TempDir(), Env: llm.Env{"ARCHYMEDES_TITLES": "off"}, Models: models, Mode: mode,
+		Root: root, ConfigDir: t.TempDir(), Env: llm.Env{"ARCHYMEDES_TITLES": "off", "ARCHYMEDES_LSP": "off"}, Models: models, Mode: mode,
 		Prompt: func(context.Context, policy.Request) (policy.Decision, error) { return policy.Allow, nil },
 		Notify: func(n Notice) { h.mu.Lock(); h.notices = append(h.notices, n); h.mu.Unlock() },
 	}

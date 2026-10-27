@@ -136,6 +136,7 @@ Params: `sessionId`, `command`, `argument`. Replies with a `kind` and its fields
 | `todos` | `{"kind":"todos","items":[{"text":"…","status":"pending|in_progress|done"}]}`, or `{"kind":"text","text":"No plan yet."}` |
 | `tools` | `{"kind":"text","text":"Tools in build mode: …"}` |
 | `compact` | `{"kind":"text","text":"Compacted the conversation: 12 → 3 messages."}`; `argument` is the focus to keep |
+| `lsp` | `{"kind":"text","text":"gopls (gopls): running\n…"}`: each language server, installed, running or failed |
 | `profile` | `{"kind":"text","text":"● work\n  home\n…"}` without `argument`; with a name (or `none`) it saves `ARCHYMEDES_PROFILE` for the sessions that follow |
 | `btw` | `{"kind":"text","text":"<the answer>"}`: `argument` is a side question, answered from the conversation without tools and without adding to it; allowed while a turn runs |
 | `undo` | `{"kind":"text","text":"Went back to before \"fix the parser\": the files and the conversation."}`; `argument` `code` or `conversation` restores only that; again for the turn before |
