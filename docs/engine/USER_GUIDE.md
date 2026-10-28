@@ -446,7 +446,8 @@ that key instead of your plan, so Friday leaves it out unless `ARCHYMEDES_CLAUDE
 | Steps in a turn | 100 | the turn ends: "the run's budget is spent" |
 | Tool calls in a turn | 500 | the same |
 | Tool calls in one step | 16 | the rest are not run; the model is told to make them in its next step |
-| One tool result | 40,000 characters | the start and end are kept, the middle is left out and counted |
+| One tool result | 40,000 characters | the start and end are kept; the full output is saved under the project and the model can read it back with read_file |
+| One step's results together | half the window (64,000 characters by default) | shared fairly across the step's calls; large results are trimmed so a step never sends more than compaction keeps |
 | One reply | 16,384 tokens | a reply cut off by it is continued, up to twice |
 | A silent stream | 3 minutes | the connection is cut and the call retried |
 | Repeating one call with nothing changed | a note at 3, a stop at 5 | see below |

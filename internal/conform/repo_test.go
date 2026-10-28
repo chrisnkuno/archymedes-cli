@@ -355,3 +355,55 @@ func TestConformDocumentReferences(t *testing.T) {
 		}
 	}
 }
+
+// TestConformModelStreamsAreWatchdogGuarded holds the liveness invariant: every call to a model's
+// Stream goes through a function that wraps it in the idle watchdog, so no provider can stall a
+// turn by going silent. A new, unguarded stream site fails here until it is routed through one of
+// the guarded helpers (or the helper's name is added, with its own watchdog).
+func TestConformModelStreamsAreWatchdogGuarded(t *testing.T) {
+	guarded := map[string]bool{"streamOnce": true, "complete": true}
+	fset := token.NewFileSet()
+	for path := range goSource(t) {
+		if !strings.Contains(filepath.ToSlash(path), "/core/") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "Stream" {
+					return true
+				}
+				if !guarded[fn.Name.Name] {
+					t.Errorf("%s: %s() calls model.Stream directly; only streamOnce and complete wrap it in the idle watchdog. Route the stream through one of them.", filepath.Base(path), fn.Name.Name)
+				}
+				return true
+			})
+		}
+	}
+}
+
+// TestConformAgentCommandsAreCancelable holds the other half of the flow liveness invariant: every
+// command the model's tools run takes a context (exec.CommandContext), so it has a deadline and is
+// cancelled with the turn. A bare exec.Command in a tool could hang with nothing to stop it.
+func TestConformAgentCommandsAreCancelable(t *testing.T) {
+	for path, src := range goSource(t) {
+		if !strings.Contains(filepath.ToSlash(path), "/core/tools/") {
+			continue
+		}
+		if strings.Contains(src, "exec.Command(") {
+			t.Errorf("%s: a tool runs exec.Command directly; use exec.CommandContext so the command takes a deadline and is cancelled with the turn.", filepath.Base(path))
+		}
+	}
+}

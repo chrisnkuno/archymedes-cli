@@ -54,11 +54,102 @@ func (r *run) runTools(ctx context.Context, calls []tool.Call) fantasy.Message {
 		outcomes[i] = r.runOne(ctx, prepared[i])
 		i++
 	}
+	r.budgetStepResults(outcomes)
 	parts := make([]fantasy.MessagePart, len(outcomes))
 	for i, o := range outcomes {
 		parts[i] = resultPart(o)
 	}
 	return fantasy.Message{Role: fantasy.MessageRoleTool, Content: parts}
+}
+
+// stepTrimNote is added to a result the step budget trimmed, so the model spreads work out.
+const stepTrimNote = "\n\n[Trimmed to keep this step within its context budget. Make fewer or more focused tool calls per step to see more.]"
+
+// offloadNote points the model at the full output kept on disk.
+func offloadNote(ref string, chars int) string {
+	return fmt.Sprintf("\n\n[Full output (%d characters) saved to %s — read_file it for the part left out.]", chars, ref)
+}
+
+// boundResult holds one result to MaxResultChars. When it is over and a result store is wired, the
+// full output is saved under the project and the model keeps a preview plus a path to re-read it,
+// rather than losing the middle; the reference is recorded so the step-budget pass can keep it.
+func (r *run) boundResult(callID string, result *tool.Result) {
+	full := result.Content
+	if len(full) <= r.budgets.MaxResultChars {
+		return
+	}
+	result.Content = truncate(full, r.budgets.MaxResultChars)
+	if r.req.ResultStore == nil {
+		return
+	}
+	ref := r.req.ResultStore(callID, full)
+	if ref == "" {
+		return
+	}
+	if result.Data == nil {
+		result.Data = map[string]any{}
+	}
+	result.Data["offloadRef"], result.Data["offloadChars"] = ref, len(full)
+	result.Content += offloadNote(ref, len(full))
+}
+
+// budgetStepResults holds one step's tool results, together, within MaxStepResultChars, so a step
+// never sends the model more than compaction keeps verbatim. The budget is shared max-min fair:
+// small results are left whole and large ones are trimmed to an equal ceiling (head and tail
+// kept), so no single result starves the rest.
+func (r *run) budgetStepResults(outcomes []outcome) {
+	budget := r.budgets.MaxStepResultChars
+	if budget <= 0 {
+		return
+	}
+	sizes := make([]int, len(outcomes))
+	total := 0
+	for i := range outcomes {
+		sizes[i] = len(outcomes[i].result.Content)
+		total += sizes[i]
+	}
+	if total <= budget {
+		return
+	}
+	caps := fairCaps(sizes, budget)
+	for i := range outcomes {
+		if caps[i] >= sizes[i] {
+			continue
+		}
+		content := truncate(outcomes[i].result.Content, caps[i])
+		// Keep the path to the full output if boundResult already saved it; otherwise tell the
+		// model the step was trimmed so it spreads work over steps.
+		if ref, ok := outcomes[i].result.Data["offloadRef"].(string); ok {
+			chars, _ := outcomes[i].result.Data["offloadChars"].(int)
+			content += offloadNote(ref, chars)
+		} else {
+			content += stepTrimNote
+		}
+		outcomes[i].result.Content = content
+	}
+}
+
+// fairCaps shares budget over sizes max-min fair: each entry gets the smaller of its size and an
+// equal share of what is left, so small results pass untouched and large ones split the remainder.
+func fairCaps(sizes []int, budget int) []int {
+	order := make([]int, len(sizes))
+	for i := range order {
+		order[i] = i
+	}
+	sort.Slice(order, func(a, b int) bool { return sizes[order[a]] < sizes[order[b]] })
+	caps := make([]int, len(sizes))
+	remaining, active := budget, len(sizes)
+	for _, i := range order {
+		share := remaining / active
+		if sizes[i] <= share {
+			caps[i] = sizes[i]
+		} else {
+			caps[i] = share
+		}
+		remaining -= caps[i]
+		active--
+	}
+	return caps
 }
 
 func batchable(p prepared) bool {
@@ -205,7 +296,7 @@ func (r *run) finish(p prepared, result tool.Result) outcome {
 			notes = append(notes, verdict.Note)
 		}
 	}
-	result.Content = truncate(result.Content, r.budgets.MaxResultChars)
+	r.boundResult(p.call.ID, &result)
 	if len(notes) > 0 {
 		result.Content += "\n\n" + strings.Join(notes, "\n")
 	}

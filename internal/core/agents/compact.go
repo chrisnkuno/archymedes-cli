@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"charm.land/fantasy"
@@ -70,7 +71,7 @@ func (s *Session) keepVerbatimTokens() int {
 	if limit <= 0 {
 		limit = loop.DefaultBudgets().ContextLimit
 	}
-	return limit / 4
+	return limit / loop.CompactionKeepDivisor
 }
 
 func lastUserIndex(messages []fantasy.Message) int {
@@ -109,14 +110,22 @@ func recentCut(messages []fantasy.Message, budget int) int {
 	return cut
 }
 
-// complete is one call with no tools, its text collected.
+// complete is one call with no tools, its text collected. Like the main loop's stream, it is held
+// to the idle limit: a provider that goes silent (summaries, titles, /btw run here) is cut and the
+// error reported, so a hung helper call can never stall a turn.
 func complete(ctx context.Context, model loop.Model, prompt fantasy.Prompt) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var silent atomic.Bool
+	watchdog := time.AfterFunc(loop.IdleTimeout, func() { silent.Store(true); cancel() })
+	defer watchdog.Stop()
 	stream, err := model.Stream(ctx, fantasy.Call{Prompt: prompt})
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
 	for part := range stream {
+		watchdog.Reset(loop.IdleTimeout)
 		switch part.Type {
 		case fantasy.StreamPartTypeTextDelta:
 			b.WriteString(part.Delta)
@@ -125,6 +134,9 @@ func complete(ctx context.Context, model loop.Model, prompt fantasy.Prompt) (str
 				return "", part.Error
 			}
 		}
+	}
+	if silent.Load() {
+		return "", errors.New("the provider went silent for too long")
 	}
 	return b.String(), ctx.Err()
 }

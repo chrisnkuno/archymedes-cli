@@ -26,15 +26,35 @@ type Budgets struct {
 	MaxToolCalls        int
 	MaxToolCallsPerStep int
 	MaxResultChars      int
-	MaxOutputTokens     int64
+	// MaxStepResultChars caps one step's tool results together, so a step never sends the model
+	// more than compaction keeps verbatim. Zero derives it from the window (StepResultCharsFor).
+	MaxStepResultChars int
+	MaxOutputTokens    int64
 	// ContextLimit is the model's window; past CompactAt of it, the conversation is compacted.
 	ContextLimit int
 	CompactAt    float64
 }
 
+// The flow measures that keep tool running smooth on every provider: sizes are kept in characters
+// and compared to the window in tokens through CharsPerToken, a rough stand-in for a real
+// tokenizer (never for billing). CompactionKeepDivisor is the fraction of the window compaction
+// keeps word for word; a step's results are held to half of that, so the model always sees in
+// full the results of the step it just caused.
+const (
+	CharsPerToken         = 4
+	CompactionKeepDivisor = 4
+)
+
+// StepResultCharsFor is the most characters of tool results one step may send the model for a
+// given window: half of what compaction keeps verbatim (ContextLimit/2 characters), so a step's
+// fresh results fit with margin at any window. The flow invariant, held by TestConformFlowBudgets.
+func StepResultCharsFor(contextLimit int) int {
+	return contextLimit * CharsPerToken / (2 * CompactionKeepDivisor)
+}
+
 // DefaultBudgets are a top-level session's.
 func DefaultBudgets() Budgets {
-	return Budgets{MaxSteps: 100, MaxToolCalls: 500, MaxToolCallsPerStep: 16, MaxResultChars: 40_000, MaxOutputTokens: 16_384, ContextLimit: 128_000, CompactAt: 0.8}
+	return Budgets{MaxSteps: 100, MaxToolCalls: 500, MaxToolCallsPerStep: 16, MaxResultChars: 40_000, MaxStepResultChars: StepResultCharsFor(128_000), MaxOutputTokens: 16_384, ContextLimit: 128_000, CompactAt: 0.8}
 }
 
 // Approver decides whether an effectful call runs; err is for a decision that could not be made
@@ -65,7 +85,11 @@ type Request struct {
 	// Checkpoint is called after every step, with the conversation structurally complete.
 	Checkpoint func([]fantasy.Message)
 	// Compact replaces the conversation with a shorter one when it nears the context limit.
-	Compact         func(ctx context.Context, messages []fantasy.Message) ([]fantasy.Message, error)
+	Compact func(ctx context.Context, messages []fantasy.Message) ([]fantasy.Message, error)
+	// ResultStore, when set, persists a tool result too large to keep inline and returns a short
+	// reference (a path under the project) the model can re-read with read_file. The model keeps a
+	// preview plus the reference instead of losing the middle. Nil falls back to plain truncation.
+	ResultStore func(callID, content string) string
 	ProviderOptions fantasy.ProviderOptions
 	// WrapUp, when set, is said to the model once the budget is spent, for one last call with no
 	// tools: a sub-agent's report is worth more than its silence.
@@ -179,7 +203,27 @@ func withDefaults(b Budgets) Budgets {
 	if b.CompactAt > 0 {
 		d.CompactAt = b.CompactAt
 	}
+	// The per-step result budget tracks the resolved window unless it was set by hand, so the flow
+	// invariant holds even when ARCHYMEDES_CONTEXT_LIMIT makes the window small or large.
+	if b.MaxStepResultChars > 0 {
+		d.MaxStepResultChars = b.MaxStepResultChars
+	} else {
+		d.MaxStepResultChars = StepResultCharsFor(d.ContextLimit)
+	}
+	// Reserve output headroom: a reply begun with the prompt at the compaction trip point must
+	// still fit under the window, so the model is never cut off by its own context. On the default
+	// window this leaves 16,384 unchanged (25,600 reserved); on a small window it scales the reply
+	// down to what fits. The flow invariant, held by TestConformFlowBudgetsFitTheWindow.
+	if reserve := OutputHeadroom(d.ContextLimit, d.CompactAt); d.MaxOutputTokens > reserve {
+		d.MaxOutputTokens = reserve
+	}
 	return d
+}
+
+// OutputHeadroom is the room left under the window once the prompt is at the compaction trip
+// point: the most a reply may be so it cannot overrun the window. (1 - CompactAt) of the window.
+func OutputHeadroom(contextLimit int, compactAt float64) int64 {
+	return int64(float64(contextLimit) * (1 - compactAt))
 }
 
 // continueAfterLength is what the model is told when its reply was cut off by the output limit.

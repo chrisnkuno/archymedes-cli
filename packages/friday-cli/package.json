@@ -1,6 +1,6 @@
 {
   "name": "@archymedes/friday",
-  "version": "3.12.1",
+  "version": "3.12.2",
   "description": "Friday \u2014 a coding agent for your terminal that shows its work, asks before it changes anything, and proves a change works. Any model: ten providers, free models, your Claude subscription or your ChatGPT plan.",
   "keywords": [
     "cli",
@@ -52,12 +52,12 @@
     "prepublishOnly": "bun run ../../tooling/build/build-packages.ts"
   },
   "optionalDependencies": {
-    "@archymedes/friday-darwin-arm64": "3.12.1",
-    "@archymedes/friday-darwin-x64": "3.12.1",
-    "@archymedes/friday-linux-arm64": "3.12.1",
-    "@archymedes/friday-linux-x64": "3.12.1",
-    "@archymedes/friday-win32-arm64": "3.12.1",
-    "@archymedes/friday-win32-x64": "3.12.1",
+    "@archymedes/friday-darwin-arm64": "3.12.2",
+    "@archymedes/friday-darwin-x64": "3.12.2",
+    "@archymedes/friday-linux-arm64": "3.12.2",
+    "@archymedes/friday-linux-x64": "3.12.2",
+    "@archymedes/friday-win32-arm64": "3.12.2",
+    "@archymedes/friday-win32-x64": "3.12.2",
     "@archymedes/state-darwin-arm64": "0.4.0",
     "@archymedes/state-darwin-x64": "0.4.0",
     "@archymedes/state-linux-arm64-gnu": "0.4.0",

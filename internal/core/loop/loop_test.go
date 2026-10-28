@@ -457,6 +457,115 @@ func TestALongConversationIsCompactedBeforeTheCallGoesOut(t *testing.T) {
 	}
 }
 
+func TestAStepsResultsAreHeldToTheStepBudgetFairly(t *testing.T) {
+	r := &run{budgets: withDefaults(Budgets{ContextLimit: 16_000})} // step budget = 8,000 chars
+	big := strings.Repeat("x", 50_000)
+	outcomes := []outcome{
+		{call: tool.Call{ID: "a"}, result: tool.Result{Content: big}},
+		{call: tool.Call{ID: "b"}, result: tool.Result{Content: big}},
+		{call: tool.Call{ID: "c"}, result: tool.Result{Content: "ok"}},
+	}
+	r.budgetStepResults(outcomes)
+	if outcomes[2].result.Content != "ok" {
+		t.Fatalf("the small result was trimmed: %q", outcomes[2].result.Content)
+	}
+	for _, i := range []int{0, 1} {
+		if !strings.Contains(outcomes[i].result.Content, "within its context budget") {
+			t.Fatalf("a trimmed result was not marked: %q", outcomes[i].result.Content)
+		}
+	}
+	total := 0
+	for _, o := range outcomes {
+		total += len(o.result.Content)
+	}
+	budget := r.budgets.MaxStepResultChars
+	slack := len(outcomes) * (len(stepTrimNote) + 100) // truncation markers and the per-result note
+	if total > budget+slack {
+		t.Fatalf("step results %d exceed the budget %d (+%d slack)", total, budget, slack)
+	}
+}
+
+// TestConformFlowBudgetsFitTheWindow is the flow invariant: for any window, a step's results fit
+// what compaction keeps verbatim, which is under the trip point, which is under the window. A
+// later change to any constant that breaks the chain fails here.
+func TestConformFlowBudgetsFitTheWindow(t *testing.T) {
+	for _, w := range []int{8_000, 32_000, 128_000, 200_000, 1_000_000} {
+		b := withDefaults(Budgets{ContextLimit: w})
+		step := b.MaxStepResultChars / CharsPerToken
+		keep := b.ContextLimit / CompactionKeepDivisor
+		trip := int(b.CompactAt * float64(b.ContextLimit))
+		if !(step <= keep && keep <= trip && trip <= b.ContextLimit) {
+			t.Fatalf("window %d: step %d > keep %d > trip %d > window %d — chain broken", w, step, keep, trip, b.ContextLimit)
+		}
+		// Output headroom: a reply from the trip point fits under the window.
+		if trip+int(b.MaxOutputTokens) > b.ContextLimit {
+			t.Fatalf("window %d: trip %d + reply %d overruns window %d", w, trip, b.MaxOutputTokens, b.ContextLimit)
+		}
+	}
+}
+
+func TestABigResultIsOffloadedAndReferenced(t *testing.T) {
+	big := strings.Repeat("y", 60_000) // over MaxResultChars (40,000)
+	stored := map[string]string{}
+	model := &scripted{turns: []turn{{calls: []scriptCall{{"read", `{}`}}}, {text: "done"}}}
+	res := Run(context.Background(), Request{Model: model, Prompt: "x",
+		Tools:       tool.NewCatalog(readTool("read", func(tool.Args) tool.Result { return tool.Text(big) })),
+		ResultStore: func(id, content string) string { stored[id] = content; return ".archymedes/results/" + id + ".txt" },
+	})
+	if res.Status != Completed {
+		t.Fatalf("status %s", res.Status)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("stored %d results, want 1", len(stored))
+	}
+	for _, v := range stored {
+		if len(v) != 60_000 {
+			t.Fatalf("stored result is %d chars, not the full 60,000", len(v))
+		}
+	}
+	var toolText string
+	for _, m := range res.Messages {
+		if m.Role == fantasy.MessageRoleTool {
+			for _, p := range m.Content {
+				if r, ok := p.(fantasy.ToolResultPart); ok {
+					if o, ok := r.Output.(fantasy.ToolResultOutputContentText); ok {
+						toolText = o.Text
+					}
+				}
+			}
+		}
+	}
+	if len(toolText) >= 60_000 {
+		t.Fatalf("the model was sent the whole %d-char result; it was not trimmed", len(toolText))
+	}
+	if !strings.Contains(toolText, ".archymedes/results/") || !strings.Contains(toolText, "read_file") {
+		t.Fatalf("the trimmed result does not point at the saved output: %q", last200(toolText))
+	}
+}
+
+func TestTheStepBudgetKeepsTheOffloadReference(t *testing.T) {
+	r := &run{budgets: withDefaults(Budgets{ContextLimit: 16_000})} // step budget 8,000 chars
+	big := strings.Repeat("z", 50_000)
+	outcomes := []outcome{
+		{call: tool.Call{ID: "a"}, result: tool.Result{Content: big, Data: map[string]any{"offloadRef": "x/a.txt", "offloadChars": 50_000}}},
+		{call: tool.Call{ID: "b"}, result: tool.Result{Content: big}},
+	}
+	r.budgetStepResults(outcomes)
+	if !strings.Contains(outcomes[0].result.Content, "x/a.txt") {
+		t.Fatalf("the saved-output path was lost when the step was trimmed: %q", last200(outcomes[0].result.Content))
+	}
+	if !strings.Contains(outcomes[1].result.Content, "context budget") {
+		t.Fatalf("the un-saved result was not marked trimmed: %q", last200(outcomes[1].result.Content))
+	}
+}
+
+func last200(s string) string {
+	if len(s) <= 200 {
+		return s
+	}
+	return s[len(s)-200:]
+}
+
 func TestLengthCutOffContinues(t *testing.T) {
 	model := &scripted{turns: []turn{{text: "part one ", finish: fantasy.FinishReasonLength}, {text: "part two"}}}
 	res := Run(context.Background(), Request{Model: model, Prompt: "x", Tools: tool.NewCatalog()})

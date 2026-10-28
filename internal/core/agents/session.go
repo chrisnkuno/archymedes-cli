@@ -231,7 +231,27 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 	if all := append(rules.Problems, problems...); len(all) > 0 {
 		cfg.Notify(Notice{Kind: "rules_problems", Problems: all})
 	}
+	cleanStaleResults(cfg.Root)
 	return s
+}
+
+// resultTTL is how long an offloaded result is kept; older ones are swept when a session opens.
+const resultTTL = 24 * time.Hour
+
+// cleanStaleResults removes offloaded results older than resultTTL, so .archymedes/results does not
+// grow without bound. Age, not a dir wipe: sessions in one repo share the folder, and a live
+// session's fresh files must survive another opening beside it. Best effort; errors are ignored.
+func cleanStaleResults(root string) {
+	base := filepath.Join(root, ".archymedes", "results")
+	_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, err := d.Info(); err == nil && time.Since(info.ModTime()) > resultTTL {
+			_ = os.Remove(path)
+		}
+		return nil
+	})
 }
 
 // ID is the session id.
@@ -506,9 +526,10 @@ func (s *Session) runRoot(ctx context.Context, text string, files []fantasy.File
 		System:  s.rootSystemPrompt(ledger.Mode(), catalog),
 		History: history, Prompt: prompt, Files: files, Tools: catalog, Hooks: s.hooks,
 		Approve: ledger.Decide, Gate: verify, Inbox: s.inbox, Budgets: s.cfg.Budgets,
-		Emit:       emit,
-		Checkpoint: func(m []fantasy.Message) { s.saveRoot(m) },
-		Compact:    s.compactor(),
+		Emit:        emit,
+		Checkpoint:  func(m []fantasy.Message) { s.saveRoot(m) },
+		Compact:     s.compactor(),
+		ResultStore: s.resultStore(thread.Root),
 	})
 	s.hooks.TurnEnded(ctx, text, string(result.Status), result.Text)
 	s.saveRoot(result.Messages)
@@ -562,6 +583,44 @@ func (s *Session) countRoot(u loop.Usage) {
 	t := thread.Usage(total)
 	s.meta.Usage, s.meta.ModelCalls = &t, s.meta.ModelCalls+1
 	_ = s.store.SaveMeta(s.meta)
+}
+
+// resultStore saves an over-long tool result under the project so the model can re-read it, and
+// returns a project-relative path (read_file resolves it). It lives in .archymedes/results, which
+// search and checkpoints leave out; a write that cannot be made returns "", so the result is only
+// truncated. threadID namespaces the root conversation from each sub-agent.
+func (s *Session) resultStore(threadID string) func(callID, content string) string {
+	dir := filepath.Join(s.cfg.Root, ".archymedes", "results", threadID)
+	return func(callID, content string) string {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return ""
+		}
+		name := safeFileName(callID)
+		if name == "" {
+			name = "result"
+		}
+		file := filepath.Join(dir, name+".txt")
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			return ""
+		}
+		rel, err := filepath.Rel(s.cfg.Root, file)
+		if err != nil {
+			return ""
+		}
+		return filepath.ToSlash(rel)
+	}
+}
+
+// safeFileName keeps a tool call id usable as a file name.
+func safeFileName(id string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, id)
 }
 
 // rootTools is what the root thread may call in a mode: the built-ins its capabilities allow,
