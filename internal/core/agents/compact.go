@@ -28,7 +28,11 @@ func (s *Session) compactorFocused(focus string) func(context.Context, []fantasy
 		if err != nil {
 			return nil, err
 		}
-		cut := lastUserIndex(messages)
+		// Keep the latest exchange verbatim and summarize what is older. The cut is normally the
+		// last message the person sent; but when that tail is itself large — a long auto-mode run
+		// with no human turn to anchor on — it is moved deeper so the kept tail fits a token
+		// budget. Without this the tail grows without bound and every turn carries the whole run.
+		cut := max(lastUserIndex(messages), recentCut(messages, s.keepVerbatimTokens()))
 		if cut <= 0 {
 			return nil, errors.New("nothing before the latest message to summarize")
 		}
@@ -48,10 +52,25 @@ func (s *Session) compactorFocused(focus string) func(context.Context, []fantasy
 		if s.cps != nil {
 			s.cps.ForgetConversation() // the old lengths point into a conversation that is gone
 		}
-		first := tail[0]
-		first.Content = append([]fantasy.MessagePart{fantasy.TextPart{Text: "Summary of the conversation so far:\n" + summary + "\n\n---\n"}}, first.Content...)
-		return append([]fantasy.Message{first}, tail[1:]...), nil
+		preface := "Summary of the conversation so far:\n" + summary + "\n\n---\n"
+		if first := tail[0]; first.Role == fantasy.MessageRoleUser {
+			first.Content = append([]fantasy.MessagePart{fantasy.TextPart{Text: preface}}, first.Content...)
+			return append([]fantasy.Message{first}, tail[1:]...), nil
+		}
+		// A deep cut lands the tail on an assistant step, not a person's turn: carry the summary
+		// as its own user message so the conversation still opens with the person.
+		return append([]fantasy.Message{fantasy.NewUserMessage(preface)}, tail...), nil
 	}
+}
+
+// keepVerbatimTokens is how much of the most recent conversation compaction keeps word for word:
+// a quarter of the context window, so a compacted run settles well under it with room to grow.
+func (s *Session) keepVerbatimTokens() int {
+	limit := s.cfg.Budgets.ContextLimit
+	if limit <= 0 {
+		limit = loop.DefaultBudgets().ContextLimit
+	}
+	return limit / 4
 }
 
 func lastUserIndex(messages []fantasy.Message) int {
@@ -61,6 +80,33 @@ func lastUserIndex(messages []fantasy.Message) int {
 		}
 	}
 	return -1
+}
+
+// recentCut is the earliest message to keep verbatim so that what is kept fits budget tokens,
+// landing on a step boundary (a user or assistant message, never tool results split from their
+// call). If a single trailing message is already over budget it is kept whole, the smallest tail
+// that still parses. It returns len(messages) when the conversation is empty.
+func recentCut(messages []fantasy.Message, budget int) int {
+	cut, fallback, tokens := len(messages), -1, 0
+	for i := len(messages) - 1; i >= 0; i-- {
+		tokens += loop.EstimateTokens(messages[i])
+		if messages[i].Role == fantasy.MessageRoleTool {
+			continue // results stay with the assistant call that precedes them
+		}
+		if fallback == -1 {
+			fallback = i
+		}
+		if tokens <= budget {
+			cut = i
+		}
+	}
+	if cut == len(messages) {
+		if fallback == -1 {
+			return len(messages)
+		}
+		return fallback
+	}
+	return cut
 }
 
 // complete is one call with no tools, its text collected.

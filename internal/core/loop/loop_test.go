@@ -432,6 +432,31 @@ func TestCompactionReplacesALongConversation(t *testing.T) {
 	}
 }
 
+func TestALongConversationIsCompactedBeforeTheCallGoesOut(t *testing.T) {
+	model := &scripted{turns: []turn{{text: "done"}}}
+	rec := &recorder{}
+	compact := func(_ context.Context, _ []fantasy.Message) ([]fantasy.Message, error) {
+		return []fantasy.Message{fantasy.NewUserMessage("summary")}, nil
+	}
+	// A big history: estimated well over the threshold (ContextLimit 1000 × 0.5 = 500 tokens).
+	var history []fantasy.Message
+	for range 12 {
+		history = append(history, fantasy.NewUserMessage(strings.Repeat("x", 1000)))
+	}
+	res := Run(context.Background(), Request{Model: model, History: history, Prompt: "go", Emit: rec.emit,
+		Compact: compact, Budgets: Budgets{ContextLimit: 1000, CompactAt: 0.5}, Tools: tool.NewCatalog()})
+	if res.Status != Completed {
+		t.Fatalf("status %s", res.Status)
+	}
+	if c := rec.of(EventCompaction); len(c) != 1 {
+		t.Fatalf("compactions %+v", c)
+	}
+	// The model never saw the oversized prompt: its first call was already the compacted one.
+	if got := len(model.prompts[0].Prompt); got != 1 {
+		t.Fatalf("first prompt carried %d messages, not the compacted 1", got)
+	}
+}
+
 func TestLengthCutOffContinues(t *testing.T) {
 	model := &scripted{turns: []turn{{text: "part one ", finish: fantasy.FinishReasonLength}, {text: "part two"}}}
 	res := Run(context.Background(), Request{Model: model, Prompt: "x", Tools: tool.NewCatalog()})

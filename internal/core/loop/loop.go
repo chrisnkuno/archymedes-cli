@@ -195,6 +195,7 @@ func (r *run) loop(ctx context.Context) (Status, error) {
 		if r.steps >= r.budgets.MaxSteps || r.calls >= r.budgets.MaxToolCalls {
 			return BudgetExhausted, nil
 		}
+		r.maybeCompactBeforeCall(ctx)
 		r.steps++
 		step, err := r.callModel(ctx, r.req.Tools.Visible())
 		if err != nil {
@@ -294,21 +295,91 @@ func (r *run) wrapUp(ctx context.Context) {
 	}
 }
 
-func (r *run) maybeCompact(ctx context.Context, last Usage) {
+// compactThreshold is the token count past which the conversation is compacted; zero when
+// compaction is off or no window is known.
+func (r *run) compactThreshold() float64 {
 	if r.req.Compact == nil || r.budgets.ContextLimit <= 0 {
+		return 0
+	}
+	return r.budgets.CompactAt * float64(r.budgets.ContextLimit)
+}
+
+// maybeCompactBeforeCall compacts when the conversation is estimated to be over the threshold
+// before a call goes out, so the first oversized turn is trimmed rather than sent whole and slow.
+// The estimate is character-based and runs every iteration, so it is cheap; the real usage after
+// a call is the backstop below.
+func (r *run) maybeCompactBeforeCall(ctx context.Context) {
+	limit := r.compactThreshold()
+	if limit <= 0 {
 		return
 	}
-	if float64(last.InputTokens+last.OutputTokens) < r.budgets.CompactAt*float64(r.budgets.ContextLimit) {
+	est := estimatePromptTokens(r.messages)
+	if float64(est) < limit {
 		return
 	}
+	r.compactNow(ctx, est)
+}
+
+// maybeCompact compacts after a call when the provider's own token count crossed the threshold.
+func (r *run) maybeCompact(ctx context.Context, last Usage) {
+	limit := r.compactThreshold()
+	if limit <= 0 {
+		return
+	}
+	if float64(last.InputTokens+last.OutputTokens) < limit {
+		return
+	}
+	r.compactNow(ctx, last.InputTokens+last.OutputTokens)
+}
+
+func (r *run) compactNow(ctx context.Context, tokensBefore int) {
 	before := len(r.messages)
 	shorter, err := r.req.Compact(ctx, r.messages)
 	if err != nil || len(shorter) == 0 || len(shorter) >= before {
 		return // a compaction that failed leaves the conversation as it was; the provider will say if it is too long
 	}
 	r.messages = shorter
-	r.emit(Event{Type: EventCompaction, TokensBefore: last.InputTokens + last.OutputTokens, MessagesBefore: before, MessagesAfter: len(shorter)})
+	r.emit(Event{Type: EventCompaction, TokensBefore: tokensBefore, MessagesBefore: before, MessagesAfter: len(shorter)})
 	r.checkpoint()
+}
+
+// estimatePromptTokens is a rough character-based size of the whole conversation, enough to
+// decide whether to compact before a call rather than only after one.
+func estimatePromptTokens(messages []fantasy.Message) int {
+	total := 0
+	for _, m := range messages {
+		total += EstimateTokens(m)
+	}
+	return total
+}
+
+// EstimateTokens is a rough character-based token count for one message (~4 characters a token,
+// plus a little for the message's own framing). It is a cheap stand-in for a real tokenizer, used
+// to decide how much conversation to keep and when to compact, never for billing.
+func EstimateTokens(m fantasy.Message) int {
+	chars := 0
+	for _, part := range m.Content {
+		switch p := part.(type) {
+		case fantasy.TextPart:
+			chars += len(p.Text)
+		case fantasy.ReasoningPart:
+			chars += len(p.Text)
+		case fantasy.ToolCallPart:
+			chars += len(p.ToolName) + len(p.Input)
+		case fantasy.ToolResultPart:
+			switch o := p.Output.(type) {
+			case fantasy.ToolResultOutputContentText:
+				chars += len(o.Text)
+			case fantasy.ToolResultOutputContentError:
+				if o.Error != nil {
+					chars += len(o.Error.Error())
+				}
+			case fantasy.ToolResultOutputContentMedia:
+				chars += len(o.Text) + len(o.Data)
+			}
+		}
+	}
+	return chars/4 + 4
 }
 
 func (r *run) emit(ev Event) {

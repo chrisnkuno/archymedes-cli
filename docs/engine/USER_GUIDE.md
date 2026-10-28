@@ -392,7 +392,12 @@ were. A line in the transcript says when it happened ("Compacted the conversatio
 48 → 6 messages").
 
 - It happens at 80% of the window. The window is assumed to be 128,000 tokens unless you set
-  `ARCHYMEDES_CONTEXT_LIMIT`.
+  `ARCHYMEDES_CONTEXT_LIMIT`. The size is checked before each turn as well as after it, so a
+  conversation that is already over the line is trimmed before the slow turn is sent, not after.
+- The most recent quarter of the window is always kept word for word. When a long run keeps
+  working without you saying anything, there is no recent message to anchor on. The summary then
+  reaches forward to cover all but that recent quarter. Otherwise the untouched tail would grow
+  until every turn carried the whole run and stalled.
 - If a provider says the conversation is already too long, Friday compacts and tries again, once.
 - `/compact` does it now, between turns; `/compact <focus>` keeps what you name in full ("/compact
   the database migration").
