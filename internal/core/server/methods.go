@@ -21,6 +21,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
+	"github.com/chrisnkuno/friday-cli/internal/core/update"
 )
 
 // session is one ACP session: the engine's session and what the client is told about it.
@@ -619,6 +620,8 @@ func (s *Server) sessionList(params json.RawMessage) (any, error) {
 func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, error) {
 	var notices []string
 	if s.opts.Forward != nil {
+		// A TypeScript agent is behind this engine: it runs the update (and its other startup
+		// upkeep). Forward to it rather than check twice and risk two installs.
 		if raw, err := s.opts.Forward(ctx, "_archymedes/startup", params); err == nil {
 			var more struct {
 				Notices []string `json:"notices"`
@@ -627,6 +630,14 @@ func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, erro
 				notices = append(notices, more.Notices...)
 			}
 		}
+	} else {
+		// The pure Go engine: run the update here, so it stays current without the TypeScript agent.
+		// The interface is what asks at startup, so this is the safe, interactive moment to install.
+		env := s.env()
+		notices = update.Run(ctx, update.Options{
+			Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
+			ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
+		})
 	}
 	if notices == nil {
 		notices = []string{}

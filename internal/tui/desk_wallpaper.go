@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -42,17 +43,41 @@ type wallpaperGrid struct {
 	w, h        int
 	top, bottom []color.RGBA
 	soft        []color.RGBA // one colour per cell, blurred: what shows through a window's glass
+	// Worked out once per grid so a frame does not redo them for every cell: blend is the two halves
+	// mixed (the photo colour of a cell), glyphBg is that photo under the ground a glyph sits on.
+	blend, glyphBg []color.RGBA
+}
+
+// ensureBlend fills blend: the photo colour of each cell, the two halves averaged. Built once.
+func (g *wallpaperGrid) ensureBlend() {
+	if g.blend != nil {
+		return
+	}
+	g.blend = make([]color.RGBA, g.w*g.h)
+	for i := range g.blend {
+		g.blend[i] = mixRGBA(g.top[i], g.bottom[i], 0.5)
+	}
+}
+
+// ensureGlyphBg fills glyphBg: the frosted ground a glyph or the chrome sits on, over the photo.
+// It depends on the theme's ground, which is fixed for a grid (the cache key names the theme).
+func (g *wallpaperGrid) ensureGlyphBg(ground color.RGBA) {
+	if g.glyphBg != nil {
+		return
+	}
+	g.ensureBlend()
+	g.glyphBg = make([]color.RGBA, g.w*g.h)
+	for i := range g.glyphBg {
+		g.glyphBg[i] = mixRGBA(ground, g.blend[i], 1-glassMix)
+	}
 }
 
 // frosted is the cell's colour as seen through glass: the photo blurred around it. Worked out once
 // per photo and size, with two passes of a box blur.
 func (g *wallpaperGrid) frosted(x, y int) color.RGBA {
 	if g.soft == nil {
-		flat := make([]color.RGBA, g.w*g.h)
-		for i := range flat {
-			flat[i] = mixRGBA(g.top[i], g.bottom[i], 0.5)
-		}
-		g.soft = boxBlur(boxBlur(flat, g.w, g.h, blurX, blurY), g.w, g.h, blurX, blurY)
+		g.ensureBlend()
+		g.soft = boxBlur(boxBlur(g.blend, g.w, g.h, blurX, blurY), g.w, g.h, blurX, blurY)
 	}
 	return g.soft[y*g.w+x]
 }
@@ -176,63 +201,98 @@ func (m *Model) underlay(content string, width, height int) string {
 	if m.underIn == content && m.underGrid == g && m.underGlass == m.glass {
 		return m.underOut
 	}
-	ground, surface := toRGBA(m.th.Bg), toRGBA(m.th.Surface)
+	ground := toRGBA(m.th.Bg)
+	g.ensureGlyphBg(ground) // the per-cell photo and glyph grounds, worked out once, not per frame
 	panels := m.panelRows(height)
-	glass := m.glass
-	canvas := lipgloss.NewCanvas(width, height)
+	// The photo, the glass and the width change every row at once; anything finer is per row.
+	if m.rowGrid != g || m.rowGlass != m.glass || m.rowWidth != width || len(m.rowOut) != height {
+		m.rowOut, m.rowGrid, m.rowGlass, m.rowWidth = make([]cachedRow, height), g, m.glass, width
+	}
+	lines := strings.Split(content, "\n")
+	out := make([]string, height)
+	for y := range height {
+		line := ""
+		if y < len(lines) {
+			line = lines[y]
+		}
+		// A composited row is never empty (it is at least a row of photo), so an empty out means the
+		// slot has not been filled this configuration; line and panel are the rest of what it depends on.
+		if c := m.rowOut[y]; c.out != "" && c.line == line && c.panel == panels[y] {
+			out[y] = c.out
+			continue
+		}
+		out[y] = m.compositeRow(g, line, y, width, ground, panels[y])
+		m.rowOut[y] = cachedRow{line: line, panel: panels[y], out: out[y]}
+	}
+	m.underIn, m.underGrid, m.underGlass, m.underOut = content, g, m.glass, strings.Join(out, "\n")
+	return m.underOut
+}
+
+// cachedRow is one screen row's composited wallpaper, kept with what it was laid for.
+type cachedRow struct {
+	line  string
+	panel bool
+	out   string
+}
+
+// compositeRow lays the wallpaper under one row of text, as underlay does for the whole frame. Each
+// row is independent once the grid is built, so the frame caches them and redraws only what changed.
+func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, ground color.RGBA, panel bool) string {
+	surface := toRGBA(m.th.Surface)
+	canvas := lipgloss.NewCanvas(width, 1)
 	canvas.Compose(lipgloss.NewLayer(content))
 	isBlank := func(c *uv.Cell) bool { return c == nil || c.Content == " " || (c.Content == "" && c.Width > 0) }
-	for y := range height {
-		// Where the text on this row is: the gaps inside a run of words, and a cell either side of
-		// it, are glass too, so a line reads as one frosted strip rather than words cut out of it.
-		text := make([]bool, width)
-		for x := range width {
-			c := canvas.CellAt(x, y)
-			text[x] = !isBlank(c) && c.Style.Bg == nil
+	// Where the text on this row is: the gaps inside a run of words, and a cell either side of it,
+	// are glass too, so a line reads as one frosted strip rather than words cut out of it.
+	text := make([]bool, width)
+	for x := range width {
+		c := canvas.CellAt(x, 0)
+		text[x] = !isBlank(c) && c.Style.Bg == nil
+	}
+	for x := range width {
+		cell := canvas.CellAt(x, 0)
+		if cell == nil || cell.Width == 0 {
+			continue // the second column of a wide glyph
 		}
-		near := func(x, reach int, step int) bool {
-			for i := 1; i <= reach; i++ {
-				if j := x + i*step; j >= 0 && j < width && text[j] {
-					return true
-				}
+		i := y*width + x
+		top, bottom := g.top[i], g.bottom[i]
+		photo := g.blend[i]
+		if image.Pt(x, y).In(m.glass) {
+			// A window: its whole body is glass over the blurred photo, its own grounds tinted too.
+			frost := g.frosted(x, y)
+			if cell.Style.Bg != nil {
+				cell.Style.Bg = mixRGBA(toRGBA(cell.Style.Bg), frost, 1-glassMix)
+			} else {
+				cell.Style.Bg = mixRGBA(surface, frost, 1-windowGlass)
 			}
-			return false
+			continue
 		}
-		for x := range width {
-			cell := canvas.CellAt(x, y)
-			if cell == nil || cell.Width == 0 {
-				continue // the second column of a wide glyph
-			}
-			top, bottom := g.at(x, y)
-			photo := mixRGBA(top, bottom, 0.5)
-			if image.Pt(x, y).In(glass) {
-				// A window: its whole body is glass over the blurred photo, its own grounds tinted too.
-				frost := g.frosted(x, y)
-				if cell.Style.Bg != nil {
-					cell.Style.Bg = mixRGBA(toRGBA(cell.Style.Bg), frost, 1-glassMix)
-				} else {
-					cell.Style.Bg = mixRGBA(surface, frost, 1-windowGlass)
-				}
-				continue
-			}
-			blank := isBlank(cell) && !(near(x, 1, -1) || near(x, 1, 1) || (near(x, 3, -1) && near(x, 3, 1)))
-			switch {
-			case cell.Style.Bg != nil:
-				// A cell that paints its own ground: frosted glass.
-				cell.Style.Bg = mixRGBA(toRGBA(cell.Style.Bg), photo, 1-glassMix)
-			case blank && !panels[y]:
-				// Nothing here: the photo, two pixels in a half block.
-				cell.Content, cell.Width = "▀", 1
-				cell.Style.Fg, cell.Style.Bg = top, bottom
-				cell.Style.Attrs, cell.Style.Underline = 0, 0
-			default:
-				// A glyph, or the chrome: on frosted glass, so it reads over any part of the photo.
-				cell.Style.Bg = mixRGBA(ground, photo, 1-glassMix)
-			}
+		blank := isBlank(cell) && !(nearText(text, x, 1, -1) || nearText(text, x, 1, 1) || (nearText(text, x, 3, -1) && nearText(text, x, 3, 1)))
+		switch {
+		case cell.Style.Bg != nil:
+			// A cell that paints its own ground: frosted glass.
+			cell.Style.Bg = mixRGBA(toRGBA(cell.Style.Bg), photo, 1-glassMix)
+		case blank && !panel:
+			// Nothing here: the photo, two pixels in a half block.
+			cell.Content, cell.Width = "▀", 1
+			cell.Style.Fg, cell.Style.Bg = top, bottom
+			cell.Style.Attrs, cell.Style.Underline = 0, 0
+		default:
+			// A glyph, or the chrome: on frosted glass, so it reads over any part of the photo.
+			cell.Style.Bg = g.glyphBg[i]
 		}
 	}
-	m.underIn, m.underGrid, m.underGlass, m.underOut = content, g, m.glass, fillHeight(canvas.Render(), height)
-	return m.underOut
+	return strings.TrimRight(canvas.Render(), "\n")
+}
+
+// nearText reports whether a text cell lies within reach columns of x, stepping by step (±1).
+func nearText(text []bool, x, reach, step int) bool {
+	for i := 1; i <= reach; i++ {
+		if j := x + i*step; j >= 0 && j < len(text) && text[j] {
+			return true
+		}
+	}
+	return false
 }
 
 func toRGBA(c color.Color) color.RGBA {

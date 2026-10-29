@@ -194,7 +194,7 @@ func (f *fakeAgent) Steer(_ context.Context, _ string, text string) (bool, error
 func (f *fakeAgent) Close() {}
 
 // newTestModel is a connected model at 80x24 with the session already open.
-func newTestModel(t *testing.T) (*Model, *fakeAgent) {
+func newTestModel(t testing.TB) (*Model, *fakeAgent) {
 	t.Helper()
 	agent := &fakeAgent{messages: make(chan any, 16)}
 	// No wallpaper: these tests read the screen's text, which the wallpaper fills the gaps of. The

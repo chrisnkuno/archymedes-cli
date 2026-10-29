@@ -41,8 +41,16 @@ type windowState struct {
 	winOrigin    image.Point
 	titleClicked int
 	underGlass   image.Rectangle // the glass the cached wallpaper frame was laid for
-	buttonKeys   []string        // the keys the hint bar's buttons press, as last drawn
-	dialogKeys   []string        // and a dialog's
+	// rowOut holds last frame's composited wallpaper row at each screen row, so a frame lays again
+	// only the rows whose text changed — a keystroke or a streaming line, not the whole screen. It
+	// is positional (one slot per row, overwritten each frame, so it cannot grow), and discarded
+	// when the photo, the glass or the width changes, since those change every row at once.
+	rowOut     []cachedRow
+	rowGrid    *wallpaperGrid
+	rowGlass   image.Rectangle
+	rowWidth   int
+	buttonKeys []string // the keys the hint bar's buttons press, as last drawn
+	dialogKeys []string // and a dialog's
 	bar          barFocus        // the keyboard on the bars (desk_bars_focus.go)
 }
 

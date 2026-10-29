@@ -93,6 +93,7 @@
     "core/advise": [
       "conform"
     ],
+    "core/update": [],
     "core/agents": [
       "core/advise",
       "core/checkpoint",
@@ -135,6 +136,7 @@
       "core/skills",
       "core/thread",
       "core/tool",
+      "core/update",
       "conform"
     ],
     "conform": []

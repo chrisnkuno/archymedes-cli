@@ -23,7 +23,7 @@ func cells(content string, width, height int) *lipgloss.Canvas {
 }
 
 // wallpaperModel is a desktop with the wallpaper on, at width×height.
-func wallpaperModel(t *testing.T, width, height int) *Model {
+func wallpaperModel(t testing.TB, width, height int) *Model {
 	t.Helper()
 	m := projectModel(t)
 	m.opts.NoWallpaper = false

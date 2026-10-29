@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func projectModel(t *testing.T) *Model {
+func projectModel(t testing.TB) *Model {
 	t.Helper()
 	root := t.TempDir()
 	for rel, content := range map[string]string{

@@ -6,8 +6,59 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
+
+// agentBatch is several agent messages delivered together, so a burst of stream chunks is one
+// render, not one per token. The screen composites in full each frame, so coalescing is the
+// difference between smooth streaming and a frame per character.
+type agentBatch struct{ msgs []any }
+
+// forward delivers the agent's messages to the model, coalescing a burst into one render.
+func (m *Model) forward(agent Agent) {
+	if m.sender == nil {
+		return // tests deliver the agent's messages themselves
+	}
+	send := m.sender
+	ch := agent.Messages()
+	go func() {
+		for first := range ch {
+			// Take whatever else is already waiting, so a fast stream renders once per drain rather
+			// than once per chunk. Bounded by what has already arrived: nothing is held back waiting.
+			batch := []any{first}
+			draining := true
+			for draining {
+				select {
+				case next, ok := <-ch:
+					if !ok {
+						draining = false
+						break
+					}
+					batch = append(batch, next)
+				default:
+					draining = false
+				}
+			}
+			send(agentBatch{msgs: batch})
+		}
+	}()
+}
+
+// handleAgentMsgs applies a batch of agent messages, then asks for one render. A turn's end is kept
+// in order: it arrives last in its batch, so the messages before it are shown before the turn wraps.
+func (m *Model) handleAgentMsgs(msgs []any) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, msg := range msgs {
+		if end, ok := msg.(acp.TurnEnded); ok {
+			cmds = append(cmds, m.finishTurn(promptDoneMsg{stop: end.StopReason}))
+			continue
+		}
+		m.handleAgent(msg)
+	}
+	return tea.Batch(append(cmds, m.flushNotifications())...)
+}
 
 // handleAgent turns one agent message into transcript changes.
 func (m *Model) handleAgent(msg any) {

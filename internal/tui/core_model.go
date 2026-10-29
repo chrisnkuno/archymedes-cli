@@ -358,18 +358,6 @@ func (m *Model) animate() tea.Cmd {
 // after the turn's last event) can never overtake its last words.
 func (m *Model) SetSender(send func(tea.Msg)) { m.sender = send }
 
-func (m *Model) forward(agent Agent) {
-	if m.sender == nil {
-		return // tests deliver the agent's messages themselves
-	}
-	send := m.sender
-	go func() {
-		for msg := range agent.Messages() {
-			send(agentMsg{msg})
-		}
-	}()
-}
-
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	model, cmd := m.update(msg)
 	// Sixel pictures are drawn over the frame, not in it: after any change, draw them again.
@@ -600,11 +588,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notice(noticeError, "Could not start the agent: "+msg.err.Error())
 		return m, nil
 	case agentMsg:
-		if end, ok := msg.msg.(acp.TurnEnded); ok {
-			return m, tea.Batch(m.finishTurn(promptDoneMsg{stop: end.StopReason}), m.flushNotifications())
-		}
-		m.handleAgent(msg.msg)
-		return m, m.flushNotifications()
+		return m, m.handleAgentMsgs([]any{msg.msg})
+	case agentBatch:
+		return m, m.handleAgentMsgs(msg.msgs)
 	case promptDoneMsg:
 		return m, tea.Batch(m.finishTurn(msg), m.flushNotifications())
 	case tea.FocusMsg:

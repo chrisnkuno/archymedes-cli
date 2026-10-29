@@ -137,6 +137,11 @@ Without a small model, the main model does everything. What runs on which:
 Modes are chosen per session (`--plan`, `--build`, `--auto`, `--defender`, or shift+tab), not by a
 setting; a resumed session keeps its own.
 
+Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) install through the package manager Friday was
+installed with, detected from the environment; set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`, `pnpm`,
+`yarn` or `bun` to force one. The newest version is read from the npm registry, or from
+`ARCHYMEDES_UPDATE_REGISTRY` when set.
+
 ## Command rules
 
 Rules you write once instead of answering the same approval every day. A rule names a command by
@@ -346,6 +351,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_SUGGEST_MODEL` | both engines | [Behaviour](#behaviour) |
 | `ARCHYMEDES_JEV`, `TYPESAFE_API_KEY`, `TYPESAFE_MODEL` | both engines | [Behaviour](#behaviour) |
 | `ARCHYMEDES_DEFER_TOOLS` | Go engine | [Behaviour](#behaviour) |
+| `ARCHYMEDES_PACKAGE_MANAGER`, `ARCHYMEDES_UPDATE_REGISTRY` | Go engine | [Behaviour](#behaviour) |
 | `OPENROUTER_BASE_URL` | Go engine (free mode) | [Providers and keys](#providers-and-keys) |
 | `ARCHYMEDES_FREE_GATEWAY_URL` | TypeScript engine; the binary reads it to choose the engine | [Providers and keys](#providers-and-keys) |
 | `ARCHYMEDES_ACP_TRACE`, `ARCHYMEDES_DEBUG_LOG`, `ARCHYMEDES_AGENT` | the `friday` binary | [Diagnostics](#diagnostics) |
