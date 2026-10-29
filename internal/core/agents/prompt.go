@@ -55,7 +55,7 @@ const testFirstLoop = `How to work: test first. Every code change runs this loop
 Docs, configuration and changes with nothing to assert skip steps 2 and 4: say so in one line.`
 
 const choosingTools = `Choosing tools:
-- Files go through the file tools, not the shell: read_file rather than cat, head or sed; grep_files rather than grep or rg; glob_files or list_files rather than find or ls; edit_file rather than sed -i. run_command is for what has no tool: builds, tests, scripts, git, package managers. Read-only commands (git status, git diff, ls, rg) run without asking.
+- Files go through the file tools, not the shell: read_file rather than cat, head or sed; grep_files rather than grep or rg; glob_files or list_files rather than find or ls; edit_file rather than sed -i. run_command is for what has no tool: builds, tests, scripts, git, package managers. A server or watcher runs with background: true; read it with command_output and end it with stop_command. Read-only commands (git status, git diff, ls, rg) run without asking.
 - Put every tool call you can into the same turn: eight calls in one turn are far faster than eight turns of one. Split calls only when the second needs the first one's result.
 - Read tool results carefully. An error says what to change; never send the same failing call again unchanged.
 - Some tools are not listed until you search for them with tool_search.`

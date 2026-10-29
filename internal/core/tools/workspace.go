@@ -24,6 +24,9 @@ type Workspace struct {
 	Rules []policy.CommandRule
 	// Todos is the session's checklist; sub-agents never get the tools that write it.
 	Todos *TodoList
+	// jobs are the session's background commands, shared with every workspace At makes, so a
+	// server a sub-agent started can be read and stopped by the session.
+	jobs *Jobs
 
 	mu sync.Mutex
 	// seen is each file's content hash as Friday last read or wrote it: edit_file refuses to edit
@@ -35,7 +38,7 @@ type Workspace struct {
 
 // NewWorkspace is a workspace at root.
 func NewWorkspace(root string) *Workspace {
-	return &Workspace{Root: root, Todos: &TodoList{}, seen: map[string][32]byte{}, written: map[string]bool{}}
+	return &Workspace{Root: root, Todos: &TodoList{}, jobs: NewJobs(), seen: map[string][32]byte{}, written: map[string]bool{}}
 }
 
 // At is a workspace sharing this one's rules but rooted elsewhere (a sub-agent's worktree).
@@ -43,8 +46,17 @@ func (w *Workspace) At(root string) *Workspace {
 	other := NewWorkspace(root)
 	other.Rules = w.Rules
 	other.Todos = w.Todos
+	other.jobs = w.jobs
 	return other
 }
+
+// Jobs is the session's background commands.
+func (w *Workspace) Jobs() *Jobs { return w.jobs }
+
+// Close stops every background command the session started, with everything they started, and
+// waits for them. Workspaces made with At share them, so closing any one closes them all; call it
+// once, when the session ends.
+func (w *Workspace) Close() { w.jobs.Close() }
 
 var errOutside = errors.New("is outside the project")
 
@@ -113,7 +125,7 @@ func (w *Workspace) Builtins() []*tool.Tool {
 	return []*tool.Tool{
 		w.readFile(), w.listFiles(), w.globFiles(), w.grepFiles(),
 		w.writeFile(), w.editFile(),
-		w.runCommand(),
+		w.runCommand(), w.commandOutput(), w.stopCommand(), w.listCommands(),
 		w.todoWrite(), w.todoRead(),
 		w.gitStatus(), w.gitDiff(), w.gitLog(), w.gitShow(),
 		w.scanSecrets(), w.readPlaybook(),

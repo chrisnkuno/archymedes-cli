@@ -421,7 +421,7 @@ func (s *Session) Models() *llm.Models {
 	return s.models
 }
 
-// Close stops the running turn and every sub-agent, and waits for them.
+// Close stops the running turn, every sub-agent and every background command, and waits for them.
 func (s *Session) Close() {
 	s.turnMu.Lock()
 	s.closed = true
@@ -441,6 +441,8 @@ func (s *Session) Close() {
 		c.stop()
 		<-c.done
 	}
+	// Background commands (the session's and its sub-agents') end with it, and all they started.
+	s.ws.Close()
 	s.mcp.Close()
 	if s.lsp != nil {
 		s.lsp.Close()

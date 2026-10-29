@@ -76,10 +76,10 @@ func standardUpdate(ev loop.Event) map[string]any {
 }
 
 var (
-	kindRead    = regexp.MustCompile(`^(read_file|list_files)$`)
+	kindRead    = regexp.MustCompile(`^(read_file|list_files|command_output|list_commands)$`)
 	kindEdit    = regexp.MustCompile(`^(write_file|edit_file)$`)
 	kindSearch  = regexp.MustCompile(`^(glob_files|grep_files|tool_search)$`)
-	kindExecute = regexp.MustCompile(`^(run_command)$`)
+	kindExecute = regexp.MustCompile(`^(run_command|stop_command)$`)
 	kindThink   = regexp.MustCompile(`^(todo_write|todo_read|delegate_task|delegate_readonly_task|wait_agents|send_agent|close_agent)$`)
 )
 

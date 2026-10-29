@@ -121,6 +121,7 @@ Run a shell command in the project root (`sh -c`, or `cmd /C` on Windows) and wa
 | --- | --- | --- |
 | `command` | required | |
 | `timeoutSeconds` | optional | default 120, at most 1,800 |
+| `background` | optional | start it and return at once with a job id; see [Background commands](#background-commands) |
 
 Effect **per call**:
 
@@ -140,7 +141,7 @@ Effect **per call**:
 The result is `exit <code>` and the output (stdout, then stderr), each kept to 200,000 characters.
 When the time runs out, the command and everything it started are stopped. A command that looks
 like a server or watcher (`npm start`, `vite`, `--watch`) gets 15 seconds; if it is still running
-then, it is stopped and the model is told it is a long-running process. A missing program is
+then, it is stopped and the model is told to start it with `background: true` instead. A missing program is
 named, with a request not to retry it.
 
 **As proof.** A successful run of a test, build, typecheck or smoke command counts as evidence
@@ -148,6 +149,58 @@ that a change works. From weakest to strongest: a check (build, typecheck, lint)
 run of the assembled program (a script Friday wrote counts), an end-to-end suite.
 Reading files or printing text does not count, and the result says when a run was not accepted
 as proof and why.
+
+### Background commands
+
+`run_command` with `background: true` starts a server, watcher or long build and returns at once.
+It returns a job id (`cmd1`, `cmd2`, …), the process id, and what it printed in its first 2 seconds
+(sooner if it ends), so a crash on startup is seen straight away. It is the same shell, the same project
+root and the same rules as a foreground command: forbidden and destructive commands are refused,
+and starting one always counts as a change (it asks in build and defender mode). Stdout and stderr
+are one stream. `timeoutSeconds` does not apply: a background command runs until it exits, is
+stopped, or the session ends.
+
+At most 8 run at once (a ninth is refused until one is stopped) and the last 20 are remembered.
+Each keeps the first 20,000 bytes of its output and the last 200,000; the middle of a longer
+output is dropped and counted, never silently lost. When the session closes, every background
+command is stopped with everything it started. A sub-agent's background commands are the
+session's: the session can read and stop them after the sub-agent ends. Read-only sub-agents and
+plan mode have none of these tools.
+
+#### `command_output`
+
+A background command's output since a cursor, and its status.
+
+| Argument | | |
+| --- | --- | --- |
+| `id` | required | the job id |
+| `since` | optional | a byte offset: the `next` of the previous result, or 0 for the start. Default: where the last read ended |
+| `waitSeconds` | optional | wait for new output, a `pattern` match or the command's end; at most 60 |
+| `pattern` | optional | a regular expression: only matching lines are returned, and the wait ends on the first match |
+| `tail` | optional | only the last this many lines of the new output |
+
+Effect none, together. The result opens with a status line, `cmd1 running · 12.3s · 4,567 bytes`
+(or `exited 3`, `stopped`, `failed: …`), then the output, at most 30,000 bytes of it, then
+`[next: since=4567]` while it runs or `[N more bytes; read on with since=…]` when there is more.
+Bytes dropped between the cursor and what is still kept are marked `[… N bytes dropped …]`.
+A cursor never returns the same byte twice, and a read costs the new output, not all of it.
+
+#### `stop_command`
+
+Stop a background command and everything it started: SIGTERM to its process group, then SIGKILL
+after 3 seconds (on Windows the process is killed).
+
+| Argument | | |
+| --- | --- | --- |
+| `id` | required | the job id |
+
+Effect none: it ends only what this session started, so it never asks. Stopping a command that
+already ended changes nothing and says so. Its output stays readable.
+
+#### `list_commands`
+
+This session's background commands, one per line: id, status, runtime, output size, command.
+No arguments. Effect none, together.
 
 ## Planning
 

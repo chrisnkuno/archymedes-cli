@@ -289,7 +289,8 @@ func (r *run) finish(p prepared, result tool.Result) outcome {
 		r.detector.Changed()
 	}
 	if p.failed == nil {
-		verdict := r.detector.Observe(p.call.Name, p.call.Args)
+		progress, _ := result.Data["progress"].(string)
+		verdict := r.detector.Observe(p.call.Name, p.call.Args, progress)
 		if verdict.Stop {
 			r.stuck = verdict.Note
 		} else if verdict.Note != "" {

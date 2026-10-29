@@ -26,10 +26,11 @@ const (
 func (w *Workspace) runCommand() *tool.Tool {
 	return &tool.Tool{
 		Name:        "run_command",
-		Description: "Run a shell command in the project root and wait for it: builds, tests, scripts. Not for servers or watchers that never exit.",
+		Description: "Run a shell command in the project root and wait for it: builds, tests, scripts. For a server or watcher that never exits, pass background: true; it returns a job id at once, then read it with command_output and end it with stop_command.",
 		Schema: tool.ObjectSchema(map[string]any{
 			"command":        map[string]any{"type": "string"},
-			"timeoutSeconds": map[string]any{"type": "integer", "description": fmt.Sprintf("Default %d, max %d.", int(CommandTimeout.Seconds()), int(CommandCeiling.Seconds()))},
+			"timeoutSeconds": map[string]any{"type": "integer", "description": fmt.Sprintf("Default %d, max %d. Not for background commands, which run until stopped.", int(CommandTimeout.Seconds()), int(CommandCeiling.Seconds()))},
+			"background":     map[string]any{"type": "boolean", "description": fmt.Sprintf("Start it and return at once with a job id and what it printed in its first %d seconds. It runs until it exits, stop_command, or the session ends.", int(CommandStartWindow.Seconds()))},
 		}, "command"),
 		Capability: tool.CapTerminal, Effect: tool.EffectWorkspace,
 		// Safe to run beside others only when a call changes nothing: the loop batches calls whose
@@ -39,7 +40,8 @@ func (w *Workspace) runCommand() *tool.Tool {
 		// is still the person's call whatever the command.
 		EffectFor: func(args tool.Args) tool.Effect {
 			command := tool.StringArg(args, "command")
-			if command == "" {
+			// A process left running is never a read, whatever it runs.
+			if command == "" || tool.BoolArg(args, "background") {
 				return tool.EffectWorkspace
 			}
 			if v := policy.JudgeCommand(w.Rules, command); v != nil && v.Decision == "ask" {
@@ -55,11 +57,11 @@ func (w *Workspace) runCommand() *tool.Tool {
 			if command == "" {
 				return tool.Error("`command` is required")
 			}
-			if v := policy.JudgeCommand(w.Rules, command); v != nil && v.Decision == "forbid" {
-				return tool.Result{Content: policy.ForbiddenMessage(command, *v), IsError: true, Data: map[string]any{"command": command, "reason": "command_rule"}}
+			if refused := w.screen(command); refused != nil {
+				return *refused
 			}
-			if policy.IsRefusedCommand(command) {
-				return tool.Error(fmt.Sprintf("Refused: '%s' can destroy work irrecoverably. Ask the user to run it themselves if it is really intended.", command))
+			if tool.BoolArg(args, "background") {
+				return w.startBackground(ctx, command)
 			}
 			timeout := CommandTimeout
 			if s, ok := tool.IntArg(args, "timeoutSeconds"); ok && s > 0 {
@@ -71,7 +73,7 @@ func (w *Workspace) runCommand() *tool.Tool {
 			}
 			out := w.shell(ctx, command, timeout)
 			if out.timedOut && trial {
-				return tool.Result{Content: fmt.Sprintf("'%s' was still running after %ds, so it was stopped: it is a long-running process, not a command that finishes. Start it in the background yourself (for example with `nohup … &` and a log file) only if the task needs it running.\n\nWhat it printed:\n%s", command, int(persistentTrial.Seconds()), out.combined()), IsError: true, Data: map[string]any{"command": command, "reason": "persistent_foreground_command"}}
+				return tool.Result{Content: fmt.Sprintf("'%s' was still running after %ds, so it was stopped: it is a long-running process, not a command that finishes. If the task needs it running, start it with background: true, read it with command_output and end it with stop_command.\n\nWhat it printed:\n%s", command, int(persistentTrial.Seconds()), out.combined()), IsError: true, Data: map[string]any{"command": command, "reason": "persistent_foreground_command"}}
 			}
 			body := out.combined()
 			if body == "" {
@@ -115,6 +117,34 @@ func (w *Workspace) runCommand() *tool.Tool {
 	}
 }
 
+// screen is the refusal for a command no mode may run, foreground or background: one a command
+// rule forbids, or one that can destroy work irrecoverably. nil when it may run.
+func (w *Workspace) screen(command string) *tool.Result {
+	if v := policy.JudgeCommand(w.Rules, command); v != nil && v.Decision == "forbid" {
+		return &tool.Result{Content: policy.ForbiddenMessage(command, *v), IsError: true, Data: map[string]any{"command": command, "reason": "command_rule"}}
+	}
+	if policy.IsRefusedCommand(command) {
+		r := tool.Error(fmt.Sprintf("Refused: '%s' can destroy work irrecoverably. Ask the user to run it themselves if it is really intended.", command))
+		r.Data = map[string]any{"command": command, "reason": "refused_command"}
+		return &r
+	}
+	return nil
+}
+
+// shellCommand is command through the platform shell in dir, in its own process group, killed
+// with that group when ctx ends.
+func shellCommand(ctx context.Context, command, dir string) *exec.Cmd {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "cmd", "/C", command)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", command)
+	}
+	cmd.Dir = dir
+	setProcessGroup(cmd)
+	return cmd
+}
+
 type shellOutput struct {
 	stdout, stderr string
 	exit           int
@@ -137,14 +167,7 @@ func (o shellOutput) combined() string {
 func (w *Workspace) shell(ctx context.Context, command string, timeout time.Duration) shellOutput {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd", "/C", command)
-	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", command)
-	}
-	cmd.Dir = w.Root
-	setProcessGroup(cmd)
+	cmd := shellCommand(ctx, command, w.Root)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &limited{buf: &stdout, max: outputMax}
 	cmd.Stderr = &limited{buf: &stderr, max: outputMax}

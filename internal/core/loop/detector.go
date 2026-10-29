@@ -16,6 +16,10 @@ import (
 // repeated, and that is the doom loop (Crush stops on repeats in a ten-call window; Gemini CLI has
 // its own detector). The first trip adds a note to the result asking for a different approach; a
 // further trip stops the run as stuck, rather than spending the rest of the budget on it.
+//
+// A tool whose answer depends on time (reading a background command's output) says how far the
+// world it reads has moved in its result's Data["progress"]; that is part of the signature, so
+// polling a command that keeps printing is not a repeat, while polling one that has gone quiet is.
 type Detector struct {
 	Window int // calls looked at
 	Warn   int // repeats of one signature that earn a note
@@ -41,8 +45,8 @@ type Verdict struct {
 func (d *Detector) Changed() { d.generation++ }
 
 // Observe records a call and judges it.
-func (d *Detector) Observe(name string, args map[string]any) Verdict {
-	sig := d.signature(name, args)
+func (d *Detector) Observe(name string, args map[string]any, progress string) Verdict {
+	sig := d.signature(name, args, progress)
 	d.recent = append(d.recent, sig)
 	if len(d.recent) > d.Window {
 		d.recent = d.recent[len(d.recent)-d.Window:]
@@ -63,9 +67,9 @@ func (d *Detector) Observe(name string, args map[string]any) Verdict {
 	return Verdict{}
 }
 
-func (d *Detector) signature(name string, args map[string]any) string {
+func (d *Detector) signature(name string, args map[string]any, progress string) string {
 	// encoding/json sorts map keys, so this is canonical for decoded JSON arguments.
 	data, _ := json.Marshal(args)
-	sum := sha256.Sum256(append([]byte(fmt.Sprintf("%s\x00%d\x00", name, d.generation)), data...))
+	sum := sha256.Sum256(append([]byte(fmt.Sprintf("%s\x00%d\x00%s\x00", name, d.generation, progress)), data...))
 	return hex.EncodeToString(sum[:8])
 }

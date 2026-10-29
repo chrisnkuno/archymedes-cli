@@ -37,8 +37,13 @@ var shownAs = map[string]struct {
 	args func(in map[string]any, root string) map[string]any
 }{
 	"Bash": {"run_command", func(in map[string]any, _ string) map[string]any {
-		return pick("command", in["command"], "description", in["description"])
+		return pick("command", in["command"], "description", in["description"], "background", in["run_in_background"])
 	}},
+	"BashOutput": {"command_output", func(in map[string]any, _ string) map[string]any {
+		return pick("id", in["bash_id"], "pattern", in["filter"])
+	}},
+	"KillShell": {"stop_command", func(in map[string]any, _ string) map[string]any { return pick("id", in["shell_id"]) }},
+	"KillBash":  {"stop_command", func(in map[string]any, _ string) map[string]any { return pick("id", in["shell_id"]) }},
 	"Read": {"read_file", func(in map[string]any, root string) map[string]any {
 		return pick("path", relative(in["file_path"], root), "offset", in["offset"], "limit", in["limit"])
 	}},

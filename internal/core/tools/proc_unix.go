@@ -18,3 +18,13 @@ func setProcessGroup(cmd *exec.Cmd) {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 }
+
+// terminateGroup asks a background command and everything it started to end (SIGTERM).
+func terminateGroup(j *Job) { _ = syscall.Kill(-j.Pid, syscall.SIGTERM) }
+
+// killGroup ends what is left of a process group (SIGKILL); a group already gone is no error.
+func killGroup(pid int) {
+	if pid > 0 {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+	}
+}

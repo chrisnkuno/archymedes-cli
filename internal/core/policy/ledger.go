@@ -376,6 +376,9 @@ func DescribeToolCall(call tool.Call, t *tool.Tool) string {
 		if escalate, _ := args["escalate"].(bool); escalate {
 			outside = " OUTSIDE the sandbox"
 		}
+		if background, _ := args["background"].(bool); background {
+			outside += " in the background"
+		}
 		return "run " + text("command", "a command") + outside + origin
 	case "start_application":
 		port := "unknown"

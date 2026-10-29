@@ -181,6 +181,7 @@ var claudeNames = map[string]string{
 	"run_command": "Bash", "edit_file": "Edit", "write_file": "Write", "read_file": "Read",
 	"grep_files": "Grep", "glob_files": "Glob", "list_files": "LS", "web_search": "WebSearch",
 	"web_fetch": "WebFetch", "delegate_task": "Task", "delegate_readonly_task": "Task", "todo_write": "TodoWrite",
+	"command_output": "BashOutput", "stop_command": "KillShell",
 }
 
 func (h Hook) matches(toolName string) bool {
