@@ -17,12 +17,34 @@ var delegationTools = map[string]bool{"delegate_task": true, "delegate_readonly_
 // recentSubagentCalls is how many of a running sub-agent's calls its card lists.
 const recentSubagentCalls = 3
 
+// Bounds on what is kept of a sub-agent's work for the inspector (app_inspect.go): its steps, the
+// oldest dropped first, and each step's output.
+const (
+	maxSubagentSteps  = 400
+	maxSubagentResult = 32 << 10
+)
+
+// subagentStep is one call a sub-agent made, and what came back.
+type subagentStep struct {
+	id, tool       string
+	args           map[string]any
+	line           string // "read file src/app.ts": the tool in words and the argument that matters
+	result         string
+	done, isError  bool
+	started, ended time.Time
+	// diff is an edit's diff, as on an edit card (chat_editdiff.go).
+	diff           string
+	added, removed int
+}
+
 // subagentRun is what one sub-agent has done so far, under the delegation call that started it.
 type subagentRun struct {
 	agent         string
 	calls, failed int
 	tokens        int
 	recent        []string // its latest calls, oldest first, at most recentSubagentCalls
+	steps         []*subagentStep
+	dropped       int // steps dropped from the front past maxSubagentSteps
 	// background and status come from the Go engine's thread events: a background sub-agent's
 	// call returns at once, and the card follows the thread instead until it ends.
 	background bool
@@ -94,11 +116,15 @@ func (m *Model) handleSubagent(ev acp.Event) {
 	if t.sub == nil {
 		t.sub = &subagentRun{agent: ev.Agent}
 	}
-	t.sub.apply(inner)
+	if step := t.sub.apply(inner, now); step != nil && step.done {
+		m.subagentEditLanded(t, step)
+		m.noteCommands(step.tool, step.args, step.result)
+	}
 	t.touch()
 }
 
-func (s *subagentRun) apply(ev acp.RuntimeEvent) {
+// apply folds one event into the run; it returns the step the event was about, if any.
+func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
 	switch ev.Type {
 	case "tool_call":
 		s.calls++
@@ -110,15 +136,46 @@ func (s *subagentRun) apply(ev acp.RuntimeEvent) {
 		if len(s.recent) > recentSubagentCalls {
 			s.recent = s.recent[len(s.recent)-recentSubagentCalls:]
 		}
+		step := &subagentStep{id: ev.ToolCallID, tool: ev.ToolName, args: ev.Arguments, line: line, started: now}
+		s.steps = append(s.steps, step)
+		if over := len(s.steps) - maxSubagentSteps; over > 0 {
+			s.steps = append(s.steps[:0:0], s.steps[over:]...)
+			s.dropped += over
+		}
+		return step
 	case "tool_result":
 		if ev.IsError {
 			s.failed++
+		}
+		for i := len(s.steps) - 1; i >= 0; i-- {
+			if st := s.steps[i]; st.id == ev.ToolCallID && !st.done {
+				st.done, st.isError, st.ended = true, ev.IsError, now
+				st.result = ev.Content
+				if len(st.result) > maxSubagentResult {
+					st.result = st.result[:maxSubagentResult] + "\n[the rest is not kept]"
+				}
+				return st
+			}
 		}
 	case "model_turn":
 		if ev.Usage != nil {
 			s.tokens += ev.Usage.InputTokens + ev.Usage.OutputTokens
 		}
 	}
+	return nil
+}
+
+// running is the step a sub-agent is on now, if one has not come back yet.
+func (s *subagentRun) running() *subagentStep {
+	if s == nil {
+		return nil
+	}
+	for i := len(s.steps) - 1; i >= 0; i-- {
+		if !s.steps[i].done {
+			return s.steps[i]
+		}
+	}
+	return nil
 }
 
 // subagentRole is the role a delegation card names: what the sub-agent said it was, else what the

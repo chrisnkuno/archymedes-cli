@@ -188,6 +188,10 @@ start of the session names it and why.
 - **In the background**, the card says so ("in the background · 4 calls") and keeps showing what
   the helper does after the call returned; its report replaces "started in the background" when it
   finishes. If you are between turns, a line says a report is waiting for your next message.
+- **The Inspector** (→ on an empty input, or → on a helper's card): every helper of the session,
+  those at work first. The one you choose shows its brief and its report once done. Between them
+  is its whole timeline: each call, its time, whether it failed, and every edit's diff. → steps
+  into the timeline, enter opens a call's output in place, space reads it, ← steps back out.
 - **`/subagents`** lists every helper of the session: id, role, status, foreground or background,
   the tokens it used, the brief's first line, and the branch for an editing background helper. Its
   last line is what all helpers used together: in, from cache, out.

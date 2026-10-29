@@ -78,6 +78,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	if frame.Get("notes").InBounds(msg) {
 		return m.runAction("notifications")
 	}
+	if frame.Get("changes-chip").InBounds(msg) {
+		return m.runAction("changes")
+	}
 	if frame.Get("start").InBounds(msg) {
 		return m.runAction("start")
 	}
@@ -130,6 +133,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	}
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(gallery.IndexOf(m.homePhoto())) // the photo, full size
+	}
+	if cmd, ok := m.railClick(msg); ok {
+		return cmd
 	}
 	if cmd, ok := m.itemClick(msg); ok {
 		return cmd

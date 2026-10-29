@@ -177,6 +177,11 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.Expand):
 		m.expanded = !m.expanded
 		return nil
+	case key.Matches(msg, k.Rail):
+		return m.toggleRail()
+	case key.Matches(msg, k.Inspect) && len(m.input.complete) == 0 && !m.landingVisible() &&
+		(msg.String() != "right" || m.input.value() == ""):
+		return m.openInspector(nil) // → on an empty input: what the sub-agents are doing, the latest edit
 	case key.Matches(msg, k.PageUp):
 		return m.scrollBy(max(m.transcriptHeight()-2, 1))
 	case key.Matches(msg, k.PageDown):

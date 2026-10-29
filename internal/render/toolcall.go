@@ -85,6 +85,20 @@ func DescribeToolCall(toolName string, args map[string]any) string {
 		return asString(args["include"])
 	case "run_command":
 		return asString(args["command"])
+	case "command_output":
+		// Which background command, and how it reads: waiting for news, or for a pattern.
+		line := asString(args["id"])
+		if pattern := asString(args["pattern"]); pattern != "" {
+			line += " /" + pattern + "/"
+		}
+		if wait, ok := asNumber(args["waitSeconds"]); ok && wait > 0 {
+			line += fmt.Sprintf(" · waits %ds", wait)
+		}
+		return line
+	case "stop_command":
+		return asString(args["id"])
+	case "list_commands":
+		return ""
 	case "start_application":
 		command := asString(args["command"])
 		if port, ok := asNumber(args["port"]); ok {
@@ -151,6 +165,9 @@ var (
 	noMatches      = regexp.MustCompile(`(?i)^No matches`)
 	noSecrets      = regexp.MustCompile(`(?i)^No likely secrets`)
 	noFilesMatched = regexp.MustCompile(`(?i)^No files matched`)
+	// JobHeadline is a background command's state as the engine writes it: "cmd1 running · 2s · 40
+	// bytes", after "Stopped. " or "cmd1 had already ended: " when stop_command says it.
+	JobHeadline = regexp.MustCompile(`^(?:Stopped\. |\S+ had already ended: )?(cmd\d+) (running|exited -?\d+|stopped|failed)`)
 )
 
 func lineCount(content string) int {
@@ -180,6 +197,16 @@ func firstNonBlank(lines []string) string {
 func SummarizeToolResult(toolName, body string, isError bool) string {
 	switch toolName {
 	case "run_command":
+		if strings.HasPrefix(body, "Started ") {
+			for _, line := range strings.Split(body, "\n") {
+				if m := JobHeadline.FindStringSubmatch(line); m != nil {
+					if m[2] == "running" {
+						return m[1] + " running in the background"
+					}
+					return m[1] + " " + m[2]
+				}
+			}
+		}
 		exit := exitLine.FindStringSubmatch(body)
 		if exit == nil {
 			return TruncateMiddle(firstLine(body), 60)
@@ -217,6 +244,22 @@ func SummarizeToolResult(toolName, body string, isError bool) string {
 			return entries[0][2] + " at " + entries[0][3]
 		}
 		return fmt.Sprintf("%d applications", len(entries))
+	case "command_output", "stop_command":
+		if m := JobHeadline.FindStringSubmatch(firstLine(body)); m != nil {
+			return m[1] + " " + m[2]
+		}
+		return TruncateMiddle(firstLine(body), 60)
+	case "list_commands":
+		count := 0
+		for _, line := range strings.Split(body, "\n") {
+			if JobHeadline.MatchString(line) {
+				count++
+			}
+		}
+		if count == 0 {
+			return "none"
+		}
+		return plural(count, "command", "commands")
 	case "grep_files":
 		if noMatches.MatchString(body) {
 			return "no matches"

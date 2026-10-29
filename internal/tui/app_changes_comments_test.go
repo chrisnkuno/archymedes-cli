@@ -62,7 +62,7 @@ func TestEmptyingACommentRemovesIt(t *testing.T) {
 func TestDiffLineRefsFollowTheDrawnRows(t *testing.T) {
 	m, _ := newTestModel(t)
 	patch := "diff --git a/x b/x\nindex 1..2\n--- a/x\n+++ b/x\n@@ -1,3 +1,3 @@\n keep\n-old\n+new\n\\ No newline at end of file\n"
-	rows, refs := diffRows(m, patch, 80), diffLineRefs(patch)
+	rows, refs := diffRows(m.th, patch, 80), diffLineRefs(patch)
 	if len(rows) != len(refs) {
 		t.Fatalf("%d rows, %d refs", len(rows), len(refs))
 	}

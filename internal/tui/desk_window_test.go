@@ -15,7 +15,7 @@ import (
 // allWindows are every app window, as values; TestConformEveryWindowTakesTheWheel finds any missing.
 var allWindows = map[string]window{
 	"changesApp": (*changesApp)(nil), "filesView": (*filesView)(nil), "finder": (*finder)(nil),
-	"galleryApp": (*galleryApp)(nil), "keysApp": (*keysApp)(nil), "modelPicker": (*modelPicker)(nil),
+	"galleryApp": (*galleryApp)(nil), "inspectApp": (*inspectApp)(nil), "keysApp": (*keysApp)(nil), "modelPicker": (*modelPicker)(nil),
 	"notesApp": (*notesApp)(nil), "pager": (*pager)(nil), "providersApp": (*providersApp)(nil),
 	"resumePicker": (*resumePicker)(nil), "settingsApp": (*settingsApp)(nil), "showcaseApp": (*showcaseApp)(nil),
 	"statsApp": (*statsApp)(nil), "tasksApp": (*tasksApp)(nil), "themePicker": (*themePicker)(nil),

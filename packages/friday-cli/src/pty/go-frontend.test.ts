@@ -203,8 +203,10 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     proc.write("/diff\r");
     // Read off the emulated screen: the cell renderer redraws only what changed, so a line on
     // screen is not one contiguous string in the output stream.
-    await screenShows(screen, "+written by the agent");
-    expect(await screen.text()).toMatch(/diff since the last checkpoint/);
+    // The write's card already shows "+written by the agent" (its diff, drawn from the call), so
+    // wait for the /diff reader's own heading, then check the line is in it.
+    await screenShows(screen, "diff since the last checkpoint");
+    expect(await screen.text()).toMatch(/\+written by the agent/);
     proc.write("/cost\r");
     await screenShows(screen, "Session cost");
     proc.write("/undo\r");

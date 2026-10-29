@@ -15,6 +15,7 @@ import (
 
 	"github.com/chrisnkuno/friday-cli/internal/gallery"
 	"github.com/chrisnkuno/friday-cli/internal/project"
+	"github.com/chrisnkuno/friday-cli/internal/theme"
 )
 
 // The Changes app (F10): what is different from the last commit, file by file — the list on the
@@ -61,6 +62,7 @@ type changesApp struct {
 
 	showBranches bool
 	br           *branchesView
+	pick         string // a file to select once the list is read (a click on it in the rail)
 }
 
 func (c *changesApp) title() string { return "Changes" }
@@ -76,6 +78,15 @@ func (m *Model) openChanges() tea.Cmd {
 	c := &changesApp{line: -1, diffs: map[string]*fileDiff{}, br: &branchesView{details: map[string]*branchDetail{}}}
 	m.openWindow(c)
 	return c.reload(m)
+}
+
+// openChangesOn opens Changes with path selected.
+func (m *Model) openChangesOn(path string) tea.Cmd {
+	cmd := m.openChanges()
+	if c := m.changesWindow(); c != nil {
+		c.pick, c.showBranches, c.onDiff = path, false, false
+	}
+	return cmd
 }
 
 func (m *Model) changesWindow() *changesApp {
@@ -103,10 +114,11 @@ func (m *Model) changesLoaded(msg changesLoadedMsg) tea.Cmd {
 	if c == nil {
 		return nil
 	}
-	selected := ""
-	if f, ok := c.selected(); ok {
+	selected := c.pick
+	if f, ok := c.selected(); ok && selected == "" {
 		selected = f.Path
 	}
+	c.pick = ""
 	c.loaded, c.loading, c.err, c.notRepo = true, false, "", false
 	c.diffs = map[string]*fileDiff{}
 	switch {
@@ -260,7 +272,7 @@ func (c *changesApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 func (c *changesApp) read(m *Model) tea.Cmd {
 	if f, ok := c.selected(); ok {
 		if d := c.diffs[f.Path]; d != nil && d.text != "" {
-			m.openWindow(newPager(m, "diff "+f.Path, diffRows(m, d.text, max(m.width-12, 20))))
+			m.openWindow(newPager(m, "diff "+f.Path, diffRows(m.th, d.text, max(m.width-12, 20))))
 		}
 	}
 	return nil
@@ -536,7 +548,7 @@ func (c *changesApp) diffView(m *Model, f project.Change, width, height int) []s
 		return []string{th.Bad.Render(ansi.Truncate(d.err, width, "…"))}
 	}
 	if d.rowsWidth != width {
-		d.rows, d.rowsWidth = diffRows(m, d.text, width), width
+		d.rows, d.rowsWidth = diffRows(m.th, d.text, width), width
 		d.refs = diffLineRefs(d.text)
 		d.hunks = nil
 		for i, row := range d.rows {
@@ -583,11 +595,13 @@ func (c *changesApp) diffView(m *Model, f project.Change, width, height int) []s
 // diffRows draws a unified diff for reading: git's headers dropped (the file is named above),
 // each hunk opened by a quiet rule, every line with its old and new line numbers, and added and
 // removed lines on a tint of their colour across the full width.
-func diffRows(m *Model, text string, width int) []string {
-	th := m.th
+//
+// A hunk whose place is not known (an edit drawn from its call, before the file was found) starts
+// at line 0: its lines are drawn with no numbers rather than with wrong ones.
+func diffRows(th theme.Theme, text string, width int) []string {
 	var rows []string
 	oldLine, newLine := 0, 0
-	gutter := func(a, b string) string { return th.Faint.Render(fmt.Sprintf("%4s %4s ", a, b)) }
+	gutter := func(a, b int) string { return th.Faint.Render(fmt.Sprintf("%4s %4s ", lineNo(a), lineNo(b))) }
 	codeWidth := max(width-10, 4)
 	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		line = strings.ReplaceAll(ansi.Strip(line), "\t", "    ")
@@ -603,25 +617,44 @@ func diffRows(m *Model, text string, width int) []string {
 			oldLine, newLine = hunkStart(line)
 			context := strings.TrimSpace(line[strings.LastIndex(line, "@@")+2:])
 			label := "  ⋯ line " + strconv.Itoa(newLine)
+			if newLine <= 0 {
+				label = "  ⋯ edit"
+			}
 			if context != "" {
 				label += " · " + context
 			}
 			rows = append(rows, lipgloss.NewStyle().Foreground(th.Secondary).Render(ansi.Truncate(label, width, "…")))
 		case strings.HasPrefix(line, "+"):
-			rows = append(rows, gutter("", strconv.Itoa(newLine))+lipgloss.NewStyle().Foreground(th.Success).Background(th.Tint(th.Success, 0.18)).Width(codeWidth).Render(ansi.Truncate(line, codeWidth, "…")))
-			newLine++
+			rows = append(rows, gutter(0, newLine)+lipgloss.NewStyle().Foreground(th.Success).Background(th.Tint(th.Success, 0.18)).Width(codeWidth).Render(ansi.Truncate(line, codeWidth, "…")))
+			newLine = advance(newLine)
 		case strings.HasPrefix(line, "-"):
-			rows = append(rows, gutter(strconv.Itoa(oldLine), "")+lipgloss.NewStyle().Foreground(th.Error).Background(th.Tint(th.Error, 0.18)).Width(codeWidth).Render(ansi.Truncate(line, codeWidth, "…")))
-			oldLine++
+			rows = append(rows, gutter(oldLine, 0)+lipgloss.NewStyle().Foreground(th.Error).Background(th.Tint(th.Error, 0.18)).Width(codeWidth).Render(ansi.Truncate(line, codeWidth, "…")))
+			oldLine = advance(oldLine)
 		case strings.HasPrefix(line, `\`):
 			rows = append(rows, th.Faint.Render("  "+line))
 		default:
-			rows = append(rows, gutter(strconv.Itoa(oldLine), strconv.Itoa(newLine))+th.Body.Render(ansi.Truncate(line, codeWidth, "…")))
-			oldLine++
-			newLine++
+			rows = append(rows, gutter(oldLine, newLine)+th.Body.Render(ansi.Truncate(line, codeWidth, "…")))
+			oldLine = advance(oldLine)
+			newLine = advance(newLine)
 		}
 	}
 	return rows
+}
+
+// lineNo is a gutter's number, blank when it is not known.
+func lineNo(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+// advance is the next line's number; an unknown one stays unknown.
+func advance(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return n + 1
 }
 
 // hunkStart reads "@@ -12,5 +14,7 @@" as (12, 14).

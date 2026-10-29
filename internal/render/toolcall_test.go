@@ -111,3 +111,23 @@ func TestSummarizeToolResult(t *testing.T) {
 		}
 	}
 }
+
+func TestBackgroundCommandCards(t *testing.T) {
+	cases := []struct{ tool, body, want string }{
+		{"run_command", "Started cmd1 in the background (pid 42): npm run dev\ncmd1 running · 2s · 1,234 bytes\nready\n[next: since=1234]", "cmd1 running in the background"},
+		{"run_command", "Started cmd2 in the background (pid 43): false\ncmd2 exited 1 · 0s · 0 bytes\n(no new output)", "cmd2 exited 1"},
+		{"command_output", "cmd1 exited 0 · 12.3s · 4,567 bytes\nPASS", "cmd1 exited 0"},
+		{"stop_command", "Stopped. cmd1 stopped · 4.1s · 120 bytes", "cmd1 stopped"},
+		{"stop_command", "cmd1 had already ended: cmd1 exited 0 · 1s · 3 bytes", "cmd1 exited 0"},
+		{"list_commands", "cmd1 running · 3s · 9 bytes · npm run dev\ncmd2 stopped · 1s · 0 bytes · make watch", "2 commands"},
+		{"list_commands", "No background commands this session.", "none"},
+	}
+	for _, c := range cases {
+		if got := SummarizeToolResult(c.tool, c.body, false); got != c.want {
+			t.Errorf("%s %q: got %q, want %q", c.tool, firstLine(c.body), got, c.want)
+		}
+	}
+	if got := DescribeToolCall("command_output", map[string]any{"id": "cmd1", "pattern": "ready", "waitSeconds": 30.0}); got != "cmd1 /ready/ · waits 30s" {
+		t.Errorf("command_output described as %q", got)
+	}
+}

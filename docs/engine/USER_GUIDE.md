@@ -12,6 +12,7 @@ setting see [Configuration](CONFIGURATION.md); for every tool see [Tools](TOOLS.
 - [Tests first, and proof before "done"](#tests-first-and-proof-before-done)
 - [Suggestions while you work](#suggestions-while-you-work)
 - [Sub-agents](#sub-agents)
+- [Seeing every change](#seeing-every-change)
 - [Sessions: resuming, restarts, titles](#sessions-resuming-restarts-titles)
 - [Long conversations: compaction](#long-conversations-compaction)
 - [Models: the main one and the small one](#models-the-main-one-and-the-small-one)
@@ -366,6 +367,23 @@ anyway, so what it found is not lost. Approvals for a helper's edits come to you
 Friday's own do.
 
 You can write your own roles; see [Sub-agents](SUBAGENTS.md).
+
+## Seeing every change
+
+Every edit is shown as it lands, not only when the turn ends.
+
+- **On its card.** An edit or a write shows its diff under the call: the lines removed and added,
+  with their line numbers in the file, and `+3 −1` in the card's header. A long diff shows its
+  first rows; enter on the card (or a second click) shows all of it.
+- **In the changes rail.** On a wide terminal, a column beside the conversation lists every file
+  changed since the last commit, with its lines added and removed. It marks the file edited last,
+  shows the helpers at work and what each is doing now, and the background commands with the last
+  line each printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
+  back. On a narrower terminal the top bar counts the changed files instead.
+- **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
+  of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see).
+- **In Changes** (F10): the whole diff of every file against the last commit. A click on a file in
+  the rail opens Changes on it.
 
 ## Sessions: resuming, restarts, titles
 

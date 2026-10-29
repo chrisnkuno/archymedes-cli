@@ -25,11 +25,11 @@ type keyMap struct {
 	// Typing (locked).
 	Send, Newline, Complete, Cancel, Interrupt, History key.Binding
 	// Apps.
-	Start, Finder, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer, Welcome key.Binding
+	Start, Finder, Chat, Files, Search, Sessions, Models, Themes, Keys, Help, Stats, Changes, Inspect, Gallery, Tasks, Notifications, Settings, Providers, TourDrawer, Welcome key.Binding
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
-	Mode, Expand, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
+	Mode, Expand, Rail, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
 	// Reading.
 	PageUp, PageDown, LineUp, LineDown, Top, Bottom key.Binding
 }
@@ -46,6 +46,7 @@ var actions = []action{
 	{"help", "help", "Apps", []string{"f8", "?"}, false, func(k *keyMap) *key.Binding { return &k.Help }},
 	{"stats", "stats", "Apps", []string{"f9"}, false, func(k *keyMap) *key.Binding { return &k.Stats }},
 	{"changes", "changes", "Apps", []string{"f10"}, false, func(k *keyMap) *key.Binding { return &k.Changes }},
+	{"inspect", "inspector", "Apps", []string{"right"}, false, func(k *keyMap) *key.Binding { return &k.Inspect }},
 	{"gallery", "gallery", "Apps", []string{"f12"}, false, func(k *keyMap) *key.Binding { return &k.Gallery }},
 
 	{"tasks", "tasks", "Apps", []string{"alt+t"}, false, func(k *keyMap) *key.Binding { return &k.Tasks }},
@@ -63,6 +64,7 @@ var actions = []action{
 
 	{"mode", "mode", "Session", []string{"shift+tab"}, false, func(k *keyMap) *key.Binding { return &k.Mode }},
 	{"expand", "expand output", "Session", []string{"ctrl+o"}, false, func(k *keyMap) *key.Binding { return &k.Expand }},
+	{"changes-rail", "changes rail", "Session", []string{"alt+d"}, false, func(k *keyMap) *key.Binding { return &k.Rail }},
 	{"undo", "undo last turn", "Session", []string{"alt+z"}, false, func(k *keyMap) *key.Binding { return &k.Undo }},
 	{"retry", "send again", "Session", []string{"alt+r"}, false, func(k *keyMap) *key.Binding { return &k.Retry }},
 	{"copy", "copy last reply", "Session", []string{"alt+y"}, false, func(k *keyMap) *key.Binding { return &k.Copy }},

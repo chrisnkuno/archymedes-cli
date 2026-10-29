@@ -59,8 +59,14 @@ func (m *Model) View() tea.View {
 			m.sel.clear()
 		}
 		m.bodyLines = body
+		rail := m.railLines(len(body))
 		for i, line := range body {
-			rows = append(rows, m.cursorMargin(i)+m.highlight(i, line))
+			row := m.cursorMargin(i) + m.highlight(i, line)
+			if rail != nil {
+				left := m.width - ansi.StringWidth(rail[i])
+				row = padRight(ansi.Truncate(row, left, ""), left) + rail[i]
+			}
+			rows = append(rows, row)
 		}
 		lines, first := m.input.dropup(m.th, m.width, m.dropupRows())
 		for i, line := range lines {
@@ -82,7 +88,7 @@ func (m *Model) View() tea.View {
 // body is the transcript area: the landing screen until there is a conversation, then the
 // transcript, with a live "thinking" line under it while the agent works on something unseen.
 func (m *Model) body(height int) []string {
-	width := max(m.width-2, 10)
+	width := m.chatWidth()
 	if m.landingVisible() {
 		return m.landing(width, height)
 	}

@@ -53,11 +53,12 @@ func (m *Model) handleAgentMsgs(msgs []any) tea.Cmd {
 	for _, msg := range msgs {
 		if end, ok := msg.(acp.TurnEnded); ok {
 			cmds = append(cmds, m.finishTurn(promptDoneMsg{stop: end.StopReason}))
+			m.rail.stale = true // whatever the turn changed, by any means, has landed
 			continue
 		}
 		m.handleAgent(msg)
 	}
-	return tea.Batch(append(cmds, m.flushNotifications())...)
+	return tea.Batch(append(cmds, m.railReread(), m.flushNotifications())...)
 }
 
 // handleAgent turns one agent message into transcript changes.
@@ -145,6 +146,8 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		}
 		if t := m.tools[ev.ToolCallID]; t != nil {
 			t.finish(ev.Content, ev.IsError)
+			m.editLanded(t)
+			m.noteCommands(t.name, t.args, ev.Content)
 		}
 	case "model_turn":
 		m.composing = nil

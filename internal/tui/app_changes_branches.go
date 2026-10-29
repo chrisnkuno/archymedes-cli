@@ -500,7 +500,7 @@ func (b *branchesView) detailRows(m *Model, r branchRow, d *branchDetail, width 
 			rows = append(rows, statusGlyph(m, project.Change{Status: f.Status})+" "+th.Body.Render(truncateMiddle(f.Path, max(width-16, 8)))+" "+counts)
 		}
 	case "stash":
-		rows = append(rows, diffRows(m, d.patch, width)...)
+		rows = append(rows, diffRows(m.th, d.patch, width)...)
 		if d.truncated {
 			rows = append(rows, th.Warn.Render("… the rest is past "+strconv.Itoa(project.MaxDiffBytes>>20)+" MB"))
 		}

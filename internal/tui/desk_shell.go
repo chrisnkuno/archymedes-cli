@@ -131,6 +131,10 @@ func (m *Model) runAction(id string) tea.Cmd {
 		m.openWindow(newKeysApp(m))
 	case "changes":
 		return m.openChanges()
+	case "inspect":
+		return m.openInspector(nil)
+	case "changes-rail":
+		return m.toggleRail()
 	case "gallery":
 		return m.openGallery(gallery.IndexOf(m.homePhoto()))
 	case "showcase":

@@ -121,6 +121,7 @@ func (m *Model) tray() string {
 	if status == "" && m.usage.input+m.usage.output > 0 {
 		tray += th.Faint.Render(fmt.Sprintf("↑%s ↓%s ", compact(m.usage.input), compact(m.usage.output)))
 	}
+	tray += m.changesChip()
 	if info := m.session.Info; info.Profile != "" {
 		tray += th.SoftPill(info.Profile, th.Accent) + " "
 	}

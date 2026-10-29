@@ -187,6 +187,7 @@ type Model struct {
 	tools     map[string]*toolItem
 	queue     []string
 	comments  []reviewComment // notes on diff lines, sent with the next message
+	rail      railState       // the changes rail beside the transcript (chat_rail.go)
 	goal      *goalState      // /goal in progress
 	turnStart time.Time
 	turnUsage usageTotals
@@ -494,6 +495,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case changesLoadedMsg:
 		return m, m.changesLoaded(msg)
+	case railLoadedMsg:
+		return m, m.railLoaded(msg)
 	case diffLoadedMsg:
 		m.diffLoaded(msg)
 		return m, nil

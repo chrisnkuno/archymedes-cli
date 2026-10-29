@@ -105,6 +105,10 @@ type toolItem struct {
 	started, ended time.Time      // for the task manager
 	sub            *subagentRun   // a delegation call's sub-agent, once it has done something
 	notes          []acp.EditNote // what the engine found worth knowing about this edit
+	// diff is an edit's or write's unified diff, built from its arguments (chat_editdiff.go), with
+	// the lines it adds and removes.
+	diff           string
+	added, removed int
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -129,6 +133,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	case t.done:
 		glyph = th.OK.Render("✓")
 		summary = render.LinkURLs(th.Faint, render.SummarizeToolResult(t.name, t.result, false))
+		if t.diff != "" {
+			summary = diffCounts(th, t.added, t.removed)
+		}
 	}
 	label := toolLabel(t.name)
 	if delegationTools[t.name] {
@@ -157,7 +164,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	if delegationTools[t.name] {
 		lines = append(lines, subagentActivity(ctx, t, expanded)...)
 	}
-	if t.done && showsOutput(t, expanded) {
+	if t.done && t.diff != "" {
+		lines = append(lines, editDiffLines(ctx, t, expanded)...)
+	} else if t.done && showsOutput(t, expanded) {
 		limit := 6
 		if expanded {
 			limit = 0
@@ -177,6 +186,33 @@ func (t *toolItem) render(ctx renderCtx) []string {
 		}
 	}
 	return lines
+}
+
+// editCardRows is how many rows of an edit's diff its card shows until it is opened.
+const editCardRows = 12
+
+// editDiffLines is an edit card's body: its diff, every line numbered, the first editCardRows rows
+// until the card is opened (enter, a second click, ctrl+o), then all of it.
+func editDiffLines(ctx renderCtx, t *toolItem, expanded bool) []string {
+	rule := lipgloss.NewStyle().Foreground(ctx.th.Tint(ctx.th.Secondary, 0.55)).Render("  │ ")
+	rows := diffRows(ctx.th, t.diff, max(ctx.width-4, 20))
+	var lines []string
+	shown := rows
+	if !expanded && len(rows) > editCardRows {
+		shown = rows[:editCardRows]
+	}
+	for _, row := range shown {
+		lines = append(lines, rule+row)
+	}
+	if hidden := len(rows) - len(shown); hidden > 0 {
+		lines = append(lines, rule+ctx.th.Faint.Render(fmt.Sprintf("… %s more · enter shows all · → inspect", plural(hidden, "line"))))
+	}
+	return lines
+}
+
+// diffCounts is "+12 −3" in the colours of added and removed.
+func diffCounts(th theme.Theme, added, removed int) string {
+	return th.OK.Render(fmt.Sprintf("+%d", added)) + " " + th.Bad.Render(fmt.Sprintf("−%d", removed))
 }
 
 // fileTools take a path argument that names one project file; listing tools produce paths.

@@ -10,9 +10,9 @@ import (
 
 // The conversation, by keyboard. ↑ on an empty input steps up into the transcript: a bar in the
 // margin marks the message or tool call the keyboard is on, ↑/↓ move from one to the next (the view
-// follows), enter opens it (a tool call's whole output, or a message in a reader) and space reads it
-// in a reader. ↓ past the newest, esc or typing goes back to the input. Earlier messages, which ↑
-// recalled before, are ctrl+↑ and ctrl+↓. A click selects a block; a second click opens it.
+// follows), enter opens it (a tool call's whole output, or a message in a reader), space reads it
+// in a reader, and → opens a tool call in the Inspector. ↓ past the newest, esc or typing goes back
+// to the input. Earlier messages, which ↑ recalled before, are ctrl+↑ and ctrl+↓. A click selects a block; a second click opens it.
 
 // selectable is an item the keyboard can stop on: what the person said, what the agent said, and
 // each tool call.
@@ -79,6 +79,12 @@ func (m *Model) transcriptKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.enterTranscript()
 	case "enter":
 		return m.openItem(m.tr.sel), true
+	case "right":
+		// A tool call opens in the Inspector: a sub-agent's whole timeline, an edit's whole diff.
+		if t, ok := m.tr.sel.(*toolItem); ok {
+			return m.openInspector(t), true
+		}
+		return nil, true
 	case "space":
 		return m.readItem(m.tr.sel), true
 	case "esc":
@@ -135,7 +141,7 @@ func (m *Model) readItem(it item) tea.Cmd {
 // scrollToItem scrolls the transcript just enough to show it, its top first when it is taller than
 // the view.
 func (m *Model) scrollToItem(target item) {
-	ctx := renderCtx{th: m.th, md: m.md, width: max(m.width-2, 10), expanded: m.expanded, root: m.projectRoot(), zones: m.zones.frame}
+	ctx := renderCtx{th: m.th, md: m.md, width: m.chatWidth(), expanded: m.expanded, root: m.projectRoot(), zones: m.zones.frame}
 	below := 0 // lines under the target's last line, to the newest
 	height := 0
 	for i := len(m.tr.items) - 1; i >= 0; i-- {

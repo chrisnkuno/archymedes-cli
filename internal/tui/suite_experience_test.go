@@ -375,7 +375,7 @@ func collect(cmd tea.Cmd) []tea.Msg {
 
 func TestDiffRowsNumberEveryLineFromItsHunk(t *testing.T) {
 	m := projectModel(t)
-	rows := diffRows(m, "diff --git a/x b/x\nindex 1..2\n--- a/x\n+++ b/x\n@@ -10,3 +10,4 @@ func f() {\n same\n-old\n+new\n+added\n tail\n", 60)
+	rows := diffRows(m.th, "diff --git a/x b/x\nindex 1..2\n--- a/x\n+++ b/x\n@@ -10,3 +10,4 @@ func f() {\n same\n-old\n+new\n+added\n tail\n", 60)
 	plain := make([]string, len(rows))
 	for i, r := range rows {
 		plain[i] = ansi.Strip(r)
