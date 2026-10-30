@@ -8,6 +8,11 @@ has 5,100 lines and `tui.ts` has 1,364.
 ## Release 3.12.5 (2026-10-29)
 You see everything the work does while it happens. Every edit shows its diff under the call, with real line numbers and `+3 −1` at a glance. On a wide terminal a rail beside the conversation keeps the changed files, the helpers at work and the latest edit's diff in view, read again as each edit lands (alt+d hides it). → opens the Inspector: every helper and every edit of the session, a helper's whole timeline with each call, its output and its diffs, and its report (WS-57). Friday can now run commands in the background — a dev server, a watcher, a long build — and read their output as it comes, wait for a line, or stop them; they show in the rail with the last line each printed, and they all end when the session does (WS-58).
 
+## Release 3.12.6 (2026-10-31)
+Start helpers yourself, as many as you like. `/agent [role] <task>` starts one in the background, and alt+a hands whatever you typed to one instead of to Friday — neither is a turn, so you can start several in a row, even while Friday works. Each gets a live card, a place in the rail and its whole timeline in the Inspector, and its report reaches Friday with your next message. On your Claude subscription each helper is a Claude Code of its own, read-only unless you name a role (WS-59). And every call is readable in full: `▸ show all` under a card names what is folded away — the full command or script, its other arguments, how many lines of output — and opens that one card in place; `▾ fold` closes it.
+
+Release check on a loaded machine (load average 15–18 from builds outside this repo): `TestBackgroundStartSeesACrashAtOnce` now uses the real 2 s start window, since a shell can take longer than the tests' 300 ms to say a program is missing (a crash still returns the moment it happens); 8/8 under that load. `bridge/run.test.ts` "gives up on an agent that keeps dying" timed out at 15 s under the same load and passed 3 of 4 times alone; nothing in this release touches it.
+
 ## WS-59: Start helpers yourself, and read every call in full (2026-10-30)
 
 User request: "add the ability to run subagents by command, also make the content of tool calling or script ran be readable with an extended button", then "i want to be able to run multiple agents with simple keyboard commands".

@@ -108,7 +108,10 @@ func TestBackgroundStartReturnsAtOnceWithItsJobAndFirstOutput(t *testing.T) {
 }
 
 func TestBackgroundStartSeesACrashAtOnce(t *testing.T) {
-	_, tools := bg(t)
+	w, tools := bg(t)
+	// The real window: a crash returns the moment it happens either way, and on a loaded machine
+	// a shell takes longer than bg's 300 ms to say a program is missing.
+	w.jobs.window = CommandStartWindow
 	began := time.Now()
 	r := call(t, tools["run_command"], tool.Args{"command": "echo boom >&2; exit 3", "background": true})
 	if !r.IsError || !strings.Contains(r.Content, "cmd1 exited 3") || !strings.Contains(r.Content, "boom") || r.Data["exitCode"] != 3 {
