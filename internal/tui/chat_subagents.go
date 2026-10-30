@@ -66,6 +66,9 @@ func (m *Model) handleThread(th *acp.ThreadInfo) {
 	ended := th.Status == "done" || th.Status == "failed" || th.Status == "cancelled"
 	t := m.tools[th.ParentToolCallID]
 	if t == nil {
+		t = m.userAgentCard(th)
+	}
+	if t == nil {
 		if ended && th.Background {
 			m.notice(noticeFaint, fmt.Sprintf("Background agent %s (%s) %s; its report reaches Friday with your next message", th.ID, th.Agent, th.Status))
 		}

@@ -54,6 +54,7 @@ func init() {
 		{"welcome", "", "The first-run walkthrough again: name, look, mode, keys, connection, a first request", func(m *Model, _ string) tea.Cmd { return m.openOnboarding() }},
 		{"tour", "", "A tour of what the agent can do, as scenes drawn in text: lit, textured and moving", func(m *Model, _ string) tea.Cmd { return m.openShowcase() }},
 		{"todos", "", "The agent's checklist for the task: what is done, doing and left", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("todos", "") }},
+		{"agent", "[role] <task>", "Start a helper on a task in the background, as many as you like, even mid-turn (alt+a)", (*Model).cmdAgent},
 		{"subagents", "", "Helpers the agent started for parts of the task: what each is doing, or what it found", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("subagents", "") }},
 		{"vim", "", "Turn vim keys in the input on or off: esc for normal mode, i to type", (*Model).cmdVim},
 		{"lsp", "", "Language servers: which are installed, running or failed; their errors follow each edit", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("lsp", "") }},

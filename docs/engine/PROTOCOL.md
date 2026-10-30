@@ -148,6 +148,7 @@ Params: `sessionId`, `command`, `argument`. Replies with a `kind` and its fields
 | `skills` | `{"kind":"text","text":"release   project   Cut a release of this project\n…"}`: each skill found, where from and what for, then any skipped and why |
 | `cost` | `{"kind":"text","text":"Main conversation: 12 model calls · 48,210 tokens in (30,100 from cache) · 2,300 out\n…"}`: the main conversation, each sub-agent and the total; no prices yet |
 | `subagents` (also `threads`, `agents`) | `{"kind":"text","text":"t-k3x9ab  explore  done  background  4.2k tok  map the API\nSub-agents used …"}` |
+| `spawn` | `{"kind":"text","text":"Started explore helper t-k3x9ab in the background; …"}`: `argument` is `[role] <brief>` (a first word naming a role picks it; otherwise `general` in a git repository outside plan mode, else `explore`). The sub-agent runs in the background with no tool call behind it: its `thread` and `subagent` events carry `parentToolCallId` `user:<id>`, and a writable one works in its own worktree. Allowed while a turn runs; `{"kind":"error",…}` when it cannot start. While Claude runs the session, the helper is a Claude Code of its own (read-only roles in plan mode, `explore` unless a role is named, at most 4 at once), and its report is told to Claude before the next prompt |
 | anything else | `{"kind":"error","text":"/<command> is not in the Go engine yet. To use it, set Settings → Engine to TypeScript …"}` |
 
 ### `_archymedes/threads`

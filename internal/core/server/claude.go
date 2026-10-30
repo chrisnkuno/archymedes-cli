@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,4 +211,23 @@ func claudeEnviron(environ []string, env llm.Env) []string {
 		out = append(out, "CLAUDE_CONFIG_DIR="+dir)
 	}
 	return out
+}
+
+// claudeHelper is /agent while Claude runs the session: the helper is a Claude Code of its own
+// (claude.StartHelper). Read-only by default, since it shares the folder with this session's
+// Claude; a writable role is named, and refused in plan mode.
+func claudeHelper(sess *session, c *claude.Session, arg string) map[string]any {
+	cannotWrite := ""
+	if sess.core.Mode() == policy.Plan {
+		cannotWrite = "plan mode changes nothing"
+	}
+	profile, brief, err := sess.core.HelperRole(arg, false, cannotWrite)
+	if err == nil {
+		var h claude.Helper
+		h, err = c.StartHelper(claude.Role{Name: profile.Name, Instructions: profile.Instructions, ReadOnly: profile.ReadOnly}, brief)
+		if err == nil {
+			return map[string]any{"kind": "text", "text": fmt.Sprintf("Started %s helper %s on Claude Code in the background; → follows it, and its report reaches Claude with your next message", profile.Name, h.ID)}
+		}
+	}
+	return map[string]any{"kind": "error", "text": "The helper could not start: " + err.Error()}
 }

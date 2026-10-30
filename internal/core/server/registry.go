@@ -193,6 +193,20 @@ var sessionCommands = []sessionCommand{
 	{"subagents", "The session's sub-agents: role, status, tokens, brief and branch", func(sess *session, _ string) map[string]any {
 		return map[string]any{"kind": "text", "text": threadsText(sess.core.Threads())}
 	}},
+	{"spawn", "Start a background sub-agent from \"[role] <brief>\", even mid-turn; its card follows its thread", func(sess *session, arg string) map[string]any {
+		if c := sess.outside(); c != nil {
+			return claudeHelper(sess, c, arg)
+		}
+		t, profile, err := sess.core.StartAgent(arg)
+		if err != nil {
+			return map[string]any{"kind": "error", "text": "The helper could not start: " + err.Error()}
+		}
+		where := ""
+		if t.Branch != "" {
+			where = " on branch " + t.Branch
+		}
+		return map[string]any{"kind": "text", "text": fmt.Sprintf("Started %s helper %s in the background%s; → follows it, and its report reaches Friday when it ends", profile.Name, t.ID, where)}
+	}},
 }
 
 // back is /undo and /rewind: the checkpoint gone back to, and what was restored.

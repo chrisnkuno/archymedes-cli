@@ -70,7 +70,7 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		}
 		m.tr.add(item)
 	default:
-		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" {
+		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" || msg.command == "spawn" {
 			// The screen keeps what was said; the agent's conversation is what was rewound.
 			return m.toast(toastInfo, msg.result.Text)
 		}

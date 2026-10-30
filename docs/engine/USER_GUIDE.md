@@ -361,6 +361,15 @@ Outside a git repository, an editing helper runs in the foreground instead.
 re-open a finished helper with a follow-up question; the helper keeps everything it read. `/subagents` lists every helper of
 the session: its role, whether it ran in the background, its status, its brief and its branch.
 
+**Starting helpers yourself.** `/agent <task>` starts a helper in the background, and alt+a
+hands whatever you typed to one instead of to Friday. Neither is a turn, so you can start several
+in a row, even while Friday works. A first word naming a role picks it (`/agent review the
+parser`); otherwise the helper edits (`general`, in a worktree of its own) in a git repository
+outside plan mode, and only reads (`explore`) anywhere else. Each one gets a card that follows its
+work, shows in the rail and the Inspector, and its report reaches Friday with your next message.
+While Claude runs the session, each helper is a Claude Code of its own, in the same folder. It
+only reads (`explore`) unless you name a role, and at most four work at once.
+
 **Limits.** Helpers never start helpers of their own. At most four run at once (others wait their
 turn). Each role has its own step and call limits; a helper that runs out is asked for its report
 anyway, so what it found is not lost. Approvals for a helper's edits come to you exactly as
@@ -382,6 +391,11 @@ Every edit is shown as it lands, not only when the turn ends.
   back. On a narrower terminal the top bar counts the changed files instead.
 - **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
   of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see).
+- **Every call, readable in full.** A card shows one line for what a call was given and a few
+  rows of what it returned. When more is folded away, `▸ show all` under it names what: the full
+  command or script it ran, its other arguments, how many lines of output. A click on it (or enter
+  on the selected card) opens that card in place; `▾ fold` closes it. ctrl+o opens every card,
+  and space reads one in a pager.
 - **In Changes** (F10): the whole diff of every file against the last commit. A click on a file in
   the rail opens Changes on it.
 
@@ -486,6 +500,7 @@ Type `/` to see every command with what it does. Those that matter most on this 
 
 | Command | Does |
 | --- | --- |
+| `/agent [role] <task>` | start a helper in the background; alt+a sends what you typed to one |
 | `/subagents` | the helpers of this session: role, status, brief, branch |
 | `/todos` | Friday's checklist for the task: what is done, doing and left |
 | `/compact [focus]` | summarize the conversation now, keeping what you name |

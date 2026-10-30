@@ -41,6 +41,8 @@ type Session struct {
 	turnIDs []turnID
 	refused map[string]bool
 	closed  bool
+	// helpers are the helpers at work (helpers.go), each with what stops it.
+	helpers map[string]context.CancelFunc
 
 	emitMu sync.Mutex // notices go out in order, whichever goroutine ends the turn
 }
@@ -384,6 +386,7 @@ func (s *Session) Close() {
 	s.mu.Lock()
 	s.closed = true
 	p := s.proc
+	s.stopHelpers()
 	s.mu.Unlock()
 	if p != nil {
 		p.close()

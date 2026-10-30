@@ -29,7 +29,7 @@ type keyMap struct {
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
-	Mode, Expand, Rail, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
+	Mode, Expand, Rail, Agent, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
 	// Reading.
 	PageUp, PageDown, LineUp, LineDown, Top, Bottom key.Binding
 }
@@ -64,6 +64,7 @@ var actions = []action{
 
 	{"mode", "mode", "Session", []string{"shift+tab"}, false, func(k *keyMap) *key.Binding { return &k.Mode }},
 	{"expand", "expand output", "Session", []string{"ctrl+o"}, false, func(k *keyMap) *key.Binding { return &k.Expand }},
+	{"new-helper", "send to a new helper", "Session", []string{"alt+a"}, false, func(k *keyMap) *key.Binding { return &k.Agent }},
 	{"changes-rail", "changes rail", "Session", []string{"alt+d"}, false, func(k *keyMap) *key.Binding { return &k.Rail }},
 	{"undo", "undo last turn", "Session", []string{"alt+z"}, false, func(k *keyMap) *key.Binding { return &k.Undo }},
 	{"retry", "send again", "Session", []string{"alt+r"}, false, func(k *keyMap) *key.Binding { return &k.Retry }},

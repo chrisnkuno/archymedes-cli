@@ -130,7 +130,11 @@ func (m *Model) readItem(it item) tea.Cmd {
 		label, text = "reply", v.text.String()
 	case *toolItem:
 		label = v.name
-		text = strings.TrimSpace(fmt.Sprintf("%s %s\n\n%s", v.name, toolBrief(v), v.result))
+		input := toolInputText(v)
+		if input == "" {
+			input = toolBrief(v)
+		}
+		text = strings.TrimSpace(fmt.Sprintf("%s\n%s\n\n%s", v.name, input, v.result))
 	default:
 		return nil
 	}
@@ -169,6 +173,9 @@ func (m *Model) scrollToItem(target item) {
 
 // itemClick is a click on a block of the transcript: the first selects it, a second opens it.
 func (m *Model) itemClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
+	if m.foldClick(msg) {
+		return nil, true
+	}
 	for _, it := range m.tr.items {
 		if !selectable(it) || !m.zones.frame.Get(itemZone(it)).InBounds(msg) {
 			continue

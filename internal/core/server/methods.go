@@ -555,7 +555,7 @@ func (s *Server) command(params json.RawMessage) (any, error) {
 	if sess == nil {
 		return nil, errorf(codeInvalidParams, "no session %s", p.SessionID)
 	}
-	if c := sess.outside(); c != nil {
+	if c := sess.outside(); c != nil && p.Command != "spawn" {
 		return c.Command(p.Command, p.Argument), nil
 	}
 	if c, ok := sessionCommandByName[p.Command]; ok {

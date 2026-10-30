@@ -161,13 +161,16 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
 	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open
+	if expanded {
+		lines = append(lines, toolInputLines(ctx, t, lipgloss.NewStyle().Foreground(th.Tint(accent, 0.55)))...)
+	}
 	if delegationTools[t.name] {
 		lines = append(lines, subagentActivity(ctx, t, expanded)...)
 	}
 	if t.done && t.diff != "" {
 		lines = append(lines, editDiffLines(ctx, t, expanded)...)
 	} else if t.done && showsOutput(t, expanded) {
-		limit := 6
+		limit := foldedOutput
 		if expanded {
 			limit = 0
 		}
@@ -185,7 +188,7 @@ func (t *toolItem) render(ctx renderCtx) []string {
 			lines = append(lines, rule+line)
 		}
 	}
-	return lines
+	return append(lines, foldButton(ctx, t)...)
 }
 
 // editCardRows is how many rows of an edit's diff its card shows until it is opened.

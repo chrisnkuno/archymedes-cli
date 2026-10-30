@@ -192,6 +192,9 @@ start of the session names it and why.
   those at work first. The one you choose shows its brief and its report once done. Between them
   is its whole timeline: each call, its time, whether it failed, and every edit's diff. → steps
   into the timeline, enter opens a call's output in place, space reads it, ← steps back out.
+- **Helpers you start yourself** (`/agent [role] <task>`, or alt+a on what you typed) run in the
+  background with no call behind them. Their card appears with their first step and is otherwise
+  the same. Their reports reach Friday like any background helper's.
 - **`/subagents`** lists every helper of the session: id, role, status, foreground or background,
   the tokens it used, the brief's first line, and the branch for an editing background helper. Its
   last line is what all helpers used together: in, from cache, out.
