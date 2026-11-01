@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { validateOutcomeBatch } from "./outcome-protocol";
 import {
   flushOutcomes,
   OUTCOME_QUEUE_LIMIT,
@@ -92,6 +93,7 @@ describe("opt-in outcome reporting", () => {
     for (let index = 0; index < 150; index += 1) await recordTaskOutcome(task, deps());
     expect(await flushOutcomes(deps())).toMatchObject({ status: "sent", sent: 150 });
     expect(calls.map((call) => (call.body as { events: unknown[] }).events.length)).toEqual([100, 50]);
+    for (const call of calls) expect(validateOutcomeBatch(call.body)).toMatchObject({ ok: true, errors: [] });
 
     for (let index = 0; index < OUTCOME_QUEUE_LIMIT + 25; index += 1) await recordTaskOutcome(task, deps({}));
     expect(await readOutcomeQueue(deps())).toHaveLength(OUTCOME_QUEUE_LIMIT);
@@ -173,5 +175,14 @@ describe("opt-in outcome reporting", () => {
     expect(preview.body.events).toHaveLength(1);
     expect(calls).toEqual([]);
     await expect(fs.readdir(directory)).resolves.toEqual([]);
+  });
+
+  it("keeps every batch under the service's 64 KiB body limit", async () => {
+    await setOutcomeReporting(true, deps());
+    const heavy = { ...task, routingReceipts: [{ chosen: { model: "m" }, considered: [], policy: {}, retries: 1, predictedOutcomeScore: 0.123456789, outcomeScore: 0.5 }], effort: "medium", actualModelRwf: 500 };
+    for (let index = 0; index < 100; index += 1) await recordTaskOutcome(heavy, deps());
+    await flushOutcomes(deps());
+    for (const call of calls) expect(new TextEncoder().encode(JSON.stringify(call.body)).length).toBeLessThanOrEqual(64 * 1024);
+    expect(calls.flatMap((call) => (call.body as { events: unknown[] }).events)).toHaveLength(100);
   });
 });

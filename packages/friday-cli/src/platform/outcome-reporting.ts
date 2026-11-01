@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Environment } from "./environment";
 import { cueOptedOut } from "./install-cue";
+import { OUTCOME_MAX_BATCH_BYTES } from "./outcome-protocol";
 import { buildOutcomeEvent, validateOutcomeEvent, type OutcomeBatch, type OutcomeEvent, type TaskOutcomeInput } from "./outcomes";
 import { settingsDirectory } from "./settings";
 import { ARCHYMEDES_CLI_VERSION } from "./update";
@@ -206,7 +207,7 @@ export async function flushOutcomes(deps: OutcomeDependencies): Promise<FlushRes
   for (;;) {
     const queue = await readOutcomeQueue(deps);
     if (queue.length === 0) break;
-    const batch: OutcomeBatch = { events: queue.slice(0, OUTCOME_BATCH_LIMIT) };
+    const batch = nextBatch(queue);
     let retry: boolean;
     try {
       const response = await fetcher(`${endpoint}/v1/outcomes`, {
@@ -236,6 +237,19 @@ export async function flushOutcomes(deps: OutcomeDependencies): Promise<FlushRes
   return { status: sent > 0 ? "sent" : "empty", sent };
 }
 
+/** The oldest events that fit one request: at most 100, and at most the service's 64 KiB body. */
+function nextBatch(queue: readonly OutcomeEvent[]): OutcomeBatch {
+  const events: OutcomeEvent[] = [];
+  let bytes = Buffer.byteLength('{"events":[]}');
+  for (const event of queue.slice(0, OUTCOME_BATCH_LIMIT)) {
+    const size = Buffer.byteLength(JSON.stringify(event)) + (events.length > 0 ? 1 : 0);
+    if (events.length > 0 && bytes + size > OUTCOME_MAX_BATCH_BYTES) break;
+    events.push(event);
+    bytes += size;
+  }
+  return { events };
+}
+
 /** Record then flush, for a task end. Never throws; the caller does not await it. */
 export async function reportTaskOutcome(input: TaskOutcomeInput, deps: OutcomeDependencies): Promise<void> {
   try {
@@ -253,7 +267,7 @@ export async function previewOutcomes(deps: OutcomeDependencies): Promise<Outcom
   const endpoint = outcomesEndpoint(deps.environment);
   const url = endpoint ? `${endpoint}/v1/outcomes` : undefined;
   const queue = await readOutcomeQueue(deps);
-  if (queue.length > 0) return { ...(url ? { url } : {}), sample: false, body: { events: queue.slice(0, OUTCOME_BATCH_LIMIT) } };
+  if (queue.length > 0) return { ...(url ? { url } : {}), sample: false, body: nextBatch(queue) };
   const state = await readOutcomeState(deps);
   const now = nowOf(deps);
   const event = buildOutcomeEvent(

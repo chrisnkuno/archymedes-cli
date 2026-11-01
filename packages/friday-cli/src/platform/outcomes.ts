@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RoutingReceipt } from "@archymedes/core/providers/routing-receipt";
 import { PROVIDER_IDS } from "@archymedes/core/providers/provider-specs";
+import { isOutcomeEnum, validateOutcomeEvent as validateWithProtocol } from "./outcome-protocol";
 
 /**
  * The outcome event a finished task becomes, when — and only when — the person turned outcome
@@ -10,7 +11,7 @@ import { PROVIDER_IDS } from "@archymedes/core/providers/provider-specs";
  * wire names and must not drift. The builder is deliberately an allow-list: it reads a fixed set of
  * enum and numeric facts about the task and nothing else, so a prompt, an answer, a path, a repo or
  * file name, or an error message cannot reach the wire even when a caller hands it the whole result.
- * Every string feature is squeezed through `FEATURE_STRING`, and free-form ids that could carry text
+ * Every string feature must be a protocol enum token (`isOutcomeEnum`), and free-form ids that could carry text
  * (a model name a person typed) collapse to `custom` the moment they look like prose or a path.
  */
 
@@ -90,8 +91,26 @@ export function normaliseModelId(raw: string | undefined): string {
   if (!value || value.length > 96) return "custom";
   if (/[\s\\]/.test(value) || /^[/~.]/.test(value) || (value.match(/\//g)?.length ?? 0) > 1) return "custom";
   if (/\.(gguf|bin|safetensors|pt|pth|onnx|ts|tsx|js|py|go|rs|json|ya?ml|md|txt|env)$/i.test(value)) return "custom";
-  const normal = value.toLowerCase().replace(/\//g, ":").replace(/[^a-z0-9_.:-]+/g, "-").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
-  return FEATURE_STRING.test(normal) ? normal : "custom";
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(value)) return "custom";
+  const normal = value.toLowerCase().replace(/\//g, ":").replace(/[^a-z0-9_.:-]+/g, "-")
+    // Snapshot dates (`-20250929`) and fine-tune hashes are identifiers, not the model: drop the
+    // segment so the family still reports, and the service's identifier checks never see them.
+    .split(/(?=[-_.:])/)
+    .filter((segment) => !identifierSegment(segment.replace(/^[-_.:]/, "")))
+    .join("")
+    .replace(/-{2,}/g, "-").replace(/^[-_.:]+|[-_.:]+$/g, "").slice(0, 64);
+  return isOutcomeEnum(normal) ? normal : "custom";
+}
+
+/** A date stamp or digit run (7+ digits), or a hash-like hex token (16+ chars, digits and letters). */
+function identifierSegment(segment: string): boolean {
+  return /^\d{7,}$/.test(segment) || (/^[0-9a-f]{16,}$/.test(segment) && /\d/.test(segment) && /[a-f]/.test(segment));
+}
+
+const APP_VERSION = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/;
+/** The app version as the protocol's version token, or `unknown` (never free text). */
+export function versionToken(raw: string): string {
+  return APP_VERSION.test(raw) ? raw : "unknown";
 }
 
 export function durationBucket(elapsedMs: number): string {
@@ -184,7 +203,7 @@ export function buildOutcomeEvent(input: TaskOutcomeInput, context: OutcomeConte
     kind: "task",
     occurredAt: new Date(context.now).toISOString(),
     installId: context.installId,
-    appVersion: context.appVersion,
+    appVersion: versionToken(context.appVersion),
     consent: { scope: "outcomes", grantedAt: context.grantedAt },
     features,
     ...(predicted !== undefined ? { prediction: { label: "completed", p: predicted } } : {}),
@@ -192,26 +211,12 @@ export function buildOutcomeEvent(input: TaskOutcomeInput, context: OutcomeConte
   };
 }
 
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
-
-/** Contract violations, empty when the event is valid. Checked again before anything is queued. */
+/**
+ * Contract violations, empty when the event is valid. This is the receiving service's own validator
+ * (vendored in outcome-protocol.ts), so Friday refuses exactly what the service would; it is checked
+ * before anything is queued and again when the queue is read back.
+ */
 export function validateOutcomeEvent(event: OutcomeEvent): string[] {
-  const errors: string[] = [];
-  if (event.schema !== OUTCOME_SCHEMA) errors.push("schema");
-  if (!UUID_V4.test(event.id)) errors.push("id");
-  if (event.product !== "friday" || event.kind !== "task") errors.push("product/kind");
-  if (!ISO_UTC.test(event.occurredAt)) errors.push("occurredAt");
-  if (!UUID_V4.test(event.installId)) errors.push("installId");
-  if (typeof event.appVersion !== "string" || !event.appVersion || event.appVersion.length > 64) errors.push("appVersion");
-  if (event.consent?.scope !== "outcomes" || !ISO_UTC.test(event.consent.grantedAt ?? "")) errors.push("consent");
-  const entries = Object.entries(event.features ?? {});
-  if (entries.length > MAX_FEATURES) errors.push("features: too many keys");
-  for (const [key, value] of entries) {
-    if (!FEATURE_STRING.test(key)) errors.push(`features.${key}: key`);
-    if (typeof value === "string" ? !FEATURE_STRING.test(value) : typeof value === "number" ? !Number.isFinite(value) : typeof value !== "boolean") errors.push(`features.${key}: value`);
-  }
-  if (event.prediction && (!FEATURE_STRING.test(event.prediction.label) || (event.prediction.p !== undefined && unitScore(event.prediction.p) !== event.prediction.p))) errors.push("prediction");
-  if (!event.outcome || !FEATURE_STRING.test(event.outcome.label) || (event.outcome.value !== undefined && !Number.isFinite(event.outcome.value))) errors.push("outcome");
-  return errors;
+  const result = validateWithProtocol(event);
+  return result.ok ? [] : result.errors;
 }
