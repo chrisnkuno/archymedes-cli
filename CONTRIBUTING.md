@@ -10,23 +10,31 @@ Thanks for helping. A few ground rules keep this maintainable.
 - New behaviour comes with invariant-style tests, not just a passing build.
 - Match the surrounding code: comment density, naming, and idiom.
 
-## Developer Certificate of Origin
+## Contributor License Agreement and DCO
 
-This project uses the [DCO](https://developercertificate.org/) instead of a CLA. Every commit
-must be signed off, certifying you wrote the change or have the right to submit it under the
-project's license:
+Contributions need both:
 
-```
-git commit -s -m "your message"
-```
+1. **The CLA** ([`CLA.md`](CLA.md), currently a draft under counsel review). On your first pull
+   request the CLA check asks you to sign by commenting the sentence it shows; that covers all your
+   future contributions. Contributing for your employer? Ask for the entity form (Part B) first.
+   You keep ownership of your work; the CLA licenses it to Archymedes, Inc., including patents and
+   the right to relicense, so the project can stay open source and be defended.
+2. **The [DCO](https://developercertificate.org/)** on every commit, certifying you wrote the change
+   or have the right to submit it:
 
-which adds a `Signed-off-by: Your Name <you@example.com>` line. Unsigned commits will be asked
-to amend.
+   ```
+   git commit -s -m "your message"
+   ```
+
+   which adds a `Signed-off-by: Your Name <you@example.com>` line. Unsigned commits will be asked
+   to amend.
 
 ## License of contributions
 
-By contributing you agree your work is provided under the Apache License, Version 2.0 (see
-LICENSE), and that you retain no additional rights beyond those the license grants.
+Friday is, and stays, open source under the Apache License, Version 2.0 (see LICENSE). Your
+contribution is distributed under that license, and licensed to Archymedes, Inc. on the terms of
+the CLA. The names "Friday" and "Archymedes" are covered by [`TRADEMARK.md`](TRADEMARK.md), not by
+the code license.
 
 ## Scope
 

@@ -301,7 +301,8 @@ See `CONTRIBUTING.md`. Commits are signed off under the [DCO](https://developerc
 ## License
 
 Apache License 2.0. See `LICENSE` and `NOTICE`. The Apache license does not grant rights to the
-"Archymedes" name or marks — see `TRADEMARK.md`.
+"Archymedes" or "Friday" names, the `@archymedes` npm scope, or the marks — see `TRADEMARK.md`.
+Contributions need the CLA (`CLA.md`) and a DCO sign-off — see `CONTRIBUTING.md`.
 
 ## Release checks
 
