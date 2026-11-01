@@ -15,6 +15,7 @@ import { escapeCodeTimeoutMs } from "../platform/escape-timeout";
 import { doctorExitCode, doctorReport, renderDoctor, runDoctor } from "../platform/doctor";
 import { ARCHYMEDES_CLI_VERSION, runSelfUpdate } from "../platform/update";
 import { saveSettings, type ArchymedesSettings } from "../platform/settings";
+import { runOutcomesCommand } from "../commands/outcomes";
 import { runSettingsMenu } from "../ui/settings-menu";
 import type { resolveControlLanguage } from "../platform/i18n";
 import { detectColorDepth } from "../text/color-depth";
@@ -60,9 +61,12 @@ export function runInformationFlag(context: Pick<StartupCommandContext, "args" |
   return undefined;
 }
 
-/** `--update`, `settings`, `--providers`, `--doctor`, `--sessions` and `history`, in that order. */
+/** `outcomes`, `--update`, `settings`, `--providers`, `--doctor`, `--sessions` and `history`, in that order. */
 export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "earlyDepth">): Promise<number | undefined> {
   const { args, environment, processEnvironment, language, stateHistory } = context;
+  if (args.outcomesCommand) {
+    return runOutcomesCommand(args.outcomesCommand, { environment, write: (text) => { out.write(text); } });
+  }
   if (args.update) {
     const result = await runSelfUpdate({
       checkOnly: args.checkUpdate,

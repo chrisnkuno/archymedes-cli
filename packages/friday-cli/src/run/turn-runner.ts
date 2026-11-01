@@ -33,6 +33,9 @@ import type { RecoverableTurn, SessionState } from "./session-state";
 import { showFreePrivacyNoticeOnce } from "../setup/free-setup";
 import { handleTurnFailure } from "./turn-failure";
 import { saveSettings } from "../platform/settings";
+import { reportTaskOutcome } from "../platform/outcome-reporting";
+import { taskOutcomeInput } from "../platform/outcomes";
+import { reasoningFromEnvironment } from "@archymedes/core/effort-policy";
 import { runTurnPreflight } from "./turn-preflight";
 import {
   SPINNER_START_DELAY_MS, activity, beginTranscriptTurn, contentWidth, endStreamedLine, glyphs, out, palette,
@@ -322,6 +325,11 @@ export function createTurnRunner(context: TurnContext): (request: string) => Pro
           cost: state.ledger.displayTotal ? formatMoney(state.ledger.displayTotal) : null,
           elapsedMs: Date.now() - started,
         });
+        // Opt-in outcome reporting (`friday outcomes on`): enums and counts only, fired and forgotten.
+        const effort = reasoningFromEnvironment(environment);
+        void reportTaskOutcome(taskOutcomeInput(result, {
+          engine: "archymedes", provider: state.spec.id, model: state.resolvedModelId, ...(effort ? { effort } : {}), elapsedMs: Date.now() - started,
+        }), { environment });
         refreshProjectFiles(); // a turn can create files, and the next mention should complete them
       } catch (error) {
         return await handleTurnFailure(error, request, context);

@@ -234,3 +234,30 @@ describe("two terminals, one project", () => {
     expect(await sessionHolder(ctx.root, "s-fail")).toBeNull();
   });
 });
+
+describe("a finished task's outcome", () => {
+  it("is handed to the outcome reporter as enums and counts — never the prompt or the answer", async () => {
+    const reported: unknown[] = [];
+    const ctx = context({ claude: fakeClaude([]), reportOutcome: (input) => { reported.push(input); } });
+    ctx.environment.ARCHYMEDES_PROVIDER = "claude";
+    ctx.environment.CLAUDE_MODEL = "sonnet";
+    const session = await openSession(ctx);
+    await session.send("refactor /home/someone/secret-repo/main.ts please");
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({ engine: "claude", provider: "claude", model: "sonnet", status: "completed" });
+    expect(JSON.stringify(reported[0])).not.toMatch(/secret-repo|refactor|"ok"/);
+    await session.dispose();
+  });
+
+  it("leaves no trace on disk by default, with the real reporter", async () => {
+    const ctx = context({ claude: fakeClaude([]) });
+    ctx.environment.ARCHYMEDES_PROVIDER = "claude";
+    const session = await openSession(ctx);
+    await session.send("hello");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const { readdir } = await import("node:fs/promises");
+    const files = await readdir(ctx.environment.ARCHYMEDES_CONFIG_DIR!).catch(() => [] as string[]);
+    expect(files.filter((name) => name.startsWith("outcomes"))).toEqual([]);
+    await session.dispose();
+  });
+});

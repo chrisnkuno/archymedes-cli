@@ -3,6 +3,7 @@ import type { ArchymedesMode } from "@archymedes/core/cli/permissions";
 import { isCurrency, type Currency } from "@archymedes/core/money";
 import { parseHistoryCommand, type HistoryCommand } from "../commands/chat-history";
 import { parsePaceFlag, type PaceLevel } from "../commands/pacing";
+import { parseOutcomesCommand, type OutcomesCommand } from "../commands/outcomes";
 import type { SandboxBackend } from "../session/location";
 
 export type ParsedArgs = {
@@ -20,6 +21,8 @@ export type ParsedArgs = {
    */
   resumePick?: boolean;
   historyCommand: HistoryCommand | null;
+  /** `friday outcomes on|off|status|preview`: opt-in outcome reporting, outside any session. */
+  outcomesCommand?: OutcomesCommand | null;
   listSessions: boolean;
   listProviders: boolean;
   doctor: boolean;
@@ -117,6 +120,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     acp: acpRequested,
     backend: "local", dockerImage: DEFAULT_DOCKER_IMAGE, upload: false, preset: undefined, sandboxMinutes: 30, budget: undefined, provider: undefined, model: undefined, currency: undefined, country: undefined, language: undefined, allowSensitive: false, json: false,
   };
+  parsed.outcomesCommand = null;
+  if (argv[0] === "outcomes") {
+    parsed.outcomesCommand = parseOutcomesCommand(argv.slice(1));
+    return parsed;
+  }
   const rest: string[] = [];
   let freeRequested = false;
   let otherProviderRequested = false;

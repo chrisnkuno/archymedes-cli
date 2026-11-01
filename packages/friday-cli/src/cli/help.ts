@@ -69,6 +69,7 @@ ${style.bold(t(language, "help.model"))}
   friday doctor              Test service health, credentials and every endpoint Friday needs
   friday doctor --report     Print a redacted JSON support report with request ids
   friday --doctor             Alias for friday doctor
+  friday outcomes on|off      Share anonymous task outcomes (off by default); status, preview
   friday settings             Configure keys, URLs, models, pricing and voice input
 
 ${style.bold(t(language, "help.cost"))}

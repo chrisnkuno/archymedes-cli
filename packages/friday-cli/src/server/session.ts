@@ -21,6 +21,8 @@ import { CODEX_PROVIDER } from "../engines/codex/identity";
 import { CodexSession } from "../engines/codex/session";
 import { jevOptionsFromEnvironment } from "../setup/jev";
 import { resolveSessionProvider } from "../setup/session-provider";
+import { reportTaskOutcome } from "../platform/outcome-reporting";
+import { taskOutcomeInput, type TaskOutcomeInput } from "../platform/outcomes";
 
 /**
  * One ACP session, on whichever engine runs it: Archymedes's own agent (any model provider), or
@@ -58,6 +60,11 @@ export type SessionContext = {
   claude?: (context: SessionContext, record: SessionRecord | undefined, mode: ArchymedesMode, model: string | undefined) => Promise<SessionEngine>;
   /** For tests: how a Codex engine is built. */
   codex?: (context: SessionContext, record: SessionRecord | undefined, mode: ArchymedesMode, model: string | undefined) => Promise<SessionEngine>;
+  /**
+   * Where a finished task's outcome goes; by default the opt-in reporter, which does nothing unless
+   * the person ran `friday outcomes on`. Fired, never awaited.
+   */
+  reportOutcome?: (input: TaskOutcomeInput) => void;
 };
 
 export async function openSession(context: SessionContext, resumeSessionId?: string): Promise<AcpSession> {
@@ -142,7 +149,32 @@ class SwitchingSession implements AcpSession {
   ) {}
 
   get id(): string { return this.engine.id; }
-  send(prompt: string) { return this.engine.send(prompt); }
+  async send(prompt: string) {
+    const startedAt = Date.now();
+    const result = await this.engine.send(prompt);
+    this.reportOutcome(result, Date.now() - startedAt);
+    return result;
+  }
+
+  /**
+   * The one place every engine's task ends. Only enums and counts are handed on — the prompt and
+   * the result's text stay here — and the reporter decides whether anything is recorded at all.
+   */
+  private reportOutcome(result: Awaited<ReturnType<SessionEngine["send"]>>, elapsedMs: number): void {
+    try {
+      const info = this.engine.info?.() ?? {};
+      const effort = reasoningFromEnvironment(this.context.environment);
+      const input = taskOutcomeInput(result, {
+        engine: this.engine.kind,
+        ...(typeof info.provider === "string" ? { provider: info.provider } : {}),
+        ...(typeof info.model === "string" ? { model: info.model } : {}),
+        ...(effort ? { effort } : {}),
+        elapsedMs,
+      });
+      const report = this.context.reportOutcome ?? ((value: TaskOutcomeInput) => { void reportTaskOutcome(value, { environment: this.context.environment }); });
+      report(input);
+    } catch { /* reporting must never disturb the session */ }
+  }
   cancel(): void { this.engine.cancel(); }
   async dispose(): Promise<void> {
     try {

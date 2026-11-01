@@ -45,7 +45,7 @@ func scriptedRun(args []string, interactive bool) (inv cli.Invocation, asJSON, o
 			return inv, false, false
 		}
 	}
-	if len(rest) > 0 && slices.Contains([]string{"acp", "bridge", "login", "logout", "account", "keys", "update", "settings", "history", "doctor"}, rest[0]) {
+	if len(rest) > 0 && slices.Contains([]string{"acp", "bridge", "login", "logout", "account", "keys", "update", "settings", "history", "doctor", "outcomes"}, rest[0]) {
 		return inv, false, false
 	}
 	if interactive && !asJSON && !print {

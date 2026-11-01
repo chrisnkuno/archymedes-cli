@@ -123,6 +123,7 @@ func TestWhatCountsAsAScriptedRun(t *testing.T) {
 		{[]string{"--print", "-p", "fix it"}, true, true, false, "fix it"},
 		{[]string{"--headless", "fix it"}, true, true, true, "fix it"},
 		{[]string{"doctor"}, false, false, false, ""},
+		{[]string{"outcomes", "status"}, false, false, false, ""},
 		{[]string{"--sessions"}, false, false, false, ""},
 		{[]string{"--json", "--providers"}, false, false, false, ""},
 	} {

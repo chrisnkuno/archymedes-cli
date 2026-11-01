@@ -161,6 +161,18 @@ Turn it off with `ARCHYMEDES_TELEMETRY=off` (or **Install count** in Settings) o
 the next run if the network is down. The code is
 [`packages/friday-cli/src/platform/install-cue.ts`](packages/friday-cli/src/platform/install-cue.ts).
 
+### Outcome reporting (opt-in, off by default)
+
+`friday outcomes on` lets Friday record one anonymous `archymedes.outcome/v1` event per finished
+task: engine, provider, a normalised model id, effort, tool-call/repair/turn counts, duration and
+cost buckets, the route's reliability bucket and the exit status, under a random per-install id.
+Never prompts, code, paths, repository or file names, or error text. Events wait in a bounded local
+queue and are sent in batches to `$ARCHYMEDES_OUTCOMES_URL/v1/outcomes` (there is no default URL:
+unset, nothing is sent). `DO_NOT_TRACK`, CI and `ARCHYMEDES_TELEMETRY=off` stop it entirely.
+`friday outcomes preview` prints exactly what would be sent; `friday outcomes off` requests erasure of
+what was sent, clears the queue and rotates the id. The code is
+[`packages/friday-cli/src/platform/outcomes.ts`](packages/friday-cli/src/platform/outcomes.ts).
+
 ## Languages
 
 The control surfaces are localized into 16 languages — `friday --language <code>` or

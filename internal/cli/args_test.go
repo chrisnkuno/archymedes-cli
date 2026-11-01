@@ -56,6 +56,8 @@ func TestEverythingElsePassesThroughUnchanged(t *testing.T) {
 		{[]string{"account"}, true, []string{"account"}},
 		{[]string{"logout"}, true, []string{"logout"}},
 		{[]string{"history", "list"}, true, []string{"history", "list"}},
+		// Opt-in outcome reporting is the agent's to switch and show, never a session.
+		{[]string{"outcomes", "preview"}, true, []string{"outcomes", "preview"}},
 		{[]string{"update", "--check"}, true, []string{"update", "--check"}},
 		{[]string{"acp", "--free"}, true, []string{"acp", "--free"}},
 		{[]string{"--providers"}, true, []string{"--providers"}},

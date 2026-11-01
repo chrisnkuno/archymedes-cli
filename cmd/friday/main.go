@@ -236,6 +236,7 @@ Without opening a session:
   friday history                list earlier sessions (friday history search <words> to find one)
   friday doctor                 check your keys, connection and setup, and say what is wrong
   friday update                 install the newest Friday
+  friday outcomes on|off        share anonymous task outcomes (off by default; status, preview)
   friday login | logout         sign in to (or out of) your archymedes.xyz account
   friday account | keys         who this computer is linked as; the provider keys your account holds
   friday acp                    talk to an editor (Zed, JetBrains) instead of a terminal
