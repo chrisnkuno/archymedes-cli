@@ -98,6 +98,9 @@ const built = await Bun.build({
   // The same trap the launcher's own comment describes, one level down.
   splitting: true,
   naming: { entry: "archymedes.js", chunk: "[name]-[hash].mjs" },
+  // The published bundle is a release build: development escape hatches (see
+  // `packages/friday-cli/src/platform/build-flavor.ts`) read this and stay shut.
+  define: { __FRIDAY_RELEASE_BUILD__: "true" },
 });
 if (!built.success) {
   for (const log of built.logs) console.error(log);
