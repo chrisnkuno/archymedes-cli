@@ -97,7 +97,10 @@ describe("opt-in outcome reporting", () => {
 
     for (let index = 0; index < OUTCOME_QUEUE_LIMIT + 25; index += 1) await recordTaskOutcome(task, deps({}));
     expect(await readOutcomeQueue(deps())).toHaveLength(OUTCOME_QUEUE_LIMIT);
-  });
+    // About 1,175 real records, each a few small file operations: well inside 15 s on a quiet machine,
+    // past it on a loaded one. The cost per record is the product's (one per finished task); the
+    // count is only this test's, so the test gets the time, not the code a shortcut.
+  }, 60_000);
 
   it("backs off after a failure, keeps the queue, and resets once a send lands", async () => {
     await setOutcomeReporting(true, deps());
