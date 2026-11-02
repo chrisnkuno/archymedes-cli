@@ -201,6 +201,11 @@ command that is not available says so, and how to get it.
 - **Your hooks.** Commands of yours that run before and after each action can stop one, in the same
   format as Claude Code's.
 
+Friday guards your code. The machine the agent runs on is a separate question: **Argus**, from the same
+team, watches that machine, keeps the evidence locally and says what it could not see. It is free for
+Linux servers, and the desktop edition for Windows + WSL2 is in a free beta:
+[archymedes.xyz/en/solutions/argus](https://www.archymedes.xyz/en/solutions/argus/?utm_source=friday&utm_medium=npm-readme).
+
 ## Make it yours
 
 Everything lives under `.archymedes/` in the project, so it travels with the repository.

@@ -11,6 +11,9 @@ import { t, type ControlLanguage } from "../platform/i18n";
 
 // A function, not a constant: it is built after `configureRendering` has learned whether the
 // destination can render colour at all, which a module-level template literal would predate.
+/** One plain link to Argus in --help; no request is made and nothing is shown unprompted. */
+export const ARGUS_URL = "https://www.archymedes.xyz/en/solutions/argus/?utm_source=friday&utm_medium=cli-help";
+
 export function helpText(language: ControlLanguage = "en", shortcuts: ReadonlyMap<string, string> = new Map()): string {
   // The module-level glyph set, which `configureRendering` has already resolved by the time this
   // is called — the reason this is a function rather than a constant.
@@ -114,6 +117,11 @@ ${style.bold(t(language, "help.headless"))}
   a person would read goes to stderr. Exit codes are stable:
     0 completed   1 failed    2 usage         3 blocked
     4 unverified  5 approval  6 limit hit     7 cancelled
+
+${style.bold("Argus")}  ${style.dim("(from the people who make Friday)")}
+  The agent runs code with your credentials. Argus watches the machine it runs on and
+  says what it could not see. Free for Linux servers; desktop beta for Windows + WSL2:
+  ${ARGUS_URL}
 
 ${style.bold(t(language, "help.inSession"))}  ${style.dim(`(${star} ${t(language, "help.sessionHint")})`)}
 ${renderCommandHelp(language, shortcuts, { mark })}
