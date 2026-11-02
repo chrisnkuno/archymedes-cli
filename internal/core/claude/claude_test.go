@@ -113,14 +113,17 @@ func TestASubagentsWorkGoesUnderItsTaskCall(t *testing.T) {
 		`{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"sub text"}},"parent_tool_use_id":"task"}`,
 		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"`+strings.Repeat("a", 500)+`"}]},"parent_tool_use_id":"task"}`,
 	)
-	if !slices.Equal(types(got), []string{"runtime:tool_call", "subagent:tool_call", "subagent:tool_result"}) {
+	if !slices.Equal(types(got), []string{"runtime:tool_call", "subagent:assistant_delta", "subagent:tool_call", "subagent:tool_result"}) {
 		t.Fatalf("events = %v", types(got))
 	}
-	if got[0].Event.ToolName != "delegate_task" || got[1].ParentToolCallID != "task" || got[1].Agent != "Explore" || got[1].Event.Arguments["path"] != "x.go" {
-		t.Fatalf("sub-agent = %+v / %+v", got[0].Event, got[1])
+	if got[0].Event.ToolName != "delegate_task" || got[2].ParentToolCallID != "task" || got[2].Agent != "Explore" || got[2].Event.Arguments["path"] != "x.go" {
+		t.Fatalf("sub-agent = %+v / %+v", got[0].Event, got[2])
 	}
-	if len(got[2].Event.Content) != subagentResultChars {
-		t.Fatalf("a sub-agent's result is a line, got %d chars", len(got[2].Event.Content))
+	if got[1].Event.Text != "thinking aloud" || got[1].ParentToolCallID != "task" {
+		t.Fatalf("its words = %+v", got[1])
+	}
+	if len(got[3].Event.Content) != 500 {
+		t.Fatalf("a sub-agent's result is kept whole for the Inspector, got %d chars", len(got[3].Event.Content))
 	}
 }
 

@@ -207,6 +207,46 @@ var sessionCommands = []sessionCommand{
 		}
 		return map[string]any{"kind": "text", "text": fmt.Sprintf("Started %s helper %s in the background%s; → follows it, and its report reaches Friday when it ends", profile.Name, t.ID, where)}
 	}},
+	{"roles", "The roles a helper can take here: name, whether it changes files, what it is for", func(sess *session, _ string) map[string]any {
+		var items []any
+		for _, p := range sess.core.Roles() {
+			status := "changes files"
+			if p.ReadOnly {
+				status = "read-only"
+			}
+			items = append(items, map[string]any{"text": p.Name, "status": status, "detail": p.Description})
+		}
+		return map[string]any{"kind": "roles", "items": items}
+	}},
+	{"agent-stop", "Stop a sub-agent at work, by its id or its card's call id; what it found so far becomes its report", func(sess *session, arg string) map[string]any {
+		var text string
+		var err error
+		if c := sess.outside(); c != nil {
+			text, err = c.StopAgent(arg)
+		} else {
+			text, err = sess.core.StopAgent(arg)
+		}
+		return agentAnswer(text, err)
+	}},
+	{"agent-send", "Tell a sub-agent \"<id> <message>\": read at its next step, or a finished one starts again", func(sess *session, arg string) map[string]any {
+		id, message, _ := strings.Cut(strings.TrimSpace(arg), " ")
+		var text string
+		var err error
+		if c := sess.outside(); c != nil {
+			text, err = c.SendAgent(id, message)
+		} else {
+			text, err = sess.core.SendAgent(id, message)
+		}
+		return agentAnswer(text, err)
+	}},
+}
+
+// agentAnswer is a sub-agent command's answer: what was done, or why not.
+func agentAnswer(text string, err error) map[string]any {
+	if err != nil {
+		return map[string]any{"kind": "error", "text": err.Error()}
+	}
+	return map[string]any{"kind": "text", "text": text}
 }
 
 // back is /undo and /rewind: the checkpoint gone back to, and what was restored.

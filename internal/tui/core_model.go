@@ -710,12 +710,17 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 		reread = c.reload(m) // the turn's edits have landed
 	}
 	m.closeAssistant()
-	for _, t := range m.tools {
-		if !t.done {
+	// A background sub-agent works on after the turn: its card keeps taking its events and its end.
+	working := map[string]*toolItem{}
+	for id, t := range m.tools {
+		switch {
+		case backgroundRunning(t):
+			working[id] = t
+		case !t.done:
 			t.finish("not finished", true)
 		}
 	}
-	m.tools = map[string]*toolItem{}
+	m.tools = working
 	m.dropApprovals()
 	m.retrying = ""
 	if msg.err != nil {

@@ -108,6 +108,11 @@ func TestASessionSwitchesToClaudeCodeAndBackKeepingTheConversation(t *testing.T)
 	if text := fmt.Sprint(read("6")["result"]); !strings.Contains(text, "Billed to your Claude plan") {
 		t.Fatalf("cost = %s", text)
 	}
+	// The person's hand on a sub-agent reaches Claude's session, not a refusal for want of a route.
+	send(`{"jsonrpc":"2.0","id":61,"method":"_archymedes/session/command","params":{"sessionId":"` + sessionID + `","command":"agent-stop","argument":"a4d8"}}`)
+	if text := fmt.Sprint(read("61")["result"]); !strings.Contains(text, `no sub-agent "a4d8" is at work`) {
+		t.Fatalf("agent-stop on Claude = %s", text)
+	}
 
 	send(`{"jsonrpc":"2.0","id":7,"method":"_archymedes/session/set_model","params":{"sessionId":"` + sessionID + `","provider":"groq","model":"llama"}}`)
 	if got := info(read("7")); got["provider"] != "groq" {

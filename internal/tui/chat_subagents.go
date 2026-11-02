@@ -35,6 +35,9 @@ type subagentStep struct {
 	// diff is an edit's diff, as on an edit card (chat_editdiff.go).
 	diff           string
 	added, removed int
+	// said: not a call but the sub-agent's own words (result), said in model call iteration.
+	said      bool
+	iteration int
 }
 
 // subagentRun is what one sub-agent has done so far, under the delegation call that started it.
@@ -43,6 +46,8 @@ type subagentRun struct {
 	calls, failed int
 	tokens        int
 	recent        []string // its latest calls, oldest first, at most recentSubagentCalls
+	said          string   // the last line of what it last said
+	model         string   // the model it runs on, from its model calls (else its thread)
 	steps         []*subagentStep
 	dropped       int // steps dropped from the front past maxSubagentSteps
 	// background and status come from the Go engine's thread events: a background sub-agent's
@@ -51,6 +56,10 @@ type subagentRun struct {
 	status     string
 	thread     string
 }
+
+// agentStopped reports whether a card's sub-agent was stopped (x, close_agent, Claude Code's own
+// stop) rather than finishing: it is drawn so, not as done.
+func agentStopped(t *toolItem) bool { return t.sub != nil && t.sub.status == "cancelled" }
 
 // backgroundRunning reports whether a card's sub-agent works on after its call returned.
 func backgroundRunning(t *toolItem) bool {
@@ -78,9 +87,21 @@ func (m *Model) handleThread(th *acp.ThreadInfo) {
 		t.sub = &subagentRun{}
 	}
 	t.sub.agent, t.sub.thread, t.sub.background, t.sub.status = th.Agent, th.ID, th.Background, th.Status
+	if t.sub.model == "" && th.Model != "" && th.Model != "claude" {
+		t.sub.model = th.Model
+	}
 	if u := th.Usage; u != nil && u.InputTokens+u.OutputTokens > t.sub.tokens {
 		// The engine's count is the whole of it, steps before a restart included.
 		t.sub.tokens = u.InputTokens + u.OutputTokens
+	}
+	if ended {
+		// Whatever it was running ended with it: no step spins on after its sub-agent.
+		for _, st := range t.sub.steps {
+			if !st.done {
+				st.done, st.isError, st.ended = true, th.Status != "done", time.Now()
+				st.result = firstNonEmpty(st.result, "Ended with the sub-agent ("+th.Status+").")
+			}
+		}
 	}
 	if th.Background && ended {
 		t.result, t.isError, t.ended = th.Report, th.Status == "failed", time.Now()
@@ -129,6 +150,8 @@ func (m *Model) handleSubagent(ev acp.Event) {
 // apply folds one event into the run; it returns the step the event was about, if any.
 func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
 	switch ev.Type {
+	case "assistant_delta":
+		s.say(ev.Text, ev.Iteration, now)
 	case "tool_call":
 		s.calls++
 		line := strings.ReplaceAll(ev.ToolName, "_", " ")
@@ -140,11 +163,7 @@ func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
 			s.recent = s.recent[len(s.recent)-recentSubagentCalls:]
 		}
 		step := &subagentStep{id: ev.ToolCallID, tool: ev.ToolName, args: ev.Arguments, line: line, started: now}
-		s.steps = append(s.steps, step)
-		if over := len(s.steps) - maxSubagentSteps; over > 0 {
-			s.steps = append(s.steps[:0:0], s.steps[over:]...)
-			s.dropped += over
-		}
+		s.add(step)
 		return step
 	case "tool_result":
 		if ev.IsError {
@@ -161,11 +180,49 @@ func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
 			}
 		}
 	case "model_turn":
+		if ev.Model != "" {
+			s.model = ev.Model
+		}
 		if ev.Usage != nil {
 			s.tokens += ev.Usage.InputTokens + ev.Usage.OutputTokens
 		}
 	}
 	return nil
+}
+
+// add puts a step at the end of the timeline, dropping the oldest past maxSubagentSteps.
+func (s *subagentRun) add(step *subagentStep) {
+	s.steps = append(s.steps, step)
+	if over := len(s.steps) - maxSubagentSteps; over > 0 {
+		s.steps = append(s.steps[:0:0], s.steps[over:]...)
+		s.dropped += over
+	}
+}
+
+// say adds words the sub-agent said: streamed pieces of one model call join the step they continue,
+// a new call (or words after a tool call) starts a step of their own.
+func (s *subagentRun) say(text string, iteration int, now time.Time) {
+	if text == "" {
+		return
+	}
+	var step *subagentStep
+	if n := len(s.steps); n > 0 && s.steps[n-1].said && s.steps[n-1].iteration == iteration {
+		step = s.steps[n-1]
+	} else {
+		step = &subagentStep{said: true, iteration: iteration, done: true, started: now}
+		s.add(step)
+	}
+	if len(step.result) < maxSubagentResult {
+		step.result += text
+	}
+	step.ended = now
+	words := strings.TrimSpace(step.result)
+	step.line = words
+	if i := strings.IndexByte(words, '\n'); i >= 0 {
+		step.line = words[:i]
+	}
+	lines := strings.Split(words, "\n")
+	s.said = strings.TrimSpace(lines[len(lines)-1])
 }
 
 // running is the step a sub-agent is on now, if one has not come back yet.
@@ -208,8 +265,11 @@ func subagentSummary(t *toolItem) string {
 			parts = append(parts, compact(t.sub.tokens)+" tokens")
 		}
 	}
-	if backgroundRunning(t) {
+	switch {
+	case backgroundRunning(t):
 		parts = append([]string{"in the background"}, parts...)
+	case agentStopped(t):
+		parts = append([]string{"stopped"}, parts...)
 	}
 	if len(parts) == 0 {
 		if t.done {
@@ -240,6 +300,9 @@ func subagentActivity(ctx renderCtx, t *toolItem, expanded bool) []string {
 		return nil
 	}
 	var lines []string
+	if t.sub.said != "" {
+		lines = append(lines, rule+ctx.th.Body.Render(ansi.Truncate("“"+t.sub.said+"”", room, "…")))
+	}
 	for _, call := range t.sub.recent {
 		lines = append(lines, rule+ctx.th.Faint.Render(ansi.Truncate(call, room, "…")))
 	}

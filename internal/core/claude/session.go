@@ -43,6 +43,10 @@ type Session struct {
 	closed  bool
 	// helpers are the helpers at work (helpers.go), each with what stops it.
 	helpers map[string]context.CancelFunc
+	// helperRuns are the Claude Code sessions helpers run on, by helper id, while they run.
+	helperRuns map[string]*Session
+	// followers follow Claude's background sub-agents (background.go), each with what stops it.
+	followers map[string]*follower
 
 	emitMu sync.Mutex // notices go out in order, whichever goroutine ends the turn
 }
@@ -202,8 +206,12 @@ func (s *Session) pump(p *process) {
 			continue
 		}
 		notices := s.tr.feed(raw)
+		launched, ended := s.tr.launched, s.tr.taskEnds
+		s.tr.launched, s.tr.taskEnds = nil, nil
 		s.mu.Unlock()
 		s.emit(notices)
+		s.startFollowing(launched)
+		s.taskEnded(ended)
 	}
 	// Gone: the next turn starts a new process, resuming this conversation.
 	s.mu.Lock()
@@ -387,6 +395,9 @@ func (s *Session) Close() {
 	s.closed = true
 	p := s.proc
 	s.stopHelpers()
+	for _, fl := range s.followers {
+		fl.cancel()
+	}
 	s.mu.Unlock()
 	if p != nil {
 		p.close()

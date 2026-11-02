@@ -9,6 +9,7 @@ import (
 
 	"github.com/chrisnkuno/friday-cli/internal/core/agents"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
+	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 )
 
 // Claude Code's stream, said in Friday's events: the ones the interface already draws. Pure:
@@ -27,9 +28,6 @@ import (
 
 // MaxResultChars is how much of one tool result an event keeps: enough to read, never a megabyte.
 const MaxResultChars = 20_000
-
-// subagentResultChars is a sub-agent's tool result as a line under its card.
-const subagentResultChars = 240
 
 // shownAs are Claude Code's tools that are one of Friday's, with the argument mapping.
 var shownAs = map[string]struct {
@@ -69,12 +67,14 @@ var shownAs = map[string]struct {
 	"Agent":     {"delegate_task", delegateArgs},
 }
 
+// delegateArgs: the short description is the task its card names; the prompt, when there is a
+// description too, is the whole brief the Inspector shows.
 func delegateArgs(in map[string]any, _ string) map[string]any {
-	task := in["description"]
+	task, brief := in["description"], in["prompt"]
 	if task == nil {
-		task = in["prompt"]
+		task, brief = brief, nil
 	}
-	return pick("task", task, "agent", in["subagent_type"])
+	return pick("task", task, "brief", brief, "agent", in["subagent_type"])
 }
 
 // writes are Claude Code's tools that change the project, for the event's effect.
@@ -217,8 +217,15 @@ type translator struct {
 	call      *modelCall
 	open      map[string]openCall
 	childOpen map[string]string
+	childSaid int // sub-agent messages said this turn, each its own iteration
 	text      strings.Builder
 	ended     bool
+	// launched are background sub-agents started since the session last took them (background.go).
+	launched []launch
+	// tasks are Claude Code's task ids by the call that started each (task_started), kept across
+	// turns; taskEnds are its word that tasks ended (task_notification), until the session takes them.
+	tasks    map[string]string
+	taskEnds []taskEnd
 }
 
 type modelCall struct {
@@ -261,6 +268,10 @@ func (t *translator) feed(raw json.RawMessage) []agents.Notice {
 		t.rateLimit = m.RateLimitInfo
 		return nil
 	}
+	if m.Type == "system" && strings.HasPrefix(m.Subtype, "task_") {
+		t.task(m.Subtype, raw) // a background task's news comes between turns too
+		return nil
+	}
 	if t.ended {
 		return nil
 	}
@@ -275,6 +286,28 @@ func (t *translator) feed(raw json.RawMessage) []agents.Notice {
 		return t.user(m)
 	}
 	return nil
+}
+
+// task takes Claude Code's news of a task: its id when it starts, and its end.
+func (t *translator) task(subtype string, raw json.RawMessage) {
+	var m struct {
+		TaskID    string `json:"task_id"`
+		ToolUseID string `json:"tool_use_id"`
+		Status    string `json:"status"`
+		Summary   string `json:"summary"`
+	}
+	if json.Unmarshal(raw, &m) != nil || m.ToolUseID == "" {
+		return
+	}
+	switch subtype {
+	case "task_started":
+		if t.tasks == nil {
+			t.tasks = map[string]string{}
+		}
+		t.tasks[m.ToolUseID] = m.TaskID
+	case "task_notification":
+		t.taskEnds = append(t.taskEnds, taskEnd{call: m.ToolUseID, task: m.TaskID, status: m.Status, summary: m.Summary})
+	}
 }
 
 func (t *translator) system(m message) []agents.Notice {
@@ -427,7 +460,16 @@ func (t *translator) user(m message) []agents.Notice {
 				content = diff // the change itself, rather than "The file has been updated"
 			}
 		}
+		var started []agents.Notice
+		if !block.IsError && call.name == "delegate_task" {
+			if l, ok := launchOf(block.ToolUseID, call.input, content); ok {
+				t.launched = append(t.launched, l)
+				content = launchedNote
+				started = append(started, l.thread(thread.Running, ""))
+			}
+		}
 		out = append(out, runtimeNotice(loop.Event{Type: loop.EventToolResult, ToolCallID: block.ToolUseID, ToolName: call.name, IsError: block.IsError, Effect: "none", Content: content}))
+		out = append(out, started...)
 	}
 	return out
 }
@@ -435,6 +477,11 @@ func (t *translator) user(m message) []agents.Notice {
 func (t *translator) subagentCalls(parent string, blocks []contentBlock) []agents.Notice {
 	var out []agents.Notice
 	for _, block := range blocks {
+		if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
+			t.childSaid++ // each message of its own: Claude sends a sub-agent's messages whole
+			out = append(out, t.subagent(parent, loop.Event{Type: loop.EventDelta, Iteration: t.childSaid, Text: block.Text}))
+			continue
+		}
 		if block.Type != "tool_use" || block.ID == "" {
 			continue
 		}
@@ -459,10 +506,7 @@ func (t *translator) subagentResults(parent string, blocks []contentBlock) []age
 			continue
 		}
 		delete(t.childOpen, block.ToolUseID)
-		content := resultText(block.Content)
-		if r := []rune(content); len(r) > subagentResultChars {
-			content = string(r[:subagentResultChars])
-		}
+		content := clip(resultText(block.Content), MaxResultChars)
 		out = append(out, t.subagent(parent, loop.Event{Type: loop.EventToolResult, ToolCallID: block.ToolUseID, ToolName: name, IsError: block.IsError, Effect: "none", Content: content}))
 	}
 	return out
@@ -689,4 +733,12 @@ func firstOf(values ...any) any {
 		}
 	}
 	return nil
+}
+
+// clip is text cut to at most n runes, saying so.
+func clip(text string, n int) string {
+	if r := []rune(text); len(r) > n {
+		return string(r[:n]) + "\n[cut at " + fmt.Sprint(n) + " characters]"
+	}
+	return text
 }

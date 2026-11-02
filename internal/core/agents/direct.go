@@ -3,6 +3,7 @@ package agents
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
@@ -80,3 +81,70 @@ func (s *Session) readOnlyNames() []string {
 	}
 	return out
 }
+
+// findChild is a sub-agent of this session by its thread id or the call id its card is under:
+// one at work or finished in this run, else one kept in the session's store.
+func (s *Session) findChild(id string) (*child, error) {
+	id = strings.TrimSpace(id)
+	if c, ok := s.lookupChild(id); ok {
+		return c, nil
+	}
+	s.childMu.Lock()
+	for _, c := range s.children {
+		if c.t.CallID == id {
+			s.childMu.Unlock()
+			return c, nil
+		}
+	}
+	s.childMu.Unlock()
+	t, stored := s.store.Thread(id)
+	if !stored || t.ID == thread.Root {
+		return nil, fmt.Errorf("no sub-agent %q in this session", id)
+	}
+	profile, ok := s.profile(t.Role)
+	if !ok {
+		return nil, fmt.Errorf("its role %s no longer exists", t.Role)
+	}
+	return &child{t: t, profile: profile, done: closedChan()}, nil
+}
+
+// StopAgent stops a sub-agent at work, as the person asked (the Inspector's x); what it found so
+// far becomes its report, and its thread event says it ended.
+func (s *Session) StopAgent(id string) (string, error) {
+	c, err := s.findChild(id)
+	if err != nil {
+		return "", err
+	}
+	if c.finished() {
+		return c.t.ID + " had already finished.", nil
+	}
+	c.stop()
+	return "Stopping " + c.t.ID + "; what it found so far becomes its report.", nil
+}
+
+// SendAgent is the person's message to a sub-agent (the Inspector's m): one at work reads it at its
+// next step; a finished one is started again in the background with it, keeping its conversation,
+// under a card of its own.
+func (s *Session) SendAgent(id, message string) (string, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", errors.New("the message is empty")
+	}
+	c, err := s.findChild(id)
+	if err != nil {
+		return "", err
+	}
+	if !c.finished() {
+		if c.inbox.Steer(message) {
+			return "Sent to " + c.t.ID + "; it reads it at its next step.", nil
+		}
+		return "", fmt.Errorf("%s is between steps; send again in a moment", c.t.ID)
+	}
+	if _, err := s.relaunch(s.life, c, UserCallPrefix+thread.NewThreadID(), true, message); err != nil {
+		return "", err
+	}
+	return "Re-opened " + c.t.ID + " in the background with your message; it keeps what it already read.", nil
+}
+
+// Roles are the roles a helper can take here, for the person to choose from (/agent's picker).
+func (s *Session) Roles() []roles.Profile { return slices.Clone(s.profiles) }

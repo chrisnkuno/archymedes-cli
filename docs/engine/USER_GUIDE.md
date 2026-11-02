@@ -386,11 +386,14 @@ Every edit is shown as it lands, not only when the turn ends.
   first rows; enter on the card (or a second click) shows all of it.
 - **In the changes rail.** On a wide terminal, a column beside the conversation lists every file
   changed since the last commit, with its lines added and removed. It marks the file edited last,
-  shows the helpers at work and what each is doing now, and the background commands with the last
-  line each printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
+  shows the helpers at work and what each is doing now (**+ new** starts one). Under **Running**
+  it lists every command at work this moment, Friday's own and its helpers': who runs it, the
+  command, and for how long. A click opens it, Friday's on its card and a helper's in the
+  Inspector. Background commands follow, each with the last line it printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
   back. On a narrower terminal the top bar counts the changed files instead.
 - **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
-  of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see).
+  of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see). On a helper,
+  x stops it and m sends it a message.
 - **Every call, readable in full.** A card shows one line for what a call was given and a few
   rows of what it returned. When more is folded away, `▸ show all` under it names what: the full
   command or script it ran, its other arguments, how many lines of output. A click on it (or enter

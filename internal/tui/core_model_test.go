@@ -103,10 +103,12 @@ func (f *fakeAgent) Command(_ context.Context, _ string, command, argument strin
 		}
 		return acp.CommandResult{Kind: "diff", Patch: "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old line\n+new line\n"}, nil
 	case "todos":
-		return acp.CommandResult{Kind: "todos", Items: []struct {
-			Text   string `json:"text"`
-			Status string `json:"status"`
-		}{{"read the code", "done"}, {"fix it", "in_progress"}, {"test it", "pending"}}}, nil
+		return acp.CommandResult{Kind: "todos", Items: []acp.CommandItem{{Text: "read the code", Status: "done"}, {Text: "fix it", Status: "in_progress"}, {Text: "test it", Status: "pending"}}}, nil
+	case "roles":
+		return acp.CommandResult{Kind: "roles", Items: []acp.CommandItem{
+			{Text: "explore", Status: "read-only", Detail: "find where/how something works"},
+			{Text: "general", Status: "changes files", Detail: "do a task end to end"},
+		}}, nil
 	case "undo":
 		return acp.CommandResult{Kind: "text", Text: `Reverted "fix the bug".`}, nil
 	}

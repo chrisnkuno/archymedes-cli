@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -106,5 +107,68 @@ func TestASubagentsEditReachesTheRail(t *testing.T) {
 	}
 	if s := screen(m); !strings.Contains(s, "Agents") || !strings.Contains(s, "read file f.go") {
 		t.Fatalf("the rail shows the sub-agent at work and its current call:\n%s", s)
+	}
+}
+
+func TestASubagentsWordsShowLiveOnItsCardAndInTheInspector(t *testing.T) {
+	m := railModel(t, 140)
+	m.phase = busy
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "d1", ToolName: "delegate_task", Arguments: map[string]any{"task": "audit", "brief": "Read every handler and list the unchecked inputs.", "agent": "Explore"}})
+	say := func(text string, iteration int) {
+		m.handleEvent(subagentEvent("d1", "Explore", acp.RuntimeEvent{Type: "assistant_delta", Text: text, Iteration: iteration}))
+	}
+	say("Starting with ", 1) // streamed: pieces of one call make one entry
+	say("the handlers.", 1)
+	m.handleEvent(subagentEvent("d1", "Explore", acp.RuntimeEvent{Type: "tool_call", ToolCallID: "r1", ToolName: "read_file", Arguments: map[string]any{"path": "h.go"}}))
+	m.handleEvent(subagentEvent("d1", "Explore", acp.RuntimeEvent{Type: "tool_result", ToolCallID: "r1", ToolName: "read_file", Content: "package h"}))
+	say("h.go trusts its query string.", 2)
+
+	sub := m.tools["d1"].sub
+	if len(sub.steps) != 3 || !sub.steps[0].said || sub.steps[0].result != "Starting with the handlers." || sub.calls != 1 {
+		t.Fatalf("steps: %d, first %+v, calls %d", len(sub.steps), sub.steps[0], sub.calls)
+	}
+	if s := screen(m); !strings.Contains(s, "h.go trusts its query string.") {
+		t.Errorf("the card shows what it last said:\n%s", s)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	s := screen(m)
+	for _, want := range []string{"Brief", "Read every handler", "said", "Starting with the handlers.", "read file h.go", "h.go trusts its query string."} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the Inspector lacks %q:\n%s", want, s)
+		}
+	}
+}
+
+func TestTheInspectorStopsAndMessagesASubagent(t *testing.T) {
+	m, agent := newTestModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 36})
+	m.phase = busy
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "d1", ToolName: "delegate_task", Arguments: map[string]any{"task": "audit", "agent": "Explore"}})
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_result", ToolCallID: "d1", ToolName: "delegate_task", Content: "Working in the background"})
+	m.handleEvent(acp.Event{Type: "thread", Thread: &acp.ThreadInfo{ID: "a4d8", ParentToolCallID: "d1", Agent: "Explore", Status: "running", Background: true, Model: "claude"}})
+	m.handleEvent(subagentEvent("d1", "Explore", acp.RuntimeEvent{Type: "model_turn", Model: "claude-haiku-4-5", Usage: &acp.Usage{InputTokens: 10, OutputTokens: 5}}))
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	s := screen(m)
+	for _, want := range []string{"claude-haiku-4-5", "x stop", "m message"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the Inspector lacks %q:\n%s", want, s)
+		}
+	}
+
+	run(m, press(m, 'x', 0))
+	run(m, press(m, 'm', 0))
+	typeText(m, "also check mul.go")
+	run(m, press(m, tea.KeyEnter, 0))
+	agent.mu.Lock()
+	got := slices.Clone(agent.commands)
+	agent.mu.Unlock()
+	if !slices.Contains(got, "agent-stop:a4d8") || !slices.Contains(got, "agent-send:a4d8 also check mul.go") {
+		t.Fatalf("x and m reach the engine under its thread id: %v", got)
+	}
+
+	// Once it has finished: nothing to stop, but it can still be told something.
+	m.handleEvent(acp.Event{Type: "thread", Thread: &acp.ThreadInfo{ID: "a4d8", ParentToolCallID: "d1", Agent: "Explore", Status: "done", Background: true, Report: "ok"}})
+	if s := screen(m); strings.Contains(s, "x stop") || !strings.Contains(s, "m message") {
+		t.Errorf("a finished sub-agent offers a message, not a stop:\n%s", s)
 	}
 }

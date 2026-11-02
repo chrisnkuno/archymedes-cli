@@ -544,6 +544,9 @@ func (s *Server) setModel(ctx context.Context, params json.RawMessage) (any, err
 	return map[string]any{"_meta": map[string]any{"archymedes": s.info(sess)}}, nil
 }
 
+// eitherEngine are the session commands whose own run handles a session Claude runs too.
+var eitherEngine = map[string]bool{"spawn": true, "roles": true, "agent-stop": true, "agent-send": true}
+
 func (s *Server) command(params json.RawMessage) (any, error) {
 	var p struct {
 		SessionID string `json:"sessionId"`
@@ -555,7 +558,7 @@ func (s *Server) command(params json.RawMessage) (any, error) {
 	if sess == nil {
 		return nil, errorf(codeInvalidParams, "no session %s", p.SessionID)
 	}
-	if c := sess.outside(); c != nil && p.Command != "spawn" {
+	if c := sess.outside(); c != nil && !eitherEngine[p.Command] {
 		return c.Command(p.Command, p.Argument), nil
 	}
 	if c, ok := sessionCommandByName[p.Command]; ok {

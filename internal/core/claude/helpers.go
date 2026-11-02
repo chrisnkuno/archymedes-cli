@@ -23,7 +23,7 @@ import (
 const MaxHelpers = 4
 
 // helperEvents are a helper's events its card shows.
-var helperEvents = map[string]bool{loop.EventToolCall: true, loop.EventToolResult: true, loop.EventModelTurn: true, loop.EventRetry: true}
+var helperEvents = map[string]bool{loop.EventDelta: true, loop.EventToolCall: true, loop.EventToolResult: true, loop.EventModelTurn: true, loop.EventRetry: true}
 
 // Role is what a helper is: its name, whether it may change files, and its own instructions
 // (from a Friday role, roles.Profile).
@@ -107,7 +107,18 @@ func (s *Session) runHelper(ctx context.Context, opts Options, h Helper) (status
 	if err != nil {
 		return thread.Failed, "Claude Code did not start for the helper: " + err.Error()
 	}
-	defer c.Close()
+	s.mu.Lock()
+	if s.helperRuns == nil {
+		s.helperRuns = map[string]*Session{}
+	}
+	s.helperRuns[h.ID] = c
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.helperRuns, h.ID)
+		s.mu.Unlock()
+		c.Close()
+	}()
 	out := c.Turn(ctx, helperPrompt(h))
 	report = strings.TrimSpace(out.Reply)
 	if report == "" {

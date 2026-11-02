@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -142,5 +143,43 @@ func startSubagent(m *Model, id string, calls int) {
 		if i < calls-1 {
 			m.handleEvent(subagentEvent(id, "general", acp.RuntimeEvent{Type: "tool_result", ToolCallID: call, ToolName: ev.ToolName, Content: "ok"}))
 		}
+	}
+}
+
+func TestTheRailShowsEveryCommandAtWorkAndWhoRunsIt(t *testing.T) {
+	m := railModel(t, 160)
+	m.phase = busy
+	m.Update(runtimeMsg(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "c1", ToolName: "run_command", Arguments: map[string]any{"command": "go test ./..."}}))
+	startSubagent(m, "d1", 1)
+	m.handleEvent(subagentEvent("d1", "general", acp.RuntimeEvent{Type: "tool_call", ToolCallID: "s1", ToolName: "run_command", Arguments: map[string]any{"command": "npm   run\nbuild"}}))
+	m.Update(runtimeMsg(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "c2", ToolName: "run_command", Arguments: map[string]any{"command": "npm run dev", "background": true}}))
+
+	running := m.commandsAtWork()
+	if len(running) != 2 || running[0].who != "friday" || running[0].command != "go test ./..." || running[1].who != "general" || running[1].command != "npm run build" {
+		t.Fatalf("Friday's and the sub-agent's foreground commands, on one line each: %+v", running)
+	}
+	s := screen(m)
+	for _, want := range []string{"Running", "2 commands", "$ go test ./...", "$ npm run build", "Agents", "+ new"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the rail lacks %q:\n%s", want, s)
+		}
+	}
+
+	// A click on the sub-agent's command opens the Inspector on it.
+	time.Sleep(40 * time.Millisecond) // the zone worker scans asynchronously
+	box := m.zones.frame.Get("rail:run:1")
+	if box.IsZero() {
+		t.Fatal("a running command is not a click zone")
+	}
+	m.Update(tea.MouseClickMsg{X: box.StartX + 1, Y: box.StartY, Button: tea.MouseLeft})
+	if _, ok := m.activeWindow().(*inspectApp); !ok {
+		t.Fatalf("a click on a sub-agent's command opens the Inspector, got %T", m.activeWindow())
+	}
+
+	// Done, it leaves the rail.
+	m.Update(runtimeMsg(acp.RuntimeEvent{Type: "tool_result", ToolCallID: "c1", ToolName: "run_command", Content: "ok"}))
+	m.handleEvent(subagentEvent("d1", "general", acp.RuntimeEvent{Type: "tool_result", ToolCallID: "s1", ToolName: "run_command", Content: "built"}))
+	if left := m.commandsAtWork(); len(left) != 0 {
+		t.Fatalf("finished commands leave Running: %+v", left)
 	}
 }

@@ -54,6 +54,12 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		return m.toast(toastWarn, "/"+msg.command+": "+msg.err.Error())
 	case msg.result.Kind == "error":
 		return m.toast(toastWarn, msg.result.Text)
+	case msg.result.Kind == "roles":
+		m.openOverlay(newNewHelperDialog(m, msg.result))
+		return nil
+	case msg.command == "roles":
+		// An engine without the roles command: /agent still starts one.
+		return m.toast(toastInfo, "/agent [role] <task> starts a helper in the background; alt+a sends what you typed to one")
 	case msg.result.Kind == "goal":
 		return m.goalVerdict(msg.result)
 	case msg.result.Kind == "forked":
@@ -70,7 +76,7 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		}
 		m.tr.add(item)
 	default:
-		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" || msg.command == "spawn" {
+		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" || msg.command == "spawn" || strings.HasPrefix(msg.command, "agent-") {
 			// The screen keeps what was said; the agent's conversation is what was rewound.
 			return m.toast(toastInfo, msg.result.Text)
 		}

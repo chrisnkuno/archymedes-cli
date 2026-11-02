@@ -30,10 +30,36 @@ func TestAltAHandsWhatIsTypedToANewHelper(t *testing.T) {
 	}
 }
 
-func TestAgentWithNoTaskSaysHowToUseIt(t *testing.T) {
+func TestAgentWithNoTaskOpensThePickerAndStartsTheChosenRole(t *testing.T) {
 	m, agent := newTestModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	typeText(m, "map the API") // what was typed becomes its task
 	run(m, m.cmdAgent(""))
-	if len(agent.commands) != 0 {
+	_, ok := m.overlay.(*newHelperDialog)
+	if !ok {
+		t.Fatalf("/agent alone opens the picker, got %T", m.overlay)
+	}
+	s := screen(m)
+	for _, want := range []string{"New helper", "auto", "explore", "read-only", "find where/how something works", "general", "changes files", "map the API"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the picker lacks %q:\n%s", want, s)
+		}
+	}
+	run(m, press(m, tea.KeyDown, 0)) // explore
+	run(m, press(m, tea.KeyEnter, 0))
+	agent.mu.Lock()
+	got := slices.Clone(agent.commands)
+	agent.mu.Unlock()
+	if !slices.Contains(got, "spawn:explore map the API") || m.overlay != nil || m.input.value() != "" {
+		t.Fatalf("enter starts the chosen role on the task, taking it from the box: %v, overlay %T, input %q", got, m.overlay, m.input.value())
+	}
+
+	// Without a task nothing starts.
+	run(m, m.cmdAgent(""))
+	run(m, press(m, tea.KeyEnter, 0))
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if n := len(agent.commands); agent.commands[n-1] != "roles:" {
 		t.Fatalf("nothing starts without a task: %v", agent.commands)
 	}
 }

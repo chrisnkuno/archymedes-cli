@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -252,18 +253,11 @@ func closedChan() chan struct{} {
 
 // reopen continues a finished child with a follow-up, in the same mode it ran in before.
 func (s *Session) reopen(ctx context.Context, tc tool.Context, old *child, message string) tool.Result {
-	history, err := s.store.Messages(old.t.ID)
+	c, err := s.relaunch(ctx, old, tc.CallID, old.t.Background, message)
 	if err != nil {
-		return tool.Error("Its conversation could not be read: " + err.Error())
+		return tool.Error(err.Error())
 	}
-	t := old.t
-	t.CallID = tc.CallID
-	_ = s.store.SetStatus(t.ID, thread.Running, "")
-	ws := s.ws
-	if t.Worktree != "" {
-		ws = s.ws.At(t.Worktree)
-	}
-	c := s.launch(ctx, t, old.profile, ws, thread.Complete(history), message)
+	t := c.t
 	if t.Background {
 		return tool.Result{Content: fmt.Sprintf("Re-opened %s in the background with your message.", t.ID), Data: map[string]any{"thread": t.ID}}
 	}
@@ -272,6 +266,22 @@ func (s *Session) reopen(ctx context.Context, tc tool.Context, old *child, messa
 	defer c.mu.Unlock()
 	c.collected = true
 	return tool.Result{Content: c.report, Data: map[string]any{"thread": t.ID}}
+}
+
+// relaunch starts a finished child again with message, keeping its conversation, under callID.
+func (s *Session) relaunch(ctx context.Context, old *child, callID string, background bool, message string) (*child, error) {
+	history, err := s.store.Messages(old.t.ID)
+	if err != nil {
+		return nil, errors.New("its conversation could not be read: " + err.Error())
+	}
+	t := old.t
+	t.CallID, t.Background = callID, background
+	_ = s.store.SetStatus(t.ID, thread.Running, "")
+	ws := s.ws
+	if t.Worktree != "" {
+		ws = s.ws.At(t.Worktree)
+	}
+	return s.launch(ctx, t, old.profile, ws, thread.Complete(history), message), nil
 }
 
 func (s *Session) closeTool() *tool.Tool {

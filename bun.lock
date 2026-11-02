@@ -15,29 +15,6 @@
         "vitest": "^3.0.0",
       },
     },
-    "packages/friday-cli": {
-      "name": "@archymedes/friday",
-      "version": "3.8.0",
-      "bin": {
-        "friday": "bin/friday.mjs",
-      },
-      "optionalDependencies": {
-        "@archymedes/friday-darwin-arm64": "3.8.0",
-        "@archymedes/friday-darwin-x64": "3.8.0",
-        "@archymedes/friday-linux-arm64": "3.8.0",
-        "@archymedes/friday-linux-x64": "3.8.0",
-        "@archymedes/friday-win32-arm64": "3.8.0",
-        "@archymedes/friday-win32-x64": "3.8.0",
-        "@archymedes/state-darwin-arm64": "0.4.0",
-        "@archymedes/state-darwin-x64": "0.4.0",
-        "@archymedes/state-linux-arm64-gnu": "0.4.0",
-        "@archymedes/state-linux-arm64-musl": "0.4.0",
-        "@archymedes/state-linux-x64-gnu": "0.4.0",
-        "@archymedes/state-linux-x64-musl": "0.4.0",
-        "@archymedes/state-win32-arm64": "0.4.0",
-        "@archymedes/state-win32-x64": "0.4.0",
-      },
-    },
     "packages/core": {
       "name": "@archymedes/core",
       "version": "0.14.0",
@@ -58,6 +35,29 @@
       "name": "@archymedes/free-gateway",
       "version": "0.2.0",
     },
+    "packages/friday-cli": {
+      "name": "@archymedes/friday",
+      "version": "3.10.0",
+      "bin": {
+        "friday": "bin/friday.mjs",
+      },
+      "optionalDependencies": {
+        "@archymedes/friday-darwin-arm64": "3.10.0",
+        "@archymedes/friday-darwin-x64": "3.10.0",
+        "@archymedes/friday-linux-arm64": "3.10.0",
+        "@archymedes/friday-linux-x64": "3.10.0",
+        "@archymedes/friday-win32-arm64": "3.10.0",
+        "@archymedes/friday-win32-x64": "3.10.0",
+        "@archymedes/state-darwin-arm64": "0.4.0",
+        "@archymedes/state-darwin-x64": "0.4.0",
+        "@archymedes/state-linux-arm64-gnu": "0.4.0",
+        "@archymedes/state-linux-arm64-musl": "0.4.0",
+        "@archymedes/state-linux-x64-gnu": "0.4.0",
+        "@archymedes/state-linux-x64-musl": "0.4.0",
+        "@archymedes/state-win32-arm64": "0.4.0",
+        "@archymedes/state-win32-x64": "0.4.0",
+      },
+    },
   },
   "packages": {
     "@ampproject/remapping": ["@ampproject/remapping@2.3.0", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw=="],
@@ -67,6 +67,20 @@
     "@archymedes/core": ["@archymedes/core@workspace:packages/core"],
 
     "@archymedes/free-gateway": ["@archymedes/free-gateway@workspace:packages/free-gateway"],
+
+    "@archymedes/friday": ["@archymedes/friday@workspace:packages/friday-cli"],
+
+    "@archymedes/friday-darwin-arm64": ["@archymedes/friday-darwin-arm64@3.10.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ujfo8U0g9eInfH8uzyRUxnPJNgoEw4yAUIZ3Mz30CMWhszNXm00IVUKGrY9TY6sibpd8G4G7vBSLPu2myqlI+A=="],
+
+    "@archymedes/friday-darwin-x64": ["@archymedes/friday-darwin-x64@3.10.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-CoSwETsG2wMGUpb3rPiHfwawAcJwQUYCUag5Bg17xByj89hvaonbuPukR7qazno+Pz1zZrE+3xeod4ovHYs9oA=="],
+
+    "@archymedes/friday-linux-arm64": ["@archymedes/friday-linux-arm64@3.10.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-iINWeDy8UnUdFIAVYK+ZFDXpHiuHbf7r49peaU+X5ihovEgHMskPDR9kKtbWOAR8h60R87TFE0e2IApx874rEg=="],
+
+    "@archymedes/friday-linux-x64": ["@archymedes/friday-linux-x64@3.10.0", "", { "os": "linux", "cpu": "x64" }, "sha512-QICGqq5xbaHlt/yo4N89fTPCSu75QAHf8/xm/jgR4lMdll+soAn9DWrmWy+Sj0v5MMFKQmeDAWlgp8GjJphUoA=="],
+
+    "@archymedes/friday-win32-arm64": ["@archymedes/friday-win32-arm64@3.10.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-PvEpHZzN7qTzXYy7IBnfJom82jz4Ss5u5k34UkDPnxT9e00lYI2Kw6Us+6jSh2IknVQkkPXG8AH5KEpbsEJdmw=="],
+
+    "@archymedes/friday-win32-x64": ["@archymedes/friday-win32-x64@3.10.0", "", { "os": "win32", "cpu": "x64" }, "sha512-pdON11Z5GRbnWjrp+icjTOnS1QmwiakIwRuOmCXgdTDP3xEJRHaJT0sen/5XOdtPOA+nBCRB2WUXdNBgutyejg=="],
 
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
 
@@ -237,8 +251,6 @@
     "ansi-regex": ["ansi-regex@6.3.0", "", {}, "sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ=="],
 
     "ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
-
-    "@archymedes/friday": ["@archymedes/friday@workspace:packages/friday-cli"],
 
     "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
 

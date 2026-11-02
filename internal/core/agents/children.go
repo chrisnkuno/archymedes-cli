@@ -70,7 +70,7 @@ func (c *child) finished() bool {
 }
 
 // subagentEvents are the child events the interface shows under its card (SubagentEvent in TS).
-var subagentEvents = map[string]bool{loop.EventToolCall: true, loop.EventToolResult: true, loop.EventModelTurn: true, loop.EventRetry: true}
+var subagentEvents = map[string]bool{loop.EventDelta: true, loop.EventToolCall: true, loop.EventToolResult: true, loop.EventModelTurn: true, loop.EventRetry: true}
 
 // interruptedNote is what a resumed child is told after a restart cut it off.
 const interruptedNote = "You were interrupted (Friday restarted). Your work so far is above. Continue the brief from where you stopped, without redoing finished steps, and end with your report."

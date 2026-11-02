@@ -171,6 +171,12 @@ func (a *inspectApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			return false, a.read(m, t, steps[a.step])
 		}
 		return false, a.read(m, t, nil)
+	case "n":
+		return false, m.newHelper()
+	case "x":
+		return false, m.stopAgent(t)
+	case "m":
+		return false, m.messageAgent(t)
 	case "t":
 		// To the card in Chat, selected there.
 		if t != nil {
@@ -206,6 +212,8 @@ func (a *inspectApp) reveal() {
 // read opens a card, or one of its sub-agent's calls, in a reader: all of it, searchable.
 func (a *inspectApp) read(m *Model, t *toolItem, st *subagentStep) tea.Cmd {
 	switch {
+	case st != nil && st.said:
+		m.openWindow(newPager(m, "said", strings.Split(strings.TrimSpace(st.result), "\n")))
 	case st != nil:
 		text := st.line + "\n\n" + st.result
 		if st.diff != "" {
@@ -311,6 +319,14 @@ func (a *inspectApp) view(m *Model) string {
 	} else if t.sub == nil || len(t.sub.steps) == 0 {
 		buttons = []button{{"space", "read"}, {"t", "show in chat"}, {"←", "chat"}, {"q", "close"}}
 	}
+	if !a.onSteps && delegationTools[t.name] {
+		// Its hand: stop it while it works, tell it something (first, so they fit).
+		control := []button{{"m", "message"}, {"n", "new"}}
+		if agentWorking(t) {
+			control = []button{{"x", "stop"}, {"m", "message"}, {"n", "new"}}
+		}
+		buttons = append(control, buttons...)
+	}
 	return strings.Join(append(rows, m.hintBar(width, buttons...)), "\n")
 }
 
@@ -321,6 +337,8 @@ func inspectRow(m *Model, t *toolItem, width int) string {
 	switch {
 	case !t.done || backgroundRunning(t):
 		glyph = m.spin.View()
+	case agentStopped(t):
+		glyph = th.Warn.Render("■")
 	case t.isError:
 		glyph = th.Bad.Render("✗")
 	}
@@ -381,18 +399,30 @@ func (a *inspectApp) detail(m *Model, t *toolItem, width int) []string {
 	switch {
 	case backgroundRunning(t):
 		state = "in the background · " + elapsed(time.Since(t.started))
+	case t.done && agentStopped(t):
+		state = "stopped after " + elapsed(t.ended.Sub(t.started))
 	case t.done && t.isError:
 		state = "failed after " + elapsed(t.ended.Sub(t.started))
 	case t.done:
 		state = "done in " + elapsed(t.ended.Sub(t.started))
 	}
-	add(th.SoftPill("agent · "+subagentRole(t), th.Secondary) + " " + th.Faint.Render(state+" · "+subagentSummary(t)))
+	if t.sub != nil && t.sub.model != "" {
+		state += " · " + t.sub.model
+	}
+	summary := strings.TrimPrefix(strings.TrimPrefix(subagentSummary(t), "in the background · "), "stopped · ") // the state says so
+	add(th.SoftPill("agent · "+subagentRole(t), th.Secondary) + " " + th.Faint.Render(state+" · "+summary))
+	task := ""
 	for _, k := range []string{"task", "prompt", "description"} {
-		if task, ok := t.args[k].(string); ok && strings.TrimSpace(task) != "" {
+		if v, ok := t.args[k].(string); ok && strings.TrimSpace(v) != "" {
+			task = v
 			heading("Task")
 			wrap(th.Body, task)
 			break
 		}
+	}
+	if brief, ok := t.args["brief"].(string); ok && strings.TrimSpace(brief) != "" && brief != task {
+		heading("Brief")
+		wrap(th.Body, brief)
 	}
 
 	// Every call, in order; the chosen one marked, an opened one with its output or diff below.
@@ -406,7 +436,7 @@ func (a *inspectApp) detail(m *Model, t *toolItem, width int) []string {
 		for i, st := range t.sub.steps {
 			a.steps = append(a.steps, len(rows))
 			add(mark(m.zones.frame, fmt.Sprintf("insp:step:%d", i), a.stepRow(m, st, i, width)))
-			if a.open[st] || st.diff != "" {
+			if a.open[st] || st.diff != "" || st.said {
 				add(stepBody(m, st, width, a.open[st])...)
 			}
 		}
@@ -423,6 +453,13 @@ func (a *inspectApp) detail(m *Model, t *toolItem, width int) []string {
 // stepRow is one call in the timeline: its state, the call in words, its counts, its time.
 func (a *inspectApp) stepRow(m *Model, st *subagentStep, i, width int) string {
 	th := m.th
+	if st.said {
+		line := " " + lipgloss.NewStyle().Foreground(th.Secondary).Render("›") + " " + th.Faint.Render("said")
+		if a.onSteps && i == a.step {
+			return selectedBar(m, padRight(ansi.Strip(line), width))
+		}
+		return line
+	}
 	glyph := th.OK.Render("✓")
 	took := elapsed(st.ended.Sub(st.started))
 	switch {
@@ -449,12 +486,18 @@ func stepBody(m *Model, st *subagentStep, width int, opened bool) []string {
 	th := m.th
 	rule := lipgloss.NewStyle().Foreground(th.Tint(th.Secondary, 0.55)).Render("   │ ")
 	var body []string
-	if st.diff != "" {
+	switch {
+	case st.said:
+		body = strings.Split(strings.TrimRight(m.md.Render(strings.TrimSpace(st.result), max(width-5, 10)), "\n"), "\n")
+		if !opened && len(body) > 12 {
+			body = append(body[:12], th.Faint.Render(fmt.Sprintf("… %s more · enter opens it", plural(len(body)-12, "line"))))
+		}
+	case st.diff != "":
 		body = diffRows(th, st.diff, max(width-5, 10))
-	} else {
+	default:
 		body = render.Excerpt(th, st.result, max(width-5, 10), 0)
 	}
-	if !opened && len(body) > 6 {
+	if !opened && !st.said && len(body) > 6 {
 		body = append(body[:6], th.Faint.Render(fmt.Sprintf("… %s more · enter opens it", plural(len(body)-6, "line"))))
 	}
 	out := make([]string, len(body))

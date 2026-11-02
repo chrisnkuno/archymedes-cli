@@ -48,7 +48,7 @@ func TestAHelperRunsOnAClaudeCodeOfItsOwnAndReportsToTheNextTurn(t *testing.T) {
 		}
 	}
 	f.mu.Unlock()
-	if strings.Join(kinds, " ") != "tool_call model_turn tool_result model_turn" {
+	if strings.Join(kinds, " ") != "tool_call model_turn tool_result assistant_delta model_turn" {
 		t.Fatalf("its card's events: %v", kinds)
 	}
 	log := f.logged()

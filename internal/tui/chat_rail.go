@@ -144,7 +144,7 @@ func (m *Model) railWidth() int {
 	if m.rail.hidden || m.width < railMinWidth || m.landingVisible() {
 		return 0
 	}
-	if len(m.rail.files) == 0 && m.rail.latest == nil && len(m.workingAgents()) == 0 && len(m.rail.commands) == 0 {
+	if len(m.rail.files) == 0 && m.rail.latest == nil && len(m.workingAgents()) == 0 && len(m.rail.commands) == 0 && len(m.commandsAtWork()) == 0 {
 		return 0
 	}
 	return min(max(m.width*28/100, 32), 46)
@@ -190,10 +190,21 @@ func (m *Model) railLines(height int) []string {
 		add(mark(m.zones.frame, fmt.Sprintf("rail:file:%d", i), railFileRow(th, f, f.Path == m.rail.touched, inner)))
 	}
 
-	// The sub-agents at work.
-	if agents := m.workingAgents(); len(agents) > 0 {
+	// The commands at work this moment, whoever runs them.
+	if running := m.commandsAtWork(); len(running) > 0 {
 		add("")
-		add(section("Agents", th.Faint.Render("→ inspect")))
+		for _, row := range m.railRunningRows(running, inner) {
+			add(row)
+		}
+	}
+
+	// The sub-agents at work, and a way to start one.
+	add("")
+	newButton := mark(m.zones.frame, "rail:new-agent", th.Key.Render("+ new"))
+	if agents := m.workingAgents(); len(agents) == 0 {
+		add(section("Agents", th.Faint.Render("none at work · ")+newButton))
+	} else {
+		add(section("Agents", th.Faint.Render("→ inspect · ")+newButton))
 		for i, t := range agents {
 			if i == 4 {
 				add(th.Faint.Render(fmt.Sprintf("  … %d more", len(agents)-i)))
@@ -319,6 +330,18 @@ func (m *Model) railClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 	for i, t := range m.workingAgents() {
 		if frame.Get(fmt.Sprintf("rail:agent:%d", i)).InBounds(msg) {
 			return m.openInspector(t), true
+		}
+	}
+	if frame.Get("rail:new-agent").InBounds(msg) {
+		return m.newHelper(), true
+	}
+	for i, c := range m.commandsAtWork() {
+		if i < maxRailRunning && frame.Get(fmt.Sprintf("rail:run:%d", i)).InBounds(msg) {
+			if c.who == "friday" {
+				m.selectItem(c.card) // its own card, in Chat
+				return nil, true
+			}
+			return m.openInspector(c.card), true
 		}
 	}
 	return nil, false

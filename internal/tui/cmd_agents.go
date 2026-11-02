@@ -21,7 +21,7 @@ const userAgentPrefix = "user:"
 
 func (m *Model) cmdAgent(arg string) tea.Cmd {
 	if strings.TrimSpace(arg) == "" {
-		return m.toast(toastInfo, "/agent <task> starts a helper in the background, e.g. /agent explore map the API; alt+a sends what you typed to one")
+		return m.newHelper() // pick its role, then say what it should do
 	}
 	return m.startAgent(arg)
 }

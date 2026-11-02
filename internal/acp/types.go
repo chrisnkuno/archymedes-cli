@@ -85,6 +85,8 @@ type Allowance struct {
 // RuntimeEvent is one AgentRuntimeEvent; only the fields its Type uses are set.
 type RuntimeEvent struct {
 	Type string `json:"type"`
+	// assistant_delta: words the model said (a sub-agent's, under its card)
+	Text string `json:"text"`
 	// tool_call / tool_result
 	ToolCallID string         `json:"toolCallId"`
 	ToolName   string         `json:"toolName"`
@@ -404,14 +406,11 @@ type ModelList struct {
 
 // CommandResult is a session command's answer: text, a patch, or a plan.
 type CommandResult struct {
-	Kind  string `json:"kind"` // text | diff | todos | turns | review | forked | goal | error
-	Text  string `json:"text"`
-	Patch string `json:"patch"`
-	Items []struct {
-		Text   string `json:"text"`
-		Status string `json:"status"`
-	} `json:"items"`
-	Turns []Turn `json:"turns"`
+	Kind  string        `json:"kind"` // text | diff | todos | turns | review | forked | goal | error
+	Text  string        `json:"text"`
+	Patch string        `json:"patch"`
+	Items []CommandItem `json:"items"`
+	Turns []Turn        `json:"turns"`
 	// review: what was reviewed, the findings worst first, and the verdict on the whole.
 	Target   string    `json:"target"`
 	Findings []Finding `json:"findings"`
@@ -423,6 +422,14 @@ type CommandResult struct {
 	Status string `json:"status"`
 	Reason string `json:"reason"`
 	Next   string `json:"next"`
+}
+
+// CommandItem is one item of a command's list: a todo (text, status), or a role (its name, whether
+// it changes files, and its description as Detail).
+type CommandItem struct {
+	Text   string `json:"text"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
 }
 
 // Finding is one problem a /review found.

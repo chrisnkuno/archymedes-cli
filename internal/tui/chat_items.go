@@ -125,6 +125,8 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	switch {
 	case backgroundRunning(t):
 		// Its call returned at once; the sub-agent behind it is still working.
+	case t.done && agentStopped(t):
+		glyph, summary = th.Warn.Render("■"), th.Warn.Render("stopped")
 	case t.done && t.isError:
 		// The error itself is printed below the card; the header only says that it failed — with
 		// a curly underline where the terminal draws one, as a second signal beside the ✗.

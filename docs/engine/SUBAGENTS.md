@@ -183,18 +183,39 @@ start of the session names it and why.
 
 ## What you see
 
-- **A card per helper**, under the call that started it: `agent · explore`, with its latest calls
-  while it runs, how many calls and tokens it used, and the first line of its report when done.
+- **A card per helper**, under the call that started it: `agent · explore`. While it runs, the card
+  shows the last thing it said and its latest calls. It counts the calls and tokens it used, and
+  shows the first line of its report when done.
 - **In the background**, the card says so ("in the background · 4 calls") and keeps showing what
   the helper does after the call returned; its report replaces "started in the background" when it
   finishes. If you are between turns, a line says a report is waiting for your next message.
 - **The Inspector** (→ on an empty input, or → on a helper's card): every helper of the session,
-  those at work first. The one you choose shows its brief and its report once done. Between them
-  is its whole timeline: each call, its time, whether it failed, and every edit's diff. → steps
-  into the timeline, enter opens a call's output in place, space reads it, ← steps back out.
+  those at work first. The one you choose shows its task, its whole brief, and its report once
+  done. Between them is its whole conversation as it happens: what it said (`› said`), each call
+  with its time and full output, whether it failed, and every edit's diff. Its thinking is not
+  shown: Claude Code does not keep thinking text in its transcripts. Its header names the model it
+  runs on. → steps into the timeline, enter opens a call's output in place, space reads it, ←
+  steps back out.
+- **Your hand on a helper,** as Claude Code's task panel gives it. In the Inspector, **x** stops
+  the helper at work, and what it found so far becomes its report. **m** tells it something: one
+  at work reads it at its next step. On Friday's engine, a finished helper starts again with your
+  message under a new card, keeping everything it already read. On the Claude provider, x stops
+  a `/agent` helper, or a sub-agent Claude started in the background (with Claude Code's own
+  `stop_task`). Claude Code takes no message for its own sub-agents from outside, so m there says
+  to ask Claude instead.
 - **Helpers you start yourself** (`/agent [role] <task>`, or alt+a on what you typed) run in the
   background with no call behind them. Their card appears with their first step and is otherwise
-  the same. Their reports reach Friday like any background helper's.
+  the same. Their reports reach Friday like any background helper's. `/agent` on its own, **n** in
+  the Inspector, or **+ new** on the rail's Agents opens a picker. It lists every role with whether
+  it changes files and what it is for. You choose one (↑↓), type the task (what you had typed is
+  already there), and enter starts it.
+- **On the Claude provider**, a sub-agent Claude Code runs in the background (`Agent` with
+  `run_in_background`) shows the same way. Its work never comes on Claude's stream: Friday follows
+  the transcript file Claude Code writes for it. What it says, its calls, their results and its
+  tokens land on the `Agent` card and in the Inspector as they happen. Its final answer becomes
+  the report. Claude Code's own word that the task ended (`task_notification`) ends the card as
+  done, failed or stopped. If neither comes and the file stops growing for 30 minutes, the card
+  ends as failed.
 - **`/subagents`** lists every helper of the session: id, role, status, foreground or background,
   the tokens it used, the brief's first line, and the branch for an editing background helper. Its
   last line is what all helpers used together: in, from cache, out.
