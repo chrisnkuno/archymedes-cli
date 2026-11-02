@@ -5,7 +5,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/friday-cli/internal/acp"
@@ -94,11 +93,7 @@ func (d *newHelperDialog) view(m *Model) string {
 		if i == d.cursor {
 			b.WriteString(selectedBar(m, padRight(ansi.Truncate("› "+line, inner, "…"), inner)) + "\n")
 		} else {
-			// On a ground of its own: the gaps between its columns are glass, not holes onto the photo.
-			ground := func(st lipgloss.Style) lipgloss.Style { return st.Background(th.Surface) }
-			row := ansi.Truncate("  "+padRight(name, 9)+" "+padRight(r.status, 14)+" "+r.detail, inner, "…")
-			cut := min(len("  "+padRight(name, 9)), len(row))
-			b.WriteString(ground(th.Body).Render(row[:cut]) + ground(th.Faint).Render(padRight(row[cut:], inner-cut)) + "\n")
+			b.WriteString(th.Body.Render("  "+padRight(name, 9)) + th.Faint.Render(ansi.Truncate(" "+padRight(r.status, 14)+" "+r.detail, max(inner-11, 1), "…")) + "\n")
 		}
 	}
 	b.WriteString("\n" + d.input.View() + "\n")

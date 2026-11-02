@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
@@ -120,5 +121,37 @@ func TestAnAgentBatchAppliesEveryMessageInOrder(t *testing.T) {
 	m.Update(agentBatch{msgs: []any{acp.TextChunk{Text: " done"}, acp.TurnEnded{StopReason: "end_turn"}}})
 	if m.phase == busy {
 		t.Fatal("a turn's end in the batch did not finish the turn")
+	}
+}
+
+// TestPanelsSitOnAPlainTintNotOnThePhoto: a dialog, the rail or a toast is one low-opacity tint of
+// the theme's colour. Not one of its cells is a half block of photo, and a pane appearing
+// invalidates the row cache like a window's glass does.
+func TestPanelsSitOnAPlainTintNotOnThePhoto(t *testing.T) {
+	const w, h = 120, 36
+	m := wallpaperModel(t, w, h)
+	content := frameOf(w, h, 1)
+	m.underIn = ""
+	before := m.underlay(content, w, h) // no panes: blank rows are photo
+
+	pane := image.Rect(30, 8, 90, 20)
+	m.panes = []image.Rectangle{pane}
+	m.underIn = ""
+	after := m.underlay(content, w, h)
+	if after == before {
+		t.Fatal("a pane appearing did not change (or invalidate) the composite")
+	}
+	rows := strings.Split(after, "\n")
+	for y := pane.Min.Y; y < pane.Max.Y; y++ {
+		cells := []rune(ansi.Strip(rows[y]))
+		for x := pane.Min.X; x < pane.Max.X && x < len(cells); x++ {
+			if cells[x] == '▀' {
+				t.Fatalf("cell %d,%d inside a pane is photo, not the tint", x, y)
+			}
+		}
+	}
+	outside := []rune(ansi.Strip(rows[pane.Min.Y+1])) // a blank row of the frame
+	if outside[5] != '▀' {
+		t.Fatalf("a blank cell outside every pane is still photo, got %q", outside[5])
 	}
 }

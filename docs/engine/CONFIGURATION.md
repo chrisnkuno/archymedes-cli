@@ -137,8 +137,12 @@ Without a small model, the main model does everything. What runs on which:
 Modes are chosen per session (`--plan`, `--build`, `--auto`, `--defender`, or shift+tab), not by a
 setting; a resumed session keeps its own.
 
-Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) install through the package manager Friday was
-installed with, detected from the environment; set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`, `pnpm`,
+Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) look for a new release when Friday starts and every
+hour while it stays open, between turns. By default a newer version is installed at once, and
+Friday says to restart to use it; `check` only says one is out, `off` never looks. On Windows,
+which will not let a running program be overwritten, Friday first moves its own `friday.exe`
+aside (back if the install fails) and deletes the old copy at a later start. Updates install
+through the package manager Friday was installed with, detected from the environment; set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`, `pnpm`,
 `yarn` or `bun` to force one. The newest version is read from the npm registry, or from
 `ARCHYMEDES_UPDATE_REGISTRY` when set.
 
@@ -210,6 +214,7 @@ Read by the `friday` binary itself, for what the screen looks like. Each is also
 | `ARCHYMEDES_PHOTOS` (environment only) | on | `off` leaves the pictures out; `local` keeps them to the built-in copies (the Gallery fetches nothing) |
 | `ARCHYMEDES_WALLPAPER` (environment only) | on | `off` keeps the pictures but not behind the whole screen |
 | `ARCHYMEDES_REDUCE_MOTION` (environment only) | off | any value turns off animated scrolling and keeps the wallpaper still |
+| `ARCHYMEDES_GLYPHS` (environment only) | what the terminal draws | `safe` draws only from WGL4, the symbols every Windows console font and the Linux console carry (`┌` for `╭`, `√` for `✓`, a turning line for the spinner); `full` draws every symbol. Unset, safe is used in the classic Windows console and the Linux text console, full everywhere else (Windows Terminal, VS Code, macOS and Linux terminals) |
 
 ## Notifications
 
@@ -255,7 +260,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_SUGGEST_MODEL` | Behaviour | Ask the model for extra suggestions (a small extra call per turn) |
 | `ARCHYMEDES_NOTIFY` | Behaviour | Notifications — when a turn ends or Friday waits for you |
 | `ARCHYMEDES_NOTIFY_URL` | Behaviour | Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only) |
-| `ARCHYMEDES_AUTO_UPDATE` | Behaviour | Automatic updates — install daily by default |
+| `ARCHYMEDES_AUTO_UPDATE` | Behaviour | Automatic updates — checked hourly, installed by default |
 | `ARCHYMEDES_TELEMETRY` | Behaviour | Install count — one anonymous cue per new version (event, version, OS) |
 | `ARCHYMEDES_TEST_FIRST` | Behaviour | Build test first — tests, then code, then static analysis |
 | `ARCHYMEDES_JEV` | Behaviour | Jev second opinion — verdicts, tool checks, ranked suggestions |
@@ -355,6 +360,6 @@ not do yet is read by the TypeScript engine.
 | `OPENROUTER_BASE_URL` | Go engine (free mode) | [Providers and keys](#providers-and-keys) |
 | `ARCHYMEDES_FREE_GATEWAY_URL` | TypeScript engine; the binary reads it to choose the engine | [Providers and keys](#providers-and-keys) |
 | `ARCHYMEDES_ACP_TRACE`, `ARCHYMEDES_DEBUG_LOG`, `ARCHYMEDES_AGENT` | the `friday` binary | [Diagnostics](#diagnostics) |
-| `ARCHYMEDES_THEME`, `ARCHYMEDES_LANGUAGE`, `ARCHYMEDES_PHOTOS`, `ARCHYMEDES_WALLPAPER`, `ARCHYMEDES_REDUCE_MOTION` | the `friday` binary | [The interface](#the-interface) |
+| `ARCHYMEDES_THEME`, `ARCHYMEDES_LANGUAGE`, `ARCHYMEDES_PHOTOS`, `ARCHYMEDES_WALLPAPER`, `ARCHYMEDES_REDUCE_MOTION`, `ARCHYMEDES_GLYPHS` | the `friday` binary | [The interface](#the-interface) |
 
 Key bindings are changed in the Keys app (F7) and saved to `keys.json` in the config directory.

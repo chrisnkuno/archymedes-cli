@@ -198,15 +198,16 @@ func (m *Model) underlay(content string, width, height int) string {
 	}
 	// Most frames are the last one again (a cursor that did not move, a tick with nothing to show):
 	// laying the wallpaper costs a few milliseconds a frame, so an unchanged frame reuses it.
-	if m.underIn == content && m.underGrid == g && m.underGlass == m.glass {
+	panes := m.panesKey()
+	if m.underIn == content && m.underGrid == g && m.underGlass == m.glass && m.underPanes == panes {
 		return m.underOut
 	}
 	ground := toRGBA(m.th.Bg)
 	g.ensureGlyphBg(ground) // the per-cell photo and glyph grounds, worked out once, not per frame
 	panels := m.panelRows(height)
 	// The photo, the glass and the width change every row at once; anything finer is per row.
-	if m.rowGrid != g || m.rowGlass != m.glass || m.rowWidth != width || len(m.rowOut) != height {
-		m.rowOut, m.rowGrid, m.rowGlass, m.rowWidth = make([]cachedRow, height), g, m.glass, width
+	if m.rowGrid != g || m.rowGlass != m.glass || m.rowPanes != panes || m.rowWidth != width || len(m.rowOut) != height {
+		m.rowOut, m.rowGrid, m.rowGlass, m.rowPanes, m.rowWidth = make([]cachedRow, height), g, m.glass, panes, width
 	}
 	lines := strings.Split(content, "\n")
 	out := make([]string, height)
@@ -224,7 +225,7 @@ func (m *Model) underlay(content string, width, height int) string {
 		out[y] = m.compositeRow(g, line, y, width, ground, panels[y])
 		m.rowOut[y] = cachedRow{line: line, panel: panels[y], out: out[y]}
 	}
-	m.underIn, m.underGrid, m.underGlass, m.underOut = content, g, m.glass, strings.Join(out, "\n")
+	m.underIn, m.underGrid, m.underGlass, m.underPanes, m.underOut = content, g, m.glass, panes, strings.Join(out, "\n")
 	return m.underOut
 }
 
@@ -239,6 +240,7 @@ type cachedRow struct {
 // row is independent once the grid is built, so the frame caches them and redraws only what changed.
 func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, ground color.RGBA, panel bool) string {
 	surface := toRGBA(m.th.Surface)
+	paneTint := toRGBA(m.th.Tint(m.th.Primary, paneTintAmount))
 	canvas := lipgloss.NewCanvas(width, 1)
 	canvas.Compose(lipgloss.NewLayer(content))
 	isBlank := func(c *uv.Cell) bool { return c == nil || c.Content == " " || (c.Content == "" && c.Width > 0) }
@@ -257,6 +259,14 @@ func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, gro
 		i := y*width + x
 		top, bottom := g.top[i], g.bottom[i]
 		photo := g.blend[i]
+		if m.onPane(x, y) {
+			// A panel (the rail, a dialog, a toast): one plain tint of the theme's colour, the same
+			// whatever photo is behind it. Its own grounds (a selected row, a pill) are kept.
+			if cell.Style.Bg == nil {
+				cell.Style.Bg = paneTint
+			}
+			continue
+		}
 		if image.Pt(x, y).In(m.glass) {
 			// A window: its whole body is glass over the blurred photo, its own grounds tinted too.
 			frost := g.frosted(x, y)
@@ -283,6 +293,30 @@ func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, gro
 		}
 	}
 	return strings.TrimRight(canvas.Render(), "\n")
+}
+
+// paneTintAmount is how much of the theme's colour a panel's ground carries over the background: a
+// low-opacity tint, enough to read as a panel, never enough to compete with its text.
+const paneTintAmount = 0.12
+
+// onPane reports whether a cell is under a panel (the rail, a dialog, a toast).
+func (m *Model) onPane(x, y int) bool {
+	p := image.Pt(x, y)
+	for _, r := range m.panes {
+		if p.In(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// panesKey is this frame's panes as a string, for the caches to compare.
+func (m *Model) panesKey() string {
+	var b strings.Builder
+	for _, r := range m.panes {
+		fmt.Fprintf(&b, "%d,%d,%d,%d;", r.Min.X, r.Min.Y, r.Max.X, r.Max.Y)
+	}
+	return b.String()
 }
 
 // nearText reports whether a text cell lies within reach columns of x, stepping by step (±1).

@@ -1,5 +1,6 @@
-// Package update keeps the installed CLI current without getting in the way: a daily check against
-// the package registry and, by default, a silent install of a newer version at a safe moment. It
+// Package update keeps the installed CLI current without getting in the way: an hourly check against
+// the package registry (at start and while Friday stays open) and, by default, a silent install of
+// a newer version at a safe moment. It
 // is the Go port of packages/friday-cli/src/platform/auto-update.ts and update.ts, so the Go engine
 // stays current on its own rather than only through the TypeScript agent it is replacing.
 //
@@ -20,8 +21,9 @@ import (
 // Package is the npm package a release ships as; the registry is asked about this name.
 const Package = "@archymedes/friday"
 
-// Interval is how often to look: daily — often enough to matter, rare enough that nobody notices.
-const Interval = 24 * time.Hour
+// Interval is how often to look: hourly, so a release reaches people the same day. The check is one
+// small request (the dist-tags, not the packument), so nobody notices it.
+const Interval = time.Hour
 
 // FetchTimeout bounds the registry check. A registry that cannot answer in this has nothing to say
 // worth delaying a prompt for, and tomorrow's check costs nothing.
@@ -63,6 +65,9 @@ type State struct {
 	LatestVersion string `json:"latestVersion,omitempty"`
 	// SkippedVersion is a version that was declined or failed to install; never offered again on its own.
 	SkippedVersion string `json:"skippedVersion,omitempty"`
+	// InstalledVersion is a version installed while an older one runs: it takes over at the next
+	// start, so it is not installed again meanwhile.
+	InstalledVersion string `json:"installedVersion,omitempty"`
 }
 
 // Action is what to do now.
@@ -107,7 +112,7 @@ func Decide(in Inputs) Decision {
 	due := in.State == nil || now-in.State.LastCheckedAt >= Interval.Milliseconds() || in.State.LastCheckedAt > now
 	// A known-newer version acts before a due check does: the answer is already in hand, and asking
 	// the registry again to learn what was learned yesterday is a request nobody needed.
-	if s := in.State; s != nil && s.LatestVersion != "" && s.LatestVersion != in.CurrentVersion && s.SkippedVersion != s.LatestVersion {
+	if s := in.State; s != nil && s.LatestVersion != "" && s.LatestVersion != in.CurrentVersion && s.SkippedVersion != s.LatestVersion && s.InstalledVersion != s.LatestVersion {
 		if IsNewer(s.LatestVersion, in.CurrentVersion) {
 			if in.Mode == ModeInstall {
 				return Decision{Action: ActionInstall, Version: s.LatestVersion}
@@ -176,7 +181,6 @@ func notify(version, current string) []string {
 // installed is what the person sees after an automatic install. The running process is old code.
 func installed(version string) []string {
 	return []string{
-		"Updated to Friday " + version + ".",
-		"This session keeps running the version it started with; restart when convenient.",
+		"Friday " + version + " is installed; restart Friday to use it.",
 	}
 }

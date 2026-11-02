@@ -41,6 +41,10 @@ type windowState struct {
 	winOrigin    image.Point
 	titleClicked int
 	underGlass   image.Rectangle // the glass the cached wallpaper frame was laid for
+	// panes are the other panels on glass this frame: the rail, a dialog, the approval, toasts. Each
+	// is a low-opacity ground over the blurred photo, as a window is, never a hole onto the photo.
+	panes      []image.Rectangle
+	underPanes string // the panes the cached frame was laid for (panesKey)
 	// rowOut holds last frame's composited wallpaper row at each screen row, so a frame lays again
 	// only the rows whose text changed — a keystroke or a streaming line, not the whole screen. It
 	// is positional (one slot per row, overwritten each frame, so it cannot grow), and discarded
@@ -48,10 +52,11 @@ type windowState struct {
 	rowOut     []cachedRow
 	rowGrid    *wallpaperGrid
 	rowGlass   image.Rectangle
+	rowPanes   string
 	rowWidth   int
 	buttonKeys []string // the keys the hint bar's buttons press, as last drawn
 	dialogKeys []string // and a dialog's
-	bar          barFocus        // the keyboard on the bars (desk_bars_focus.go)
+	bar        barFocus // the keyboard on the bars (desk_bars_focus.go)
 }
 
 // windowRect is where the focused window's frame goes on screen, border included.

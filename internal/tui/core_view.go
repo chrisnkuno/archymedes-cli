@@ -48,7 +48,7 @@ func (m *Model) View() tea.View {
 	}
 	rows := make([]string, 0, m.height)
 	rows = append(rows, m.topBar())
-	m.glass, m.buttonKeys, m.dialogKeys = image.Rectangle{}, nil, nil
+	m.glass, m.panes, m.buttonKeys, m.dialogKeys = image.Rectangle{}, m.panes[:0], nil, nil
 	if w := m.activeWindow(); w != nil {
 		rows = append(rows, m.windowView(w)...)
 	} else {
@@ -60,6 +60,11 @@ func (m *Model) View() tea.View {
 		}
 		m.bodyLines = body
 		rail := m.railLines(len(body))
+		if len(rail) > 0 {
+			// The rail is a panel on glass, beside the transcript, from under the top bar down.
+			left := m.width - ansi.StringWidth(rail[0])
+			m.panes = append(m.panes, image.Rect(left, 1, m.width, 1+len(rail)))
+		}
 		for i, line := range body {
 			row := m.cursorMargin(i) + m.highlight(i, line)
 			if rail != nil {
@@ -81,7 +86,7 @@ func (m *Model) View() tea.View {
 	if len(rows) > m.height {
 		rows = rows[len(rows)-m.height:]
 	}
-	v.SetContent(m.underlay(m.composite(strings.Join(rows, "\n")), m.width, m.height))
+	v.SetContent(m.glyphsFor(m.underlay(m.composite(strings.Join(rows, "\n")), m.width, m.height)))
 	return v
 }
 
@@ -180,7 +185,9 @@ func (m *Model) composite(content string) string {
 	switch {
 	case m.approval != nil:
 		dialog := m.approval.view(m.th, m.width, len(m.approvals))
-		layers = append(layers, lipgloss.NewLayer(dialog).X(1).Y(max(1+m.transcriptHeight()-lipgloss.Height(dialog), 1)).Z(2))
+		dy := max(1+m.transcriptHeight()-lipgloss.Height(dialog), 1)
+		layers = append(layers, lipgloss.NewLayer(dialog).X(1).Y(dy).Z(2))
+		m.panes = append(m.panes, image.Rect(1, dy, 1+lipgloss.Width(dialog), dy+lipgloss.Height(dialog)))
 	case m.overlay != nil:
 		box := clipBlock(m.overlay.view(m), m.width, m.height-2)
 		x := max((m.width-lipgloss.Width(box))/2, 0)
@@ -188,6 +195,7 @@ func (m *Model) composite(content string) string {
 		// The dialog's zones (the box, its rows) are registered where it will be drawn.
 		box = scanAt(m.zones.dialog, mark(m.zones.dialog, "dialog", box), x, y)
 		layers = append(layers, lipgloss.NewLayer(box).X(x).Y(y).Z(2))
+		m.panes = append(m.panes, image.Rect(x, y, x+lipgloss.Width(box), y+lipgloss.Height(box)))
 	default:
 		scan(m.zones.dialog, "") // no dialog: no dialog targets
 	}
@@ -198,6 +206,7 @@ func (m *Model) composite(content string) string {
 		t := m.toastView(m.toasts[i])
 		x, h := max(m.width-lipgloss.Width(t)-1, 0), lipgloss.Height(t)
 		layers = append(layers, lipgloss.NewLayer(t).X(x).Y(y).Z(3))
+		m.panes = append(m.panes, image.Rect(x, y, x+lipgloss.Width(t), y+h))
 		for len(marked) < y {
 			marked = append(marked, "")
 		}

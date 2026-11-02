@@ -22,6 +22,11 @@ type Options struct {
 	// Fetch and Do default to the registry check and the package-manager install; tests replace them.
 	Fetch func(ctx context.Context, get func(string) string, pkg string) (string, error)
 	Do    func(ctx context.Context, get func(string) string, pkg, version string) bool
+	// MoveAside moves the running executable (Executable, default this process's) out of the way
+	// before installing, and back if the install fails: Windows will not let a running program be
+	// overwritten, only renamed. Set on Windows (aside.go).
+	MoveAside  bool
+	Executable string
 }
 
 // Run runs one round: decide, look if due, act if there is something to act on. It returns the
@@ -45,6 +50,9 @@ func Run(ctx context.Context, o Options) []string {
 		do = Install
 	}
 
+	if o.MoveAside {
+		clearAside(o.Executable, o.ConfigDir) // what earlier updates moved aside, once nothing runs it
+	}
 	state := readState(o.ConfigDir)
 	in := Inputs{Mode: o.Mode, Interactive: o.Interactive, CI: isCI(o.Getenv), CurrentVersion: o.CurrentVersion, State: state, Now: o.Now}
 	decision := Decide(in)
@@ -53,7 +61,7 @@ func Run(ctx context.Context, o Options) []string {
 		latest, err := fetch(ctx, o.Getenv, o.Package)
 		next := &State{LastCheckedAt: o.Now.UnixMilli()}
 		if state != nil {
-			next.SkippedVersion = state.SkippedVersion
+			next.SkippedVersion, next.InstalledVersion = state.SkippedVersion, state.InstalledVersion
 		}
 		if err == nil {
 			next.LatestVersion = latest
@@ -70,9 +78,23 @@ func Run(ctx context.Context, o Options) []string {
 	case ActionNotify:
 		return notify(decision.Version, o.CurrentVersion)
 	case ActionInstall:
+		restore := func() {}
+		if o.MoveAside {
+			back, err := setAside(o.Executable, o.ConfigDir, o.Now)
+			if err != nil {
+				return nil // nowhere to move it: the install would only fail; the next check tries again
+			}
+			restore = back
+		}
 		if do(ctx, o.Getenv, o.Package, decision.Version) {
+			done := &State{LastCheckedAt: o.Now.UnixMilli(), LatestVersion: decision.Version, InstalledVersion: decision.Version}
+			if in.State != nil {
+				done.SkippedVersion = in.State.SkippedVersion
+			}
+			writeState(o.ConfigDir, done)
 			return installed(decision.Version)
 		}
+		restore()
 		// A failed install is remembered as skipped: retrying the same broken version at every
 		// launch is how an update mechanism becomes something people uninstall.
 		writeState(o.ConfigDir, &State{LastCheckedAt: o.Now.UnixMilli(), LatestVersion: decision.Version, SkippedVersion: decision.Version})

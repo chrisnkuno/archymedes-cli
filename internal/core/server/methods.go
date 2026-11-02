@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -640,6 +641,7 @@ func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, erro
 		notices = update.Run(ctx, update.Options{
 			Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
 			ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
+			MoveAside: runtime.GOOS == "windows", // a running friday.exe cannot be overwritten there
 		})
 	}
 	if notices == nil {

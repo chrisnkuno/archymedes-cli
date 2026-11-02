@@ -3,6 +3,8 @@ package update
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +50,7 @@ func TestIsNewerNeverOffersADowngradeOrTouchesADevBuild(t *testing.T) {
 
 func TestDecideFollowsThePolicy(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	recent := now.Add(-time.Hour).UnixMilli()
+	recent := now.Add(-10 * time.Minute).UnixMilli()
 	stale := now.Add(-48 * time.Hour).UnixMilli()
 	newer := &State{LastCheckedAt: recent, LatestVersion: "2.0.0"}
 
@@ -65,6 +67,8 @@ func TestDecideFollowsThePolicy(t *testing.T) {
 		{"known newer installs", Inputs{Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", State: newer, Now: now}, ActionInstall},
 		{"known newer notifies in check mode", Inputs{Mode: ModeCheck, Interactive: true, CurrentVersion: "1.0.0", State: newer, Now: now}, ActionNotify},
 		{"recent and current is not due", Inputs{Mode: ModeInstall, Interactive: true, CurrentVersion: "2.0.0", State: newer, Now: now}, ActionSkip},
+		{"an hour on, a check is due", Inputs{Mode: ModeInstall, Interactive: true, CurrentVersion: "2.0.0", State: &State{LastCheckedAt: now.Add(-time.Hour).UnixMilli(), LatestVersion: "2.0.0"}, Now: now}, ActionCheck},
+		{"an installed version waiting for a restart is not installed again", Inputs{Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", State: &State{LastCheckedAt: recent, LatestVersion: "2.0.0", InstalledVersion: "2.0.0"}, Now: now}, ActionSkip},
 		{"a skipped version is not re-offered", Inputs{Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", State: &State{LastCheckedAt: recent, LatestVersion: "2.0.0", SkippedVersion: "2.0.0"}, Now: now}, ActionSkip},
 	}
 	for _, c := range cases {
@@ -120,7 +124,7 @@ func TestRunInstallsAKnownNewerVersionWithoutFetching(t *testing.T) {
 	if installed != "9.0.0" {
 		t.Fatalf("installed %q, want 9.0.0", installed)
 	}
-	if !strings.Contains(strings.Join(notices, "\n"), "Updated to Friday 9.0.0") {
+	if !strings.Contains(strings.Join(notices, "\n"), "Friday 9.0.0 is installed; restart Friday to use it") {
 		t.Fatalf("notice = %v", notices)
 	}
 }
@@ -194,5 +198,70 @@ func TestRunDoesNothingUnderAutomation(t *testing.T) {
 	})
 	if len(notices) != 0 {
 		t.Fatalf("a non-interactive run said %v", notices)
+	}
+}
+
+func TestRunInstallsOnceAndKeepsWhatItInstalled(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
+	installs := 0
+	o := Options{
+		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Fetch: func(context.Context, func(string) string, string) (string, error) { return "9.0.0", nil },
+		Do:    func(context.Context, func(string) string, string, string) bool { installs++; return true },
+	}
+	Run(context.Background(), o)
+	o.Now = now.Add(2 * time.Hour) // the next hourly check, still running 1.0.0
+	if notices := Run(context.Background(), o); installs != 1 || len(notices) != 0 {
+		t.Fatalf("installed %d times, notices %v: an installed version waits for the restart", installs, notices)
+	}
+	if s := readState(dir); s == nil || s.InstalledVersion != "9.0.0" {
+		t.Fatalf("state = %+v", s)
+	}
+}
+
+// TestWindowsMovesTheRunningProgramAsideAndBack: the install replaces a program that is not where
+// it was; a failed install puts it back; a later start deletes what was moved.
+func TestWindowsMovesTheRunningProgramAsideAndBack(t *testing.T) {
+	root := t.TempDir()
+	exe := filepath.Join(root, "npm", "node_modules", "@archymedes", "friday-win32-x64", "bin", "friday.exe")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	put := func() { _ = os.WriteFile(exe, []byte("old friday"), 0o755) }
+	put()
+	dir := t.TempDir()
+	now := time.Now()
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
+	var during bool
+	o := Options{
+		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		MoveAside: true, Executable: exe,
+		Do: func(context.Context, func(string) string, string, string) bool {
+			_, err := os.Stat(exe)
+			during = os.IsNotExist(err)
+			return false // the install fails
+		},
+	}
+	Run(context.Background(), o)
+	if !during {
+		t.Fatal("the running program was still in the package while it was being replaced")
+	}
+	if data, err := os.ReadFile(exe); err != nil || string(data) != "old friday" {
+		t.Fatalf("a failed install puts the program back: %q %v", data, err)
+	}
+
+	// A good install: moved aside, then cleared at a later start.
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.1.0"})
+	o.Do = func(context.Context, func(string) string, string, string) bool { put(); return true } // npm writes the new one
+	Run(context.Background(), o)
+	aside := filepath.Join(root, "npm", "node_modules", ".friday-replaced")
+	if entries, _ := os.ReadDir(aside); len(entries) != 1 {
+		t.Fatalf("the old program waits beside node_modules: %v", entries)
+	}
+	clearAside(exe, dir)
+	if entries, _ := os.ReadDir(aside); len(entries) != 0 {
+		t.Fatalf("a later start deletes it: %v", entries)
 	}
 }

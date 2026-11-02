@@ -98,11 +98,15 @@ type usageTotals struct{ input, output int }
 
 // Model is the whole UI.
 type Model struct {
-	opts   Options
-	th     theme.Theme
-	md     *render.Markdown
-	width  int
-	height int
+	// safe: this terminal draws only WGL4, so each frame's other symbols are swapped (core_glyphs.go).
+	safe bool
+	// noticed are the upkeep notices already shown this session.
+	noticed map[string]bool
+	opts    Options
+	th      theme.Theme
+	md      *render.Markdown
+	width   int
+	height  int
 
 	tr       *transcript
 	input    composer
@@ -227,7 +231,7 @@ type Model struct {
 // New builds the model; Init connects.
 func New(opts Options) *Model {
 	th, _ := theme.Load(opts.Theme)
-	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th)}
+	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th), safe: detectSafeGlyphs()}
 	m.keyOverrides = map[string][]string{}
 	m.vim.on = vimOn(opts.ConfigDir)
 	if opts.ConfigDir != "" {
@@ -281,8 +285,37 @@ type startedMsg struct {
 }
 type connectedMsg struct{ session acp.Session }
 
-// startupNoticesMsg is what the agent's start-of-day upkeep had to say (an update installed or available).
+// startupNoticesMsg is what the agent's upkeep had to say (an update installed or available).
 type startupNoticesMsg struct{ notices []string }
+
+// upkeepEvery is how often the agent's upkeep runs while Friday stays open: the engine's update
+// check is hourly, so a new release is found and installed within the hour.
+const upkeepEvery = time.Hour
+
+// upkeepMsg is time for the agent's upkeep again (the update check).
+type upkeepMsg struct{}
+
+func upkeepAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return upkeepMsg{} })
+}
+
+// upkeep runs the agent's upkeep in the background, between turns: one running waits a few minutes.
+func (m *Model) upkeep() tea.Cmd {
+	if m.agent == nil {
+		return nil
+	}
+	if m.phase == busy {
+		return upkeepAfter(5 * time.Minute)
+	}
+	agent := m.agent
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		notices, _ := agent.Startup(ctx)
+		return startupNoticesMsg{notices}
+	}
+}
+
 type connectFailedMsg struct{ err error }
 type agentMsg struct{ msg any }
 type promptDoneMsg struct {
@@ -550,9 +583,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case startupNoticesMsg:
 		var cmds []tea.Cmd
 		for _, notice := range msg.notices {
+			if m.noticed[notice] {
+				continue // said once this session is enough: the hourly check would repeat it
+			}
+			if m.noticed == nil {
+				m.noticed = map[string]bool{}
+			}
+			m.noticed[notice] = true
 			cmds = append(cmds, m.toast(toastInfo, notice))
 		}
-		return m, tea.Batch(cmds...)
+		return m, tea.Batch(append(cmds, upkeepAfter(upkeepEvery))...)
+	case upkeepMsg:
+		return m, m.upkeep()
 	case connectedMsg:
 		first := m.session.ID == ""
 		m.session, m.phase = msg.session, ready
@@ -570,14 +612,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.modeChosenEarlier())
 		if first {
 			cmds = append(cmds, m.readProjectState())
-			// Once, in the background, after the session is usable: never on the way to the prompt.
-			agent := m.agent
-			cmds = append(cmds, func() tea.Msg {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-				defer cancel()
-				notices, _ := agent.Startup(ctx)
-				return startupNoticesMsg{notices}
-			})
+			// In the background, after the session is usable: never on the way to the prompt. Then
+			// again every hour while Friday stays open, so a new release is found and installed.
+			cmds = append(cmds, m.upkeep())
 		}
 		if len(m.queue) > 0 {
 			next := m.queue[0]
