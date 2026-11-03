@@ -37,17 +37,17 @@
     },
     "packages/friday-cli": {
       "name": "@archymedes/friday",
-      "version": "3.10.0",
+      "version": "3.12.7",
       "bin": {
         "friday": "bin/friday.mjs",
       },
       "optionalDependencies": {
-        "@archymedes/friday-darwin-arm64": "3.10.0",
-        "@archymedes/friday-darwin-x64": "3.10.0",
-        "@archymedes/friday-linux-arm64": "3.10.0",
-        "@archymedes/friday-linux-x64": "3.10.0",
-        "@archymedes/friday-win32-arm64": "3.10.0",
-        "@archymedes/friday-win32-x64": "3.10.0",
+        "@archymedes/friday-darwin-arm64": "3.12.7",
+        "@archymedes/friday-darwin-x64": "3.12.7",
+        "@archymedes/friday-linux-arm64": "3.12.7",
+        "@archymedes/friday-linux-x64": "3.12.7",
+        "@archymedes/friday-win32-arm64": "3.12.7",
+        "@archymedes/friday-win32-x64": "3.12.7",
         "@archymedes/state-darwin-arm64": "0.4.0",
         "@archymedes/state-darwin-x64": "0.4.0",
         "@archymedes/state-linux-arm64-gnu": "0.4.0",
@@ -70,17 +70,17 @@
 
     "@archymedes/friday": ["@archymedes/friday@workspace:packages/friday-cli"],
 
-    "@archymedes/friday-darwin-arm64": ["@archymedes/friday-darwin-arm64@3.10.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ujfo8U0g9eInfH8uzyRUxnPJNgoEw4yAUIZ3Mz30CMWhszNXm00IVUKGrY9TY6sibpd8G4G7vBSLPu2myqlI+A=="],
+    "@archymedes/friday-darwin-arm64": ["@archymedes/friday-darwin-arm64@3.12.7", "", { "os": "darwin", "cpu": "arm64" }, "sha512-YAgChYlPDQZdXTWaXZbOB7yr1yfD8sqNZl3426Zb9EPzTZNVotwpfQMo1f2QJuhtTILwIOViOgc+eCEkL55/Mg=="],
 
-    "@archymedes/friday-darwin-x64": ["@archymedes/friday-darwin-x64@3.10.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-CoSwETsG2wMGUpb3rPiHfwawAcJwQUYCUag5Bg17xByj89hvaonbuPukR7qazno+Pz1zZrE+3xeod4ovHYs9oA=="],
+    "@archymedes/friday-darwin-x64": ["@archymedes/friday-darwin-x64@3.12.7", "", { "os": "darwin", "cpu": "x64" }, "sha512-HcddsDNyYYkxiMAxhCrMg1pbVZKU7237tUBaFTjvB9hMm0hOOLE+n8L+kTKXotEyrn7P8ATA/HcxoBmI9nirhw=="],
 
-    "@archymedes/friday-linux-arm64": ["@archymedes/friday-linux-arm64@3.10.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-iINWeDy8UnUdFIAVYK+ZFDXpHiuHbf7r49peaU+X5ihovEgHMskPDR9kKtbWOAR8h60R87TFE0e2IApx874rEg=="],
+    "@archymedes/friday-linux-arm64": ["@archymedes/friday-linux-arm64@3.12.7", "", { "os": "linux", "cpu": "arm64" }, "sha512-HUHWPBEpgl+xQphu3oe5TlkS3OrU3R5KEC2sqQ0pAzYj0buQYKvptqIbuwk/XGFCdvRLI37MxANDZfWFaG2sSg=="],
 
-    "@archymedes/friday-linux-x64": ["@archymedes/friday-linux-x64@3.10.0", "", { "os": "linux", "cpu": "x64" }, "sha512-QICGqq5xbaHlt/yo4N89fTPCSu75QAHf8/xm/jgR4lMdll+soAn9DWrmWy+Sj0v5MMFKQmeDAWlgp8GjJphUoA=="],
+    "@archymedes/friday-linux-x64": ["@archymedes/friday-linux-x64@3.12.7", "", { "os": "linux", "cpu": "x64" }, "sha512-x/shnbpEi2R9Kr3GzuwppK7BwadG/L+kJa02rT0IWrrJYPgQAGxuqRgDynrVgY3xrfHYirG1WIlOzV9YhFjoVw=="],
 
-    "@archymedes/friday-win32-arm64": ["@archymedes/friday-win32-arm64@3.10.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-PvEpHZzN7qTzXYy7IBnfJom82jz4Ss5u5k34UkDPnxT9e00lYI2Kw6Us+6jSh2IknVQkkPXG8AH5KEpbsEJdmw=="],
+    "@archymedes/friday-win32-arm64": ["@archymedes/friday-win32-arm64@3.12.7", "", { "os": "win32", "cpu": "arm64" }, "sha512-FL0Z47pW2ZphIlcSSVPr+41KMX70atyuYoavHDPMGeAWGQSO8DYrpkwwZ59YdiCGi3qPt27MnAaI+jW1lFgXaQ=="],
 
-    "@archymedes/friday-win32-x64": ["@archymedes/friday-win32-x64@3.10.0", "", { "os": "win32", "cpu": "x64" }, "sha512-pdON11Z5GRbnWjrp+icjTOnS1QmwiakIwRuOmCXgdTDP3xEJRHaJT0sen/5XOdtPOA+nBCRB2WUXdNBgutyejg=="],
+    "@archymedes/friday-win32-x64": ["@archymedes/friday-win32-x64@3.12.7", "", { "os": "win32", "cpu": "x64" }, "sha512-tmm4JhJSPhiSTBVRhBDwTTSrjblTFS9mZMzozdosP2AQGkV1eJJsSlegRqUyRj570mbhHFQ5Jrg+VKIko1g8cg=="],
 
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
 
