@@ -73,7 +73,11 @@ type Tool struct {
 	// ReadOnlyHint is an MCP server's own claim that the tool changes nothing out there.
 	ReadOnlyHint bool
 	Provenance   Provenance
-	Run          func(ctx context.Context, tc Context, args Args) Result
+	// Preview, when set, is what the interface may show of a call before it runs (run_command's
+	// test-time estimate), sent with the call's announcement. It must be quick: it runs before
+	// every call of the tool, and nil is nothing to show.
+	Preview func(Args) map[string]any
+	Run     func(ctx context.Context, tc Context, args Args) Result
 }
 
 // CallEffect is the effect of this call: the tool's own judgment when it has one, else its declaration.

@@ -48,7 +48,8 @@ verification gate and steering need to decide what happens after the model says 
 | `policy` | Modes and capabilities, the permission ledger, the safety screen, read-only commands, command rules, the shell tokenizer (ports of `core/cli/permissions.ts`, `safety.ts`, `command-readonly.ts`, `command-rules.ts`, `command.ts`) | `tool` |
 | `gate` | The verification gate (`verification-gate.ts`); what counts as evidence is in `policy` (`ClassifyVerification`) | `tool` |
 | `roles` | Sub-agent roles: built-ins, role files, which tools a role gets, the delegation guidance (`subagents.ts`), plus each role's model and background default | `tool` |
-| `tools` | Built-in tools on a local workspace: files, search, commands, todos, git | `tool`, `policy`, `gate` |
+| `testtime` | How long a test run will take, learned per project (whole runs and their parts: Go packages, test files, Rust binaries), whether it can wait for the end, and reuse of a pass on an unchanged tree | `tool`, `policy` |
+| `tools` | Built-in tools on a local workspace: files, search, commands, todos, git | `tool`, `policy`, `gate`, `testtime` |
 | `llm` | Which provider and model, from settings.json and the environment, as Fantasy models; the main/small pair | — |
 | `settings` | The Settings list: fields, choices, validation, masking, settings.json (WS-50.2, ported from `platform/settings.ts`) | `llm` |
 | `loop` | One run: stream the model, run tools, fold in steering, detect loops, hold to the gate, compact | `tool`, `policy`, `gate` |

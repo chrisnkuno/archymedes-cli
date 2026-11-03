@@ -122,6 +122,7 @@ Run a shell command in the project root (`sh -c`, or `cmd /C` on Windows) and wa
 | `command` | required | |
 | `timeoutSeconds` | optional | default 120, at most 1,800 |
 | `background` | optional | start it and return at once with a job id; see [Background commands](#background-commands) |
+| `fresh` | optional | run a test command again even when nothing changed since it passed; see [Test runs](#test-runs) |
 
 Effect **per call**:
 
@@ -149,6 +150,48 @@ that a change works. From weakest to strongest: a check (build, typecheck, lint)
 run of the assembled program (a script Friday wrote counts), an end-to-end suite.
 Reading files or printing text does not count, and the result says when a run was not accepted
 as proof and why.
+
+### Test runs
+
+A command that runs tests is timed, and Friday learns how long it takes. It knows `go test`,
+`cargo test`, `pytest`, `vitest`, `jest`, `bun test`, `deno test`, `mocha`, `rspec`, `phpunit`,
+`dotnet test`, `gradle test`, `mvn test`, `ctest`, `swift test`, `npm test`, `npm run test:…` and
+`make test`. Each is read through `npx`, `pnpm exec`, `uv run`, `python -m` and `cd <dir> &&`. It
+reads which runner, which packages or files, which filter and which flags that change the cost
+(`-race`, `-cover`, `-count=3`, `-short`): `go test -v ./...` and `go test ./... -v` are one run.
+
+**Before it starts**, its card shows how long it should take: `≈45s`, a range when runs vary
+(`≈30s–2m`), `(guess)` when nothing was measured yet. The estimate is a median and a 90th
+percentile, from the most trusted of:
+
+1. **history**: this run before, as a moving average of the logarithm of its time, so a suite that
+   got slower is believed within a few runs;
+2. **parts**: never run like this, but its parts were. Each Go package, test file or Rust test
+   binary is timed from the runner's own output. The parts are scheduled the way the runner runs
+   them, longest first on as many lanes as it uses. That is scaled by how much longer this
+   project's whole runs take than their parts (build and start-up);
+3. **similar**: the whole suite, scaled by the share of test files in this one's scope;
+4. **guess**: the runner's start-up plus a cost per test file in scope.
+
+The rail's Running row shows `12s of ≈45s`, and `slower than usual` past the 90th percentile.
+
+**Can wait for the end.** A whole-suite run expected to take 20 seconds or more, while the session
+has changed files, is marked `can wait for the end`. The model is told after it, with a narrower
+run over the packages or test files that changed and its own estimate (`go test ./internal/x`,
+≈2s), so it iterates on that and runs the whole suite once before finishing.
+
+**Its limit.** With no `timeoutSeconds`, a run measured as longer than the default gets one and a
+half times its 90th percentile plus 10 seconds, up to the 30-minute ceiling. It is not killed at two
+minutes and run again. Guesses never move the limit.
+
+**Already passed.** When the same command passed in this session and the work tree has not changed
+since, it is not run again for 30 minutes. The result is that pass, said to be one, and it counts as
+proof as before. The work tree is the commit and every changed or untracked file's size and
+modification time; files git ignores and Friday's own `.archymedes/` are left out. A failure forgets the pass;
+`fresh: true` runs it anyway. Outside git nothing is reused.
+
+Times are kept per project in `.archymedes/test-times.json` (at most 96 runs and 2,000 parts per
+runner, least recently used dropped first); a damaged file is started over.
 
 ### Background commands
 

@@ -29,7 +29,7 @@ type keyMap struct {
 	// Windows.
 	NextWindow, PrevWindow, CloseWindow key.Binding
 	// Session.
-	Mode, Expand, Rail, Agent, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
+	Mode, Expand, Rail, Growth, Agent, Quit, Undo, Retry, Copy, Suggest1, Suggest2, Suggest3 key.Binding
 	// Reading.
 	PageUp, PageDown, LineUp, LineDown, Top, Bottom key.Binding
 }
@@ -66,6 +66,7 @@ var actions = []action{
 	{"expand", "expand output", "Session", []string{"ctrl+o"}, false, func(k *keyMap) *key.Binding { return &k.Expand }},
 	{"new-helper", "send to a new helper", "Session", []string{"alt+a"}, false, func(k *keyMap) *key.Binding { return &k.Agent }},
 	{"changes-rail", "changes rail", "Session", []string{"alt+d"}, false, func(k *keyMap) *key.Binding { return &k.Rail }},
+	{"growth-panel", "growth panel", "Session", []string{"alt+v"}, false, func(k *keyMap) *key.Binding { return &k.Growth }},
 	{"undo", "undo last turn", "Session", []string{"alt+z"}, false, func(k *keyMap) *key.Binding { return &k.Undo }},
 	{"retry", "send again", "Session", []string{"alt+r"}, false, func(k *keyMap) *key.Binding { return &k.Retry }},
 	{"copy", "copy last reply", "Session", []string{"alt+y"}, false, func(k *keyMap) *key.Binding { return &k.Copy }},

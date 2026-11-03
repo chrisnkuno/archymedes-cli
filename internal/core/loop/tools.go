@@ -255,7 +255,11 @@ func (r *run) runOne(ctx context.Context, p prepared) outcome {
 // approval belongs to is already on screen).
 func (r *run) announce(p prepared) {
 	r.calls++
-	r.emit(Event{Type: EventToolCall, ToolCallID: p.call.ID, ToolName: p.call.Name, Effect: string(p.effect), Arguments: p.call.Args})
+	var data map[string]any
+	if p.tool != nil && p.tool.Preview != nil {
+		data = p.tool.Preview(p.call.Args)
+	}
+	r.emit(Event{Type: EventToolCall, ToolCallID: p.call.ID, ToolName: p.call.Name, Effect: string(p.effect), Arguments: p.call.Args, Data: data})
 }
 
 func (r *run) approve(ctx context.Context, p prepared) (bool, error) {

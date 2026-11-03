@@ -53,12 +53,12 @@ func (m *Model) handleAgentMsgs(msgs []any) tea.Cmd {
 	for _, msg := range msgs {
 		if end, ok := msg.(acp.TurnEnded); ok {
 			cmds = append(cmds, m.finishTurn(promptDoneMsg{stop: end.StopReason}))
-			m.rail.stale = true // whatever the turn changed, by any means, has landed
+			m.rail.stale, m.growth.stale = true, true // whatever the turn changed, by any means, has landed
 			continue
 		}
 		m.handleAgent(msg)
 	}
-	return tea.Batch(append(cmds, m.railReread(), m.flushNotifications())...)
+	return tea.Batch(append(cmds, m.railReread(), m.growthReread(), m.flushNotifications())...)
 }
 
 // handleAgent turns one agent message into transcript changes.
@@ -137,7 +137,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 		m.composing = nil
 		m.closeAssistant()
 		m.stats.tool(ev.ToolName)
-		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments, started: time.Now()}
+		t := &toolItem{id: ev.ToolCallID, name: ev.ToolName, args: ev.Arguments, started: time.Now(), test: readTestRun(ev.Data, nil)}
 		m.tools[ev.ToolCallID] = t
 		m.tr.add(t)
 	case "tool_result":
@@ -145,9 +145,11 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			m.limits.toolError(time.Now())
 		}
 		if t := m.tools[ev.ToolCallID]; t != nil {
+			t.test = readTestRun(ev.Data, t.test)
 			t.finish(ev.Content, ev.IsError)
 			m.editLanded(t)
 			m.noteCommands(t.name, t.args, ev.Content)
+			m.growthPlan(t.name, ev.Content, ev.IsError)
 		}
 	case "model_turn":
 		m.composing = nil

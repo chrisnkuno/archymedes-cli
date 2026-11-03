@@ -179,6 +179,8 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, k.Rail):
 		return m.toggleRail()
+	case key.Matches(msg, k.Growth):
+		return m.toggleGrowth()
 	case key.Matches(msg, k.Agent):
 		return m.agentFromInput()
 	case key.Matches(msg, k.Inspect) && len(m.input.complete) == 0 && !m.landingVisible() &&

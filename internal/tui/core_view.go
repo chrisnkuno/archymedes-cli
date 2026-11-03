@@ -59,7 +59,7 @@ func (m *Model) View() tea.View {
 			m.sel.clear()
 		}
 		m.bodyLines = body
-		rail := m.railLines(len(body))
+		rail := joinColumns(m.growthLines(len(body)), m.railLines(len(body)))
 		if len(rail) > 0 {
 			// The rail is a panel on glass, beside the transcript, from under the top bar down.
 			left := m.width - ansi.StringWidth(rail[0])

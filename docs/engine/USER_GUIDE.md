@@ -391,6 +391,16 @@ Every edit is shown as it lands, not only when the turn ends.
   command, and for how long. A click opens it, Friday's on its card and a helper's in the
   Inspector. Background commands follow, each with the last line it printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
   back. On a narrower terminal the top bar counts the changed files instead.
+- **In the growth panel** (alt+v or `/growth`; 96 columns or more). The project is drawn as a tree
+  that grows while the work is done. Its branches are the project's folders, and the heaviest are
+  opened into their own branches as far as the panel's height allows. Each branch has a bar for the
+  code it holds: the dim part was there when the session began, the bright part was written since.
+  Beside it are its lines and what this session did to it: `+120 −12`, `new`, or `pruned 40` when
+  more was taken out than put in. The agent's plan grows on the tree as steps (○ to do, ◐ in
+  progress, ✓ done), each on the branch it is about. That is the file it was worked on in, or else
+  the folder its words name. A path the code does not have yet grows a `planned` branch, so a new
+  project shows what is still to be built. Steps about nothing in particular stay on the trunk. It
+  is measured again when an edit lands, and only files that changed since are read again.
 - **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
   of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see). On a helper,
   x stops it and m sends it a message.

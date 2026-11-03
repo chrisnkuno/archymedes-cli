@@ -80,9 +80,15 @@
     "core/thread": [
       "conform"
     ],
+    "core/testtime": [
+      "core/tool",
+      "core/policy",
+      "conform"
+    ],
     "core/tools": [
       "core/tool",
       "core/policy",
+      "core/testtime",
       "conform"
     ],
     "core/loop": [

@@ -60,6 +60,7 @@ func (m *Model) editLanded(t *toolItem) {
 	path, _ := t.args["path"].(string)
 	m.rail.latest = &railEdit{path: path, who: "Friday", diff: t.diff, added: t.added, removed: t.removed, item: t}
 	m.markEdited(path)
+	m.growthEdit(path, t.added, t.removed)
 }
 
 // subagentEditLanded is the same for one of a sub-agent's calls.
@@ -83,6 +84,7 @@ func (m *Model) subagentEditLanded(card *toolItem, step *subagentStep) {
 	}
 	m.rail.latest = &railEdit{path: path, who: subagentRole(card), diff: step.diff, added: step.added, removed: step.removed, item: card}
 	m.markEdited(path)
+	m.growthEdit(path, step.added, step.removed)
 }
 
 func (m *Model) markEdited(path string) {
@@ -141,7 +143,7 @@ func (m *Model) workingAgents() []*toolItem {
 
 // railWidth is the rail's columns, its edge included; 0 when it is not shown.
 func (m *Model) railWidth() int {
-	if m.rail.hidden || m.width < railMinWidth || m.landingVisible() {
+	if m.rail.hidden || m.width-m.growthWidth() < railMinWidth || m.landingVisible() {
 		return 0
 	}
 	if len(m.rail.files) == 0 && m.rail.latest == nil && len(m.workingAgents()) == 0 && len(m.rail.commands) == 0 && len(m.commandsAtWork()) == 0 {
@@ -151,7 +153,7 @@ func (m *Model) railWidth() int {
 }
 
 // chatWidth is the transcript's width, beside the rail when it is shown.
-func (m *Model) chatWidth() int { return max(m.width-2-m.railWidth(), 10) }
+func (m *Model) chatWidth() int { return max(m.width-2-m.railWidth()-m.growthWidth(), 10) }
 
 // railLines is the rail as height rows, each width columns wide with its edge; nil when hidden.
 func (m *Model) railLines(height int) []string {

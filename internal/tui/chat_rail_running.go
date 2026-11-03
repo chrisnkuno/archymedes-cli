@@ -69,6 +69,9 @@ func (m *Model) railRunningRows(running []runningCommand, inner int) []string {
 			break
 		}
 		took := th.Faint.Render(" " + elapsed(time.Since(c.started)))
+		if c.who == "friday" && c.card != nil {
+			took = th.Faint.Render(" " + elapsed(time.Since(c.started)) + c.card.test.railNote(time.Since(c.started)))
+		}
 		who := th.SoftPill(c.who, th.Secondary)
 		if c.who == "friday" {
 			who = th.SoftPill(c.who, th.Primary)

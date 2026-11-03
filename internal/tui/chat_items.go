@@ -109,6 +109,8 @@ type toolItem struct {
 	// the lines it adds and removes.
 	diff           string
 	added, removed int
+	// test is a test run's expected and actual time (chat_testrun.go), nil for anything else.
+	test *testRun
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -159,7 +161,7 @@ func (t *toolItem) render(ctx renderCtx) []string {
 		}
 		head += " " + render.FileLink(th.Body, detail, ctx.root, path)
 	}
-	head += th.Faint.Render(" · ") + summary
+	head += th.Faint.Render(" · ") + summary + t.test.cardNote(th)
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
 	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open

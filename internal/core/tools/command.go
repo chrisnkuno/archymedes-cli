@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
+	"github.com/chrisnkuno/friday-cli/internal/core/testtime"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 )
 
@@ -31,6 +33,7 @@ func (w *Workspace) runCommand() *tool.Tool {
 			"command":        map[string]any{"type": "string"},
 			"timeoutSeconds": map[string]any{"type": "integer", "description": fmt.Sprintf("Default %d, max %d. Not for background commands, which run until stopped.", int(CommandTimeout.Seconds()), int(CommandCeiling.Seconds()))},
 			"background":     map[string]any{"type": "boolean", "description": fmt.Sprintf("Start it and return at once with a job id and what it printed in its first %d seconds. It runs until it exits, stop_command, or the session ends.", int(CommandStartWindow.Seconds()))},
+			"fresh":          map[string]any{"type": "boolean", "description": "Run tests again even when nothing changed since the same command passed; without it, that pass is returned at once."},
 		}, "command"),
 		Capability: tool.CapTerminal, Effect: tool.EffectWorkspace,
 		// Safe to run beside others only when a call changes nothing: the loop batches calls whose
@@ -52,6 +55,16 @@ func (w *Workspace) runCommand() *tool.Tool {
 			}
 			return tool.EffectWorkspace
 		},
+		// The card shows a test run's expected time, and whether it can wait for the end, as it starts.
+		Preview: func(args tool.Args) map[string]any {
+			if tool.BoolArg(args, "background") {
+				return nil
+			}
+			if a, ok := w.adviseTests(tool.StringArg(args, "command")); ok {
+				return map[string]any{"testRun": a.Data()}
+			}
+			return nil
+		},
 		Run: func(ctx context.Context, _ tool.Context, args tool.Args) tool.Result {
 			command := strings.TrimSpace(tool.StringArg(args, "command"))
 			if command == "" {
@@ -63,15 +76,30 @@ func (w *Workspace) runCommand() *tool.Tool {
 			if tool.BoolArg(args, "background") {
 				return w.startBackground(ctx, command)
 			}
+			advice, isTest := w.adviseTests(command)
 			timeout := CommandTimeout
 			if s, ok := tool.IntArg(args, "timeoutSeconds"); ok && s > 0 {
 				timeout = min(time.Duration(s)*time.Second, CommandCeiling)
+			} else if isTest {
+				// A suite this project measured past the default gets its own time, not a kill and a retry.
+				timeout = advice.TimeoutFor(CommandTimeout, CommandCeiling)
 			}
 			trial := policy.IsLikelyPersistentCommand(command)
 			if trial {
 				timeout = min(timeout, persistentTrial)
 			}
+			print := ""
+			if isTest && !trial {
+				print = w.tests().Fingerprint(ctx)
+				if !tool.BoolArg(args, "fresh") {
+					if reused, ok := w.reusePass(command, advice, print); ok {
+						return reused
+					}
+				}
+			}
+			started := time.Now()
 			out := w.shell(ctx, command, timeout)
+			took := time.Since(started)
 			if out.timedOut && trial {
 				return tool.Result{Content: fmt.Sprintf("'%s' was still running after %ds, so it was stopped: it is a long-running process, not a command that finishes. If the task needs it running, start it with background: true, read it with command_output and end it with stop_command.\n\nWhat it printed:\n%s", command, int(persistentTrial.Seconds()), out.combined()), IsError: true, Data: map[string]any{"command": command, "reason": "persistent_foreground_command"}}
 			}
@@ -84,6 +112,18 @@ func (w *Workspace) runCommand() *tool.Tool {
 			}
 			data := map[string]any{"command": command, "exitCode": out.exit, "stdout": out.stdout, "stderr": out.stderr}
 			result := tool.Result{Content: fmt.Sprintf("exit %d\n%s", out.exit, body), IsError: out.exit != 0, Data: data}
+			if isTest && ctx.Err() == nil && out.missing == "" && out.exit != 127 {
+				w.tests().Record(advice.Run, took, out.stdout+"\n"+out.stderr, out.timedOut)
+				if out.exit != 0 {
+					w.tests().Forget(reuseKey(command))
+				}
+				testRun := advice.Data()
+				testRun["took"] = math.Round(took.Seconds()*10) / 10
+				data["testRun"] = testRun
+				if note := advice.Note(took.Seconds()); note != "" {
+					result.Content += "\n\n" + note
+				}
+			}
 			if out.missing != "" {
 				result.Content += fmt.Sprintf("\n\n'%s' is not available in this environment. Do not retry this command; use another program, or check with 'command -v' first.", out.missing)
 				data["missingProgram"] = out.missing
@@ -110,11 +150,56 @@ func (w *Workspace) runCommand() *tool.Tool {
 					return result
 				}
 				result.Evidence = &tool.Evidence{Passed: true, Kind: kind, Summary: command + " exited 0"}
+				if isTest && !out.timedOut {
+					w.tests().Passed(reuseKey(command), print, result.Content, took)
+				}
 			}
 			data["verificationKind"] = string(kind)
 			return result
 		},
 	}
+}
+
+// tests is this project's test times.
+func (w *Workspace) tests() *testtime.Estimator { return testtime.For(w.Root) }
+
+// adviseTests is what is known of command as a test run; ok is false when it runs no tests.
+func (w *Workspace) adviseTests(command string) (testtime.Advice, bool) {
+	command = strings.TrimSpace(command)
+	if command == "" || policy.IsReadOnlyCommand(command, runtime.GOOS) {
+		return testtime.Advice{}, false
+	}
+	written := w.Written()
+	files := make([]string, 0, len(written))
+	for f := range written {
+		files = append(files, f)
+	}
+	return w.tests().Advise(command, files)
+}
+
+// reuseKey is a command as reuse matches it: the same words, whatever the spacing.
+func reuseKey(command string) string { return strings.Join(strings.Fields(command), " ") }
+
+// reusePass answers a test run with its last pass when the work tree has not changed since: the
+// same tests on the same files pass again, and waiting for them is time spent learning nothing.
+func (w *Workspace) reusePass(command string, advice testtime.Advice, print string) (tool.Result, bool) {
+	content, took, at, ok := w.tests().Reused(reuseKey(command), print)
+	if !ok {
+		return tool.Result{}, false
+	}
+	kind := policy.ClassifyVerification(command)
+	if kind == "" {
+		kind = tool.EvidenceTests
+	}
+	ago := time.Since(at).Round(time.Second)
+	content += fmt.Sprintf("\n\n[Not run again: nothing in the work tree changed since this command passed %s ago (it took %s), so this is that run's result. Pass fresh: true to run it anyway.]", ago, testtime.Duration(took.Seconds()))
+	testRun := advice.Data()
+	testRun["reused"], testRun["took"], testRun["saved"] = true, 0.0, math.Round(took.Seconds()*10)/10
+	return tool.Result{
+		Content:  content,
+		Data:     map[string]any{"command": command, "exitCode": 0, "reused": true, "testRun": testRun, "verificationKind": string(kind)},
+		Evidence: &tool.Evidence{Passed: true, Kind: kind, Summary: command + " passed on this same tree"},
+	}, true
 }
 
 // screen is the refusal for a command no mode may run, foreground or background: one a command

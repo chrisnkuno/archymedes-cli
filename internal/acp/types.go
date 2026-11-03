@@ -94,6 +94,9 @@ type RuntimeEvent struct {
 	Arguments  map[string]any `json:"arguments"`
 	IsError    bool           `json:"isError"`
 	Content    string         `json:"content"`
+	// Data is what the engine knows of the call as values: on a run_command call, `testRun` is a
+	// test run's expected time (p50, p90, basis, runs, canWait, narrower) and, on its result, took.
+	Data map[string]any `json:"data"`
 	// model_turn
 	Model         string `json:"model"`
 	Iteration     int    `json:"iteration"`
