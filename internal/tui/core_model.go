@@ -193,6 +193,7 @@ type Model struct {
 	comments  []reviewComment // notes on diff lines, sent with the next message
 	rail      railState       // the changes rail beside the transcript (chat_rail.go)
 	growth    growthState     // the growth panel: the project as a growing tree (chat_growth.go)
+	lastInput time.Time       // the last key, click or paste, for resting motion (core_motion.go)
 	goal      *goalState      // /goal in progress
 	turnStart time.Time
 	turnUsage usageTotals
@@ -369,32 +370,15 @@ func (m *Model) openSession() tea.Cmd {
 	}
 }
 
-// animate starts whichever tick chains the screen now needs and are not already running: the
-// spinner while the agent starts or works, the landing mark while it is on screen. Each chain
-// stops by itself once its reason is gone, so an idle session does not repaint.
-func (m *Model) animate() tea.Cmd {
-	var cmds []tea.Cmd
-	if (m.phase == connecting || m.phase == busy) && !m.spinning {
-		m.spinning = true
-		cmds = append(cmds, m.spin.Tick)
-	}
-	if m.landingVisible() && !m.animated {
-		m.animated = true
-		cmds = append(cmds, animTick())
-	}
-	if s, ok := m.activeWindow().(*showcaseApp); ok {
-		cmds = append(cmds, s.wake()) // brought back to the front: moving again
-	}
-	return tea.Batch(cmds...)
-}
-
 // SetSender gives the model the program's Send, which delivers the agent's messages: one goroutine
 // forwards the agent's stream in order for the whole session, so a turn's end (acp.TurnEnded, sent
 // after the turn's last event) can never overtake its last words.
 func (m *Model) SetSender(send func(tea.Msg)) { m.sender = send }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	woke := m.noteActivity(msg, time.Now())
 	model, cmd := m.update(msg)
+	cmd = tea.Batch(cmd, m.wake(woke)) // motion that rested (core_motion.go) moves again
 	// Sixel pictures are drawn over the frame, not in it: after any change, draw them again.
 	if sixel := m.sixelAfter(); sixel != nil {
 		cmd = tea.Batch(cmd, sixel)
@@ -463,17 +447,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case showcaseTickMsg:
 		return m, m.showcaseTicked()
 	case animTickMsg:
-		if !m.landingVisible() {
-			m.animated = false
-			return m, nil
-		}
-		m.angle += 0.06
-		if m.opts.Motion {
-			m.homeT += animInterval.Seconds()
-			m.stepTourDrawer()
-		}
-		m.turnPhoto(time.Now())
-		return m, animTick()
+		return m, m.animTicked()
 	case tea.BackgroundColorMsg:
 		// On a light terminal, unless a theme was asked for, use the light one: a dark ground's
 		// palette on white is unreadable, and the person never chose it.
@@ -636,11 +610,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleAgentMsgs(msg.msgs)
 	case promptDoneMsg:
 		return m, tea.Batch(m.finishTurn(msg), m.flushNotifications())
-	case tea.FocusMsg:
-		m.notifier.blurred = false
-		return m, nil
-	case tea.BlurMsg:
-		m.notifier.blurred = true
+	case tea.FocusMsg, tea.BlurMsg:
+		_, m.notifier.blurred = msg.(tea.BlurMsg) // notifications wait for it, motion rests on it
 		return m, nil
 	case notifyFailedMsg:
 		if !m.notifier.failed {

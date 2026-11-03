@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -87,6 +88,10 @@ func (m *Model) showcaseTicked() tea.Cmd {
 				s.ticking = false
 			}
 		}
+		return nil
+	}
+	if m.resting(time.Now()) {
+		s.ticking = false // nobody is looking; the next key or click wakes it (core_motion.go)
 		return nil
 	}
 	if !s.paused {
@@ -296,14 +301,19 @@ func drawTorus(w, h int, t float64) [][]cell {
 	a, b := t*0.9, t*0.45
 	sa, ca, sb, cb := math.Sin(a), math.Cos(a), math.Sin(b), math.Cos(b)
 	step := 0.5 / math.Max(k1, 10) // finer sampling for a bigger ring, so it never shows holes
-	for theta := 0.0; theta < 2*math.Pi; theta += step * 2 {
-		st, ct := math.Sin(theta), math.Cos(theta)
-		for phi := 0.0; phi < 2*math.Pi; phi += step {
-			sp, cp := math.Sin(phi), math.Cos(phi)
-			circleX, circleY := r2+r1*ct, r1*st
-			x := circleX*(cb*cp+sa*sb*sp) - circleY*ca*sb
-			y := circleX*(sb*cp-sa*cb*sp) + circleY*ca*cb
-			z := k2 + ca*circleX*sp + circleY*sa
+	// The sines and cosines of the ring's angles are the same every frame: only the turn (a, b)
+	// moves. They come from a table, accumulated as the loops below always stepped, so the picture
+	// is the same to the last bit; the per-frame work is the rotation alone.
+	thetas, phis := torusAngles(step*2), torusAngles(step)
+	for _, th := range thetas {
+		st, ct := th[0], th[1]
+		circleX, circleY := r2+r1*ct, r1*st
+		cyCaSb, cyCaCb, cySa := circleY*ca*sb, circleY*ca*cb, circleY*sa
+		for _, ph := range phis {
+			sp, cp := ph[0], ph[1]
+			x := circleX*(cb*cp+sa*sb*sp) - cyCaSb
+			y := circleX*(sb*cp-sa*cb*sp) + cyCaCb
+			z := k2 + ca*circleX*sp + cySa
 			ooz := 1 / z
 			px := int(float64(w)/2 + k1*ooz*x)
 			py := int(float64(h)/2 - k1*ooz*y/2)
@@ -316,6 +326,23 @@ func drawTorus(w, h int, t float64) [][]cell {
 		}
 	}
 	return grid
+}
+
+// torusTables are torusAngles' tables by step; a drawer size has one step, so it holds one or two.
+var torusTables sync.Map
+
+// torusAngles is the sine and cosine of every angle from 0 below 2π by step, accumulated as
+// `for a := 0.0; a < 2*math.Pi; a += step` would visit them.
+func torusAngles(step float64) [][2]float64 {
+	if t, ok := torusTables.Load(step); ok {
+		return t.([][2]float64)
+	}
+	var table [][2]float64
+	for a := 0.0; a < 2*math.Pi; a += step {
+		table = append(table, [2]float64{math.Sin(a), math.Cos(a)})
+	}
+	torusTables.Store(step, table)
+	return table
 }
 
 // drawGlobe is a turning planet: procedural continents, a graticule, a moving sun with a specular

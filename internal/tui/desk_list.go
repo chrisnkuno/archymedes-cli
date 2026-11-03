@@ -6,7 +6,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // Lists: every vertical list on the desktop is one of these, so they all move, scroll, click and
@@ -127,7 +126,7 @@ func (l *listView) window(n, height int) (from, to int) {
 }
 
 // row draws row i, text fitted to width: the bar when it is selected, and its click target.
-func (l *listView) row(m *Model, zones *zone.Manager, i int, text string, width int) string {
+func (l *listView) row(m *Model, zones *zoneManager, i int, text string, width int) string {
 	line := padRight(ansi.Truncate(text, width, "…"), width)
 	if i == l.cursor && !l.skips(i) {
 		line = selectedBar(m, line)
@@ -144,7 +143,7 @@ func selectedBar(m *Model, line string) string {
 }
 
 // clicked is the row of n a click landed on, if any.
-func (l *listView) clicked(zones *zone.Manager, msg tea.MouseClickMsg, n int) (int, bool) {
+func (l *listView) clicked(zones *zoneManager, msg tea.MouseClickMsg, n int) (int, bool) {
 	for i := l.top; i < min(l.top+l.shown, n); i++ {
 		if zones.Get(fmt.Sprintf("%s:%d", l.zone, i)).InBounds(msg) {
 			return i, !l.skips(i)

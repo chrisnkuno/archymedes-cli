@@ -27,6 +27,9 @@ type statsApp struct {
 	bars     *barchart.Model // kept from the last draw, to map a click to its bar
 }
 
+// statsBarsZone is the click target over the tokens chart.
+const statsBarsZone = "stats:bars"
+
 func newStatsApp() *statsApp { return &statsApp{selected: -1} }
 
 func (s *statsApp) title() string { return "Stats" }
@@ -72,7 +75,7 @@ func (s *statsApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 	if s.bars == nil {
 		return nil
 	}
-	x, y := m.zones.frame.Get(s.bars.ZoneID()).Pos(msg)
+	x, y := m.zones.frame.Get(statsBarsZone).Pos(msg)
 	if x < 0 {
 		return nil
 	}
@@ -176,7 +179,7 @@ func (s *statsApp) tokenPanel(m *Model, w, h int) string {
 	barW := min(max((cw+1)/max(len(turns), 1)-1, 1), 4)
 	first := max(len(turns)-max((cw+1)/(barW+1), 1), 0)
 	bars := barchart.New(cw, ch, barchart.WithNoAutoBarWidth(), barchart.WithBarWidth(barW), barchart.WithBarGap(1), // in this order: the width is set only without auto
-		barchart.WithStyles(th.Faint, th.Faint), barchart.WithZoneManager(m.zones.frame))
+		barchart.WithStyles(th.Faint, th.Faint))
 	selected := s.turn(len(turns))
 	for i := first; i < len(turns); i++ {
 		in, out := th.Tint(th.Secondary, 0.55), th.Primary
@@ -192,7 +195,7 @@ func (s *statsApp) tokenPanel(m *Model, w, h int) string {
 	s.bars = &bars
 	legend := "  " + lipgloss.NewStyle().Foreground(th.Tint(th.Secondary, 0.55)).Render("■") + th.Faint.Render(" input ") +
 		lipgloss.NewStyle().Foreground(th.Primary).Render("■") + th.Faint.Render(" output")
-	return panel(m, "Tokens per turn"+legend, bars.View(), w, h)
+	return panel(m, "Tokens per turn"+legend, mark(m.zones.frame, statsBarsZone, bars.View()), w, h)
 }
 
 // durationPanel: seconds per finished turn over time, in braille for resolution in a small box.

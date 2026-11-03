@@ -15,7 +15,6 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/lrstanley/bubblezone/v2 v2.0.0
 	github.com/mattn/go-runewidth v0.0.30
 	github.com/rivo/uniseg v0.4.7
 	golang.org/x/image v0.46.0
@@ -49,6 +48,7 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/kaptinlin/jsonpointer v0.4.28 // indirect
 	github.com/kaptinlin/jsonschema v0.9.10 // indirect
+	github.com/lrstanley/bubblezone/v2 v2.0.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
@@ -66,3 +66,5 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
+
+replace github.com/atotto/clipboard => ./third_party/clipboard

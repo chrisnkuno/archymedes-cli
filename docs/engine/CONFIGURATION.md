@@ -213,7 +213,7 @@ Read by the `friday` binary itself, for what the screen looks like. Each is also
 | `ARCHYMEDES_LANGUAGE` | your locale | the interface's language |
 | `ARCHYMEDES_PHOTOS` (environment only) | on | `off` leaves the pictures out; `local` keeps them to the built-in copies (the Gallery fetches nothing) |
 | `ARCHYMEDES_WALLPAPER` (environment only) | on | `off` keeps the pictures but not behind the whole screen |
-| `ARCHYMEDES_REDUCE_MOTION` (environment only) | off | any value turns off animated scrolling and keeps the wallpaper still |
+| `ARCHYMEDES_REDUCE_MOTION` (environment only) | off | any value turns off animated scrolling and keeps the wallpaper still. Without it, the home screen's motion still rests while the terminal is not focused and after a minute with no key or click, and moves again at the next one |
 | `ARCHYMEDES_GLYPHS` (environment only) | what the terminal draws | `safe` draws only from WGL4, the symbols every Windows console font and the Linux console carry (`┌` for `╭`, `√` for `✓`, a turning line for the spinner); `full` draws every symbol. Unset, safe is used in the classic Windows console and the Linux text console, full everywhere else (Windows Terminal, VS Code, macOS and Linux terminals) |
 
 ## Notifications

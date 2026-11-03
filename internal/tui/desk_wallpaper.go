@@ -239,8 +239,12 @@ type cachedRow struct {
 // compositeRow lays the wallpaper under one row of text, as underlay does for the whole frame. Each
 // row is independent once the grid is built, so the frame caches them and redraws only what changed.
 func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, ground color.RGBA, panel bool) string {
-	surface := toRGBA(m.th.Surface)
-	paneTint := toRGBA(m.th.Tint(m.th.Primary, paneTintAmount))
+	return renderRow(m.composeRow(g, content, y, width, panel), width)
+}
+
+// composeRow is compositeRow's cells, before they are written out.
+func (m *Model) composeRow(g *wallpaperGrid, content string, y, width int, panel bool) *lipgloss.Canvas {
+	surface, paneTint := m.rowTints()
 	canvas := lipgloss.NewCanvas(width, 1)
 	canvas.Compose(lipgloss.NewLayer(content))
 	isBlank := func(c *uv.Cell) bool { return c == nil || c.Content == " " || (c.Content == "" && c.Width > 0) }
@@ -292,7 +296,18 @@ func (m *Model) compositeRow(g *wallpaperGrid, content string, y, width int, gro
 			cell.Style.Bg = g.glyphBg[i]
 		}
 	}
-	return strings.TrimRight(canvas.Render(), "\n")
+	return canvas
+}
+
+// rowTints are the window surface and the panel tint as colours, worked out again only when the
+// theme's colours change rather than per row: a tint is a blend in Lab space, and every row asked.
+func (m *Model) rowTints() (surface, pane color.RGBA) {
+	from := [2]color.RGBA{toRGBA(m.th.Surface), toRGBA(m.th.Primary)}
+	if m.tints.from != from || m.tints.surface.A == 0 {
+		m.tints.from = from
+		m.tints.surface, m.tints.pane = from[0], toRGBA(m.th.Tint(m.th.Primary, paneTintAmount))
+	}
+	return m.tints.surface, m.tints.pane
 }
 
 // paneTintAmount is how much of the theme's colour a panel's ground carries over the background: a

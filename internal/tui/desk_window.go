@@ -3,12 +3,12 @@ package tui
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // Windows on the desktop. An app is a window floating on the wallpaper, not a pane over the whole
@@ -49,11 +49,16 @@ type windowState struct {
 	// only the rows whose text changed — a keystroke or a streaming line, not the whole screen. It
 	// is positional (one slot per row, overwritten each frame, so it cannot grow), and discarded
 	// when the photo, the glass or the width changes, since those change every row at once.
-	rowOut     []cachedRow
-	rowGrid    *wallpaperGrid
-	rowGlass   image.Rectangle
-	rowPanes   string
-	rowWidth   int
+	rowOut   []cachedRow
+	rowGrid  *wallpaperGrid
+	rowGlass image.Rectangle
+	rowPanes string
+	rowWidth int
+	// tints are rowTints' colours and the theme colours they were worked out from.
+	tints struct {
+		from          [2]color.RGBA
+		surface, pane color.RGBA
+	}
 	buttonKeys []string // the keys the hint bar's buttons press, as last drawn
 	dialogKeys []string // and a dialog's
 	bar        barFocus // the keyboard on the bars (desk_bars_focus.go)
@@ -231,7 +236,7 @@ func (m *Model) dialogHintBar(width int, buttons ...button) string {
 	return m.buttonBar(m.zones.dialog, "dbutton", &m.dialogKeys, width, buttons)
 }
 
-func (m *Model) buttonBar(zones *zone.Manager, prefix string, keys *[]string, width int, buttons []button) string {
+func (m *Model) buttonBar(zones *zoneManager, prefix string, keys *[]string, width int, buttons []button) string {
 	th := m.th
 	var parts []string
 	used := 1

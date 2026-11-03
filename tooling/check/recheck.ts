@@ -35,9 +35,18 @@ function changedFiles(pattern: RegExp): string[] {
   return [...files].filter((file) => pattern.test(file) && existsSync(path.join(REPO, file)));
 }
 
-/** The Go packages holding changed files, as `go test` names them. */
+/** Whether a file belongs to a Go module of its own below the root (a `replace` target such as
+ * third_party/clipboard), which `go test` from the root cannot name. */
+function inNestedModule(file: string): boolean {
+  for (let dir = path.posix.dirname(file); dir !== "." && dir !== ""; dir = path.posix.dirname(dir)) {
+    if (existsSync(path.join(REPO, dir, "go.mod"))) return true;
+  }
+  return false;
+}
+
+/** The Go packages holding changed files, as `go test` names them; nested modules are left out. */
 function changedGoPackages(): string[] {
-  return [...new Set(changedFiles(/\.go$/).map((file) => `./${path.posix.dirname(file)}`))].sort();
+  return [...new Set(changedFiles(/\.go$/).filter((file) => !inNestedModule(file)).map((file) => `./${path.posix.dirname(file)}`))].sort();
 }
 
 const sectionConfig = JSON.parse(readFileSync(path.join(HERE, "sections.json"), "utf8")) as { sourceRoot: string; allowed: SectionRules };

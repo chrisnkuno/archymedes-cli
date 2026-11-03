@@ -119,7 +119,7 @@ func TestStatsDrawsTheSessionAndPicksATurn(t *testing.T) {
 	// A click on the first bar's column picks turn 1.
 	m.View()
 	time.Sleep(20 * time.Millisecond)
-	z := m.zones.frame.Get(s.bars.ZoneID())
+	z := m.zones.frame.Get(statsBarsZone)
 	if z.IsZero() {
 		t.Fatal("the token chart has no zone")
 	}

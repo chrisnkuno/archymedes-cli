@@ -89,7 +89,7 @@ type Request struct {
 	// ResultStore, when set, persists a tool result too large to keep inline and returns a short
 	// reference (a path under the project) the model can re-read with read_file. The model keeps a
 	// preview plus the reference instead of losing the middle. Nil falls back to plain truncation.
-	ResultStore func(callID, content string) string
+	ResultStore     func(callID, content string) string
 	ProviderOptions fantasy.ProviderOptions
 	// WrapUp, when set, is said to the model once the budget is spent, for one last call with no
 	// tools: a sub-agent's report is worth more than its silence.

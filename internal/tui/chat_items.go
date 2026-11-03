@@ -7,7 +7,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/render"
@@ -22,7 +21,7 @@ type renderCtx struct {
 	expanded bool   // ctrl+o: show tool output in full
 	root     string // the project directory, for links to files
 	// zones marks click targets (a tool card's header); nil where blocks are not clickable (the pager).
-	zones *zone.Manager
+	zones *zoneManager
 }
 
 // item is one block of the transcript. version changes whenever its content does, which is what
@@ -75,6 +74,14 @@ type assistantItem struct {
 	// open is true while text may still arrive. Streaming markdown is re-rendered as it grows; a
 	// closed item never changes again.
 	open bool
+	// settled is the rendered part of an open reply up to its last finished block, kept between
+	// chunks: its source length, the width and renderer it was drawn with, and its lines.
+	settled struct {
+		upto  int
+		width int
+		md    *render.Markdown
+		lines []string
+	}
 }
 
 func (a *assistantItem) append(text string) {
@@ -87,7 +94,18 @@ func (a *assistantItem) render(ctx renderCtx) []string {
 	if body == "" {
 		return nil
 	}
-	lines := strings.Split(ctx.md.Render(body, ctx.width-2), "\n")
+	var lines []string
+	if cut := settledSplit(body); a.open && cut > 0 {
+		st := &a.settled
+		if st.upto != cut || st.width != ctx.width || st.md != ctx.md {
+			st.upto, st.width, st.md = cut, ctx.width, ctx.md
+			st.lines = strings.Split(ctx.md.Render(body[:cut], ctx.width-2), "\n")
+		}
+		lines = joinRendered(st.lines, strings.Split(ctx.md.Render(body[cut:], ctx.width-2), "\n"))
+	} else {
+		a.settled.lines = nil
+		lines = strings.Split(ctx.md.Render(body, ctx.width-2), "\n")
+	}
 	return gutter(ctx.th.AgentGutter.Render("● "), lines)
 }
 
