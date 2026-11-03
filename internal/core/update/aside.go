@@ -18,15 +18,20 @@ import (
 // asideName marks a moved executable, so clearAside deletes only what setAside made.
 const asideName = "friday-replaced-"
 
-// asideDirs are where to move it, in order: beside the global node_modules (the same drive as the
+// asideDirs are where to move it, in order: beside the outermost node_modules (the same drive as the
 // install, so the rename always works, and outside any package), then Friday's config folder.
 func asideDirs(exe, configDir string) []string {
 	var dirs []string
+	// The outermost node_modules is the global one. The nearest is usually the package's own nested
+	// folder, which the install is about to remove and which cannot go while the moved program runs.
+	outer := ""
 	for dir := filepath.Dir(exe); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 		if filepath.Base(dir) == "node_modules" {
-			dirs = append(dirs, filepath.Join(dir, ".friday-replaced"))
-			break
+			outer = dir
 		}
+	}
+	if outer != "" {
+		dirs = append(dirs, filepath.Join(outer, ".friday-replaced"))
 	}
 	if configDir != "" {
 		dirs = append(dirs, filepath.Join(configDir, "update", "replaced"))

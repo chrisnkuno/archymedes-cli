@@ -265,3 +265,40 @@ func TestWindowsMovesTheRunningProgramAsideAndBack(t *testing.T) {
 		t.Fatalf("a later start deletes it: %v", entries)
 	}
 }
+
+// TestAsideGoesBesideTheOutermostNodeModules: in a global npm install the program sits under the
+// package's own nested node_modules, which the install removes; the moved copy must live outside it.
+func TestAsideGoesBesideTheOutermostNodeModules(t *testing.T) {
+	exe := filepath.Join("prefix", "node_modules", "@archymedes", "friday", "node_modules", "@archymedes", "friday-win32-x64", "bin", "friday.exe")
+	got := asideDirs(exe, "")
+	want := filepath.Join("prefix", "node_modules", ".friday-replaced")
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("asideDirs = %v, want [%s]", got, want)
+	}
+}
+
+// TestAnInstallThatWroteElsewhereIsNotASuccess: the package manager exits 0 but nothing is at the
+// launch path, so the old program goes back and the update counts as failed.
+func TestAnInstallThatWroteElsewhereIsNotASuccess(t *testing.T) {
+	root := t.TempDir()
+	exe := filepath.Join(root, "node_modules", "@archymedes", "friday-win32-x64", "bin", "friday.exe")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(exe, []byte("old friday"), 0o755)
+	dir := t.TempDir()
+	now := time.Now()
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
+	o := Options{
+		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		MoveAside: true, Executable: exe,
+		Do: func(context.Context, func(string) string, string, string) bool { return true }, // exits 0, writes nothing here
+	}
+	Run(context.Background(), o)
+	if data, err := os.ReadFile(exe); err != nil || string(data) != "old friday" {
+		t.Fatalf("the old program is back: %q %v", data, err)
+	}
+	if s := readState(dir); s == nil || s.InstalledVersion == "9.0.0" {
+		t.Fatalf("state = %+v: a phantom install must not be recorded", s)
+	}
+}
