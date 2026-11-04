@@ -143,7 +143,7 @@ func goFiles(t *testing.T) map[string]*ast.File {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out[strings.TrimPrefix(path, root+"/")] = f
+		out[strings.TrimPrefix(filepath.ToSlash(path), root+"/")] = f // slash-separated on every OS: callers compare against "cmd/"
 	}
 	return out
 }
