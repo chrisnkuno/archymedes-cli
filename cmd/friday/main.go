@@ -166,8 +166,8 @@ func installPendingUpdate() {
 	for _, line := range update.AtExit(ctx, update.Options{
 		Mode: update.ReadMode(os.Getenv), Interactive: true, CurrentVersion: version,
 		ConfigDir: configDir, Getenv: os.Getenv, MoveAside: runtime.GOOS == "windows",
-	}, func(line string) { fmt.Fprintln(os.Stderr, line) }) {
-		fmt.Fprintln(os.Stderr, line)
+	}, func(line string) { fmt.Fprintln(os.Stderr, "friday:", line) }) {
+		fmt.Fprintln(os.Stderr, "friday:", line)
 	}
 }
 

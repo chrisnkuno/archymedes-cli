@@ -635,7 +635,14 @@ func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, erro
 	if s.opts.Forward != nil {
 		// The TypeScript agent keeps the rest of its startup upkeep (the defender feed); it is told
 		// not to run the update, which is no longer its to run.
-		_, _ = s.opts.Forward(ctx, "_archymedes/startup", json.RawMessage(`{"updates":false}`))
+		if raw, err := s.opts.Forward(ctx, "_archymedes/startup", json.RawMessage(`{"updates":false}`)); err == nil {
+			var more struct {
+				Notices []string `json:"notices"`
+			}
+			if json.Unmarshal(raw, &more) == nil {
+				notices = append(notices, more.Notices...)
+			}
+		}
 	}
 	if notices == nil {
 		notices = []string{}

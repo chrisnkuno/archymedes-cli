@@ -322,6 +322,7 @@ func TestContractBackgroundSubAgentReportsAsAThreadEvent(t *testing.T) {
 }
 
 func TestContractForwardsWhatTheGoEngineDoesNotHave(t *testing.T) {
+	t.Setenv("ARCHYMEDES_AUTO_UPDATE", "off") // the engine now owns the update check; this test is about forwarding
 	var asked []string
 	var mu sync.Mutex
 	forward := func(_ context.Context, method string, params json.RawMessage) (json.RawMessage, error) {

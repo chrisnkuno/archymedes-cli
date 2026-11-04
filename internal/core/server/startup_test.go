@@ -33,8 +33,8 @@ func TestStartupAnnouncesAnUpdateButNeverInstallsMidSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	notices := got.(map[string]any)["notices"].([]string)
-	if len(notices) != 1 || !strings.Contains(notices[0], "9.0.0 is ready") {
-		t.Fatalf("notices = %v: the engine announces the update, and the agent's own are not shown", notices)
+	if len(notices) != 2 || !strings.Contains(notices[0], "9.0.0 is ready") || notices[1] != "from the TypeScript agent" {
+		t.Fatalf("notices = %v: the engine announces the update, then whatever the agent has to say", notices)
 	}
 	if forwardedMethod != "_archymedes/startup" || !strings.Contains(forwardedParams, `"updates":false`) {
 		t.Fatalf("forwarded %q %s: the agent must be told it does not own the update", forwardedMethod, forwardedParams)
