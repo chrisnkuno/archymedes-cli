@@ -19,11 +19,16 @@ func submitCommand(m *Model, text string) {
 // toast's timer, which collect leaves alone) instead of giving up after run's 200 ms, which a process
 // start alone can exceed on Windows, so the test would read the screen before the work had happened.
 func submitSlow(m *Model, text string) {
+	typeText(m, text)
+	deliverSlow(m, press(m, tea.KeyEnter, 0))
+}
+
+// deliverSlow is deliver with time for work that starts a process.
+func deliverSlow(m *Model, cmd tea.Cmd) {
 	was := collectWait
 	collectWait = 15 * time.Second
 	defer func() { collectWait = was }()
-	typeText(m, text)
-	deliver(m, press(m, tea.KeyEnter, 0))
+	deliver(m, cmd)
 }
 
 func TestSessionCommandsBecomeTranscriptBlocks(t *testing.T) {

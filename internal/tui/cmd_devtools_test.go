@@ -39,8 +39,8 @@ func TestABangRunsTheCommandInTheProjectAndShowsItsOutputWithoutTheAgent(t *test
 	if err := os.WriteFile(filepath.Join(m.opts.Cwd, "marker.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	typeText(m, "!ls && echo done")
-	run(m, press(m, tea.KeyEnter, 0))
+	list := onThisPlatform("ls && echo done", "dir /b && echo done") // ls is not a cmd.exe command
+	submitSlow(m, "!"+list)
 	s := lastShell(t, m)
 	if !s.done || s.exitCode != 0 || !strings.Contains(s.output, "marker.txt") || !strings.Contains(s.output, "done") {
 		t.Fatalf("%+v", s)
@@ -48,14 +48,14 @@ func TestABangRunsTheCommandInTheProjectAndShowsItsOutputWithoutTheAgent(t *test
 	if len(agent.prompts) != 0 {
 		t.Fatalf("a !command must not reach the agent: %v", agent.prompts)
 	}
-	if out := screen(m); !strings.Contains(out, "$ ls && echo done") || !strings.Contains(out, "marker.txt") {
+	if out := screen(m); !strings.Contains(out, "$ "+list) || !strings.Contains(out, "marker.txt") {
 		t.Fatalf("screen:\n%s", out)
 	}
 }
 
 func TestAFailingCommandShowsItsExitCode(t *testing.T) {
 	m, _ := readyModel(t)
-	run(m, m.runShell(onThisPlatform("echo oops; exit 3", "echo oops & exit 3")))
+	deliverSlow(m, m.runShell(onThisPlatform("echo oops; exit 3", "echo oops & exit 3")))
 	if s := lastShell(t, m); s.exitCode != 3 || !strings.Contains(s.output, "oops") || !strings.Contains(screen(m), "exit 3") {
 		t.Fatalf("%+v", s)
 	}
