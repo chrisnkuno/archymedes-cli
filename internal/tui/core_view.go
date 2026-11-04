@@ -31,7 +31,7 @@ func (m *Model) dropupRows() int {
 func (m *Model) windowHeight() int { return max(m.height-2, 0) }
 
 func (m *Model) transcriptHeight() int {
-	return max(m.height-2-m.composerHeight()-m.dropupRows()-m.adviceRows(), 0)
+	return max(m.height-2-m.composerHeight()-m.dropupRows()-m.adviceRows()-m.queueRows(), 0)
 }
 
 func (m *Model) View() tea.View {
@@ -78,6 +78,9 @@ func (m *Model) View() tea.View {
 			rows = append(rows, " "+mark(m.zones.frame, fmt.Sprintf("comp:%d", first+i), line))
 		}
 		for _, line := range m.adviceLines(m.width - 2) {
+			rows = append(rows, " "+line)
+		}
+		for _, line := range m.queueLines(m.width - 2) {
 			rows = append(rows, " "+line)
 		}
 		rows = append(rows, strings.Split(m.composerBox(), "\n")...)

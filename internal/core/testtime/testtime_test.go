@@ -72,19 +72,19 @@ func TestStatLearnsAndAdapts(t *testing.T) {
 	var s Stat
 	now := time.Now()
 	for range 5 {
-		s.add(10, now)
+		s.Add(10, now)
 	}
 	if math.Abs(s.Seconds()-10) > 0.01 || s.Var > 1e-9 {
 		t.Fatalf("five runs of 10s: median %v, var %v", s.Seconds(), s.Var)
 	}
 	// The suite got three times slower: within three runs the median is past 20s.
 	for range 3 {
-		s.add(30, now)
+		s.Add(30, now)
 	}
 	if s.Seconds() < 20 {
 		t.Errorf("after three slow runs the median is still %v", s.Seconds())
 	}
-	if s.sigma(sigmaHistory) <= 0 {
+	if s.Sigma(sigmaHistory) <= 0 {
 		t.Error("a spread of zero after a change")
 	}
 }

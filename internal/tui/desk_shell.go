@@ -135,6 +135,8 @@ func (m *Model) runAction(id string) tea.Cmd {
 		return m.openInspector(nil)
 	case "changes-rail":
 		return m.toggleRail()
+	case "growth-panel":
+		return m.toggleGrowth()
 	case "gallery":
 		return m.openGallery(gallery.IndexOf(m.homePhoto()))
 	case "showcase":

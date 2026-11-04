@@ -471,7 +471,7 @@ func TestMessagesSentDuringATurnAreQueuedAndEscapeDropsThem(t *testing.T) {
 	typeText(m, "second")
 	run(m, press(m, tea.KeyEnter, 0))
 	if len(m.queue) != 1 {
-		t.Fatalf("queue = %q", m.queue)
+		t.Fatalf("queue = %q", queued(m))
 	}
 	run(m, first) // first turn ends; the queued message is sent next
 	if len(agent.prompts) != 2 || agent.prompts[1] != "second" {
@@ -482,27 +482,32 @@ func TestMessagesSentDuringATurnAreQueuedAndEscapeDropsThem(t *testing.T) {
 	press(m, tea.KeyEnter, 0)
 	press(m, tea.KeyEscape, 0)
 	if agent.cancelled != 1 || len(m.queue) != 0 {
-		t.Fatalf("cancelled=%d queue=%q", agent.cancelled, m.queue)
+		t.Fatalf("cancelled=%d queue=%q", agent.cancelled, queued(m))
 	}
 }
 
+// TestAMessageSentDuringATurnSteersIt: after its few seconds in the queue (chat_queue.go).
 func TestAMessageSentDuringATurnSteersIt(t *testing.T) {
 	m, agent := newTestModel(t)
 	typeText(m, "first")
 	press(m, tea.KeyEnter, 0) // the turn runs (its end is never delivered here)
 	typeText(m, "use tabs, not spaces")
 	run(m, press(m, tea.KeyEnter, 0))
+	if len(agent.steered) != 0 || strings.Join(queued(m), "|") != "use tabs, not spaces" {
+		t.Fatalf("sent at once rather than queued a few seconds: steered %q, queue %q", agent.steered, queued(m))
+	}
+	dueNow(m) // its countdown runs out
 	if len(m.queue) != 0 || len(agent.steered) != 1 || agent.steered[0] != "use tabs, not spaces" {
-		t.Fatalf("steered %q, queue %q", agent.steered, m.queue)
+		t.Fatalf("steered %q, queue %q", agent.steered, queued(m))
 	}
 	if !strings.Contains(screen(m), "use tabs, not spaces") || !strings.Contains(screen(m), "Sent to the running turn") {
 		t.Fatalf("the steer shows in the conversation:\n%s", screen(m))
 	}
 	// Accepted but never read: handed back, first in line.
-	m.queue = []string{"later"}
+	m.queue = []queuedMsg{{id: 99, text: "later"}}
 	m.handleEvent(acp.Event{Type: "steering_unread", Messages: []string{"use tabs, not spaces"}})
-	if strings.Join(m.queue, "|") != "use tabs, not spaces|later" {
-		t.Fatalf("queue %q", m.queue)
+	if strings.Join(queued(m), "|") != "use tabs, not spaces|later" {
+		t.Fatalf("queue %q", queued(m))
 	}
 }
 

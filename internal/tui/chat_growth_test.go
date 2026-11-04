@@ -184,7 +184,7 @@ func TestGrowthPanelGrowsWithTheWork(t *testing.T) {
 		Content: "[x] 1. read the store\n[~] 2. cache queries\n[ ] 3. add api/routes.go"})
 	m.growthEdit(filepath.Join(root, "pkg", "store", "db.go"), 12, 3)
 	s := screen(m)
-	for _, want := range []string{"Growth", "this session +12 −3", "plan", "1/3 steps", "store", "◐ cache queries", "api", "planned"} {
+	for _, want := range []string{"Growth", "this session +12 −3", "plan · 1 of 3 steps done", "store", "◐ cache queries", "api", "planned"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("panel lacks %q:\n%s", want, s)
 		}
@@ -299,6 +299,50 @@ func TestGrowthPanelExtends(t *testing.T) {
 	run("/growth off")
 	if m.growth.shown {
 		t.Fatal("/growth off is not a toggle")
+	}
+}
+
+// TestGrowthPanelSaysWhatItShowsAndWhenThePlanEnds: the panel explains its tree and its shades in
+// words, the plan's bar is labelled as the plan's steps, and with the engine's step estimate it
+// says about how long the rest of the plan will take.
+func TestGrowthPanelSaysWhatItShowsAndWhenThePlanEnds(t *testing.T) {
+	m, _ := newTestModel(t)
+	root := t.TempDir()
+	m.opts.Cwd = root
+	_ = os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 34})
+	m.tr.add(&noticeItem{kind: noticeInfo, text: "conversation"})
+	deliver(m, press(m, 'v', tea.ModAlt))
+	m.growth.wide = true // room for the words at full length
+
+	s := screen(m)
+	for _, want := range []string{"your code as a tree", "bright", "this session", "plan appears here"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the panel does not explain %q:\n%s", want, s)
+		}
+	}
+
+	started := time.Now().Add(-1 * time.Minute).UTC().Format(time.RFC3339)
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_call", ToolCallID: "p1", ToolName: "todo_write", Arguments: map[string]any{}})
+	m.handleRuntime(acp.RuntimeEvent{Type: "tool_result", ToolCallID: "p1", ToolName: "todo_write",
+		Content: "[x] 1. read\n[~] 2. change\n[ ] 3. test\n[ ] 4. document",
+		Data: map[string]any{
+			"plan":  map[string]any{"p50": 120.0, "p90": 300.0, "basis": "history", "runs": 6.0, "stepP50": 120.0},
+			"items": []any{map[string]any{"id": 1.0, "status": "done"}, map[string]any{"id": 2.0, "status": "in_progress", "started": started}, map[string]any{"id": 3.0, "status": "pending"}, map[string]any{"id": 4.0, "status": "pending"}},
+		}})
+	s = screen(m)
+	for _, want := range []string{"plan · 1 of 4 steps done", "left"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the plan row lacks %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "plan appears here") {
+		t.Errorf("the no-plan hint stays with a plan:\n%s", s)
+	}
+	// Two steps to go at about two minutes each, and one a minute into its two: about five minutes.
+	left, ok := m.planTimeLeft()
+	if !ok || left < 4*60 || left > 7*60 {
+		t.Errorf("plan time left %v s (ok %v), want about 5 minutes", left, ok)
 	}
 }
 

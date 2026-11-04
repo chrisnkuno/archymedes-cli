@@ -17,7 +17,7 @@ func TestTheTaskManagerListsTheTurnQueueAndTools(t *testing.T) {
 	m.tr.items = append(m.tr.items, &userItem{text: "build the thing"},
 		&toolItem{name: "run_command", args: map[string]any{"command": "npm test"}, done: true, isError: true, started: time.Now().Add(-2 * time.Second), ended: time.Now()},
 		&toolItem{name: "write_file", args: map[string]any{"path": "a.js"}, started: time.Now()})
-	m.queue = []string{"then deploy it"}
+	m.queue = []queuedMsg{{id: 1, text: "then deploy it"}}
 	m.runAction("tasks")
 	s := screen(m)
 	for _, want := range []string{"turn", "running", "build the thing", "queued", "then deploy it", "run_command npm test", "failed", "write_file a.js"} {

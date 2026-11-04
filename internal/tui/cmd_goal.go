@@ -80,7 +80,7 @@ func (m *Model) goalVerdict(result acp.CommandResult) tea.Cmd {
 	}
 	m.goal.turns++
 	if m.phase != ready {
-		m.queue = append(m.queue, result.Next)
+		m.enqueue(result.Next)
 		return nil
 	}
 	return m.send(result.Next)

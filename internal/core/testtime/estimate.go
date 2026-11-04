@@ -83,7 +83,7 @@ func (e *Estimator) Estimate(run Run) Estimate {
 	defer e.mu.Unlock()
 	h := e.load()
 	if s := h.Runs[run.Key()]; s != nil && s.N > 0 {
-		return lognormal(s.Mu, s.sigma(sigmaHistory), "history", s.N)
+		return lognormal(s.Mu, s.Sigma(sigmaHistory), "history", s.N)
 	}
 	if est, ok := e.fromParts(h, run); ok {
 		return est
@@ -178,7 +178,7 @@ func (e *Estimator) fromParts(h *history, run Run) (Estimate, bool) {
 	}
 	calMu, calSigma := math.Log(cal), sigmaParts
 	if c := h.Calibration[rule]; c != nil && c.N > 0 {
-		calMu, calSigma = c.Mu, c.sigma(sigmaParts)
+		calMu, calSigma = c.Mu, c.Sigma(sigmaParts)
 	}
 	mu := math.Log(max(span, 0.01)) + calMu
 	if run.Filter != "" {

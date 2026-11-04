@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -118,7 +117,12 @@ func (m *Model) handleEvent(ev acp.Event) {
 		m.handleThread(ev.Thread)
 	case "steering_unread":
 		// The turn ended before reading these: they go first in the queue, as turns of their own.
-		m.queue = append(slices.Clone(ev.Messages), m.queue...)
+		var unread []queuedMsg
+		for _, text := range ev.Messages {
+			m.queueSeq++
+			unread = append(unread, queuedMsg{id: m.queueSeq, text: text})
+		}
+		m.queue = append(unread, m.queue...)
 	case "suggestions":
 		m.takeSuggestions(ev.Steps)
 	case "edit_notes":
@@ -149,7 +153,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			t.finish(ev.Content, ev.IsError)
 			m.editLanded(t)
 			m.noteCommands(t.name, t.args, ev.Content)
-			m.growthPlan(t.name, ev.Content, ev.IsError)
+			m.growthPlan(t.name, ev.Content, ev.IsError, ev.Data)
 		}
 	case "model_turn":
 		m.composing = nil

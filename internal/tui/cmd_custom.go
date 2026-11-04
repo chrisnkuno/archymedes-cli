@@ -136,7 +136,7 @@ func (m *Model) sendPrompt(text string) tea.Cmd {
 	case ready:
 		return m.send(text)
 	case busy, connecting:
-		m.queue = append(m.queue, text)
+		m.enqueue(text)
 		return m.toast(toastInfo, "Queued — runs when this turn ends")
 	}
 	return m.toast(toastWarn, "The agent is not running; restart Friday")

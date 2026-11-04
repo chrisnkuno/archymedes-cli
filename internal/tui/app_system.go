@@ -119,7 +119,7 @@ func (m *Model) taskRows(now time.Time) []taskRow {
 		rows = append(rows, taskRow{kind: "agent", state: "idle", detail: m.session.Info.Model})
 	}
 	for _, q := range m.queue {
-		rows = append(rows, taskRow{kind: "queued", state: "waiting", detail: firstLine(q)})
+		rows = append(rows, taskRow{kind: "queued", state: "waiting", detail: firstLine(q.text)})
 	}
 	for i := len(m.tr.items) - 1; i >= 0; i-- {
 		t, ok := m.tr.items[i].(*toolItem)
