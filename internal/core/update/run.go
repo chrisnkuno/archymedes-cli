@@ -86,7 +86,14 @@ func Run(ctx context.Context, o Options) []string {
 			}
 			restore = back
 		}
-		if do(ctx, o.Getenv, o.Package, decision.Version) {
+		installedOK := do(ctx, o.Getenv, o.Package, decision.Version)
+		if installedOK && o.MoveAside && !programInPlace(o.Executable) {
+			// The package manager said yes but wrote the program somewhere else (another prefix, pnpm,
+			// bun): nothing is at the launch path any more, so put the old one back rather than leave
+			// no friday to start.
+			installedOK = false
+		}
+		if installedOK {
 			done := &State{LastCheckedAt: o.Now.UnixMilli(), LatestVersion: decision.Version, InstalledVersion: decision.Version}
 			if in.State != nil {
 				done.SkippedVersion = in.State.SkippedVersion
@@ -146,4 +153,17 @@ func writeState(configDir string, s *State) {
 	if data, err := json.MarshalIndent(s, "", "  "); err == nil {
 		_ = os.WriteFile(stateFile(configDir), append(data, '\n'), 0o644)
 	}
+}
+
+// programInPlace reports whether a program exists at the launch path after an install moved the old
+// one aside. An empty path means the running executable, as setAside resolves it.
+func programInPlace(exe string) bool {
+	if exe == "" {
+		var err error
+		if exe, err = os.Executable(); err != nil {
+			return false
+		}
+	}
+	_, err := os.Stat(exe)
+	return err == nil
 }

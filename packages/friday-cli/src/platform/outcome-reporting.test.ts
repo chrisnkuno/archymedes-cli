@@ -136,6 +136,19 @@ describe("opt-in outcome reporting", () => {
     expect(await readOutcomeQueue(deps())).toEqual([]);
   });
 
+  it("keeps the queue when the service refuses for its own reasons (auth, wrong path), and retries later", async () => {
+    await setOutcomeReporting(true, deps());
+    await recordTaskOutcome(task, deps());
+    for (const refusal of [401, 403, 404]) {
+      status = refusal;
+      expect((await flushOutcomes(deps())).status).toBe("failed");
+      expect(await readOutcomeQueue(deps())).toHaveLength(1);
+      clock += 24 * 60 * 60 * 1000;
+    }
+    status = 202;
+    expect(await flushOutcomes(deps())).toMatchObject({ status: "sent", sent: 1 });
+  });
+
   it("`off` requests erasure, clears the queue and rotates the install id", async () => {
     const on = await setOutcomeReporting(true, deps());
     await recordTaskOutcome(task, deps());

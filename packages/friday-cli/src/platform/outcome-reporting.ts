@@ -215,10 +215,12 @@ export async function flushOutcomes(deps: OutcomeDependencies): Promise<FlushRes
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(batch),
         signal: AbortSignal.timeout(TIMEOUT_MS),
+        redirect: "error",
       });
-      // A 4xx other than throttling means this batch will never be accepted: drop it rather than
-      // retry it forever behind every later event.
-      retry = response.status >= 500 || response.status === 408 || response.status === 429;
+      // Only a rejection of the batch's own content (bad request, too large, unprocessable) means it will
+      // never be accepted: drop it. Any other failure (auth, a wrong path, throttling, an outage) is
+      // about the service, not the data, so the events stay queued and the send is retried later.
+      retry = !response.ok && ![400, 413, 422].includes(response.status);
     } catch { retry = true; }
     if (retry) {
       const failures = (state.backoff?.failures ?? 0) + 1;
