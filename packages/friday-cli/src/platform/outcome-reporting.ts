@@ -25,7 +25,8 @@ import { ARCHYMEDES_CLI_VERSION } from "./update";
  * Nothing here blocks the interface: callers fire `reportTaskOutcome` and do not await it, each
  * request gives up after five seconds, and failures back off exponentially (30 s doubling, to six
  * hours). Two processes flushing at once can send an event twice; event ids are UUIDs, so the
- * service deduplicates.
+ * service deduplicates. The queue file is changed under a short-lived lock, so a flush that rewrites
+ * it cannot discard an event another process appended meanwhile.
  */
 
 export const OUTCOME_QUEUE_LIMIT = 1_000;
@@ -142,6 +143,35 @@ async function writeQueue(deps: OutcomeDependencies, events: readonly OutcomeEve
   await atomicWrite(file, events.map((event) => `${JSON.stringify(event)}\n`).join(""));
 }
 
+/**
+ * Runs `fn` holding the queue's lock, so that a flush rewriting the queue never discards an event
+ * another process appended between its read and its write. The lock is a file made exclusively; one
+ * older than ten seconds belongs to a process that died and is broken. If the lock cannot be taken
+ * within two seconds, or the directory cannot hold one, `fn` runs anyway: a slow lock must not cost
+ * the person an event or a session.
+ */
+async function withQueueLock<T>(deps: OutcomeDependencies, fn: () => Promise<T>): Promise<T> {
+  const lock = path.join(directoryOf(deps), `${QUEUE_FILE}.lock`);
+  await fs.mkdir(path.dirname(lock), { recursive: true, mode: 0o700 }).catch(() => undefined);
+  const deadline = Date.now() + 2_000;
+  let owned = false;
+  for (;;) {
+    try {
+      await (await fs.open(lock, "wx", 0o600)).close();
+      owned = true;
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") break;
+      try {
+        if (Date.now() - (await fs.stat(lock)).mtimeMs > 10_000) { await fs.rm(lock, { force: true }); continue; }
+      } catch { continue; }
+      if (Date.now() > deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  try { return await fn(); } finally { if (owned) await fs.rm(lock, { force: true }).catch(() => undefined); }
+}
+
 /** `friday outcomes on|off`. Off also requests erasure, clears the queue and rotates the install id. */
 export async function setOutcomeReporting(enabled: boolean, deps: OutcomeDependencies): Promise<OutcomeState> {
   const current = await readOutcomeState(deps);
@@ -158,7 +188,7 @@ export async function setOutcomeReporting(enabled: boolean, deps: OutcomeDepende
     pendingErasure: [...new Set([...current.pendingErasure, current.installId])],
   };
   await writeState(deps, next);
-  await writeQueue(deps, []);
+  await withQueueLock(deps, () => writeQueue(deps, []));
   return { ...next, pendingErasure: await sendErasures(deps, next) };
 }
 
@@ -194,9 +224,11 @@ export async function recordTaskOutcome(input: TaskOutcomeInput, deps: OutcomeDe
   const file = path.join(directoryOf(deps), QUEUE_FILE);
   const line = `${JSON.stringify(event)}\n`;
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-  await fs.appendFile(file, line, { encoding: "utf8", mode: 0o600 });
-  const { size } = await fs.stat(file);
-  if (size > line.length * OUTCOME_QUEUE_LIMIT * 1.25) await writeQueue(deps, await readOutcomeQueue(deps));
+  await withQueueLock(deps, async () => {
+    await fs.appendFile(file, line, { encoding: "utf8", mode: 0o600 });
+    const { size } = await fs.stat(file);
+    if (size > line.length * OUTCOME_QUEUE_LIMIT * 1.25) await writeQueue(deps, await readOutcomeQueue(deps));
+  });
   return "queued";
 }
 
@@ -240,7 +272,7 @@ export async function flushOutcomes(deps: OutcomeDependencies): Promise<FlushRes
     }
     // Remove exactly what was sent, keeping anything appended while the request was in flight.
     const sentIds = new Set(batch.events.map((event) => event.id));
-    await writeQueue(deps, (await readOutcomeQueue(deps)).filter((event) => !sentIds.has(event.id)));
+    await withQueueLock(deps, async () => writeQueue(deps, (await readOutcomeQueue(deps)).filter((event) => !sentIds.has(event.id))));
     sent += batch.events.length;
   }
   if (state.backoff) {
@@ -266,7 +298,10 @@ function nextBatch(queue: readonly OutcomeEvent[]): OutcomeBatch {
 /** Record then flush, for a task end. Never throws; the caller does not await it. */
 export async function reportTaskOutcome(input: TaskOutcomeInput, deps: OutcomeDependencies): Promise<void> {
   try {
-    if (await recordTaskOutcome(input, deps) === "queued") await flushOutcomes(deps);
+    // "off" flushes too: a flush delivers erasure requests first, and one that could not be delivered
+    // when reporting was turned off is otherwise never retried (nothing else runs while it is off).
+    const recorded = await recordTaskOutcome(input, deps);
+    if (recorded === "queued" || recorded === "off") await flushOutcomes(deps);
   } catch { /* reporting must never disturb the session */ }
 }
 

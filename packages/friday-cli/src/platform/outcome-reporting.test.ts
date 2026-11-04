@@ -11,6 +11,7 @@ import {
   readOutcomeQueue,
   readOutcomeState,
   recordTaskOutcome,
+  reportTaskOutcome,
   setOutcomeReporting,
   type OutcomeDependencies,
 } from "./outcome-reporting";
@@ -160,6 +161,65 @@ describe("opt-in outcome reporting", () => {
     expect((await readOutcomeQueue(deps()))[0]!.features.model).toBe("custom");
     await flushOutcomes(deps());
     expect(JSON.stringify(calls)).not.toMatch(/acme|payroll/);
+  });
+
+  it("retries an erasure that could not be delivered at the next task end, even though reporting is off", async () => {
+    await setOutcomeReporting(true, deps());
+    status = 503;
+    const off = await setOutcomeReporting(false, deps());
+    expect(off.pendingErasure).toHaveLength(1);
+    status = 204;
+    await reportTaskOutcome(task, deps()); // reporting is off: nothing queued, but the erasure is retried
+    expect((await readOutcomeState(deps())).pendingErasure).toEqual([]);
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(2);
+    expect(await readOutcomeQueue(deps())).toEqual([]);
+  });
+
+  it("loses no event recorded while a flush is waiting on the server", async () => {
+    await setOutcomeReporting(true, deps());
+    for (let i = 0; i < 5; i += 1) await recordTaskOutcome(task, deps());
+    // The server is slow; more tasks end in the meantime, from the same and from other processes.
+    const sent = new Set<string>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slow = {
+      ...deps(),
+      fetch: (async (_input: string | URL, init?: RequestInit) => {
+        await gate;
+        for (const event of (JSON.parse(String(init?.body)) as { events: { id: string }[] }).events) sent.add(event.id);
+        return new Response(null, { status: 202 });
+      }) as typeof fetch,
+    };
+    const flushing = flushOutcomes(slow);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await Promise.all(Array.from({ length: 8 }, () => recordTaskOutcome(task, deps())));
+    const everything = new Set((await readOutcomeQueue(deps())).map((event) => event.id));
+    expect(everything.size).toBe(13);
+    release();
+    await flushing;
+    const left = new Set((await readOutcomeQueue(deps())).map((event) => event.id));
+    const lost = [...everything].filter((id) => !sent.has(id) && !left.has(id));
+    expect(lost).toEqual([]);
+  });
+
+  it("changes the queue only under its lock: an append waits for a held lock, and a dead holder's lock is broken", async () => {
+    await setOutcomeReporting(true, deps());
+    const lock = path.join(directory, "outcomes-queue.jsonl.lock");
+    await fs.writeFile(lock, "");
+    const recording = recordTaskOutcome(task, deps());
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(await readOutcomeQueue(deps())).toEqual([]); // still waiting for whoever holds the lock
+    await fs.rm(lock);
+    expect(await recording).toBe("queued");
+    expect(await readOutcomeQueue(deps())).toHaveLength(1);
+    await expect(fs.stat(lock)).rejects.toThrow(); // released
+
+    const old = new Date(Date.now() - 60_000);
+    await fs.writeFile(lock, "");
+    await fs.utimes(lock, old, old); // a process that died holding it
+    expect(await recordTaskOutcome(task, deps())).toBe("queued");
+    expect(await readOutcomeQueue(deps())).toHaveLength(2);
+    await expect(fs.stat(lock)).rejects.toThrow();
   });
 
   it("`off` requests erasure, clears the queue and rotates the install id", async () => {
