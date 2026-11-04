@@ -149,6 +149,19 @@ describe("opt-in outcome reporting", () => {
     expect(await flushOutcomes(deps())).toMatchObject({ status: "sent", sent: 1 });
   });
 
+  it("scrubs a model id that an older version queued before it can be previewed or sent", async () => {
+    await setOutcomeReporting(true, deps());
+    await recordTaskOutcome(task, deps());
+    const file = path.join(directory, "outcomes-queue.jsonl");
+    const queued = JSON.parse((await fs.readFile(file, "utf8")).trim());
+    queued.features.model = "ollama:acme-payroll-v2";
+    await fs.writeFile(file, `${JSON.stringify(queued)}
+`);
+    expect((await readOutcomeQueue(deps()))[0]!.features.model).toBe("custom");
+    await flushOutcomes(deps());
+    expect(JSON.stringify(calls)).not.toMatch(/acme|payroll/);
+  });
+
   it("`off` requests erasure, clears the queue and rotates the install id", async () => {
     const on = await setOutcomeReporting(true, deps());
     await recordTaskOutcome(task, deps());

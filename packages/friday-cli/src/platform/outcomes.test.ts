@@ -65,6 +65,28 @@ describe("outcome event builder", () => {
     }
   });
 
+  it("reports public models by family and collapses anything that could name a customer to custom", () => {
+    for (const publicId of ["gpt-4o", "gpt-4o-mini", "o3-mini", "claude-sonnet-4-5-20250929", "gemini-2.5-pro", "deepseek-chat", "mistral-large-latest", "qwen2.5-coder-32b-instruct", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-4o", "llama3.1:8b", "grok-4", "mixtral-8x7b-instruct"]) {
+      expect(normaliseModelId(publicId), publicId).not.toBe("custom");
+    }
+    const sensitive = [
+      "ft:gpt-4o:contoso-legal", "ft:gpt-4o-mini:acme:9f86d081884c7d659a2feaa0c55ad015", "ft:gpt-4o-mini-2024-07-18:acme-corp::AbC123xY",
+      "ollama:acme-payroll-v2", "gpt-4o-acme-prod", "gpt-4-contoso-hr-bot", "claude-sonnet-4-5-globex-claims", "llama3.1-8b-initech-support",
+      "azure/contoso-deployment-1", "my-company-llm", "acme-assistant", "internal-finance-7b", "projectx", "customer-1234-gpt", "legal-gpt",
+    ];
+    for (const id of sensitive) expect(normaliseModelId(id), id).toBe("custom");
+  });
+
+  it("never lets a sensitive model id reach an event, the queue's serialised form, or a batch body", () => {
+    const secret = "ft:gpt-4o:contoso-legal";
+    const event = buildOutcomeEvent(
+      { engine: "archymedes", provider: "openai", model: secret, status: "completed", toolCalls: 1, iterations: 1, elapsedMs: 1, routingReceipts: [{ chosen: { model: secret }, considered: [{ model: secret, eligible: true, reason: secret }], policy: {}, retries: 0, predictedOutcomeScore: 0.5, outcomeScore: 0.5 }] },
+      { installId: "00000000-0000-4000-8000-000000000000", grantedAt: "2026-11-01T00:00:00.000Z", appVersion: "3.12.8", now: Date.parse("2026-11-01T12:00:00Z") },
+    );
+    expect(event.features.model).toBe("custom");
+    expect(JSON.stringify({ events: [event] })).not.toMatch(/contoso|legal/i);
+  });
+
   it("buckets duration and cost instead of sending exact values", () => {
     expect([5_000, 30_000, 120_000, 600_000, 3_600_000].map(durationBucket)).toEqual(["lt_10s", "lt_1m", "lt_5m", "lt_30m", "gte_30m"]);
     expect([0, 5, 50, 500, 5_000, 50_000].map(costBucket)).toEqual(["0", "lt_10", "lt_100", "lt_1k", "lt_10k", "gte_10k"]);

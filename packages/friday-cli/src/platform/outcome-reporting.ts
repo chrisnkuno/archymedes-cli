@@ -4,7 +4,7 @@ import path from "node:path";
 import type { Environment } from "./environment";
 import { cueOptedOut } from "./install-cue";
 import { OUTCOME_MAX_BATCH_BYTES } from "./outcome-protocol";
-import { buildOutcomeEvent, validateOutcomeEvent, type OutcomeBatch, type OutcomeEvent, type TaskOutcomeInput } from "./outcomes";
+import { buildOutcomeEvent, isPublicModelId, validateOutcomeEvent, type OutcomeBatch, type OutcomeEvent, type TaskOutcomeInput } from "./outcomes";
 import { settingsDirectory } from "./settings";
 import { ARCHYMEDES_CLI_VERSION } from "./update";
 
@@ -119,10 +119,21 @@ export async function readOutcomeQueue(deps: OutcomeDependencies): Promise<Outco
     if (!line.trim()) continue;
     try {
       const event = JSON.parse(line) as OutcomeEvent;
-      if (validateOutcomeEvent(event).length === 0) events.push(event);
+      if (validateOutcomeEvent(event).length === 0) events.push(scrubModel(event));
     } catch { /* a torn line from a crash mid-write is dropped, not sent */ }
   }
   return events.slice(-OUTCOME_QUEUE_LIMIT);
+}
+
+/**
+ * Events queued by an earlier version were built under an earlier rule for model ids. The queue is
+ * re-checked on every read, so whatever is previewed or sent obeys the current rule, not the one in
+ * force when the event was written.
+ */
+function scrubModel(event: OutcomeEvent): OutcomeEvent {
+  const model = event.features?.model;
+  if (typeof model !== "string" || isPublicModelId(model)) return event;
+  return { ...event, features: { ...event.features, model: "custom" } };
 }
 
 async function writeQueue(deps: OutcomeDependencies, events: readonly OutcomeEvent[]): Promise<void> {
