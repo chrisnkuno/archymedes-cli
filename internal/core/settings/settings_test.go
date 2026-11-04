@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -80,7 +81,9 @@ func TestSetSavesClearsAndMasks(t *testing.T) {
 		t.Fatal("a cleared setting stayed")
 	}
 	info, err := os.Stat(File(dir))
-	if err != nil || info.Mode().Perm() != 0o600 {
+	// Windows has no permission bits to read back (a file is always reported 0666); it is the file
+	// being private to the owner, by the account's ACL, that matters there.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("file mode %v, %v", info.Mode().Perm(), err)
 	}
 }

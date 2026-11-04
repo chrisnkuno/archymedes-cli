@@ -9,10 +9,12 @@ import (
 	"testing"
 )
 
+// repo is a fresh repository. core.autocrlf is off in it: Git for Windows defaults it to true, which
+// writes CRLF into the files a checkout restores, and these tests compare file contents exactly.
 func repo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"}} {
+	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"}, {"config", "core.autocrlf", "false"}} {
 		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}

@@ -104,6 +104,14 @@ func (m *Model) runShellIn(command, dir string, env []string) tea.Cmd {
 		var cmd *exec.Cmd
 		if runtime.GOOS == "windows" {
 			cmd = exec.CommandContext(ctx, "cmd", "/C", command)
+			// cmd.exe runs the command as its child: killing cmd.exe alone (what a cancelled context
+			// does) leaves the command running, and still holding the folder it ran in. Take the tree.
+			cmd.Cancel = func() error {
+				if err := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid)).Run(); err != nil {
+					return cmd.Process.Kill()
+				}
+				return nil
+			}
 		} else {
 			shell := os.Getenv("SHELL")
 			if shell == "" {
@@ -113,6 +121,10 @@ func (m *Model) runShellIn(command, dir string, env []string) tea.Cmd {
 		}
 		cmd.Dir = dir
 		cmd.Env = append(append(os.Environ(), "NO_COLOR=1", "TERM=dumb"), env...)
+		// Esc kills the shell, but a program it started can still hold the output pipe open (on Windows
+		// the shell is not even the process group's leader); without this, Run waits for it to finish
+		// and "stopped" arrives only then. After the delay the pipes are closed and Run returns.
+		cmd.WaitDelay = time.Second
 		var out limitedBuffer
 		cmd.Stdout, cmd.Stderr = &out, &out
 		err := cmd.Run()

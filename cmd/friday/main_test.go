@@ -1,10 +1,13 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/chrisnkuno/friday-cli/internal/core/update"
 )
 
 func TestAgentCommandAcceptsAJSONArraySoPathsMayHoldSpaces(t *testing.T) {
@@ -41,5 +44,23 @@ func TestAgentCommandFindsTheCheckoutsOwnAgent(t *testing.T) {
 	want := filepath.Join(root, "packages", "friday-cli", "src", "friday.ts")
 	if err != nil || len(got) != 3 || got[2] != want {
 		t.Fatalf("agentCommand = %q, %v; want bun run %s", got, err, want)
+	}
+}
+
+// A person who saved ARCHYMEDES_AUTO_UPDATE=off in Settings must not be updated when Friday closes:
+// the exit install reads the same saved settings as the in-session check, with the environment over them.
+func TestTheExitUpdateHonoursASavedSetting(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"ARCHYMEDES_AUTO_UPDATE":"off"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := exitUpdateOptions(dir, nil).Mode; got != update.ModeOff {
+		t.Fatalf("saved off, mode = %q", got)
+	}
+	if got := exitUpdateOptions(dir, []string{"ARCHYMEDES_AUTO_UPDATE=check"}).Mode; got != update.ModeCheck {
+		t.Fatalf("the environment wins over the saved setting, mode = %q", got)
+	}
+	if got := exitUpdateOptions(t.TempDir(), nil).Mode; got != update.ModeInstall {
+		t.Fatalf("nothing saved, mode = %q", got)
 	}
 }

@@ -3,7 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -107,7 +107,7 @@ func (m *Model) filesLoaded(msg filesLoadedMsg) {
 		f.err = msg.err.Error()
 		return
 	}
-	f.tree = tree.New(buildTree(path.Base(m.projectRoot()), msg.files), 40, 10)
+	f.tree = tree.New(buildTree(filepath.Base(m.projectRoot()), msg.files), 40, 10)
 	f.tree.SetShowHelp(false)
 	f.tree.SetCursorCharacter("›")
 	f.tree.SetOpenCharacter("▾")
@@ -274,7 +274,7 @@ func (f *filesView) view(m *Model) string {
 	treeWidth := treeWidth(m.width)
 	previewWidth := max(m.width-treeWidth-3, 0)
 
-	title := " " + th.Title.Render("files") + th.Faint.Render("  "+path.Base(m.projectRoot()))
+	title := " " + th.Title.Render("files") + th.Faint.Render("  "+filepath.Base(m.projectRoot()))
 	right := ""
 	if f.loaded && f.err == "" {
 		right = th.Faint.Render(plural(f.count, "file") + " ")

@@ -134,7 +134,7 @@ func TestACancelRightBehindItsPromptCoversIt(t *testing.T) {
 	send := func(line string) { _, _ = io.WriteString(clientIn, line+"\n") }
 	send(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
 	read("1")
-	send(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + root + `"}}`)
+	send(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":` + jsonString(root) + `}}`)
 	sessionID := read("2")["result"].(map[string]any)["sessionId"].(string)
 	// Both lines in one write: the cancel is read before the prompt's goroutine could start.
 	send(`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"hi"}]}}` + "\n" +

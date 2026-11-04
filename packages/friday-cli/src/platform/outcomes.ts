@@ -99,7 +99,45 @@ export function normaliseModelId(raw: string | undefined): string {
     .filter((segment) => !identifierSegment(segment.replace(/^[-_.:]/, "")))
     .join("")
     .replace(/-{2,}/g, "-").replace(/^[-_.:]+|[-_.:]+$/g, "").slice(0, 64);
-  return isOutcomeEnum(normal) ? normal : "custom";
+  return isOutcomeEnum(normal) && isPublicModelId(normal) ? normal : "custom";
+}
+
+/** Vendor namespaces that prefix a public model id (`openai/gpt-4o`, `models/gemini-2.5-pro`). */
+const MODEL_NAMESPACES = new Set([
+  "models", "openai", "anthropic", "google", "meta-llama", "meta", "mistralai", "x-ai", "deepseek", "qwen",
+  "openrouter", "cohere", "nvidia", "microsoft", "amazon", "moonshotai", "z-ai", "perplexity",
+]);
+/** Public model families an id must start with. A name that starts anywhere else is a person's own. */
+const MODEL_FAMILIES = new Set([
+  "claude", "gpt", "gemini", "gemma", "grok", "deepseek", "mistral", "mixtral", "codestral", "ministral", "pixtral",
+  "llama", "qwen", "qwq", "phi", "command", "kimi", "glm", "nova", "sonar", "friday", "auto", "chatgpt", "codex", "o",
+]);
+/** Words that only ever describe a variant of a public model. Anything else could be a name. */
+const MODEL_WORDS = new Set([
+  "mini", "nano", "micro", "turbo", "pro", "flash", "lite", "sonnet", "opus", "haiku", "fable", "instruct", "chat",
+  "latest", "preview", "thinking", "coder", "code", "large", "medium", "small", "versatile", "terra", "free", "auto",
+  "reasoner", "reasoning", "max", "ultra", "plus", "base", "vision", "exp", "experimental", "online", "beta", "nemo",
+  "codex", "image", "audio", "realtime", "search", "deep", "research", "it", "moe", "thinking", "high", "low",
+  "r", "v", "instant", "router", "scout", "maverick", "distill", "distilled", "tiny", "oss", "next", "hermes",
+]);
+const MODEL_NUMBER = /^(?:v?\d+(?:\.\d+)*[a-z]?|\d+x\d+b|\d+(?:\.\d+)?[bkm]|v\d+|r\d+|o\d+)$/;
+
+/**
+ * Whether a normalised id is a public model and nothing else: an optional vendor namespace, a known
+ * family, then only version numbers, sizes and variant words. A fine-tune (`ft:gpt-4o:contoso-legal`),
+ * a deployment or a custom endpoint carries words from outside that vocabulary, so it fails and is
+ * reported as `custom`: the check is an allowlist, because a name cannot be recognised by its shape.
+ */
+export function isPublicModelId(normal: string): boolean {
+  const colon = normal.indexOf(":");
+  const rest = colon > 0 && MODEL_NAMESPACES.has(normal.slice(0, colon)) ? normal.slice(colon + 1) : normal;
+  const pieces = rest.split(/[-_:]/).filter((piece) => piece !== "");
+  const [head, ...tail] = pieces;
+  if (head === undefined) return false;
+  // `llama3.1`, `qwen2.5`, `gpt4`, `o3`: a family with its version fused on.
+  const family = head.replace(/[0-9.]+[a-z]?$/, "") || head;
+  if (!MODEL_FAMILIES.has(family) && !/^o[0-9]/.test(head)) return false;
+  return tail.every((piece) => MODEL_NUMBER.test(piece) || MODEL_WORDS.has(piece));
 }
 
 /** A date stamp or digit run (7+ digits), or a hash-like hex token (16+ chars, digits and letters). */

@@ -114,7 +114,7 @@ func TestRunInstallsAKnownNewerVersionWithoutFetching(t *testing.T) {
 	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
 	var installed string
 	notices := Run(context.Background(), Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
 		Fetch: func(context.Context, func(string) string, string) (string, error) {
 			t.Fatal("should not fetch")
 			return "", nil
@@ -150,7 +150,7 @@ func TestRunChecksThenNotifiesInCheckMode(t *testing.T) {
 func TestRunStampsTheCheckEvenWhenTheRegistryIsUnreachable(t *testing.T) {
 	dir := t.TempDir()
 	notices := Run(context.Background(), Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil),
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil),
 		Fetch: func(context.Context, func(string) string, string) (string, error) { return "", errors.New("offline") },
 	})
 	if len(notices) != 0 {
@@ -166,7 +166,7 @@ func TestRunRemembersAFailedInstallAsSkipped(t *testing.T) {
 	now := time.Now()
 	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
 	notices := Run(context.Background(), Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
 		Do: func(context.Context, func(string) string, string, string) bool { return false },
 	})
 	if !strings.Contains(strings.Join(notices, "\n"), "Could not install Friday 9.0.0") {
@@ -177,7 +177,7 @@ func TestRunRemembersAFailedInstallAsSkipped(t *testing.T) {
 	}
 	// A second round offers it no more.
 	again := Run(context.Background(), Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
 		Do: func(context.Context, func(string) string, string, string) bool {
 			t.Fatal("a skipped version was offered again")
 			return false
@@ -207,7 +207,7 @@ func TestRunInstallsOnceAndKeepsWhatItInstalled(t *testing.T) {
 	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
 	installs := 0
 	o := Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
 		Fetch: func(context.Context, func(string) string, string) (string, error) { return "9.0.0", nil },
 		Do:    func(context.Context, func(string) string, string, string) bool { installs++; return true },
 	}
@@ -236,7 +236,7 @@ func TestWindowsMovesTheRunningProgramAsideAndBack(t *testing.T) {
 	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
 	var during bool
 	o := Options{
-		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
 		MoveAside: true, Executable: exe,
 		Do: func(context.Context, func(string) string, string, string) bool {
 			_, err := os.Stat(exe)
@@ -263,5 +263,159 @@ func TestWindowsMovesTheRunningProgramAsideAndBack(t *testing.T) {
 	clearAside(exe, dir)
 	if entries, _ := os.ReadDir(aside); len(entries) != 0 {
 		t.Fatalf("a later start deletes it: %v", entries)
+	}
+}
+
+// TestAsideGoesBesideTheOutermostNodeModules: in a global npm install the program sits under the
+// package's own nested node_modules, which the install removes; the moved copy must live outside it.
+func TestAsideGoesBesideTheOutermostNodeModules(t *testing.T) {
+	exe := filepath.Join("prefix", "node_modules", "@archymedes", "friday", "node_modules", "@archymedes", "friday-win32-x64", "bin", "friday.exe")
+	got := asideDirs(exe, "")
+	want := filepath.Join("prefix", "node_modules", ".friday-replaced")
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("asideDirs = %v, want [%s]", got, want)
+	}
+}
+
+// TestAnInstallThatWroteElsewhereIsNotASuccess: the package manager exits 0 but nothing is at the
+// launch path, so the old program goes back and the update counts as failed.
+func TestAnInstallThatWroteElsewhereIsNotASuccess(t *testing.T) {
+	root := t.TempDir()
+	exe := filepath.Join(root, "node_modules", "@archymedes", "friday-win32-x64", "bin", "friday.exe")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(exe, []byte("old friday"), 0o755)
+	dir := t.TempDir()
+	now := time.Now()
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
+	o := Options{
+		Mode: ModeInstall, Boundary: true, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		MoveAside: true, Executable: exe,
+		Do: func(context.Context, func(string) string, string, string) bool { return true }, // exits 0, writes nothing here
+	}
+	Run(context.Background(), o)
+	if data, err := os.ReadFile(exe); err != nil || string(data) != "old friday" {
+		t.Fatalf("the old program is back: %q %v", data, err)
+	}
+	if s := readState(dir); s == nil || s.InstalledVersion == "9.0.0" {
+		t.Fatalf("state = %+v: a phantom install must not be recorded", s)
+	}
+}
+
+// lifecycle: an install only runs at a boundary, with no other Friday running, under one lock; an
+// install cut short is retried, not skipped.
+
+func lifecycleOptions(t *testing.T, installs *int) (Options, string) {
+	t.Helper()
+	dir := t.TempDir()
+	now := time.Now()
+	writeState(dir, &State{LastCheckedAt: now.UnixMilli(), LatestVersion: "9.0.0"})
+	return Options{
+		Mode: ModeInstall, Interactive: true, CurrentVersion: "1.0.0", ConfigDir: dir, Getenv: env(nil), Now: now,
+		Do: func(context.Context, func(string) string, string, string) bool { *installs++; return true },
+	}, dir
+}
+
+func TestAnInstallDueMidSessionIsAnnouncedNotRun(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs) // Boundary false: a session is running
+	notices := Run(context.Background(), o)
+	if installs != 0 {
+		t.Fatal("an install ran while a session was using the files")
+	}
+	if len(notices) != 1 || !strings.Contains(notices[0], "9.0.0 is ready") || !strings.Contains(notices[0], "when you close Friday") {
+		t.Fatalf("notices = %v", notices)
+	}
+	if s := readState(dir); s == nil || s.InstalledVersion != "" || s.SkippedVersion != "" {
+		t.Fatalf("an announcement must not record an install or a skip: %+v", s)
+	}
+}
+
+func TestAnInstallWaitsForEveryOtherRunningFriday(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs)
+	o.Boundary = true
+	release := RegisterSession(dir) // a second terminal, still open
+	defer release()
+	if Run(context.Background(), o); installs != 0 {
+		t.Fatal("installed under another running session")
+	}
+	release()
+	if Run(context.Background(), o); installs != 1 {
+		t.Fatalf("installs = %d: with the other session closed it installs", installs)
+	}
+}
+
+func TestACrashedSessionDoesNotBlockUpdatesForever(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs)
+	o.Boundary = true
+	stale := filepath.Join(sessionsDir(dir), "999-1")
+	_ = os.MkdirAll(filepath.Dir(stale), 0o755)
+	_ = os.WriteFile(stale, []byte("999"), 0o644)
+	old := o.Now.Add(-10 * time.Minute)
+	_ = os.Chtimes(stale, old, old)
+	if Run(context.Background(), o); installs != 1 {
+		t.Fatalf("installs = %d: a session that stopped touching its file is gone", installs)
+	}
+}
+
+func TestOnlyOneInstallRunsAtATime(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs)
+	o.Boundary = true
+	hold, ok := acquireInstallLock(dir, o.Now)
+	if !ok {
+		t.Fatal("could not take the lock")
+	}
+	if Run(context.Background(), o); installs != 0 {
+		t.Fatal("two installs ran against one install")
+	}
+	hold()
+	if Run(context.Background(), o); installs != 1 {
+		t.Fatalf("installs = %d after the lock was released", installs)
+	}
+	// A lock left by an install that died is broken once it is old enough.
+	if _, ok := acquireInstallLock(dir, o.Now); !ok {
+		t.Fatal("the lock was not released after the install")
+	}
+	late := o.Now.Add(lockStale + time.Minute)
+	if _, ok := acquireInstallLock(dir, late); !ok {
+		t.Fatal("a lock from a dead install was never broken")
+	}
+}
+
+func TestAnInterruptedInstallIsRetriedNotSkipped(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs)
+	o.Boundary = true
+	ctx, cancel := context.WithCancel(context.Background())
+	o.Do = func(context.Context, func(string) string, string, string) bool { installs++; cancel(); return false } // Ctrl-C mid-install
+	Run(ctx, o)
+	if s := readState(dir); s == nil || s.SkippedVersion != "" || s.Installing != "" {
+		t.Fatalf("a cut-short install must not be skipped or left marked: %+v", s)
+	}
+	o.Do = func(context.Context, func(string) string, string, string) bool { installs++; return true }
+	Run(context.Background(), o)
+	if installs != 2 {
+		t.Fatalf("installs = %d: the interrupted version should be tried again", installs)
+	}
+}
+
+func TestAnInstallThatDiedMidWayIsForgottenAndRetried(t *testing.T) {
+	var installs int
+	o, dir := lifecycleOptions(t, &installs)
+	o.Boundary = true
+	died := o.Now.Add(-time.Hour).UnixMilli()
+	writeState(dir, &State{LastCheckedAt: o.Now.UnixMilli(), LatestVersion: "9.0.0", Installing: "9.0.0", InstallingAt: died})
+	if Run(context.Background(), o); installs != 1 {
+		t.Fatalf("installs = %d: a marker from an hour ago is an install that died", installs)
+	}
+	// A fresh marker is a live install in another process: wait.
+	writeState(dir, &State{LastCheckedAt: o.Now.UnixMilli(), LatestVersion: "9.0.0", Installing: "9.0.0", InstallingAt: o.Now.UnixMilli()})
+	installs = 0
+	if Run(context.Background(), o); installs != 0 {
+		t.Fatal("started a second install beside a live one")
 	}
 }

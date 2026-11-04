@@ -20,7 +20,7 @@ var Fields = []Field{
 	{Key: "ARCHYMEDES_SUGGEST_MODEL", Label: "Ask the model for extra suggestions (a small extra call per turn)", Choices: onOffChoices},
 	{Key: "ARCHYMEDES_NOTIFY", Label: "Notifications — when a turn ends or Friday waits for you", Choices: notifyChoices},
 	{Key: "ARCHYMEDES_NOTIFY_URL", Label: "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)", URL: true},
-	{Key: "ARCHYMEDES_AUTO_UPDATE", Label: "Automatic updates — checked hourly, installed by default", Choices: autoUpdateChoices},
+	{Key: "ARCHYMEDES_AUTO_UPDATE", Label: "Automatic updates — checked hourly, installed when Friday closes", Choices: autoUpdateChoices},
 	{Key: "ARCHYMEDES_TELEMETRY", Label: "Install count — one anonymous cue per new version (event, version, OS)", Choices: telemetryChoices},
 	{Key: "ARCHYMEDES_TEST_FIRST", Label: "Build test first — tests, then code, then static analysis", Choices: testFirstChoices},
 	{Key: "ARCHYMEDES_JEV", Label: "Jev second opinion — verdicts, tool checks, ranked suggestions", Choices: jevChoices},

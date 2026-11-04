@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 // The npm launcher's decision logic; it ships in packages/friday-cli/bin, where a test file
 // would be published, so its tests live here.
@@ -37,5 +38,14 @@ describe("npm launcher", () => {
   it("honours an explicit binary, and publishes exactly the platforms the build produces", () => {
     expect(resolveInterface({ platform: "linux", arch: "x64", override: "/dev/go", resolvePackage: () => undefined, exists: () => false, join })).toEqual({ binary: "/dev/go" });
     expect([...PUBLISHED_PLATFORMS].sort()).toEqual(TARGETS.map((t) => `${t.platform}-${t.arch}`).sort());
+  });
+
+  it("imports the bundled agent by file URL, never by path: Windows rejects a drive-letter path", () => {
+    // import("C:\dir\friday.mjs") throws ERR_UNSUPPORTED_ESM_URL_SCHEME, and this is the path taken
+    // whenever the Go binary cannot be used. The packed-package check (verify:package) runs it for
+    // real on Windows; this keeps the mistake out on every platform.
+    const source = readFileSync(path.join(__dirname, "../../packages/friday-cli/bin/friday.mjs"), "utf8");
+    expect(source).toContain("import(pathToFileURL(");
+    expect(source).not.toContain("import(agentEntry)");
   });
 });

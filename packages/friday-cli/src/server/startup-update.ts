@@ -70,3 +70,14 @@ export function installInChildProcess(entry: { execPath: string; script: string 
       child.on("exit", (code) => resolve(code === 0 && Boolean(version)));
     });
 }
+
+/**
+ * The startup upkeep of an agent that sits behind the Go engine: only its own feed refresh. The
+ * engine runs the update check on its hourly clock and installs when the interface closes, so this
+ * agent neither checks on a different clock nor installs into files the open session is using.
+ * Never throws, and returns no notices.
+ */
+export function feedOnlyStartup(environment: Environment): string[] {
+  void updateDefenderFeed(environment).catch(() => undefined);
+  return [];
+}

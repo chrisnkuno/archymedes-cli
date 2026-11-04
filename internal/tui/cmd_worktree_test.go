@@ -18,17 +18,24 @@ func TestWorktreeOpensANewSessionThereAfterTheSetupScriptAndBackReturns(t *testi
 	m.opts.Cwd = root
 	m.notice(noticeInfo, "the old conversation")
 
-	submitCommand(m, "/worktree feature x")
+	submitSlow(m, "/worktree feature x")
 	deliver(m, nil)
 	wt := filepath.Join(root, ".archymedes", "worktrees", "feature-x")
 	agent.mu.Lock()
 	cwds := append([]string(nil), agent.cwds...)
 	agent.mu.Unlock()
-	if len(cwds) == 0 || cwds[len(cwds)-1] != wt {
+	if len(cwds) == 0 || !samePath(cwds[len(cwds)-1], wt) {
 		t.Fatalf("the new session opens in the worktree: %v", cwds)
 	}
 	ready, err := os.ReadFile(filepath.Join(wt, "ready.txt"))
-	if err != nil || !strings.Contains(string(ready), "set up from "+root) {
+	// The script runs under a POSIX shell: on Windows its path has forward slashes, and on macOS
+	// the temp directory is behind a symlink (/var -> /private/var).
+	realRoot, _ := filepath.EvalSymlinks(root)
+	var sawRoot bool
+	for _, candidate := range []string{root, realRoot, filepath.ToSlash(root), filepath.ToSlash(realRoot)} {
+		sawRoot = sawRoot || (candidate != "" && strings.Contains(string(ready), "set up from "+candidate))
+	}
+	if err != nil || !sawRoot {
 		t.Fatalf("setup.sh ran there with the main checkout's path: %q %v", ready, err)
 	}
 	s := screen(m)
@@ -39,7 +46,7 @@ func TestWorktreeOpensANewSessionThereAfterTheSetupScriptAndBackReturns(t *testi
 		t.Fatal("the old session is closed (it stays in /resume)")
 	}
 
-	submitCommand(m, "/worktree back")
+	submitSlow(m, "/worktree back")
 	agent.mu.Lock()
 	last := agent.cwds[len(agent.cwds)-1]
 	agent.mu.Unlock()

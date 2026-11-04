@@ -24,8 +24,14 @@ func TestDirMatchesTheAgentsSettingsDirectory(t *testing.T) {
 		{map[string]string{"APPDATA": `/appdata`}, "windows", "/appdata/Archymedes"},
 	}
 	for _, c := range cases {
-		if got := filepath.ToSlash(Dir(env(c.env), "/home/u", c.goos)); got != c.want {
-			t.Errorf("%v %s: %s", c.env, c.goos, got)
+		want := c.want
+		if dir := c.env["ARCHYMEDES_CONFIG_DIR"]; dir != "" {
+			// An explicit directory is made absolute on the machine running: "/custom" is D:/custom on Windows.
+			abs, _ := filepath.Abs(dir)
+			want = filepath.ToSlash(abs)
+		}
+		if got := filepath.ToSlash(Dir(env(c.env), "/home/u", c.goos)); got != want {
+			t.Errorf("%v %s: %s, want %s", c.env, c.goos, got, want)
 		}
 	}
 }

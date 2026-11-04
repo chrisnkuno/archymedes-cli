@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -35,5 +36,16 @@ func TestARequestWithAPictureSendsIt(t *testing.T) {
 	run(m, m.send("what is wrong in bug.png"))
 	if len(agent.images) != 1 || agent.images[0].MimeType != "image/png" || !strings.Contains(screen(m), "Sent 1 image with the request") {
 		t.Fatalf("images %+v\n%s", agent.images, screen(m))
+	}
+}
+
+func TestFileURIsAreValidOnEveryPlatform(t *testing.T) {
+	if got := fileURI("/home/me/my pics/a b.jpg"); got != "file:///home/me/my pics/a b.jpg" {
+		t.Errorf("unix path: %q", got)
+	}
+	if runtime.GOOS == "windows" {
+		if got := fileURI(`C:\Users\me\my pics\a b.jpg`); got != "file:///C:/Users/me/my pics/a b.jpg" {
+			t.Errorf("windows path: %q (a drive path needs three slashes and forward slashes)", got)
+		}
 	}
 }

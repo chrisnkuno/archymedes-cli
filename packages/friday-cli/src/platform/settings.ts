@@ -205,7 +205,7 @@ export const SETTING_FIELDS = [
   // Read by the Go interface (internal/tui/core_notify.go).
   { key: "ARCHYMEDES_NOTIFY", label: "Notifications — when a turn ends or Friday waits for you", choices: NOTIFY_CHOICES },
   { key: "ARCHYMEDES_NOTIFY_URL", label: "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)", url: true },
-  { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — checked hourly, installed by default", choices: AUTO_UPDATE_CHOICES },
+  { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — checked hourly, installed when Friday closes", choices: AUTO_UPDATE_CHOICES },
   { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: TELEMETRY_CHOICES },
   // On by default: writing the tests first is how Friday builds, and the setting is the way out.
   { key: "ARCHYMEDES_TEST_FIRST", label: "Build test first — tests, then code, then static analysis", choices: TEST_FIRST_CHOICES },

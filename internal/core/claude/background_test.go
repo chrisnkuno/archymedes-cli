@@ -21,8 +21,8 @@ func launchResult(path string) string {
 }
 
 func TestLaunchOfReadsTheTranscriptPath(t *testing.T) {
-	l, ok := launchOf("call-1", map[string]any{"subagent_type": "Explore", "description": "audit"}, launchResult("/tmp/x/a.output"))
-	if !ok || l.path != "/tmp/x/a.output" || l.id != "a4d8e8a8f2fa34db8" || l.role != "Explore" || l.brief != "audit" || l.call != "call-1" {
+	l, ok := launchOf("call-1", map[string]any{"subagent_type": "Explore", "description": "audit"}, launchResult(absPath("/tmp/x/a.output")))
+	if !ok || l.path != absPath("/tmp/x/a.output") || l.id != "a4d8e8a8f2fa34db8" || l.role != "Explore" || l.brief != "audit" || l.call != "call-1" {
 		t.Fatalf("launch = %+v, %v", l, ok)
 	}
 	if _, ok := launchOf("c", nil, "Done: found 3 files."); ok {
@@ -37,7 +37,7 @@ func TestTranslatorStartsFollowingABackgroundAgent(t *testing.T) {
 	tr := newTranslator("/repo")
 	tr.begin()
 	tr.feed(json.RawMessage(`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"call-1","name":"Agent","input":{"description":"audit","prompt":"look","subagent_type":"Explore","run_in_background":true}}]}}`))
-	result, _ := json.Marshal(launchResult("/tmp/x/a.output"))
+	result, _ := json.Marshal(launchResult(absPath("/tmp/x/a.output")))
 	out := tr.feed(json.RawMessage(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call-1","content":` + string(result) + `}]}}`))
 	if len(out) != 2 || out[0].Event.Content != launchedNote || strings.Contains(out[0].Event.Content, "agentId") {
 		t.Fatalf("result = %+v", out)
@@ -45,7 +45,7 @@ func TestTranslatorStartsFollowingABackgroundAgent(t *testing.T) {
 	if th := out[1].Thread; th == nil || th.Status != thread.Running || !th.Background || th.ParentToolCallID != "call-1" {
 		t.Fatalf("thread = %+v", out[1])
 	}
-	if len(tr.launched) != 1 || tr.launched[0].path != "/tmp/x/a.output" {
+	if len(tr.launched) != 1 || tr.launched[0].path != absPath("/tmp/x/a.output") {
 		t.Fatalf("launched = %+v", tr.launched)
 	}
 }
