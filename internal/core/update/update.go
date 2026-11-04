@@ -68,6 +68,11 @@ type State struct {
 	// InstalledVersion is a version installed while an older one runs: it takes over at the next
 	// start, so it is not installed again meanwhile.
 	InstalledVersion string `json:"installedVersion,omitempty"`
+	// Installing is a version whose install was started and not yet finished, with when (epoch ms).
+	// One found later, and old enough, was cut short (the machine slept, the terminal closed): it is
+	// cleared and tried again, not counted as a failure, because nothing said the version is bad.
+	Installing   string `json:"installing,omitempty"`
+	InstallingAt int64  `json:"installingAt,omitempty"`
 }
 
 // Action is what to do now.
@@ -109,6 +114,9 @@ func Decide(in Inputs) Decision {
 		return Decision{Action: ActionSkip, Reason: "ci"}
 	}
 	now := in.Now.UnixMilli()
+	if s := in.State; s != nil && s.Installing != "" && now-s.InstallingAt < lockStale.Milliseconds() && s.InstallingAt <= now {
+		return Decision{Action: ActionSkip, Reason: "installing"}
+	}
 	due := in.State == nil || now-in.State.LastCheckedAt >= Interval.Milliseconds() || in.State.LastCheckedAt > now
 	// A known-newer version acts before a due check does: the answer is already in hand, and asking
 	// the registry again to learn what was learned yesterday is a request nobody needed.

@@ -622,27 +622,20 @@ func (s *Server) sessionList(params json.RawMessage) (any, error) {
 }
 
 func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, error) {
-	var notices []string
+	// The update check is the Go engine's on both paths, hourly, so a TypeScript agent behind this
+	// engine neither checks on a different clock nor installs on its own. It never installs from
+	// here: a session is open and is using the files an install replaces. A newer version is
+	// announced, and installed when the interface closes (update.AtExit).
+	env := s.env()
+	notices := update.Run(ctx, update.Options{
+		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
+		ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
+		MoveAside: runtime.GOOS == "windows", // a running friday.exe cannot be overwritten there
+	})
 	if s.opts.Forward != nil {
-		// A TypeScript agent is behind this engine: it runs the update (and its other startup
-		// upkeep). Forward to it rather than check twice and risk two installs.
-		if raw, err := s.opts.Forward(ctx, "_archymedes/startup", params); err == nil {
-			var more struct {
-				Notices []string `json:"notices"`
-			}
-			if json.Unmarshal(raw, &more) == nil {
-				notices = append(notices, more.Notices...)
-			}
-		}
-	} else {
-		// The pure Go engine: run the update here, so it stays current without the TypeScript agent.
-		// The interface is what asks at startup, so this is the safe, interactive moment to install.
-		env := s.env()
-		notices = update.Run(ctx, update.Options{
-			Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
-			ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
-			MoveAside: runtime.GOOS == "windows", // a running friday.exe cannot be overwritten there
-		})
+		// The TypeScript agent keeps the rest of its startup upkeep (the defender feed); it is told
+		// not to run the update, which is no longer its to run.
+		_, _ = s.opts.Forward(ctx, "_archymedes/startup", json.RawMessage(`{"updates":false}`))
 	}
 	if notices == nil {
 		notices = []string{}

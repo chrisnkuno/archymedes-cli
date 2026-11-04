@@ -23,3 +23,11 @@ describe("startup upkeep for a client that draws its own screen", () => {
     expect(installs).toBe(0);
   });
 });
+
+describe("startup upkeep behind the Go engine", () => {
+  it("runs no update of its own: no check, no install, no notice", async () => {
+    const { feedOnlyStartup } = await import("./startup-update");
+    // A feed address nothing listens on, and an updater mode that would install: neither may be used.
+    expect(feedOnlyStartup({ ARCHYMEDES_AUTO_UPDATE: "install", ARCHYMEDES_DEFENDER_FEED_URL: "http://127.0.0.1:9/off", ARCHYMEDES_UPDATE_REGISTRY: "http://127.0.0.1:9" })).toEqual([]);
+  });
+});

@@ -12,7 +12,7 @@ import { claudeSetupStatus, withClaude, withClaudeModels } from "../engines/clau
 import { CLAUDE_PROVIDER } from "../engines/claude/identity";
 import { codexModels, codexOverview, codexSetupStatus, connectCodex, rememberCodexModel, withCodex, withCodexModels } from "../engines/codex/backend";
 import { CODEX_PROVIDER } from "../engines/codex/identity";
-import { installInChildProcess, startupMaintenance } from "./startup-update";
+import { feedOnlyStartup, installInChildProcess, startupMaintenance } from "./startup-update";
 
 /**
  * `friday acp` — the same agent, driven by an editor over stdio.
@@ -100,11 +100,16 @@ export async function runAcpServer(options: AcpServerOptions): Promise<number> {
         const [listing, claudeRow, codexRow] = await Promise.all([modelList(options.environment, params), claudeOverview(claude), codexOverview(claude)]);
         return withCodexModels(withClaudeModels(listing, claudeRow), codexRow);
       },
-      // Asked by the Go interface once its session is open: the daily update check and install the
-      // terminal CLI runs at startup. Once per process; an editor that never asks never updates.
-      "_archymedes/startup": async () => ({
-        notices: await (startup ??= startupMaintenance(options.environment, false, installInChildProcess({ execPath: process.execPath, script: process.argv[1] ?? "" }, options.environment))),
-      }),
+      // Asked by the Go interface once its session is open. `updates: false` is the interface saying
+      // it owns the update (hourly check, install when it closes): only this agent's own upkeep runs,
+      // once. Without it (an editor over ACP that asks) the daily check and install run, once per
+      // process; an editor that never asks never updates.
+      "_archymedes/startup": async (params) => {
+        if (params.updates === false) return { notices: await (startup ??= Promise.resolve(feedOnlyStartup(options.environment))) };
+        return {
+          notices: await (startup ??= startupMaintenance(options.environment, false, installInChildProcess({ execPath: process.execPath, script: process.argv[1] ?? "" }, options.environment))),
+        };
+      },
       // Newest first, for a resume picker: id, title and when it was last touched.
       // Each marked when another terminal has it open: resuming that one opens a copy.
       "_archymedes/sessions": async (params) => {
