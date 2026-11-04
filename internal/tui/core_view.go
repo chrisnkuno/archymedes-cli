@@ -203,8 +203,13 @@ func (m *Model) composite(content string) string {
 		scan(m.zones.dialog, "") // no dialog: no dialog targets
 	}
 	// Toasts stack from the top right; their zones are registered as one block at their places.
+	// Beside a side panel they start under its title row, which they would otherwise hide (and
+	// a toast may name the title: "click its title").
 	var marked []string
 	y := 1
+	if m.activeWindow() == nil && (m.growthWidth() > 0 || m.railWidth() > 0) {
+		y = 2
+	}
 	for i := len(m.toasts) - 1; i >= 0 && y < m.height-2; i-- {
 		t := m.toastView(m.toasts[i])
 		x, h := max(m.width-lipgloss.Width(t)-1, 0), lipgloss.Height(t)

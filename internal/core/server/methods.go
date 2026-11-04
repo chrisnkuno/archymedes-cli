@@ -669,7 +669,8 @@ func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, erro
 func (s *Server) setupStatus(ctx context.Context, params json.RawMessage) (any, error) {
 	if s.opts.Forward != nil {
 		if raw, err := s.opts.Forward(ctx, "_archymedes/setup/status", params); err == nil {
-			return raw, nil
+			env := s.env()
+			return readyClaude(raw, firstNonEmpty(s.opts.Provider, env.Get("ARCHYMEDES_PROVIDER")), env.Get), nil
 		}
 	}
 	env := s.env()

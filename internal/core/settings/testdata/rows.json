@@ -295,11 +295,11 @@
     "choices": [
       {
         "value": "install",
-        "label": "Check daily and install automatically (default)"
+        "label": "Check hourly and install automatically (default)"
       },
       {
         "value": "check",
-        "label": "Check daily and tell me only"
+        "label": "Check hourly and tell me only"
       },
       {
         "value": "off",
@@ -314,12 +314,12 @@
     "kind": "choice",
     "choices": [
       {
-        "value": "on",
-        "label": "On — one anonymous cue when a new version first runs (default)"
+        "value": "off",
+        "label": "Off — nothing is sent (default)"
       },
       {
-        "value": "off",
-        "label": "Off — nothing is sent"
+        "value": "on",
+        "label": "On — one anonymous cue when a new version first runs"
       }
     ]
   },

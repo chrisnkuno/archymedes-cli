@@ -266,3 +266,21 @@ func TestRememberSavesSeveralKeysAtOnceAndSkipsWhatIsInvalid(t *testing.T) {
 		t.Fatalf("the broken file was replaced: %q", data)
 	}
 }
+
+// TestTheInstallCountIsOffUntilChosen: the Settings list says what the code does. The count is off
+// until the person says yes, so Off comes first, as the default, and On never claims to be one.
+func TestTheInstallCountIsOffUntilChosen(t *testing.T) {
+	f, ok := Lookup("ARCHYMEDES_TELEMETRY")
+	if !ok || len(f.Choices) != 2 {
+		t.Fatalf("field: %+v", f)
+	}
+	if f.Choices[0].Value != "off" || !strings.Contains(f.Choices[0].Label, "(default)") {
+		t.Errorf("first choice %+v: Off, the default, comes first", f.Choices[0])
+	}
+	if strings.Contains(f.Choices[1].Label, "default") {
+		t.Errorf("On claims to be the default: %q", f.Choices[1].Label)
+	}
+	if u, _ := Lookup("ARCHYMEDES_AUTO_UPDATE"); strings.Contains(strings.ToLower(u.Choices[0].Label+u.Choices[1].Label), "daily") {
+		t.Errorf("updates are checked hourly, not daily: %+v", u.Choices)
+	}
+}
