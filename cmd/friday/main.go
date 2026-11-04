@@ -30,6 +30,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/cli"
 	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/update"
 	"github.com/chrisnkuno/friday-cli/internal/tui"
 )
@@ -162,12 +163,19 @@ func installPendingUpdate() {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	configDir := config.Default()
-	for _, line := range update.AtExit(ctx, update.Options{
-		Mode: update.ReadMode(os.Getenv), Interactive: true, CurrentVersion: version,
-		ConfigDir: configDir, Getenv: os.Getenv, MoveAside: runtime.GOOS == "windows",
-	}, func(line string) { fmt.Fprintln(os.Stderr, "friday:", line) }) {
+	for _, line := range update.AtExit(ctx, exitUpdateOptions(config.Default(), os.Environ()), func(line string) { fmt.Fprintln(os.Stderr, "friday:", line) }) {
 		fmt.Fprintln(os.Stderr, "friday:", line)
+	}
+}
+
+// exitUpdateOptions is the update policy when Friday closes: read from the saved settings with the
+// environment over them, exactly as the in-session check reads it. Reading the environment alone
+// would install an update for a person who saved ARCHYMEDES_AUTO_UPDATE=off in Settings.
+func exitUpdateOptions(configDir string, environ []string) update.Options {
+	env := llm.LoadEnv(configDir, environ)
+	return update.Options{
+		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: version,
+		ConfigDir: configDir, Getenv: env.Get, MoveAside: runtime.GOOS == "windows",
 	}
 }
 
