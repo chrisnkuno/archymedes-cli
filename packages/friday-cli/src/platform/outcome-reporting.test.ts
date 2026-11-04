@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -96,12 +97,15 @@ describe("opt-in outcome reporting", () => {
     expect(calls.map((call) => (call.body as { events: unknown[] }).events.length)).toEqual([100, 50]);
     for (const call of calls) expect(validateOutcomeBatch(call.body)).toMatchObject({ ok: true, errors: [] });
 
-    for (let index = 0; index < OUTCOME_QUEUE_LIMIT + 25; index += 1) await recordTaskOutcome(task, deps({}));
+    // The bound is the queue's, not the speed of 1,000 real writes: seed a full queue, then record past it.
+    await recordTaskOutcome(task, deps());
+    const file = path.join(directory, "outcomes-queue.jsonl");
+    const [template] = (await fs.readFile(file, "utf8")).trim().split("\n");
+    const seeded = Array.from({ length: OUTCOME_QUEUE_LIMIT }, () => JSON.stringify({ ...JSON.parse(template!), id: randomUUID() }));
+    await fs.writeFile(file, `${seeded.join("\n")}\n`);
+    for (let index = 0; index < 25; index += 1) await recordTaskOutcome(task, deps({}));
     expect(await readOutcomeQueue(deps())).toHaveLength(OUTCOME_QUEUE_LIMIT);
-    // About 1,175 real records, each a few small file operations: well inside 15 s on a quiet machine,
-    // past it on a loaded one. The cost per record is the product's (one per finished task); the
-    // count is only this test's, so the test gets the time, not the code a shortcut.
-  }, 60_000);
+  });
 
   it("backs off after a failure, keeps the queue, and resets once a send lands", async () => {
     await setOutcomeReporting(true, deps());
