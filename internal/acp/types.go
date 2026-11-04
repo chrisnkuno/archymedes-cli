@@ -5,7 +5,10 @@
 // checkpoints, compactions, Jev). This package owns the wire and nothing about presentation.
 package acp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ProtocolVersion is the ACP major version the TS agent speaks (`ACP_PROTOCOL_VERSION`).
 const ProtocolVersion = 1
@@ -197,6 +200,22 @@ type ThreadInfo struct {
 	// Model is the model it runs on; Usage is every token it has used so far.
 	Model string `json:"model"`
 	Usage *Usage `json:"usage"`
+	// StartedAt is when this run began, MaxSteps its step limit, Estimate how long a run of its
+	// role takes in this project (the Go engine's core/worktime; absent from other engines).
+	StartedAt time.Time     `json:"startedAt"`
+	MaxSteps  int           `json:"maxSteps"`
+	Estimate  *WorkEstimate `json:"estimate"`
+}
+
+// WorkEstimate is how long a piece of work is expected to take, learned in the project: a
+// log-normal time given by its median and 90th percentile, in seconds, with the median time of one
+// of its steps. Basis is "history", "similar" or "guess".
+type WorkEstimate struct {
+	P50     float64 `json:"p50"`
+	P90     float64 `json:"p90"`
+	Basis   string  `json:"basis"`
+	Runs    int     `json:"runs"`
+	StepP50 float64 `json:"stepP50"`
 }
 
 // PermissionOption is one choice the agent offers for an approval.

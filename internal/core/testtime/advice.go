@@ -198,7 +198,7 @@ func (e *Estimator) Record(run Run, took time.Duration, output string, timedOut 
 	h := e.load()
 	s := statFor(h.Runs, run.Key())
 	if !timedOut || s.N == 0 || seconds > s.Seconds() {
-		s.add(seconds, now)
+		s.Add(seconds, now)
 	}
 	if !timedOut {
 		units := parseUnits(run.Runner, output)
@@ -210,14 +210,14 @@ func (e *Estimator) Record(run Run, took time.Duration, output string, timedOut 
 				cached = true
 				continue
 			}
-			h.unit(rule, u.Name).add(u.Seconds, now)
+			h.unit(rule, u.Name).Add(u.Seconds, now)
 			times = append(times, u.Seconds)
 		}
 		// The calibration is the wall time over the makespan of what really ran; a run with cached
 		// packages took less than its units would, and would teach it wrong.
 		if !cached && len(times) > 0 {
 			if span := makespan(times, e.workersFor(run)); span > 0.05 {
-				statFor(h.Calibration, rule).add(seconds/span, now)
+				statFor(h.Calibration, rule).Add(seconds/span, now)
 			}
 		}
 	}

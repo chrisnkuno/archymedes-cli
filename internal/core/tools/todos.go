@@ -6,8 +6,10 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
+	"github.com/chrisnkuno/friday-cli/internal/core/worktime"
 )
 
 // TodoItem is one line of the plan.
@@ -15,6 +17,8 @@ type TodoItem struct {
 	ID     int    `json:"id"`
 	Text   string `json:"text"`
 	Status string `json:"status"` // pending | in_progress | done
+	// Started is when the step went in progress, for the interface's time left (core/worktime).
+	Started time.Time `json:"started,omitzero"`
 }
 
 // TodoList is the session's checklist (core/cli/tools.ts TodoList): replaced whole, updated by id
@@ -23,13 +27,24 @@ type TodoList struct {
 	mu     sync.Mutex
 	items  []TodoItem
 	nextID int
+	// mark is when the list was made or a step last finished: a step done without being started
+	// is timed from there, the work between two completions being that step's.
+	mark time.Time
+	now  func() time.Time // the clock; nil is time.Now
+}
+
+func (l *TodoList) clock() time.Time {
+	if l.now != nil {
+		return l.now()
+	}
+	return time.Now()
 }
 
 // Replace sets a new list with fresh ids.
 func (l *TodoList) Replace(texts []string) []TodoItem {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.items = nil
+	l.items, l.mark = nil, l.clock()
 	for _, text := range texts {
 		l.nextID++
 		l.items = append(l.items, TodoItem{ID: l.nextID, Text: text, Status: "pending"})
@@ -37,23 +52,40 @@ func (l *TodoList) Replace(texts []string) []TodoItem {
 	return slices.Clone(l.items)
 }
 
-// SetStatus applies every id that exists and returns the ones that do not.
-func (l *TodoList) SetStatus(ids []int, status string) (unknown []int) {
+// SetStatus applies every id that exists and returns the ones that do not, and how long each step
+// it finished took: from its start, or from the step finished before it.
+func (l *TodoList) SetStatus(ids []int, status string) (unknown []int, finished []time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	now := l.clock()
 	for _, id := range ids {
 		found := false
 		for i := range l.items {
-			if l.items[i].ID == id {
-				l.items[i].Status = status
-				found = true
+			it := &l.items[i]
+			if it.ID != id {
+				continue
 			}
+			found = true
+			switch {
+			case status == "in_progress" && it.Status != "in_progress":
+				it.Started = now
+			case status == "done" && it.Status != "done":
+				from := l.mark
+				if !it.Started.IsZero() {
+					from = it.Started
+				}
+				if !from.IsZero() {
+					finished = append(finished, now.Sub(from))
+				}
+				l.mark = now
+			}
+			it.Status = status
 		}
 		if !found {
 			unknown = append(unknown, id)
 		}
 	}
-	return unknown
+	return unknown, finished
 }
 
 // Items is a copy of the list.
@@ -138,15 +170,20 @@ func (w *Workspace) todoWrite() *tool.Tool {
 					texts = append(texts, text)
 				}
 				items := w.Todos.Replace(texts)
-				return tool.Result{Content: renderTodos(items), Data: map[string]any{"items": items}}
+				return tool.Result{Content: renderTodos(items), Data: w.planData(items)}
 			}
 			complete, start := ids(args["complete"]), ids(args["start"])
 			if len(complete) == 0 && len(start) == 0 {
 				items := w.Todos.Items()
-				return tool.Result{Content: renderTodos(items), Data: map[string]any{"items": items}}
+				return tool.Result{Content: renderTodos(items), Data: w.planData(items)}
 			}
 			redundant := len(start) == 0 && w.Todos.alreadyDone(complete)
-			unknown := append(w.Todos.SetStatus(start, "in_progress"), w.Todos.SetStatus(complete, "done")...)
+			unknownStart, _ := w.Todos.SetStatus(start, "in_progress")
+			unknownDone, finished := w.Todos.SetStatus(complete, "done")
+			unknown := append(unknownStart, unknownDone...)
+			for _, took := range finished {
+				worktime.For(w.Root).RecordPlanStep(took)
+			}
 			items := w.Todos.Items()
 			var note string
 			if redundant {
@@ -155,9 +192,14 @@ func (w *Workspace) todoWrite() *tool.Tool {
 			if len(unknown) > 0 {
 				note += fmt.Sprintf("No todo with id %v — it may be from an earlier list. Current ids are shown below.\n", unknown)
 			}
-			return tool.Result{Content: note + renderTodos(items), Data: map[string]any{"items": items}}
+			return tool.Result{Content: note + renderTodos(items), Data: w.planData(items)}
 		},
 	}
+}
+
+// planData is a plan result as values: its items, and what a step is expected to take here.
+func (w *Workspace) planData(items []TodoItem) map[string]any {
+	return map[string]any{"items": items, "plan": worktime.For(w.Root).PlanStep()}
 }
 
 func (w *Workspace) todoRead() *tool.Tool {
@@ -166,7 +208,7 @@ func (w *Workspace) todoRead() *tool.Tool {
 		Capability: tool.CapPlanning, Effect: tool.EffectNone, ParallelSafe: true,
 		Run: func(context.Context, tool.Context, tool.Args) tool.Result {
 			items := w.Todos.Items()
-			return tool.Result{Content: renderTodos(items), Data: map[string]any{"items": items}}
+			return tool.Result{Content: renderTodos(items), Data: w.planData(items)}
 		},
 	}
 }

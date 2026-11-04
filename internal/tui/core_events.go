@@ -149,7 +149,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			t.finish(ev.Content, ev.IsError)
 			m.editLanded(t)
 			m.noteCommands(t.name, t.args, ev.Content)
-			m.growthPlan(t.name, ev.Content, ev.IsError)
+			m.growthPlan(t.name, ev.Content, ev.IsError, ev.Data)
 		}
 	case "model_turn":
 		m.composing = nil

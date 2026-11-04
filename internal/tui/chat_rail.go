@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -220,6 +221,14 @@ func (m *Model) railLines(height int) []string {
 			}
 			add(mark(m.zones.frame, fmt.Sprintf("rail:agent:%d", i),
 				m.spin.View()+" "+th.SoftPill(subagentRole(t), th.Secondary)+" "+th.Faint.Render(doing)))
+			// Its time on a row of its own, so a long "doing" never cuts it off.
+			timing := helperTiming(t.sub, time.Now())
+			if backgroundRunning(t) {
+				timing = strings.TrimPrefix(timing+" · background", " · ") // last: the first to give way
+			}
+			if timing != "" {
+				add(th.Faint.Render("  " + timing))
+			}
 		}
 	}
 

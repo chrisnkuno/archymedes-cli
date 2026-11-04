@@ -134,6 +134,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	if m.landingVisible() && frame.Get("photo").InBounds(msg) {
 		return m.openGallery(gallery.IndexOf(m.homePhoto())) // the photo, full size
 	}
+	if cmd, ok := m.helpersChipClick(msg); ok {
+		return cmd
+	}
 	if cmd, ok := m.growthClick(msg); ok {
 		return cmd
 	}

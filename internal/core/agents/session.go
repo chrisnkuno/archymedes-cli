@@ -34,6 +34,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 	"github.com/chrisnkuno/friday-cli/internal/core/tools"
+	"github.com/chrisnkuno/friday-cli/internal/core/worktime"
 )
 
 // Notice is something a session tells its client. Kind is the `_archymedes/event` type it becomes.
@@ -68,6 +69,11 @@ type ThreadInfo struct {
 	// Model is the model it runs on; Usage is every token it has used so far.
 	Model string      `json:"model,omitempty"`
 	Usage *loop.Usage `json:"usage,omitempty"`
+	// StartedAt is when this run began; MaxSteps its step limit; Estimate how long a run of its
+	// role takes here (core/worktime). The interface turns them into the time it has left.
+	StartedAt time.Time          `json:"startedAt,omitzero"`
+	MaxSteps  int                `json:"maxSteps,omitempty"`
+	Estimate  *worktime.Estimate `json:"estimate,omitempty"`
 }
 
 // Asker puts a question to the person; "" with no error is a dismissal.

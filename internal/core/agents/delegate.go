@@ -281,7 +281,7 @@ func (s *Session) relaunch(ctx context.Context, old *child, callID string, backg
 	if t.Worktree != "" {
 		ws = s.ws.At(t.Worktree)
 	}
-	return s.launch(ctx, t, old.profile, ws, thread.Complete(history), message), nil
+	return s.launch(ctx, t, old.profile, ws, thread.Complete(history), message, true), nil
 }
 
 func (s *Session) closeTool() *tool.Tool {

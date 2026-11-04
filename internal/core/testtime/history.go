@@ -21,8 +21,8 @@ type Stat struct {
 
 const minWeight = 0.3
 
-// add folds in one run of seconds.
-func (s *Stat) add(seconds float64, now time.Time) {
+// Add folds in one run of seconds.
+func (s *Stat) Add(seconds float64, now time.Time) {
 	x := math.Log(max(seconds, 0.001))
 	s.Last = now.Unix()
 	if s.N == 0 {
@@ -36,9 +36,9 @@ func (s *Stat) add(seconds float64, now time.Time) {
 	s.N++
 }
 
-// sigma is the spread, shrunk toward prior for the first few runs: one run says little about how
+// Sigma is the spread, shrunk toward prior for the first few runs: one run says little about how
 // much the next will vary.
-func (s Stat) sigma(prior float64) float64 {
+func (s Stat) Sigma(prior float64) float64 {
 	const k = 2.0
 	n := float64(s.N)
 	return math.Sqrt((n*s.Var + k*prior*prior) / (n + k))

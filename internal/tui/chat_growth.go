@@ -15,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/project"
 )
 
@@ -39,7 +40,9 @@ type growthState struct {
 	cache               map[string]fileCount
 	edits               map[string][2]int // lines added and removed per file this session
 	plan                []growthBud
-	placed              map[int]string // a plan item's id → the file it was worked on in
+	planEst             *acp.WorkEstimate // what a plan step takes here, from the engine (core/worktime)
+	planStarted         map[int]time.Time // when each step in progress began
+	placed              map[int]string    // a plan item's id → the file it was worked on in
 	truncated           bool
 	measuredAt          time.Time
 	// version moves with every change the panel draws; drawn is the last drawing, by drawnKey.
@@ -198,8 +201,9 @@ func (m *Model) relativePath(path string) string {
 // planLine is one line of todo_write's and todo_read's result: "[x] 3. write the tests".
 var planLine = regexp.MustCompile(`^\[([ x~])\] (\d+)\. (.+)$`)
 
-// growthPlan reads the agent's plan from a todo call's result.
-func (m *Model) growthPlan(tool, result string, isError bool) {
+// growthPlan reads the agent's plan from a todo call's result, and from its data what a step is
+// expected to take and when each step in progress began.
+func (m *Model) growthPlan(tool, result string, isError bool, data map[string]any) {
 	if isError || (tool != "todo_write" && tool != "todo_read") {
 		return
 	}
@@ -217,6 +221,58 @@ func (m *Model) growthPlan(tool, result string, isError bool) {
 		m.growth.plan = plan
 		m.growth.version++
 	}
+	if est := readWorkEstimate(data["plan"]); est != nil {
+		m.growth.planEst = est
+	}
+	if items, ok := data["items"].([]any); ok {
+		m.growth.planStarted = map[int]time.Time{}
+		for _, raw := range items {
+			it, _ := raw.(map[string]any)
+			id, _ := it["id"].(float64)
+			started, _ := it["started"].(string)
+			if at, err := time.Parse(time.RFC3339, started); err == nil && it["status"] == "in_progress" {
+				m.growth.planStarted[int(id)] = at
+			}
+		}
+	}
+}
+
+// readWorkEstimate is an estimate as values in a result's data, or nil.
+func readWorkEstimate(raw any) *acp.WorkEstimate {
+	v, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	num := func(key string) float64 { f, _ := v[key].(float64); return f }
+	basis, _ := v["basis"].(string)
+	return &acp.WorkEstimate{P50: num("p50"), P90: num("p90"), Basis: basis, Runs: int(num("runs")), StepP50: num("stepP50")}
+}
+
+// planTimeLeft is about how long the rest of the plan takes: each step to do at a step's mean
+// time, and each step in progress at what is left of it given how long it has run (timeLeft).
+func (m *Model) planTimeLeft() (float64, bool) {
+	g := &m.growth
+	if g.planEst == nil || len(g.plan) == 0 {
+		return 0, false
+	}
+	if _, ok := timeLeft(g.planEst, 0, 0, 0); !ok {
+		return 0, false
+	}
+	total, now := 0.0, time.Now()
+	for _, b := range g.plan {
+		switch b.status {
+		case "pending":
+			total += meanTime(g.planEst)
+		case "in_progress":
+			ran := 0.0
+			if at, ok := g.planStarted[b.id]; ok {
+				ran = max(now.Sub(at).Seconds(), 0)
+			}
+			left, _ := timeLeft(g.planEst, ran, 0, 0)
+			total += left
+		}
+	}
+	return total, true
 }
 
 // growthWidth is the panel's columns, its edge included; 0 when it is not shown.
@@ -314,6 +370,9 @@ func (m *Model) growthLines(height int) []string {
 		session += th.OK.Render("+"+compactCount(tree.added)) + " " + th.Bad.Render("−"+compactCount(tree.removed))
 	}
 	add(session)
+	// What it is, in words: the tree, its bars' two shades, and the plan.
+	add(th.Faint.Render("your code as a tree, a branch per folder"))
+	add(th.Faint.Render("bars: dim before this session · ") + th.OK.Render("bright") + th.Faint.Render(" written in it"))
 	if len(g.plan) > 0 {
 		done := 0
 		for _, b := range g.plan {
@@ -321,9 +380,13 @@ func (m *Model) growthLines(height int) []string {
 				done++
 			}
 		}
-		const planBar = 10
-		filled := done * planBar / len(g.plan)
-		add(th.Faint.Render("plan ") + th.OK.Render(strings.Repeat("█", filled)) + th.Faint.Render(strings.Repeat("░", planBar-filled)) + th.Faint.Render(fmt.Sprintf(" %d/%d steps", done, len(g.plan))))
+		line := fmt.Sprintf("plan · %d of %d steps done", done, len(g.plan))
+		if left, ok := m.planTimeLeft(); ok && done < len(g.plan) {
+			line += " · " + approx(left) + " left"
+		}
+		add(th.Strong.Render(line))
+	} else {
+		add(th.Faint.Render("no plan yet: Friday's plan appears here, its steps on their branches"))
 	}
 	add("")
 	if g.measured && tree.lines == 0 && len(g.plan) == 0 && tree.added == 0 {

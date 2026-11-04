@@ -55,6 +55,12 @@ type subagentRun struct {
 	background bool
 	status     string
 	thread     string
+	// started, maxSteps and estimate come with its thread (the Go engine's core/worktime), turns
+	// from its model calls: together, about how long it has left (chat_worktime.go).
+	started  time.Time
+	maxSteps int
+	estimate *acp.WorkEstimate
+	turns    int
 }
 
 // agentStopped reports whether a card's sub-agent was stopped (x, close_agent, Claude Code's own
@@ -87,6 +93,14 @@ func (m *Model) handleThread(th *acp.ThreadInfo) {
 		t.sub = &subagentRun{}
 	}
 	t.sub.agent, t.sub.thread, t.sub.background, t.sub.status = th.Agent, th.ID, th.Background, th.Status
+	if !th.StartedAt.IsZero() {
+		t.sub.started = th.StartedAt
+	} else if t.sub.started.IsZero() {
+		t.sub.started = time.Now() // an engine that does not say: from when it was first seen
+	}
+	if th.Estimate != nil {
+		t.sub.estimate, t.sub.maxSteps = th.Estimate, th.MaxSteps
+	}
 	if t.sub.model == "" && th.Model != "" && th.Model != "claude" {
 		t.sub.model = th.Model
 	}
@@ -180,6 +194,7 @@ func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
 			}
 		}
 	case "model_turn":
+		s.turns++
 		if ev.Model != "" {
 			s.model = ev.Model
 		}

@@ -85,10 +85,15 @@
       "core/policy",
       "conform"
     ],
+    "core/worktime": [
+      "core/testtime",
+      "conform"
+    ],
     "core/tools": [
-      "core/tool",
       "core/policy",
       "core/testtime",
+      "core/tool",
+      "core/worktime",
       "conform"
     ],
     "core/loop": [
@@ -115,6 +120,7 @@
       "core/thread",
       "core/tool",
       "core/tools",
+      "core/worktime",
       "conform"
     ],
     "core/claude": [

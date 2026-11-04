@@ -16,6 +16,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 	"github.com/chrisnkuno/friday-cli/internal/core/tools"
+	"github.com/chrisnkuno/friday-cli/internal/core/worktime"
 )
 
 // child is one sub-agent run: a child thread working on a brief.
@@ -26,6 +27,12 @@ type child struct {
 	ws      *tools.Workspace
 	done    chan struct{}
 	cancel  context.CancelFunc
+
+	// started is when this run began, estimate how long it should take (core/worktime); learn is
+	// whether its time is a whole run worth learning (not one resumed after a restart).
+	started  time.Time
+	estimate worktime.Estimate
+	learn    bool
 
 	mu        sync.Mutex
 	result    loop.Result
@@ -104,17 +111,19 @@ func (s *Session) startChild(turnCtx context.Context, spec spawnSpec) (*child, e
 	if err := s.store.Spawn(t); err != nil {
 		return nil, err
 	}
-	return s.launch(turnCtx, t, spec.profile, ws, history, spec.brief), nil
+	return s.launch(turnCtx, t, spec.profile, ws, history, spec.brief, true), nil
 }
 
-// launch runs a child thread from history and prompt, registering it while it runs.
-func (s *Session) launch(turnCtx context.Context, t thread.Thread, profile roles.Profile, ws *tools.Workspace, history []fantasy.Message, prompt string) *child {
+// launch runs a child thread from history and prompt, registering it while it runs. learn: its
+// time, once it completes, is a whole run of its role (core/worktime).
+func (s *Session) launch(turnCtx context.Context, t thread.Thread, profile roles.Profile, ws *tools.Workspace, history []fantasy.Message, prompt string, learn bool) *child {
 	base := turnCtx
 	if t.Background {
 		base = s.life
 	}
 	ctx, cancel := context.WithCancel(base)
-	c := &child{t: t, profile: profile, inbox: loop.NewInbox(), ws: ws, done: make(chan struct{}), cancel: cancel}
+	c := &child{t: t, profile: profile, inbox: loop.NewInbox(), ws: ws, done: make(chan struct{}), cancel: cancel,
+		started: time.Now(), estimate: worktime.For(s.cfg.Root).Helper(profile.Name, profile.MaxIterations), learn: learn}
 	if t.Usage != nil {
 		c.usage = loop.Usage(*t.Usage)
 	}
@@ -228,6 +237,9 @@ func (c *child) finish(s *Session, result loop.Result, extra string) {
 	c.result, c.report = result, report
 	c.mu.Unlock()
 	_ = s.store.SetStatus(c.t.ID, status, report)
+	if c.learn && result.Status == loop.Completed {
+		worktime.For(s.cfg.Root).RecordHelper(c.profile.Name, time.Since(c.started), result.Steps)
+	}
 	s.noticeThread(c, status, report)
 	if c.t.Background {
 		// The parent may be mid-turn (it reads this at its next step) or idle (its next turn does).
@@ -243,6 +255,7 @@ func (s *Session) noticeThread(c *child, status, report string) {
 		ID: c.t.ID, ParentToolCallID: c.t.CallID, Agent: c.profile.Name, Status: status,
 		Background: c.t.Background, Brief: c.t.Brief, Report: report, Branch: c.t.Branch,
 		Model: model, Usage: c.spent(),
+		StartedAt: c.started, MaxSteps: c.profile.MaxIterations, Estimate: &c.estimate,
 	}})
 }
 
@@ -270,7 +283,7 @@ func (s *Session) resumeInterrupted(t thread.Thread) {
 	if len(history) == 0 {
 		prompt = t.Brief // it had not started its first step
 	}
-	s.launch(s.life, t, profile, ws, thread.Complete(history), prompt)
+	s.launch(s.life, t, profile, ws, thread.Complete(history), prompt, false)
 }
 
 func (s *Session) profile(name string) (roles.Profile, bool) {

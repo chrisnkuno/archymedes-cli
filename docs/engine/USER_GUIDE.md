@@ -381,6 +381,19 @@ Friday's own do.
 
 You can write your own roles; see [Sub-agents](SUBAGENTS.md).
 
+### How long a helper, or the plan, has left
+
+Friday learns how long work takes in each project and keeps it in
+`.archymedes/work-times.json`: a finished helper's time and steps, by role, and each finished
+plan step. A time is treated as log-normal, as test times are, and kept as its median and its 90th
+percentile. A role with no runs yet borrows this project's time per step from the other roles.
+With nothing measured, it is a guess from the steps the role may take.
+
+What a helper has left is not the median minus the time it has run. One still going after two
+minutes is one of the longer ones, so Friday takes the median of the runs that lasted at least that
+long. It is never more than the steps the helper has left times its own pace so far. The plan's
+time left adds each step to do at a step's mean time, and what is left of the step in progress.
+
 ## Seeing every change
 
 Every edit is shown as it lands, not only when the turn ends.
@@ -390,7 +403,11 @@ Every edit is shown as it lands, not only when the turn ends.
   first rows; enter on the card (or a second click) shows all of it.
 - **In the changes rail.** On a wide terminal, a column beside the conversation lists every file
   changed since the last commit, with its lines added and removed. It marks the file edited last,
-  shows the helpers at work and what each is doing now (**+ new** starts one). Under **Running**
+  shows the helpers at work and what each is doing now (**+ new** starts one). Under each helper
+  is how long it has run and about how long it has left, `1m 12s · ≈2m left`, and `background`
+  when it works on while Friday does other things. Past the time nine in ten of its kind take, it
+  says `longer than usual` instead. On a terminal too narrow for the rail, the top bar shows
+  `2 helpers ≈3m left`; a click opens the Inspector on them. Under **Running**
   it lists every command at work this moment, Friday's own and its helpers': who runs it, the
   command, and for how long. A click opens it, Friday's on its card and a helper's in the
   Inspector. Background commands follow, each with the last line it printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
@@ -405,6 +422,8 @@ Every edit is shown as it lands, not only when the turn ends.
   the folder its words name. A path the code does not have yet grows a `planned` branch, so a new
   project shows what is still to be built. Steps about nothing in particular stay on the trunk. It
   is measured again when an edit lands, and only files that changed since are read again.
+  The panel says what it shows under its title, and what its bars' shades mean. Its plan row reads
+  `plan · 2 of 5 steps done · ≈6m left`; with no plan yet it says where one will appear.
   `/growth wide` extends it to half the screen for a big tree, and a click on its title switches
   between that and its usual width; `/growth narrow` and `/growth off` do the same by name. Hidden
   and shown again with alt+v, it keeps the width it had. When what is left beside it is too narrow
