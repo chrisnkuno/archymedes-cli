@@ -54,6 +54,7 @@ func newPager(m *Model, title string, lines []string) *pager {
 	styles.Focused.Prompt, styles.Focused.Text, styles.Focused.Placeholder = m.th.Key, m.th.Body, m.th.Faint
 	in.SetStyles(styles)
 	p.input = in
+	p.fit(m)
 	p.refresh(m)
 	return p
 }
@@ -70,6 +71,7 @@ func (m *Model) transcriptPager() *pager {
 // the end — the most recent mention is usually the one being looked for.
 func (p *pager) search(m *Model, query string) {
 	p.query, p.matches, p.current = strings.TrimSpace(query), nil, 0
+	p.fit(m)
 	if p.query != "" {
 		needle := strings.ToLower(p.query)
 		for i, line := range p.plain {
@@ -88,6 +90,7 @@ func (p *pager) step(m *Model, delta int) {
 		return
 	}
 	p.current = (p.current + delta + len(p.matches)) % len(p.matches)
+	p.fit(m)
 	p.refresh(m)
 	p.reveal()
 }
@@ -188,10 +191,25 @@ func (p *pager) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (p *pager) view(m *Model) string {
-	th := m.th
+// fit sizes the viewport as the window will draw it. Everything that scrolls (search, step, the jump
+// to the newest line) reasons about the viewport's height and wrapped line count, so it must be sized
+// before any of them runs, not first when the pager is drawn: an unsized viewport measures against
+// defaults, and where a match then ends up depends on them. A window is drawn against a screen the
+// size of its inside (windowView), so the size is taken from there, not from the whole screen.
+func (p *pager) fit(m *Model) {
+	inside := m.windowInside()
+	m.sized(inside.Dx(), inside.Dy(), func() { p.size(m) })
+}
+
+// size gives the viewport the room m has: while a window is drawn, m is already its inside.
+func (p *pager) size(m *Model) {
 	p.vp.SetWidth(m.width)
 	p.vp.SetHeight(max(m.windowHeight()-2, 1))
+}
+
+func (p *pager) view(m *Model) string {
+	th := m.th
+	p.size(m)
 
 	percent := int(p.vp.ScrollPercent() * 100)
 	right := th.Faint.Render(fmt.Sprintf("%d lines · %d%% ", len(p.lines), percent))

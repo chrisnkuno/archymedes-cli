@@ -100,3 +100,33 @@ func TestMarkMatchesKeepsTheText(t *testing.T) {
 		t.Fatalf("%q", ansi.Strip(got))
 	}
 }
+
+// The pager reasons about its viewport's height and wrapped line count when it scrolls to a match,
+// so the viewport must already have the size it will be drawn at: where the match ends up must not
+// depend on defaults an unsized viewport happens to carry.
+func TestPagerIsSizedAsDrawnBeforeItScrollsToAMatch(t *testing.T) {
+	for _, size := range [][2]int{{80, 20}, {100, 30}, {132, 48}} {
+		m, _ := newTestModel(t)
+		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		for i := 1; i <= 80; i++ {
+			text := fmt.Sprintf("line %02d of the session", i)
+			if i == 80 {
+				text += " mentions the Needle here"
+			}
+			m.notice(noticeInfo, text)
+		}
+		submitCommand(m, "/find needle")
+		p, ok := m.activeWindow().(*pager)
+		if !ok {
+			t.Fatalf("%v: /find opens the pager", size)
+		}
+		w, h, y := p.vp.Width(), p.vp.Height(), p.vp.YOffset()
+		s := screen(m)
+		if p.vp.Width() != w || p.vp.Height() != h || p.vp.YOffset() != y {
+			t.Fatalf("%v: sized %dx%d at offset %d when it searched, %dx%d at %d when drawn", size, w, h, y, p.vp.Width(), p.vp.Height(), p.vp.YOffset())
+		}
+		if !strings.Contains(s, "mentions the Needle") {
+			t.Fatalf("%v: the newest match is on screen:\n%s", size, s)
+		}
+	}
+}

@@ -48,8 +48,21 @@ func (s *Session) addWorktree(id string) (dir, branch string, err error) {
 	if _, err := s.gitIn(top, "worktree", "add", "-q", "-b", branch, checkout, "HEAD"); err != nil {
 		return "", "", err
 	}
-	// The project may be a subdirectory of the repository; the child works in the same one.
-	rel, _ := filepath.Rel(top, s.cfg.Root)
+	// The project may be a subdirectory of the repository; the child works in the same one. git reports
+	// the repository's real path, while the project path may reach it through a symlink (macOS keeps
+	// temp directories and /tmp behind /var -> /private/var, and people link project folders), and
+	// the relative path between a real path and a symlinked one is nonsense. Compare real paths.
+	realRoot, realTop := s.cfg.Root, top
+	if p, err := filepath.EvalSymlinks(realRoot); err == nil {
+		realRoot = p
+	}
+	if p, err := filepath.EvalSymlinks(realTop); err == nil {
+		realTop = p
+	}
+	rel, err := filepath.Rel(realTop, realRoot)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		rel = "." // the project is not inside the repository's tree: work at its top
+	}
 	return filepath.Join(checkout, rel), branch, nil
 }
 
