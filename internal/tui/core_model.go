@@ -187,18 +187,24 @@ type Model struct {
 	mode    string
 	phase   phase
 
-	current   *assistantItem
-	tools     map[string]*toolItem
-	queue     []string
-	comments  []reviewComment // notes on diff lines, sent with the next message
-	rail      railState       // the changes rail beside the transcript (chat_rail.go)
-	growth    growthState     // the growth panel: the project as a growing tree (chat_growth.go)
-	lastInput time.Time       // the last key, click or paste, for resting motion (core_motion.go)
-	goal      *goalState      // /goal in progress
-	turnStart time.Time
-	turnUsage usageTotals
-	usage     usageTotals
-	retrying  string
+	current *assistantItem
+	tools   map[string]*toolItem
+	queue   []queuedMsg // sent while a turn runs (chat_queue.go)
+	// queueSel is the queued message selected with ↑ (-1: none, the input has the keys); queueHeld
+	// when the countdowns were held for it; queueSeq numbers the entries; queueTicking: a clock runs.
+	queueSel     int
+	queueHeld    time.Time
+	queueSeq     int
+	queueTicking bool
+	comments     []reviewComment // notes on diff lines, sent with the next message
+	rail         railState       // the changes rail beside the transcript (chat_rail.go)
+	growth       growthState     // the growth panel: the project as a growing tree (chat_growth.go)
+	lastInput    time.Time       // the last key, click or paste, for resting motion (core_motion.go)
+	goal         *goalState      // /goal in progress
+	turnStart    time.Time
+	turnUsage    usageTotals
+	usage        usageTotals
+	retrying     string
 	// text is the interface's words in the person's language (ARCHYMEDES_LANGUAGE, else the locale).
 	text *i18n.Catalog
 	// composing is the tool call the model is writing right now, shown in place of "thinking…".
@@ -235,6 +241,7 @@ func New(opts Options) *Model {
 	th, _ := theme.Load(opts.Theme)
 	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th), safe: detectSafeGlyphs()}
 	m.keyOverrides = map[string][]string{}
+	m.queueSel = -1
 	m.vim.on = vimOn(opts.ConfigDir)
 	if opts.ConfigDir != "" {
 		overrides, err := config.LoadKeys(opts.ConfigDir)
@@ -523,6 +530,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.commandDone(msg)
 	case steerDoneMsg:
 		return m, m.steerDone(msg)
+	case queueTickMsg:
+		return m, m.queueTicked()
 	case pushPlanMsg:
 		return m, m.pushPlanned(msg)
 	case pushedMsg:
@@ -583,7 +592,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice(noticeInfo, msg.session.Info.Notice)
 		}
 		if m.opts.Prompt != "" {
-			m.queue = append([]string{m.opts.Prompt}, m.queue...)
+			m.queueSeq++
+			m.queue = append([]queuedMsg{{id: m.queueSeq, text: m.opts.Prompt}}, m.queue...)
 		}
 		cmds := []tea.Cmd{m.animate()}
 		cmds = append(cmds, m.modeChosenEarlier())
@@ -593,9 +603,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// again every hour while Friday stays open, so a new release is found and installed.
 			cmds = append(cmds, m.upkeep())
 		}
-		if len(m.queue) > 0 {
-			next := m.queue[0]
-			m.queue = m.queue[1:]
+		if next, ok := m.nextQueued(); ok {
 			cmds = append(cmds, m.send(next))
 		}
 		return m, tea.Batch(cmds...)
@@ -675,11 +683,11 @@ func (m *Model) submit() tea.Cmd {
 	}
 	switch m.phase {
 	case busy:
-		return m.steer(text)
+		return m.queueDuringRun(text)
 	case ready:
 		return m.send(text)
 	case connecting:
-		m.queue = append(m.queue, text)
+		m.enqueue(text)
 		return nil
 	}
 	m.notice(noticeError, "The agent is not running; restart Friday")
@@ -763,9 +771,7 @@ func (m *Model) finishTurn(msg promptDoneMsg) tea.Cmd {
 			return then(reread, tip, m.goalTurnEnded(msg.stop))
 		}
 	}
-	if len(m.queue) > 0 {
-		next := m.queue[0]
-		m.queue = m.queue[1:]
+	if next, ok := m.nextQueued(); ok {
 		return then(reread, tip, m.send(next))
 	}
 	return then(reread, tip)
@@ -775,7 +781,7 @@ func (m *Model) cancelTurn() tea.Cmd {
 	if m.phase != busy {
 		return nil
 	}
-	m.queue = nil // stopping means stopping, not moving on to the next queued message
+	m.queue, m.queueSel = nil, -1 // stopping means stopping, not moving on to the next queued message
 	m.goal = nil
 	_ = m.agent.Cancel(m.session.ID)
 	return m.toast(toastInfo, "Stopping…")

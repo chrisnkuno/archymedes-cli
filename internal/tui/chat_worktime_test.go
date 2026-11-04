@@ -52,8 +52,8 @@ func TestTimeLeftInvariants(t *testing.T) {
 }
 
 // TestBackgroundHelpersShowTheirTime: a helper at work shows how long it has run and about how long
-// it has left, in the rail beside the conversation and, when the rail has no room, in the top bar;
-// one past its usual time says so.
+// it has left, in the rail beside the conversation and, when the rail has no room, in the top bar's
+// agents chip; one past its usual time says so.
 func TestBackgroundHelpersShowTheirTime(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
@@ -75,7 +75,7 @@ func TestBackgroundHelpersShowTheirTime(t *testing.T) {
 	if m.railWidth() != 0 {
 		t.Fatal("the rail still shows at 100 columns")
 	}
-	if top := strings.Split(screen(m), "\n")[0]; !strings.Contains(top, "1 helper") || !strings.Contains(top, "left") {
+	if top := strings.Split(screen(m), "\n")[0]; !strings.Contains(top, "agents 1") || !strings.Contains(top, "left") {
 		t.Errorf("the top bar does not show the helper at work:\n%s", top)
 	}
 
@@ -89,7 +89,7 @@ func TestBackgroundHelpersShowTheirTime(t *testing.T) {
 	// Done, it leaves the top bar.
 	m.handleEvent(acp.Event{Type: "thread", Thread: &acp.ThreadInfo{ID: "t1", ParentToolCallID: "d1", Agent: "general", Status: "done", Background: true, Report: "ported"}})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	if top := strings.Split(screen(m), "\n")[0]; strings.Contains(top, "helper") {
+	if top := strings.Split(screen(m), "\n")[0]; strings.Contains(top, "agents 1") || strings.Contains(top, "left") {
 		t.Errorf("a finished helper stays in the top bar:\n%s", top)
 	}
 }

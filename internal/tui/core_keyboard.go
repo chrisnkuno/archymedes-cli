@@ -101,6 +101,11 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 			return cmd
 		}
 	}
+	if m.queueSel >= 0 && len(m.queue) > 0 {
+		if cmd, ok := m.queueKey(msg); ok {
+			return cmd
+		}
+	}
 	if m.desk.focused && m.landingVisible() {
 		if cmd, ok := m.deskKey(msg); ok {
 			return cmd
@@ -183,9 +188,10 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.toggleGrowth()
 	case key.Matches(msg, k.Agent):
 		return m.agentFromInput()
-	case key.Matches(msg, k.Inspect) && len(m.input.complete) == 0 && !m.landingVisible() &&
-		(msg.String() != "right" || m.input.value() == ""):
-		return m.openInspector(nil) // → on an empty input: what the sub-agents are doing, the latest edit
+	case key.Matches(msg, k.Inspect) && msg.String() != "right":
+		return m.openInspector(nil) // alt+i: the helpers at work and the latest edit, from anywhere
+	case key.Matches(msg, k.Inspect) && len(m.input.complete) == 0 && !m.landingVisible() && m.input.value() == "":
+		return m.openInspector(nil) // → on an empty input, where it moves nothing
 	case key.Matches(msg, k.PageUp):
 		return m.scrollBy(max(m.transcriptHeight()-2, 1))
 	case key.Matches(msg, k.PageDown):
@@ -203,6 +209,9 @@ func (m *Model) chatKey(msg tea.KeyPressMsg) tea.Cmd {
 	case (msg.String() == "up" || msg.String() == "down") && len(m.input.complete) > 0:
 		delta := map[string]int{"up": -1, "down": 1}[msg.String()]
 		m.input.compPos = (m.input.compPos + delta + len(m.input.complete)) % len(m.input.complete)
+		return nil
+	case msg.String() == "up" && m.input.value() == "" && len(m.queue) > 0 && !m.landingVisible():
+		m.focusQueue(len(m.queue) - 1) // ↑ from an empty input: into the queue, nearest first
 		return nil
 	case msg.String() == "up" && m.input.value() == "" && m.enterTranscript():
 		return nil // ↑ from an empty input: onto the newest block of the conversation

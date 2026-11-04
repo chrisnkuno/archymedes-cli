@@ -396,6 +396,32 @@ minutes is one of the longer ones, so Friday takes the median of the runs that l
 long. It is never more than the steps the helper has left times its own pace so far. The plan's
 time left adds each step to do at a step's mean time, and what is left of the step in progress.
 
+## Sending while Friday works
+
+A message sent while Friday works waits in a queue above the input. Each one is numbered,
+with how many wait, and goes into the running turn after five seconds. Friday reads it after its
+current step, so "use tabs, not spaces" lands before the next edit, not after the whole turn.
+
+| Key, in the queue | What it does |
+| --- | --- |
+| ↑ from an empty input | into the queue, on the newest message; the countdowns hold while you are there |
+| ↑ / ↓ | move between messages; past the first, into the conversation; past the last, back to the input |
+| enter | back into the input, to change it and send it again |
+| x or delete | drop it |
+| alt+↑ / alt+↓ | move it up or down |
+| s | send it into the turn now |
+| esc | back to the input; the countdowns go on |
+
+A message the turn ends without reading waits in the queue as a turn of its own, and so does
+one an engine cannot take mid-turn. They run in order when the current turn ends. esc on the
+input stops the turn and clears the queue.
+
+## Growth and agents, a key away
+
+The top bar carries `▲ growth alt+v` and `☺ agents alt+i`, and a click on either works too.
+Growth shows or hides the growth panel. Agents opens the Inspector on the helpers at work and
+counts them: `☺ agents 2`. On a wide terminal the dock shows the same two among its chips.
+
 ## Seeing every change
 
 Every edit is shown as it lands, not only when the turn ends.
@@ -408,8 +434,8 @@ Every edit is shown as it lands, not only when the turn ends.
   shows the helpers at work and what each is doing now (**+ new** starts one). Under each helper
   is how long it has run and about how long it has left, `1m 12s · ≈2m left`, and `background`
   when it works on while Friday does other things. Past the time nine in ten of its kind take, it
-  says `longer than usual` instead. On a terminal too narrow for the rail, the top bar shows
-  `2 helpers ≈3m left`; a click opens the Inspector on them. Under **Running**
+  says `longer than usual` instead. On a terminal too narrow for the rail, the top bar's agents
+  chip says it: `☺ agents 2 ≈3m left alt+i`. Under **Running**
   it lists every command at work this moment, Friday's own and its helpers': who runs it, the
   command, and for how long. A click opens it, Friday's on its card and a helper's in the
   Inspector. Background commands follow, each with the last line it printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
@@ -430,7 +456,8 @@ Every edit is shown as it lands, not only when the turn ends.
   between that and its usual width; `/growth narrow` and `/growth off` do the same by name. Hidden
   and shown again with alt+v, it keeps the width it had. When what is left beside it is too narrow
   for the changes rail, the rail steps aside until the panel narrows.
-- **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
+- **In the Inspector** (alt+i from anywhere, → on an empty input or a selected card, or a click
+  on `☺ agents` in the top bar): every helper and every edit
   of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see). On a helper,
   x stops it and m sends it a message.
 - **Every call, readable in full.** A card shows one line for what a call was given and a few

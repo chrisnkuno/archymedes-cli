@@ -26,6 +26,7 @@ var dockApps = []struct{ id, icon, name string }{
 // systemApps are the desktop's own: always a key away and in the start menu, and shown in the dock
 // as compact chips when the main apps leave room for them.
 var systemApps = []struct{ id, icon, name string }{
+	{"growth-panel", "▲", "Growth"}, {"inspect", "☺", "Agents"},
 	{"providers", "⇄", "Providers"}, {"tasks", "☰", "Tasks"}, {"notifications", "●", "Alerts"}, {"settings", "⚙", "Settings"},
 }
 
@@ -37,6 +38,11 @@ func (m *Model) systemChips(room int) string {
 	for _, app := range systemApps {
 		a, _ := findAction(app.id)
 		label := " " + keyLabel(m.keys.keysFor(a)) + app.icon + " "
+		if app.id == "inspect" {
+			if n := len(m.workingAgents()); n > 0 {
+				label = fmt.Sprintf(" %s%s %d at work ", keyLabel(m.keys.keysFor(a)), app.icon, n) // the helpers, a click away
+			}
+		}
 		w := ansi.StringWidth(label)
 		if used+w > room {
 			break
@@ -121,7 +127,7 @@ func (m *Model) tray() string {
 	if status == "" && m.usage.input+m.usage.output > 0 {
 		tray += th.Faint.Render(fmt.Sprintf("↑%s ↓%s ", compact(m.usage.input), compact(m.usage.output)))
 	}
-	tray += m.changesChip() + m.helpersChip()
+	tray += m.shortcutChips() + m.changesChip()
 	if info := m.session.Info; info.Profile != "" {
 		tray += th.SoftPill(info.Profile, th.Accent) + " "
 	}

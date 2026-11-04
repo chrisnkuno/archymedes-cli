@@ -46,7 +46,7 @@ var actions = []action{
 	{"help", "help", "Apps", []string{"f8", "?"}, false, func(k *keyMap) *key.Binding { return &k.Help }},
 	{"stats", "stats", "Apps", []string{"f9"}, false, func(k *keyMap) *key.Binding { return &k.Stats }},
 	{"changes", "changes", "Apps", []string{"f10"}, false, func(k *keyMap) *key.Binding { return &k.Changes }},
-	{"inspect", "inspector", "Apps", []string{"right"}, false, func(k *keyMap) *key.Binding { return &k.Inspect }},
+	{"inspect", "agents & inspector", "Apps", []string{"alt+i", "right"}, false, func(k *keyMap) *key.Binding { return &k.Inspect }},
 	{"gallery", "gallery", "Apps", []string{"f12"}, false, func(k *keyMap) *key.Binding { return &k.Gallery }},
 
 	{"tasks", "tasks", "Apps", []string{"alt+t"}, false, func(k *keyMap) *key.Binding { return &k.Tasks }},

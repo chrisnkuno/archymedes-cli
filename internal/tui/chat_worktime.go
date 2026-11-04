@@ -107,27 +107,41 @@ func (m *Model) helpersLeft(now time.Time) (n int, longest float64, known bool) 
 	return n, longest, known
 }
 
-// helpersChip is the top bar's count of helpers at work, with the time until the last is done,
-// when the rail is not beside the transcript to list them; a click opens the Inspector.
-func (m *Model) helpersChip() string {
-	if m.railWidth() > 0 || m.landingVisible() {
-		return ""
+// shortcutChips are the growth panel and the helpers, a click away in the top bar at every width
+// the bar has room for them: "▲ growth alt+v  ☺ agents alt+i", the names dropped when narrow.
+// Agents counts the helpers at work and, when the rail is not there to list them, says about how
+// long until the last is done: "☺ agents 2 ≈3m left alt+i".
+func (m *Model) shortcutChips() string {
+	th := m.th
+	named := m.width >= 96 // below, the words go; the count and the time left stay
+	chip := func(id, icon, name, extra, keyID string) string {
+		a, _ := findAction(keyID)
+		label := icon + " "
+		if named {
+			label += name + " "
+		}
+		if extra != "" {
+			label += extra + " "
+		}
+		return mark(m.zones.frame, id, th.Faint.Render(label)+th.Key.Render(keyLabel(m.keys.keysFor(a)))) + "  "
 	}
-	n, longest, known := m.helpersLeft(time.Now())
-	if n == 0 {
-		return ""
+	work := ""
+	if n, longest, known := m.helpersLeft(time.Now()); n > 0 {
+		work = fmt.Sprintf("%d", n)
+		if known && m.railWidth() == 0 {
+			work += " " + approx(longest) + " left"
+		}
 	}
-	text := plural(n, "helper")
-	if known {
-		text += " " + approx(longest) + " left"
-	}
-	return mark(m.zones.frame, "helpers-chip", m.th.Faint.Render(text)) + " "
+	return chip("top:growth", "▲", "growth", "", "growth-panel") + chip("top:agents", "☺", "agents", work, "inspect")
 }
 
-// helpersChipClick opens the Inspector, on every helper, from the top bar's chip.
-func (m *Model) helpersChipClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
-	if !m.zones.frame.Get("helpers-chip").InBounds(msg) {
-		return nil, false
+// shortcutClick is a click on one of the top bar's shortcut chips.
+func (m *Model) shortcutClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
+	switch {
+	case m.zones.frame.Get("top:growth").InBounds(msg):
+		return m.runAction("growth-panel"), true
+	case m.zones.frame.Get("top:agents").InBounds(msg):
+		return m.openInspector(nil), true
 	}
-	return m.openInspector(nil), true
+	return nil, false
 }
