@@ -376,10 +376,17 @@ func (s *Session) Busy() bool {
 // Steer hands text to the running turn; false when none runs (send it as a turn instead).
 func (s *Session) Steer(text string) bool { return s.inbox.Steer(text) }
 
-// SetMode changes what the session may do, keeping standing approvals.
+// SetMode changes what the session may do, keeping standing approvals. Between build and auto the
+// ledger changes in place, so a running turn and its helpers follow at their next call; any other
+// change takes a new ledger, which the next turn uses.
 func (s *Session) SetMode(mode policy.Mode) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.meta.Mode = string(mode)
+	if s.ledger.SetMode(mode) {
+		_ = s.store.SaveMeta(s.meta)
+		return
+	}
 	standing := s.ledger.Snapshot()
 	patterns := s.ledger.Patterns()
 	s.ledger = policy.NewLedger(mode, s.askApproval)
@@ -388,7 +395,6 @@ func (s *Session) SetMode(mode policy.Mode) {
 		_ = s.ledger.AllowPattern(p)
 	}
 	s.ledger.SetCommandRules(s.ws.Rules)
-	s.meta.Mode = string(mode)
 	_ = s.store.SaveMeta(s.meta)
 }
 

@@ -232,3 +232,37 @@ func TestNumbersAndURLsReadAsTheTypeScriptRulesDid(t *testing.T) {
 		}
 	}
 }
+
+// TestRememberSavesSeveralKeysAtOnceAndSkipsWhatIsInvalid: a switch remembers its provider and
+// model in one write; a value the Settings list would refuse is left out, never stored.
+func TestRememberSavesSeveralKeysAtOnceAndSkipsWhatIsInvalid(t *testing.T) {
+	dir := t.TempDir()
+	if r := Set(dir, "ARCHYMEDES_THEME", "dusk"); !r.OK {
+		t.Fatal(r.Error)
+	}
+	if err := Remember(dir, map[string]string{"ARCHYMEDES_PROVIDER": "groq", "GROQ_MODEL": "qwen-3-32b", "NOT_A_SETTING": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	got := Load(dir)
+	want := map[string]string{"ARCHYMEDES_THEME": "dusk", "ARCHYMEDES_PROVIDER": "groq", "GROQ_MODEL": "qwen-3-32b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	// Free mode never stores a paid model; the provider still is.
+	if err := Remember(dir, map[string]string{"ARCHYMEDES_PROVIDER": "free", "FREE_MODEL": "openai/gpt-5"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(dir); got["ARCHYMEDES_PROVIDER"] != "free" || got["FREE_MODEL"] != "" {
+		t.Fatalf("free with a paid model: %v", got)
+	}
+	// Over a file someone broke by hand, nothing is written.
+	if err := os.WriteFile(File(dir), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Remember(dir, map[string]string{"ARCHYMEDES_PROVIDER": "groq"}); err == nil {
+		t.Fatal("remembered over a broken file")
+	}
+	if data, _ := os.ReadFile(File(dir)); string(data) != "{broken" {
+		t.Fatalf("the broken file was replaced: %q", data)
+	}
+}

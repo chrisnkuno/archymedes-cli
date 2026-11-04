@@ -78,7 +78,11 @@ spent, or when Friday notices it is going in circles. The last line of the turn 
 
 The **mode** decides what Friday may do without asking. shift+tab cycles plan → build → auto →
 defender in a session; `/mode <name>`, or `/plan`, `/build`, `/auto`, `/defender`, switch
-directly. The mode can change mid-session; standing approvals carry over.
+directly. The mode can change mid-session; standing approvals carry over. While Friday works, a
+change between build and auto applies at once. Its next edit or command, and its helpers' next
+ones, follow the new mode. So a long run can go over to auto, or back to build, without
+stopping. Plan and defender change what Friday can use, so a change to or from them
+shows as `build → plan` in the top bar and applies when the turn ends.
 
 | Mode | Reads | Edits files | Runs commands | Asks you |
 | --- | --- | --- | --- | --- |
@@ -401,6 +405,10 @@ Every edit is shown as it lands, not only when the turn ends.
   the folder its words name. A path the code does not have yet grows a `planned` branch, so a new
   project shows what is still to be built. Steps about nothing in particular stay on the trunk. It
   is measured again when an edit lands, and only files that changed since are read again.
+  `/growth wide` extends it to half the screen for a big tree, and a click on its title switches
+  between that and its usual width; `/growth narrow` and `/growth off` do the same by name. Hidden
+  and shown again with alt+v, it keeps the width it had. When what is left beside it is too narrow
+  for the changes rail, the rail steps aside until the panel narrows.
 - **In the Inspector** (→ on an empty input, or → on a selected card): every helper and every edit
   of the session in full, described under [Sub-agents](SUBAGENTS.md#what-you-see). On a helper,
   x stops it and m sends it a message.
@@ -459,6 +467,12 @@ is always a free one.
 every model you can switch to. Switching to another provider works too (`/model` lists them),
 Claude included (see [Claude Code](#claude-code)), except to Codex, which runs on the TypeScript
 engine.
+
+Friday remembers the model you last switched to. The next session, today or after a restart,
+starts on it: the switch saves the provider as **Default provider** and the model as that provider's
+model setting (such as `GROQ_MODEL` or `CLAUDE_MODEL`), as Settings would. `--provider` and
+`--model` still choose for the one run they are given to, and a resumed session goes back to the
+model it was on. A switch that is refused remembers nothing, and free mode never stores a paid model.
 
 ## Claude Code
 

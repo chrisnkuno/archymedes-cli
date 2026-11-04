@@ -208,3 +208,95 @@ func TestGrowthPanelGrowsWithTheWork(t *testing.T) {
 		t.Error("/growth did not hide it")
 	}
 }
+
+// TestGrowthPanelExtends: /growth wide gives the tree half the screen, a click on its title
+// switches between the widths, alt+v keeps the width it had, and no row runs over at any size.
+func TestGrowthPanelExtends(t *testing.T) {
+	m, _ := newTestModel(t)
+	root := t.TempDir()
+	m.opts.Cwd = root
+	_ = os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644)
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	m.tr.add(&noticeItem{kind: noticeInfo, text: "conversation"})
+	run := func(line string) {
+		t.Helper()
+		cmd, ok := m.runCommand(line)
+		if !ok {
+			t.Fatalf("%s is not a command", line)
+		}
+		deliver(m, cmd)
+	}
+
+	run("/growth")
+	narrow := m.growthWidth()
+	if narrow == 0 || m.growth.wide {
+		t.Fatalf("/growth: width %d, wide %v", narrow, m.growth.wide)
+	}
+	run("/growth wide")
+	if !m.growth.shown || m.growthWidth() != 70 {
+		t.Fatalf("/growth wide on 140 columns: %d, want half", m.growthWidth())
+	}
+	if !strings.Contains(screen(m), "Growth") {
+		t.Fatal("the extended panel has no title")
+	}
+	for _, width := range []int{96, 120, 200} {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
+		if w := m.growthWidth(); w < 30 || w > width/2 {
+			t.Errorf("width %d: extended to %d", width, w)
+		}
+		if m.chatWidth() < 40 {
+			t.Errorf("width %d: the conversation is left %d columns", width, m.chatWidth())
+		}
+		for i, row := range strings.Split(m.View().Content, "\n") {
+			if w := ansi.StringWidth(row); w > width {
+				t.Errorf("width %d: row %d is %d columns", width, i, w)
+			}
+		}
+	}
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+
+	// Hidden and shown again, it keeps its width.
+	deliver(m, press(m, 'v', tea.ModAlt))
+	if m.growthWidth() != 0 {
+		t.Fatal("alt+v did not hide it")
+	}
+	deliver(m, press(m, 'v', tea.ModAlt))
+	if m.growthWidth() != 70 {
+		t.Fatalf("shown again at %d, not the extended width", m.growthWidth())
+	}
+
+	// A click on the title narrows it, and another extends it again. The toasts above would float
+	// over it until their timer, which this test does not run; the clicks themselves raise none.
+	m.toasts = nil
+	click := func() {
+		t.Helper()
+		_ = m.View()
+		time.Sleep(40 * time.Millisecond) // the zone worker scans asynchronously
+		box := m.zones.frame.Get("growth:title")
+		if box.IsZero() {
+			t.Fatal("the panel's title is not a click zone")
+		}
+		m.Update(tea.MouseClickMsg{X: box.StartX, Y: box.StartY, Button: tea.MouseLeft})
+	}
+	click()
+	if m.growth.wide || m.growthWidth() != narrow {
+		t.Fatalf("a click on the title left it at %d", m.growthWidth())
+	}
+	click()
+	if !m.growth.wide {
+		t.Fatal("a second click did not extend it")
+	}
+
+	run("/growth narrow")
+	if m.growth.wide || m.growthWidth() != narrow {
+		t.Fatalf("/growth narrow: %d", m.growthWidth())
+	}
+	run("/growth off")
+	if m.growth.shown {
+		t.Fatal("/growth off left it shown")
+	}
+	run("/growth off")
+	if m.growth.shown {
+		t.Fatal("/growth off is not a toggle")
+	}
+}

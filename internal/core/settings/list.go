@@ -73,6 +73,28 @@ type SetResult struct {
 // saves interleaved would each write the file as it was before the other.
 var saving sync.Mutex
 
+// Remember saves what Friday noticed rather than what the person typed — such as the model last
+// switched to — in one write. A key that is not a setting, or a value the Settings list would
+// refuse, is left out; a file that cannot be read is never replaced.
+func Remember(dir string, values map[string]string) error {
+	saving.Lock()
+	defer saving.Unlock()
+	stored, err := read(dir)
+	if err != nil {
+		return err
+	}
+	for key, raw := range values {
+		if _, ok := Lookup(key); !ok || strings.TrimSpace(raw) == "" {
+			continue
+		}
+		if value, refusal := Validate(key, raw); refusal == "" {
+			stored[key] = value
+		}
+	}
+	_, err = Save(dir, stored)
+	return err
+}
+
 // Set saves one setting; an empty value clears it. A refusal comes back as Error, never as a Go error.
 func Set(dir, key, raw string) SetResult {
 	field, ok := Lookup(key)

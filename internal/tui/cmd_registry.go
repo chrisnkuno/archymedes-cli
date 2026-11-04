@@ -48,7 +48,7 @@ func init() {
 		{"cost", "", "What this session has spent, and on what", func(m *Model, _ string) tea.Cmd { return m.sessionCommand("cost", "") }},
 		{"stats", "", "The session as charts: tokens, time and tools per turn", func(m *Model, _ string) tea.Cmd { return m.runAction("stats") }},
 		{"changes", "", "What changed since the last commit, file by file, as diffs", func(m *Model, _ string) tea.Cmd { return m.runAction("changes") }},
-		{"growth", "", "The project as a growing tree: sections fill as code is written, the plan's steps on them", func(m *Model, _ string) tea.Cmd { return m.toggleGrowth() }},
+		{"growth", "[wide|narrow|off]", "The project as a growing tree, the plan's steps on it; wide extends it to half the screen", func(m *Model, arg string) tea.Cmd { return m.growthCommand(arg) }},
 		{"gallery", "", "The pictures, full size: built-in photos, live originals from Unsplash, and art drawn by code", func(m *Model, _ string) tea.Cmd { return m.runAction("gallery") }},
 		{"wallpaper", "", "Pick the photo behind the screen, let them take turns, or none", func(m *Model, _ string) tea.Cmd { m.openWindow(newWallpaperPicker(m)); return nil }},
 		{"finder", "", "Everything Friday opens, as a grid of icons: apps, commands, sessions, files, themes, modes (alt+g)", func(m *Model, _ string) tea.Cmd { return m.openFinder() }},

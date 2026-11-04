@@ -30,6 +30,7 @@ const growthMinWidth = 96
 
 type growthState struct {
 	shown               bool
+	wide                bool // extended: half the screen, for a big tree (/growth wide, a click on its title)
 	measuring, measured bool
 	stale               bool
 	root                string
@@ -223,7 +224,11 @@ func (m *Model) growthWidth() int {
 	if !m.growth.shown || m.width < growthMinWidth || m.landingVisible() {
 		return 0
 	}
-	return min(max(m.width*27/100, 30), 44)
+	narrow := min(max(m.width*27/100, 30), 44)
+	if m.growth.wide {
+		return max(narrow, m.width/2) // the rail steps aside when what is left is too narrow for it
+	}
+	return narrow
 }
 
 func (m *Model) toggleGrowth() tea.Cmd {
@@ -235,6 +240,43 @@ func (m *Model) toggleGrowth() tea.Cmd {
 		return tea.Batch(m.toast(toastInfo, "The growth panel needs "+strconv.Itoa(growthMinWidth)+" columns"), m.growthReread())
 	}
 	return m.growthReread()
+}
+
+// growthCommand is /growth: alone it shows or hides the panel; wide extends it to half the screen,
+// narrow brings it back beside the conversation, off hides it.
+func (m *Model) growthCommand(arg string) tea.Cmd {
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "":
+		return m.toggleGrowth()
+	case "off", "hide":
+		if !m.growth.shown {
+			return nil
+		}
+		return m.toggleGrowth()
+	case "wide", "extend", "extended":
+		return tea.Batch(m.setGrowthWide(true), m.toast(toastInfo, "Growth panel extended; click its title or /growth narrow to narrow it"))
+	case "narrow":
+		return m.setGrowthWide(false)
+	}
+	return m.toast(toastWarn, "/growth takes wide, narrow or off")
+}
+
+// setGrowthWide shows the panel at one of its two widths.
+func (m *Model) setGrowthWide(wide bool) tea.Cmd {
+	m.growth.wide = wide
+	if !m.growth.shown {
+		return m.toggleGrowth()
+	}
+	return nil
+}
+
+// growthClick is a click on the panel: its title switches between the two widths. It says nothing:
+// the panel moving is the answer, and a toast would float over the title the next click aims at.
+func (m *Model) growthClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
+	if m.growthWidth() == 0 || !m.zones.frame.Get("growth:title").InBounds(msg) {
+		return nil, false
+	}
+	return m.setGrowthWide(!m.growth.wide), true
 }
 
 // growthLines is the panel as height rows, each growthWidth columns wide with its edge; nil when
@@ -261,7 +303,7 @@ func (m *Model) growthLines(height int) []string {
 	if !g.measured {
 		right = m.spin.View()
 	}
-	add(spread(th.Strong.Render("Growth"), right, inner))
+	add(spread(mark(m.zones.frame, "growth:title", th.Strong.Render("Growth")), right, inner))
 	session := th.Faint.Render("this session ")
 	switch {
 	case tree.added == 0 && tree.removed == 0:

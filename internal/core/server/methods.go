@@ -20,6 +20,7 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
+	"github.com/chrisnkuno/friday-cli/internal/core/settings"
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 	"github.com/chrisnkuno/friday-cli/internal/core/tool"
 	"github.com/chrisnkuno/friday-cli/internal/core/update"
@@ -542,7 +543,22 @@ func (s *Server) setModel(ctx context.Context, params json.RawMessage) (any, err
 			previous.Close() // its conversation is kept by Claude Code, and resumed if it comes back
 		}
 	}
-	return map[string]any{"_meta": map[string]any{"archymedes": s.info(sess)}}, nil
+	info := s.info(sess)
+	s.rememberModel(info)
+	return map[string]any{"_meta": map[string]any{"archymedes": info}}, nil
+}
+
+// rememberModel keeps the model a session switched to as where the next one starts: the default
+// provider and that provider's model, as Settings → Providers would. It is a convenience; a switch
+// that cannot be remembered still happened.
+func (s *Server) rememberModel(info map[string]any) {
+	provider, _ := info["provider"].(string)
+	model, _ := info["model"].(string)
+	p, ok := llm.Lookup(provider)
+	if !ok || s.opts.ConfigDir == "" {
+		return
+	}
+	_ = settings.Remember(s.opts.ConfigDir, map[string]string{"ARCHYMEDES_PROVIDER": p.ID, p.Prefix() + "_MODEL": model})
 }
 
 // eitherEngine are the session commands whose own run handles a session Claude runs too.

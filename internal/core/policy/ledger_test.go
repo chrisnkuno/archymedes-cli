@@ -426,3 +426,55 @@ func TestLedgerConcurrentDecide(t *testing.T) {
 		t.Errorf("snapshot has %d keys, want 4", n)
 	}
 }
+
+// TestBuildAndAutoSwitchInPlace: the ledger a running turn holds changes mode under it, so the
+// next call is decided by the new mode; only build and auto, which offer the same tools, can.
+func TestBuildAndAutoSwitchInPlace(t *testing.T) {
+	r := answering(Deny)
+	l := NewLedger(Build, r.prompt)
+	edit := func(path string) bool {
+		return decide(t, l, newCall("edit_file", tool.Args{"path": path}), newTool("edit_file"))
+	}
+	if edit("a.go") || len(r.requests) != 1 {
+		t.Fatalf("build asks before an edit: asked %d", len(r.requests))
+	}
+	if !l.SetMode(Auto) || l.Mode() != Auto {
+		t.Fatal("build → auto refused")
+	}
+	if !edit("b.go") || len(r.requests) != 1 {
+		t.Fatalf("auto, mid-turn, still asked: %d", len(r.requests))
+	}
+	if !l.SetMode(Build) || edit("c.go") || len(r.requests) != 2 {
+		t.Fatalf("back in build the edit was not asked about: %d", len(r.requests))
+	}
+	for _, to := range []Mode{Plan, Defender} {
+		if l.SetMode(to) || l.Mode() != Build {
+			t.Errorf("switched in place to %s, which changes the tools", to)
+		}
+	}
+	for _, c := range []struct {
+		from, to Mode
+		live     bool
+	}{{Build, Auto, true}, {Auto, Build, true}, {Auto, Auto, true}, {Plan, Build, false}, {Auto, Defender, false}, {Defender, Auto, false}} {
+		if got := SwitchesLive(c.from, c.to); got != c.live {
+			t.Errorf("SwitchesLive(%s, %s) = %v", c.from, c.to, got)
+		}
+	}
+}
+
+// TestSwitchingModeWhileDecidingIsSafe: a mode change racing decisions (helpers decide in parallel).
+func TestSwitchingModeWhileDecidingIsSafe(t *testing.T) {
+	l := NewLedger(Build, answering(Allow).prompt)
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				_ = decide(t, l, newCall("edit_file", tool.Args{"path": "a.go"}), newTool("edit_file"))
+				l.SetMode([]Mode{Build, Auto}[i%2])
+			}
+		}()
+	}
+	wg.Wait()
+}

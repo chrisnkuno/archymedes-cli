@@ -72,7 +72,15 @@ func nextMode(mode string) string {
 	return cycle[(i+1)%len(cycle)]
 }
 
-// setMode asks the agent for mode; during a turn it waits for the turn to end.
+// switchesLive is whether a running turn can take the change at once: build and auto offer the same
+// tools and differ only in what is asked, so the engine applies the change at the next call.
+func switchesLive(from, to string) bool {
+	working := func(m string) bool { return m == "build" || m == "auto" }
+	return working(from) && working(to)
+}
+
+// setMode asks the agent for mode. During a turn, a change between build and auto applies at once;
+// any other waits for the turn to end.
 func (m *Model) setMode(mode string) tea.Cmd {
 	if !slices.Contains(acp.Modes, mode) {
 		return m.toast(toastWarn, fmt.Sprintf("No mode %q — choose %s", mode, strings.Join(acp.Modes, ", ")))
@@ -80,7 +88,7 @@ func (m *Model) setMode(mode string) tea.Cmd {
 	if m.agent == nil {
 		return nil
 	}
-	if m.phase == busy {
+	if m.phase == busy && !switchesLive(m.mode, mode) {
 		if mode == m.mode {
 			m.pendingMode = ""
 			return m.toast(toastInfo, "Staying in "+mode+" mode")

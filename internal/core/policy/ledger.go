@@ -109,7 +109,31 @@ func NewLedger(mode Mode, prompt Prompt) *Ledger {
 }
 
 // Mode is the ledger's mode.
-func (l *Ledger) Mode() Mode { return l.mode }
+func (l *Ledger) Mode() Mode {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.mode
+}
+
+// SwitchesLive is whether a running turn can change from one mode to the other under it: build and
+// auto offer the same tools and differ only in what is asked, so the next call simply follows the
+// new mode. Plan and defender change the tools and the instructions, and wait for the next turn.
+func SwitchesLive(from, to Mode) bool {
+	working := func(m Mode) bool { return m == Build || m == Auto }
+	return working(from) && working(to)
+}
+
+// SetMode changes the mode in place, for every turn and helper deciding with this ledger, when the
+// change is one SwitchesLive allows; false, and nothing changed, otherwise.
+func (l *Ledger) SetMode(mode Mode) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !SwitchesLive(l.mode, mode) {
+		return false
+	}
+	l.mode = mode
+	return true
+}
 
 // SetCommandRules sets the person's command rules, read fresh each turn.
 func (l *Ledger) SetCommandRules(rules []CommandRule) {
@@ -229,7 +253,7 @@ func (l *Ledger) Decide(ctx context.Context, call tool.Call, t *tool.Tool) (bool
 		args = tool.Args{}
 	}
 	l.mu.Lock()
-	rules := l.rules
+	rules, mode := l.rules, l.mode // the mode as this call is decided: build and auto change in place (SetMode)
 	l.mu.Unlock()
 
 	// The person's own command rules speak first. Forbid: nothing to ask, the command refuses itself
@@ -242,7 +266,7 @@ func (l *Ledger) Decide(ctx context.Context, call tool.Call, t *tool.Tool) (bool
 	if ruled != nil && ruled.Decision == RuleForbid {
 		return true, nil
 	}
-	if ruled != nil && ruled.Decision == RuleAllow && l.mode != Defender {
+	if ruled != nil && ruled.Decision == RuleAllow && mode != Defender {
 		return true, nil
 	}
 	// A run outside the command sandbox is the person's call, every time.
@@ -255,11 +279,11 @@ func (l *Ledger) Decide(ctx context.Context, call tool.Call, t *tool.Tool) (bool
 	// Auto mode is ergonomics, not a blanket trust grant: credentials, production configuration and
 	// high-impact commands remain explicit human decisions.
 	safety := AssessToolSafety(tool.Call{ID: call.ID, Name: call.Name, Args: args, Raw: call.Raw}, t)
-	if !mustAsk && l.mode == Auto && t.Effect == tool.EffectWorkspace && !safety.Sensitive {
+	if !mustAsk && mode == Auto && t.Effect == tool.EffectWorkspace && !safety.Sensitive {
 		return true, nil
 	}
 	// An MCP tool its server marks read-only is not worth a dialog in auto mode.
-	if l.mode == Auto && t.Effect == tool.EffectExternal && t.ReadOnlyHint {
+	if mode == Auto && t.Effect == tool.EffectExternal && t.ReadOnlyHint {
 		return true, nil
 	}
 
@@ -293,7 +317,7 @@ func (l *Ledger) Decide(ctx context.Context, call tool.Call, t *tool.Tool) (bool
 
 	// Defender mode never offers a broader grant: its contract is that each change is looked at.
 	var pattern *Pattern
-	if l.mode != Defender {
+	if mode != Defender {
 		pattern = SuggestPattern(tool.Call{ID: call.ID, Name: call.Name, Args: args, Raw: call.Raw}, t, safety)
 	}
 	decision, err := l.prompt(ctx, Request{

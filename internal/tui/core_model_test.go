@@ -421,17 +421,45 @@ func TestAModeChosenDuringATurnAppliesBeforeTheNextMessage(t *testing.T) {
 	agent.cannotSteer = true
 	typeText(m, "first")
 	first := press(m, tea.KeyEnter, 0)
-	press(m, tea.KeyTab, tea.ModShift) // build → auto, during the turn
-	press(m, tea.KeyTab, tea.ModShift) // auto → defender
-	press(m, tea.KeyTab, tea.ModShift) // defender → plan
-	if len(agent.modes) != 0 || m.pendingMode != "plan" || !regexp.MustCompile(`build\s+→\s+plan`).MatchString(screen(m)) {
+	run(m, press(m, tea.KeyTab, tea.ModShift)) // build → auto, during the turn: at once
+	run(m, press(m, tea.KeyTab, tea.ModShift)) // auto → defender: changes the tools, waits
+	run(m, press(m, tea.KeyTab, tea.ModShift)) // defender → plan: waits
+	if strings.Join(agent.modes, ",") != "auto" || m.pendingMode != "plan" || !regexp.MustCompile(`auto\s+→\s+plan`).MatchString(screen(m)) {
 		t.Fatalf("modes=%v pending=%q\n%s", agent.modes, m.pendingMode, screen(m))
 	}
 	typeText(m, "second")
 	run(m, press(m, tea.KeyEnter, 0))
 	run(m, first)
-	if strings.Join(agent.modes, ",") != "plan" || m.mode != "plan" || m.pendingMode != "" || len(agent.prompts) != 2 {
+	if strings.Join(agent.modes, ",") != "auto,plan" || m.mode != "plan" || m.pendingMode != "" || len(agent.prompts) != 2 {
 		t.Fatalf("modes=%v mode=%s pending=%q prompts=%q", agent.modes, m.mode, m.pendingMode, agent.prompts)
+	}
+}
+
+// TestBuildAndAutoSwitchDuringATurn: between build and auto the change reaches the running turn at
+// once, both ways, through the mode picker as through shift+tab, and cancels a change still waiting.
+func TestBuildAndAutoSwitchDuringATurn(t *testing.T) {
+	m, agent := newTestModel(t)
+	agent.cannotSteer = true
+	typeText(m, "first")
+	first := press(m, tea.KeyEnter, 0)
+	if m.phase != busy {
+		t.Fatal("no turn is running")
+	}
+	run(m, press(m, tea.KeyTab, tea.ModShift)) // build → auto
+	if strings.Join(agent.modes, ",") != "auto" || m.mode != "auto" || m.pendingMode != "" {
+		t.Fatalf("build → auto mid-turn: modes=%v mode=%s pending=%q", agent.modes, m.mode, m.pendingMode)
+	}
+	run(m, m.setMode("plan"))  // waits for the turn
+	run(m, m.setMode("build")) // and is replaced by a change that need not wait
+	if strings.Join(agent.modes, ",") != "auto,build" || m.mode != "build" || m.pendingMode != "" {
+		t.Fatalf("auto → build mid-turn: modes=%v mode=%s pending=%q", agent.modes, m.mode, m.pendingMode)
+	}
+	if strings.Contains(screen(m), "→") && regexp.MustCompile(`build\s+→\s+plan`).MatchString(screen(m)) {
+		t.Fatalf("the replaced plan change still shows:\n%s", screen(m))
+	}
+	run(m, first)
+	if strings.Join(agent.modes, ",") != "auto,build" || m.mode != "build" {
+		t.Fatalf("after the turn: modes=%v mode=%s", agent.modes, m.mode)
 	}
 }
 
