@@ -71,12 +71,18 @@ func TestAFirstRunWalksSixStepsAndAppliesWhatWasChosen(t *testing.T) {
 		t.Fatal("trying a key ran it")
 	}
 
-	// Connect: what is ready, and the count turned off.
+	// Connect: what is ready, and the count, which starts off: choosing Count is the yes.
 	press(m, tea.KeyEnter, 0)
 	if s := screen(m); !strings.Contains(s, "Ready") || !strings.Contains(s, "kimi-k2") || !strings.Contains(s, "Count installs") {
 		t.Fatalf("connect step:\n%s", s)
 	}
-	press(m, tea.KeyRight, 0)
+	if ob.countOn {
+		t.Fatal("the install count must start off: the person has not said yes")
+	}
+	press(m, tea.KeyLeft, 0) // from "Don't" to "Count": the yes
+	if !ob.countOn {
+		t.Fatal("choosing Count did not turn it on")
+	}
 
 	// Back and forward again keeps the choices.
 	press(m, tea.KeyBackspace, 0)
@@ -99,7 +105,7 @@ func TestAFirstRunWalksSixStepsAndAppliesWhatWasChosen(t *testing.T) {
 	if !state.Onboarded || state.Name != "Ada" {
 		t.Fatalf("not remembered: %+v", state)
 	}
-	if !slices.Contains(agent.set, "ARCHYMEDES_THEME="+chosen) || !slices.Contains(agent.set, "ARCHYMEDES_TELEMETRY=off") {
+	if !slices.Contains(agent.set, "ARCHYMEDES_THEME="+chosen) || !slices.Contains(agent.set, "ARCHYMEDES_TELEMETRY=on") {
 		t.Fatalf("settings saved: %v", agent.set)
 	}
 	if !slices.Contains(agent.modes, "auto") {
@@ -177,5 +183,13 @@ func TestTheGreetingNamesThePerson(t *testing.T) {
 	}
 	if got := greeting(morning, ""); got != "Good morning." {
 		t.Fatal(got)
+	}
+}
+
+func TestOnlyAnExplicitYesCountsInstalls(t *testing.T) {
+	for value, want := range map[string]bool{"": false, "off": false, "0": false, "maybe": false, "on": true, "ON": true, " on ": true, "1": true, "true": true, "yes": true} {
+		if got := countingSaid(value); got != want {
+			t.Errorf("countingSaid(%q) = %v, want %v", value, got, want)
+		}
 	}
 }

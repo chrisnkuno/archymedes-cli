@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cueFor, cueOptedOut, INSTALL_CUE_URL, sendInstallCue, type CueDependencies } from "./install-cue";
+import { cueConsented, cueFor, cueOptedOut, INSTALL_CUE_URL, sendInstallCue, type CueDependencies } from "./install-cue";
+
+/** The person has said yes: the cue is off until they do. */
+const YES = { ARCHYMEDES_TELEMETRY: "on" };
 
 function counter(status = 204, lastVersion?: string) {
   const sent: Array<{ url: string; body: unknown; headers: unknown }> = [];
@@ -24,12 +27,12 @@ describe("install cue", () => {
 
   it("sends the four fields and nothing else, once per version", async () => {
     const { sent, dependencies, marker } = counter();
-    expect(await sendInstallCue({}, dependencies, "3.9.0")).toBe("sent");
+    expect(await sendInstallCue(YES, dependencies, "3.9.0")).toBe("sent");
     expect(sent).toHaveLength(1);
     expect(sent[0]!.url).toBe(INSTALL_CUE_URL);
     expect(Object.keys(sent[0]!.body as object).sort()).toEqual(["arch", "event", "os", "version"]);
     expect(marker()).toBe("3.9.0");
-    expect(await sendInstallCue({}, dependencies, "3.9.0")).toBe("owed-none");
+    expect(await sendInstallCue(YES, dependencies, "3.9.0")).toBe("owed-none");
     expect(sent).toHaveLength(1);
   });
 
@@ -43,16 +46,35 @@ describe("install cue", () => {
     expect(cueOptedOut({ DO_NOT_TRACK: "0", ARCHYMEDES_TELEMETRY: "on" })).toBe(false);
   });
 
+  it("is off until the person says yes: unset sends nothing, and only an explicit yes does", async () => {
+    for (const environment of [{}, { ARCHYMEDES_TELEMETRY: "" }, { ARCHYMEDES_TELEMETRY: "maybe" }]) {
+      expect(cueConsented(environment)).toBe(false);
+      const { sent, dependencies, marker } = counter();
+      expect(await sendInstallCue(environment, dependencies, "3.9.0")).toBe("no-consent");
+      expect(sent).toHaveLength(0);
+      expect(marker()).toBeUndefined();
+    }
+    for (const yes of ["on", "ON", "1", "true", "yes", " on "]) {
+      expect(cueConsented({ ARCHYMEDES_TELEMETRY: yes })).toBe(true);
+    }
+    // A yes does not override a stronger no.
+    for (const environment of [{ ARCHYMEDES_TELEMETRY: "on", DO_NOT_TRACK: "1" }, { ARCHYMEDES_TELEMETRY: "on", CI: "true" }]) {
+      const { sent, dependencies } = counter();
+      expect(await sendInstallCue(environment, dependencies, "3.9.0")).toBe("opted-out");
+      expect(sent).toHaveLength(0);
+    }
+  });
+
   it("retries after no answer or a server error, and stops after a refusal", async () => {
     const down = counter(503);
-    expect(await sendInstallCue({}, down.dependencies, "3.9.0")).toBe("failed");
+    expect(await sendInstallCue(YES, down.dependencies, "3.9.0")).toBe("failed");
     expect(down.marker()).toBeUndefined();
     const refused = counter(400);
-    expect(await sendInstallCue({}, refused.dependencies, "3.9.0")).toBe("sent");
+    expect(await sendInstallCue(YES, refused.dependencies, "3.9.0")).toBe("sent");
     expect(refused.marker()).toBe("3.9.0");
     const offline = counter();
     offline.dependencies.fetch = (async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
-    expect(await sendInstallCue({}, offline.dependencies, "3.9.0")).toBe("failed");
+    expect(await sendInstallCue(YES, offline.dependencies, "3.9.0")).toBe("failed");
     expect(offline.marker()).toBeUndefined();
   });
 });

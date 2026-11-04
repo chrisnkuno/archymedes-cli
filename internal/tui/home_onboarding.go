@@ -113,10 +113,12 @@ func newOnboarding(m *Model) *onboarding {
 	ob.name = huh.NewInput().Title("What should Friday call you?").
 		Description("Optional. Kept on this machine, for the greeting; never sent anywhere.").
 		Placeholder("your name").CharLimit(40).Value(&ob.nameValue)
-	ob.counted = !strings.EqualFold(config.Setting(m.opts.ConfigDir, "ARCHYMEDES_TELEMETRY"), "off") && os.Getenv("DO_NOT_TRACK") == ""
+	// Off unless the person says yes: counting starts on "Don't", and only an earlier yes (saved
+	// by this screen or Settings) starts it on "Count". Unset is a no.
+	ob.counted = countingSaid(config.Setting(m.opts.ConfigDir, "ARCHYMEDES_TELEMETRY")) && os.Getenv("DO_NOT_TRACK") == ""
 	ob.countOn = ob.counted
 	ob.count = huh.NewConfirm().Title("Count installs and updates anonymously?").
-		Description("One cue per new version: the version and the OS. Nothing about you or your code.").
+		Description("Off unless you choose Count. One cue per new version: the version, the OS and the CPU type. Nothing about you or your code.").
 		Affirmative("Count").Negative("Don't").Value(&ob.countOn)
 
 	for _, name := range theme.Names() {
@@ -560,4 +562,13 @@ func (ob *onboarding) bindings() []key.Binding {
 		out = append(out, b("←→", "choose"))
 	}
 	return append(out, b("esc", "skip the rest"))
+}
+
+// countingSaid is whether the saved install-count setting is a yes. Unset is not.
+func countingSaid(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on", "1", "true", "yes":
+		return true
+	}
+	return false
 }
