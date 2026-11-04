@@ -48,7 +48,7 @@ func TestPushOnTheDefaultBranchOffersANewBranchFirst(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.opts.Cwd = clone
 	m.tr.add(&userItem{text: "Fix the login redirect bug"})
-	submitCommand(m, "/push")
+	submitSlow(m, "/push")
 	g, ok := m.overlay.(*defaultBranchGuard)
 	if !ok {
 		t.Fatalf("on main, /push asks first:\n%s", screen(m))
@@ -64,7 +64,7 @@ func TestPushOnTheDefaultBranchOffersANewBranchFirst(t *testing.T) {
 		t.Fatal(screen(m))
 	}
 	// Now on the new branch: /push goes straight through.
-	submitCommand(m, "/push")
+	submitSlow(m, "/push")
 	if m.overlay != nil {
 		t.Fatal("no guard off the default branch")
 	}
@@ -74,13 +74,13 @@ func TestPushTheDefaultBranchItselfOnlyWhenChosen(t *testing.T) {
 	clone, _ := clonedRepo(t)
 	m, _ := newTestModel(t)
 	m.opts.Cwd = clone
-	submitCommand(m, "/push")
+	submitSlow(m, "/push")
 	deliver(m, press(m, tea.KeyDown, 0))
 	deliver(m, press(m, tea.KeyEnter, 0))
 	if !strings.Contains(screen(m), "Pushed main to origin") {
 		t.Fatal(screen(m))
 	}
-	submitCommand(m, "/push")
+	submitSlow(m, "/push")
 	deliver(m, press(m, tea.KeyEscape, 0))
 	if m.overlay != nil {
 		t.Fatal("esc cancels")
@@ -95,7 +95,7 @@ func TestPROpensThePullRequestThroughTheAgentAfterPushing(t *testing.T) {
 	exec.Command("git", "-C", clone, "switch", "-q", "-c", "feature").Run()
 	m, agent := newTestModel(t)
 	m.opts.Cwd = clone
-	submitCommand(m, "/pr mention the issue number")
+	submitSlow(m, "/pr mention the issue number")
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	if len(agent.prompts) != 1 || !strings.Contains(agent.prompts[0], "gh pr create --base main --head feature") || !strings.Contains(agent.prompts[0], "Guidance from me: mention the issue number") || !strings.Contains(agent.prompts[0], "do not push") {
@@ -106,7 +106,7 @@ func TestPROpensThePullRequestThroughTheAgentAfterPushing(t *testing.T) {
 func TestPushWithoutARemoteSaysSo(t *testing.T) {
 	m, _ := newTestModel(t)
 	m.opts.Cwd = changedRepo(t)
-	submitCommand(m, "/push")
+	submitSlow(m, "/push")
 	if !strings.Contains(screen(m), "no remote") {
 		t.Fatal(screen(m))
 	}

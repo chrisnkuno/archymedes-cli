@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -362,7 +362,7 @@ func (c *changesApp) click(m *Model, msg tea.MouseClickMsg) tea.Cmd {
 func (c *changesApp) view(m *Model) string {
 	th := m.th
 	width, height := m.width, max(m.windowHeight(), 1)
-	title := " " + th.Title.Render("Changes") + "  " + c.tabs(m) + th.Faint.Render("  "+path.Base(m.projectRoot())) + c.headLine(m)
+	title := " " + th.Title.Render("Changes") + "  " + c.tabs(m) + th.Faint.Render("  "+filepath.Base(m.projectRoot())) + c.headLine(m)
 	right := ""
 	if c.loading || c.br.loading {
 		right = m.spin.View() + " "

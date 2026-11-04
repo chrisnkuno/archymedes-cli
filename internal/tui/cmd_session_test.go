@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -12,6 +13,17 @@ import (
 func submitCommand(m *Model, text string) {
 	typeText(m, text)
 	run(m, press(m, tea.KeyEnter, 0))
+}
+
+// submitSlow is submitCommand for a command that starts git: it waits for the work (but not for a
+// toast's timer, which collect leaves alone) instead of giving up after run's 200 ms, which a process
+// start alone can exceed on Windows, so the test would read the screen before the work had happened.
+func submitSlow(m *Model, text string) {
+	was := collectWait
+	collectWait = 15 * time.Second
+	defer func() { collectWait = was }()
+	typeText(m, text)
+	deliver(m, press(m, tea.KeyEnter, 0))
 }
 
 func TestSessionCommandsBecomeTranscriptBlocks(t *testing.T) {

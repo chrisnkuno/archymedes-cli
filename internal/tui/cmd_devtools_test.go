@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestABangRunsTheCommandInTheProjectAndShowsItsOutputWithoutTheAgent(t *test
 
 func TestAFailingCommandShowsItsExitCode(t *testing.T) {
 	m, _ := readyModel(t)
-	run(m, m.runShell("echo oops; exit 3"))
+	run(m, m.runShell(onThisPlatform("echo oops; exit 3", "echo oops & exit 3")))
 	if s := lastShell(t, m); s.exitCode != 3 || !strings.Contains(s.output, "oops") || !strings.Contains(screen(m), "exit 3") {
 		t.Fatalf("%+v", s)
 	}
@@ -62,7 +63,7 @@ func TestAFailingCommandShowsItsExitCode(t *testing.T) {
 
 func TestEscStopsARunningCommand(t *testing.T) {
 	m, _ := readyModel(t)
-	cmd := m.runShell("sleep 5")
+	cmd := m.runShell(onThisPlatform("sleep 5", "ping -n 6 127.0.0.1 > nul"))
 	done := make(chan tea.Msg, 1)
 	go func() { done <- cmd() }()
 	time.Sleep(100 * time.Millisecond)
@@ -235,4 +236,13 @@ func TestTheProvidersAppFitsEverySize(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		assertFits(t, m, "providers")
 	}
+}
+
+// onThisPlatform picks the command line for the shell the interface uses here: sh elsewhere, cmd.exe
+// on Windows, where ";" and "sleep" mean nothing.
+func onThisPlatform(posix, windows string) string {
+	if runtime.GOOS == "windows" {
+		return windows
+	}
+	return posix
 }

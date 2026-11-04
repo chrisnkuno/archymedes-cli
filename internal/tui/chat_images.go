@@ -57,7 +57,7 @@ func attachedImages(text, cwd string) (images []acp.Image, skipped []string) {
 			skipped = append(skipped, filepath.Base(path)+": "+err.Error())
 			continue
 		}
-		images = append(images, acp.Image{MimeType: mime, Data: data, URI: "file://" + path})
+		images = append(images, acp.Image{MimeType: mime, Data: data, URI: fileURI(path)})
 	}
 	return images, skipped
 }
@@ -93,4 +93,15 @@ func pathTokens(text string) []string {
 	}
 	flush()
 	return out
+}
+
+// fileURI is path as a file: URI. A Windows path has a drive and backslashes, and a bare
+// "file://" + path gives file://C:\dir\x.png, which names a host called "C:"; the drive form is
+// file:///C:/dir/x.png. A Unix path already starts with a slash, so its URI is unchanged.
+func fileURI(path string) string {
+	slashed := filepath.ToSlash(path)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return "file://" + slashed
 }

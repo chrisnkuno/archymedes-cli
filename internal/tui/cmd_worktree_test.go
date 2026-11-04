@@ -18,7 +18,7 @@ func TestWorktreeOpensANewSessionThereAfterTheSetupScriptAndBackReturns(t *testi
 	m.opts.Cwd = root
 	m.notice(noticeInfo, "the old conversation")
 
-	submitCommand(m, "/worktree feature x")
+	submitSlow(m, "/worktree feature x")
 	deliver(m, nil)
 	wt := filepath.Join(root, ".archymedes", "worktrees", "feature-x")
 	agent.mu.Lock()
@@ -46,7 +46,7 @@ func TestWorktreeOpensANewSessionThereAfterTheSetupScriptAndBackReturns(t *testi
 		t.Fatal("the old session is closed (it stays in /resume)")
 	}
 
-	submitCommand(m, "/worktree back")
+	submitSlow(m, "/worktree back")
 	agent.mu.Lock()
 	last := agent.cwds[len(agent.cwds)-1]
 	agent.mu.Unlock()
