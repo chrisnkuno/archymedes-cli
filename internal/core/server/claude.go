@@ -231,3 +231,23 @@ func claudeHelper(sess *session, c *claude.Session, arg string) map[string]any {
 	}
 	return map[string]any{"kind": "error", "text": "The helper could not start: " + err.Error()}
 }
+
+// readyClaude corrects the TypeScript agent's setup status for a session on Claude: it says Claude
+// needs Anthropic's Agent SDK, which only it uses, while this engine drives Claude Code itself. Left
+// as it was, a start on a remembered Claude opened the first-run connect screen instead of a
+// session. Any other reason (signed out, no Claude Code) stands.
+func readyClaude(raw json.RawMessage, provider string, get func(string) string) json.RawMessage {
+	if !strings.EqualFold(provider, claude.Provider) || claude.Find(get) == "" {
+		return raw
+	}
+	var status map[string]any
+	if json.Unmarshal(raw, &status) != nil || status["configured"] != false {
+		return raw
+	}
+	if reason, _ := status["reason"].(string); !strings.Contains(reason, "Agent SDK") {
+		return raw
+	}
+	status["configured"] = true
+	delete(status, "reason")
+	return mustJSON(status)
+}

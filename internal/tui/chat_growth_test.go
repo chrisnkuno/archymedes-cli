@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -298,5 +299,70 @@ func TestGrowthPanelExtends(t *testing.T) {
 	run("/growth off")
 	if m.growth.shown {
 		t.Fatal("/growth off is not a toggle")
+	}
+}
+
+// TestAToastLeavesTheGrowthPanelsTitleClickable: toasts float at the top right, where the side
+// panels have their titles. While a panel is shown they start below its title row, so the title
+// they may name ("click its title") is not under them.
+func TestAToastLeavesTheGrowthPanelsTitleClickable(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.opts.Cwd = t.TempDir()
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	m.tr.add(&noticeItem{kind: noticeInfo, text: "conversation"})
+	cmd, _ := m.runCommand("/growth wide") // shows the panel, extended, and a toast about it
+	deliver(m, cmd)
+	if len(m.toasts) == 0 {
+		t.Fatal("no toast to test with")
+	}
+	_ = m.View()
+	time.Sleep(40 * time.Millisecond) // the zone worker scans asynchronously
+	title := m.zones.frame.Get("growth:title")
+	if title.IsZero() {
+		t.Fatal("the panel's title is not a click zone")
+	}
+	for _, toast := range m.toasts {
+		if box := m.zones.toasts.Get(fmt.Sprintf("toast:%d", toast.id)); !box.IsZero() && box.StartY <= title.StartY {
+			t.Fatalf("a toast at row %d covers the title at row %d", box.StartY, title.StartY)
+		}
+	}
+	m.Update(tea.MouseClickMsg{X: title.StartX, Y: title.StartY, Button: tea.MouseLeft})
+	if m.growth.wide {
+		t.Fatal("a click on the title, with a toast up, did not narrow the panel")
+	}
+}
+
+// TestGrowthOnTheHomeScreenSaysWhereItWillBe: before the conversation starts the panel has no
+// room beside it; asking for it says where it will appear rather than seeming to do nothing, and
+// the wide toast fits a toast whole.
+func TestGrowthOnTheHomeScreenSaysWhereItWillBe(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.opts.Cwd = t.TempDir()
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	if !m.landingVisible() {
+		t.Skip("the test model starts past the home screen")
+	}
+	deliver(m, press(m, 'v', tea.ModAlt))
+	if len(m.toasts) == 0 || !strings.Contains(m.toasts[len(m.toasts)-1].text, "beside the conversation") {
+		t.Fatalf("alt+v on the home screen: %+v", m.toasts)
+	}
+	m.toasts = nil
+	cmd, _ := m.runCommand("/growth wide")
+	deliver(m, cmd)
+	if len(m.toasts) == 0 || !strings.Contains(m.toasts[len(m.toasts)-1].text, "beside the conversation") {
+		t.Fatalf("/growth wide on the home screen: %+v", m.toasts)
+	}
+
+	m.tr.add(&noticeItem{kind: noticeInfo, text: "conversation"})
+	m.toasts = nil
+	cmd, _ = m.runCommand("/growth narrow")
+	deliver(m, cmd)
+	cmd, _ = m.runCommand("/growth wide")
+	deliver(m, cmd)
+	if len(m.toasts) == 0 {
+		t.Fatal("no toast for /growth wide")
+	}
+	if text := m.toasts[len(m.toasts)-1].text; len([]rune(text)) > 48 {
+		t.Errorf("the wide toast is cut off in a toast: %q (%d)", text, len([]rune(text)))
 	}
 }

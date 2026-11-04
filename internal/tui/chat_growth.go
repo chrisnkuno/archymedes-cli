@@ -238,9 +238,14 @@ func (m *Model) toggleGrowth() tea.Cmd {
 		return m.toast(toastInfo, "Growth panel hidden; alt+v brings it back")
 	case m.width < growthMinWidth:
 		return tea.Batch(m.toast(toastInfo, "The growth panel needs "+strconv.Itoa(growthMinWidth)+" columns"), m.growthReread())
+	case m.landingVisible():
+		return tea.Batch(m.toast(toastInfo, growthOnHome), m.growthReread())
 	}
 	return m.growthReread()
 }
+
+// growthOnHome is what asking for the panel on the home screen says: it has no room there.
+const growthOnHome = "Growth shows beside the conversation once it starts"
 
 // growthCommand is /growth: alone it shows or hides the panel; wide extends it to half the screen,
 // narrow brings it back beside the conversation, off hides it.
@@ -254,7 +259,11 @@ func (m *Model) growthCommand(arg string) tea.Cmd {
 		}
 		return m.toggleGrowth()
 	case "wide", "extend", "extended":
-		return tea.Batch(m.setGrowthWide(true), m.toast(toastInfo, "Growth panel extended; click its title or /growth narrow to narrow it"))
+		if m.landingVisible() {
+			m.growth.wide, m.growth.shown = true, true
+			return tea.Batch(m.toast(toastInfo, growthOnHome), m.growthReread())
+		}
+		return tea.Batch(m.setGrowthWide(true), m.toast(toastInfo, "Growth extended · click its title to narrow"))
 	case "narrow":
 		return m.setGrowthWide(false)
 	}

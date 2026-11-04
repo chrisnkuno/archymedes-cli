@@ -75,3 +75,42 @@ func TestConnectingClaudeChecksTheSignInAndInstallsNothing(t *testing.T) {
 		t.Fatalf("signed out: %v", r)
 	}
 }
+
+// TestARememberedClaudeIsReadyWithoutTheAgentSDK: the TypeScript agent says Claude needs Anthropic's
+// Agent SDK, which only it uses; the Go engine drives Claude Code itself. A start on a remembered
+// Claude must open a session, not the first-run connect screen (it waited there for good).
+func TestARememberedClaudeIsReadyWithoutTheAgentSDK(t *testing.T) {
+	sdkMissing := json.RawMessage(`{"configured":false,"reason":"Claude needs Anthropic's Agent SDK (installed when you connect).","providers":[]}`)
+	status := func(s *Server) map[string]any {
+		t.Helper()
+		got, err := s.setupStatus(context.Background(), json.RawMessage(`{}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out map[string]any
+		raw, _ := json.Marshal(got)
+		_ = json.Unmarshal(raw, &out)
+		return out
+	}
+	s, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "CLAUDE_MODEL=sonnet")
+	s.opts.Forward = func(context.Context, string, json.RawMessage) (json.RawMessage, error) { return sdkMissing, nil }
+	if got := status(s); got["configured"] != true || got["reason"] != nil {
+		t.Fatalf("Claude Code is installed and signed in, yet: %v", got)
+	}
+
+	// Without Claude Code at all, the answer stands.
+	gone, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "ARCHYMEDES_CLAUDE_PATH=/nonexistent/claude", "PATH=/nonexistent")
+	gone.opts.Forward = s.opts.Forward
+	if got := status(gone); got["configured"] != false {
+		t.Fatalf("no Claude Code, yet configured: %v", got)
+	}
+
+	// Any other reason stands too: only the SDK is the TypeScript agent's own concern.
+	other, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude")
+	other.opts.Forward = func(context.Context, string, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`{"configured":false,"reason":"Claude needs you to sign in (claude auth login)."}`), nil
+	}
+	if got := status(other); got["configured"] != false {
+		t.Fatalf("a sign-in problem was hidden: %v", got)
+	}
+}

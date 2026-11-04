@@ -48,8 +48,8 @@ const CURRENCY_CHOICES: readonly SettingChoice[] = [...new Set(SUPPORTED_COUNTRI
   .map((value) => ({ value, label: value }));
 
 const AUTO_UPDATE_CHOICES: readonly SettingChoice[] = [
-  { value: "install", label: "Check daily and install automatically (default)" },
-  { value: "check", label: "Check daily and tell me only" },
+  { value: "install", label: "Check hourly and install automatically (default)" },
+  { value: "check", label: "Check hourly and tell me only" },
   { value: "off", label: "Never check" },
 ];
 
@@ -70,8 +70,8 @@ const NOTIFY_CHOICES: readonly SettingChoice[] = [
 ];
 
 const TELEMETRY_CHOICES: readonly SettingChoice[] = [
-  { value: "on", label: "On — one anonymous cue when a new version first runs (default)" },
-  { value: "off", label: "Off — nothing is sent" },
+  { value: "off", label: "Off — nothing is sent (default)" },
+  { value: "on", label: "On — one anonymous cue when a new version first runs" },
 ];
 
 // Go is the default and the way back is one setting, read by the `friday` binary itself before

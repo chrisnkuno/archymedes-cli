@@ -153,8 +153,8 @@ var onOffChoices = []Choice{
 }
 
 var autoUpdateChoices = []Choice{
-	{"install", "Check daily and install automatically (default)"},
-	{"check", "Check daily and tell me only"},
+	{"install", "Check hourly and install automatically (default)"},
+	{"check", "Check hourly and tell me only"},
 	{"off", "Never check"},
 }
 
@@ -199,8 +199,8 @@ var webSearchChoices = []Choice{
 
 // telemetryChoices had the suggestion words (onOffChoices) in the TypeScript list; its own since WS-50.2.
 var telemetryChoices = []Choice{
-	{"on", "On — one anonymous cue when a new version first runs (default)"},
-	{"off", "Off — nothing is sent"},
+	{"off", "Off — nothing is sent (default)"},
+	{"on", "On — one anonymous cue when a new version first runs"},
 }
 
 var notifyChoices = []Choice{
