@@ -158,7 +158,9 @@ describe("the bridge", () => {
     await fs.writeFile(configPath, config());
     expect(await done).toBe(1);
     expect(logs.join("\n")).toContain("giving up");
-  });
+    // Six real node processes are started and killed in a row before it gives up; on a runner busy with
+    // the rest of the suite the 15 s default has been too little once. The behaviour is not timing.
+  }, 60_000);
 
   it("exits with 1 when the agent cannot start at all", async () => {
     const { done } = start({ command: ["/nonexistent/friday"] });
