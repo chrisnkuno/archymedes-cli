@@ -132,7 +132,9 @@ func TestPrefixWordJSON(t *testing.T) {
 
 func TestConfigDirectory(t *testing.T) {
 	env := func(values map[string]string) func(string) string { return func(k string) string { return values[k] } }
-	if got := ConfigDirectory(env(map[string]string{"ARCHYMEDES_CONFIG_DIR": "/cfg"}), "linux"); got != "/cfg" {
+	// An explicit directory is made absolute on the machine running: "/cfg" is D:\cfg on Windows.
+	cfg, _ := filepath.Abs("/cfg")
+	if got := ConfigDirectory(env(map[string]string{"ARCHYMEDES_CONFIG_DIR": "/cfg"}), "linux"); got != cfg {
 		t.Errorf("explicit: %s", got)
 	}
 	if got := ConfigDirectory(env(map[string]string{"XDG_CONFIG_HOME": "/xdg"}), "linux"); got != filepath.Join("/xdg", "archymedes") {

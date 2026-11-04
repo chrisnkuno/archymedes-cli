@@ -289,7 +289,7 @@
   },
   {
     "key": "ARCHYMEDES_AUTO_UPDATE",
-    "label": "Automatic updates — checked hourly, installed by default",
+    "label": "Automatic updates — checked hourly, installed when Friday closes",
     "section": "Behaviour",
     "kind": "choice",
     "choices": [

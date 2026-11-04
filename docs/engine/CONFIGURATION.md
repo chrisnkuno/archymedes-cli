@@ -139,20 +139,20 @@ setting; a resumed session keeps its own.
 
 Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) look for a new release when Friday starts and every
 hour while it stays open, between turns. A newer version is never installed while a session is
-open, because an install replaces files the session still loads. Friday says the version is ready,
-and by default installs it when you close Friday, and only if no other Friday is running from the
-same install (each running Friday keeps a small heartbeat file in its config folder; a crashed
-one stops counting after two minutes). One install runs at a time, under a lock that is broken if
-its holder died; Ctrl-C at the "Installing..." line skips it. An install cut short is retried at
-the next close, not marked as failed; one that fails is remembered and not offered again on its
-own. `check` only says one is out, `off` never looks. On Windows, which will not let a running
-program be overwritten, Friday first moves its own `friday.exe` aside, beside the outermost
-`node_modules` of the install (back if the install fails or writes nowhere), and deletes the old
-copy at a later start. Updates install through the package manager Friday was installed with,
-detected from the environment; set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`, `pnpm`, `yarn` or `bun`
-to force one. The newest version is read from the npm registry, which must be https (or this
-machine), or from `ARCHYMEDES_UPDATE_REGISTRY` when set. The agent behind the interface does not
-run its own update.
+open, because an install replaces files the session still loads. Friday says the version is
+ready. By default it installs when you close Friday, and only if no other Friday is running from
+the same install. Each running Friday keeps a small heartbeat file in its config folder, and a
+crashed one stops counting after two minutes. One install runs at a time, under a lock that is
+broken if its holder died. Ctrl-C at the "Installing..." line skips it. An install cut short is
+retried at the next close, not marked as failed. One that fails is remembered and not offered
+again on its own. `check` only says one is out, and `off` never looks. On Windows a running
+program cannot be overwritten, so Friday first moves its own `friday.exe` aside, beside the
+outermost `node_modules` of the install. It goes back if the install fails or writes nowhere,
+and the old copy is deleted at a later start. Updates install through the package manager Friday
+was installed with, detected from the environment. Set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`,
+`pnpm`, `yarn` or `bun` to force one. The newest version is read from the npm registry, which
+must be https (or this machine), or from `ARCHYMEDES_UPDATE_REGISTRY` when set. The agent behind
+the interface does not run its own update.
 
 ## Command rules
 
