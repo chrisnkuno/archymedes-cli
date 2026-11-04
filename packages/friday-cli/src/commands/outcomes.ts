@@ -24,7 +24,15 @@ export function parseOutcomesCommand(words: readonly string[]): OutcomesCommand 
   return { kind: "invalid", reason: `Unknown outcomes command "${word}". Use on, off, status or preview.` };
 }
 
-export type OutcomesIo = OutcomeDependencies & { write: (text: string) => void };
+export type OutcomesIo = OutcomeDependencies & {
+  write: (text: string) => void;
+  /**
+   * Asks the person a yes/no question and resolves true only on an explicit yes. Supplied only when a
+   * person is at an interactive terminal; without it `on` refuses, so a script, a CI job or an agent
+   * running shell commands cannot grant consent on anyone's behalf.
+   */
+  confirm?: (question: string) => Promise<boolean>;
+};
 
 export async function runOutcomesCommand(command: OutcomesCommand, io: OutcomesIo): Promise<number> {
   const { write, environment } = io;
@@ -35,16 +43,32 @@ export async function runOutcomesCommand(command: OutcomesCommand, io: OutcomesI
   const blocked = outcomeNetworkBlocked(environment);
   const endpoint = outcomesEndpoint(environment);
   if (command.kind === "on") {
-    const state = await setOutcomeReporting(true, io);
-    write([
-      `Outcome reporting is on (since ${state.grantedAt}).`,
-      "Each finished task adds one anonymous event: engine, provider, model id, effort, counts, buckets and",
-      "exit status. Never prompts, code, paths, repository or file names, or error text.",
-      endpoint ? `Sent in batches to ${endpoint}/v1/outcomes.` : "ARCHYMEDES_OUTCOMES_URL is not set, so nothing is sent yet; events wait in a local queue.",
+    const current = await readOutcomeState(io);
+    if (current.enabled) {
+      write(`Outcome reporting is already on (since ${current.grantedAt}). Turn off (and erase): friday outcomes off.\n`);
+      return 0;
+    }
+    const disclosure = [
+      "Outcome reporting records one anonymous event per finished task: engine, provider, model family,",
+      "effort, counts, buckets and exit status. Never prompts, code, paths, repository or file names, or",
+      "error text. Custom or fine-tuned model names are reported only as \"custom\".",
+      endpoint ? `Events are sent in batches to ${endpoint}/v1/outcomes.` : "ARCHYMEDES_OUTCOMES_URL is not set, so nothing would be sent; events would wait in a local queue.",
       ...(blocked ? [`Nothing is recorded or sent while ${blocked}.`] : []),
       "See exactly what would be sent: friday outcomes preview. Turn off (and erase): friday outcomes off.",
       "",
-    ].join("\n"));
+    ].join("\n");
+    if (!io.confirm) {
+      write(`${disclosure}\nOutcome reporting needs your own yes, so it cannot be turned on from a script, CI job or agent.\nRun \`friday outcomes on\` yourself in an interactive terminal. Nothing was changed.\n`);
+      return EXIT_CODES.needs_approval;
+    }
+    write(`${disclosure}\n`);
+    if (!(await io.confirm("Turn outcome reporting on? [y/N] "))) {
+      write("Nothing changed: outcome reporting stays off.\n");
+      return 0;
+    }
+    const state = await setOutcomeReporting(true, io);
+    write(`Outcome reporting is on (since ${state.grantedAt}).
+`);
     return 0;
   }
   if (command.kind === "off") {

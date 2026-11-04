@@ -164,7 +164,10 @@ the next run if the network is down. The code is
 ### Outcome reporting (opt-in, off by default)
 
 `friday outcomes on` lets Friday record one anonymous `archymedes.outcome/v1` event per finished
-task: engine, provider, a normalised model id, effort, tool-call/repair/turn counts, duration and
+task. It shows what is collected and asks for a typed yes in an interactive terminal; it refuses
+(exit code 5, nothing changed) from a script, CI job or agent, so nobody can consent for you.
+An event holds: engine, provider, the model family (a public model such as `gpt-4o` or
+`claude-sonnet-4-5`; any fine-tune, deployment or custom name is reported only as `custom`), effort, tool-call/repair/turn counts, duration and
 cost buckets, the route's reliability bucket and the exit status, under a random per-install id.
 Never prompts, code, paths, repository or file names, or error text. Events wait in a bounded local
 queue and are sent in batches to `$ARCHYMEDES_OUTCOMES_URL/v1/outcomes` (there is no default URL:

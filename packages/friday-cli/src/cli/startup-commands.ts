@@ -65,7 +65,15 @@ export function runInformationFlag(context: Pick<StartupCommandContext, "args" |
 export async function runMaintenanceFlag(context: Omit<StartupCommandContext, "earlyDepth">): Promise<number | undefined> {
   const { args, environment, processEnvironment, language, stateHistory } = context;
   if (args.outcomesCommand) {
-    return runOutcomesCommand(args.outcomesCommand, { environment, write: (text) => { out.write(text); } });
+    // Consent is asked only of a person at a terminal; with no TTY on both ends `on` refuses.
+    const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const confirm = interactive
+      ? async (question: string) => {
+          const ask = createInterface({ input: process.stdin, output: process.stdout });
+          try { return /^y(es)?$/i.test((await ask.question(question)).trim()); } catch { return false; } finally { ask.close(); }
+        }
+      : undefined;
+    return runOutcomesCommand(args.outcomesCommand, { environment, write: (text) => { out.write(text); }, ...(confirm ? { confirm } : {}) });
   }
   if (args.update) {
     const result = await runSelfUpdate({
