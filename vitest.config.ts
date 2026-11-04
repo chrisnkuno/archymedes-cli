@@ -65,10 +65,10 @@ export default defineConfig({
           name: "pty",
           include: [PTY_TESTS],
           // One worker for the whole project, so these files run one after another. `fileParallelism`
-          // is a root-level option and is ignored here; `singleFork` is the per-project form of the
-          // same idea and is the one that actually takes effect.
+          // is a root-level option and is ignored here; `maxWorkers: 1` is the per-project form of the
+          // same idea (vitest 4 replaced `poolOptions.forks.singleFork` with it).
           pool: "forks",
-          poolOptions: { forks: { singleFork: true } },
+          maxWorkers: 1,
         },
       },
       {

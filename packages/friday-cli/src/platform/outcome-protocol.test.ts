@@ -18,7 +18,8 @@ describe("archymedes.outcome/v1 against the service's own validator", () => {
   it("strips dates and hashes from model ids, and refuses ids, UUIDs and host names", () => {
     expect(normaliseModelId("claude-sonnet-4-5-20250929")).toBe("claude-sonnet-4-5");
     expect(normaliseModelId("anthropic/claude-3-5-haiku-20241022")).toBe("anthropic:claude-3-5-haiku");
-    expect(normaliseModelId("ft:gpt-4o-mini:acme:9f86d081884c7d659a2f")).toBe("ft:gpt-4o-mini:acme");
+    // A fine-tune names its owner; it is never reported, only the fact that it is custom.
+    expect(normaliseModelId("ft:gpt-4o-mini:acme:9f86d081884c7d659a2f")).toBe("custom");
     expect(normaliseModelId("gpt-4o-2024-08-06")).toBe("gpt-4o-2024-08-06");
     for (const unsafe of ["6f1c1f9e-6a43-4c55-9d0e-2b1b7d3f0a11", "www.example.org", "api.my-company.com", "acme.ai", "12345678"]) {
       expect(normaliseModelId(unsafe), unsafe).toBe("custom");

@@ -46,7 +46,13 @@ func TestReadIsNumberedAndWindowed(t *testing.T) {
 	if part.Content != "a.txt (lines 2-2 of 3)\n2\ttwo" {
 		t.Fatalf("part = %q", part.Content)
 	}
-	for _, bad := range []string{"../outside", "/etc/passwd", "~/x"} {
+	// An absolute path elsewhere on the machine. "/etc/passwd" has no drive on Windows, so there it is
+	// rooted at the project's own drive and resolves inside the project: not an escape at all.
+	elsewhere := "/etc/passwd"
+	if runtime.GOOS == "windows" {
+		elsewhere = `C:\Windows\win.ini`
+	}
+	for _, bad := range []string{"../outside", elsewhere, "~/x"} {
 		if r := call(t, tools["read_file"], tool.Args{"path": bad}); !r.IsError || !strings.Contains(r.Content, "outside the project") {
 			t.Fatalf("read %s: %+v", bad, r)
 		}

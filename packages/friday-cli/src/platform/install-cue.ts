@@ -14,9 +14,11 @@ import { ARCHYMEDES_CLI_VERSION } from "./update";
  * download numbers cannot.
  *
  * What is sent is `{ event, version, os, arch }` and nothing else: no id, no path, no project, no
- * account. Off with `ARCHYMEDES_TELEMETRY=off` (also in Settings) or `DO_NOT_TRACK=1`, and never
- * from CI or a test run. It never delays anything: the caller does not await it, the request gives
- * up after two seconds, and a failure is silent and retried on the next run.
+ * account. It is OFF until the person says yes: the first-run welcome asks (and starts on "Don't"),
+ * and Settings or `ARCHYMEDES_TELEMETRY=on` is the same yes. Unset is a no. A no stays a no
+ * (`ARCHYMEDES_TELEMETRY=off`, `DO_NOT_TRACK=1`), and it is never sent from CI or a test run. It
+ * never delays anything: the caller does not await it, the request gives up after two seconds, and
+ * a failure is silent and retried on the next run.
  */
 
 export const INSTALL_CUE_URL = "https://archymedes.xyz/api/v1/count/";
@@ -35,6 +37,15 @@ export function cueOptedOut(environment: Environment): boolean {
   return Boolean(environment.CI?.trim()) || environment.NODE_ENV === "test";
 }
 
+/**
+ * Whether the person said yes: `ARCHYMEDES_TELEMETRY` is on, 1, true or yes, from the environment or
+ * the settings saved by the welcome screen. Unset is not a yes; consent is never assumed.
+ */
+export function cueConsented(environment: Environment): boolean {
+  const telemetry = environment.ARCHYMEDES_TELEMETRY?.trim().toLowerCase();
+  return telemetry !== undefined && ["on", "1", "true", "yes"].includes(telemetry);
+}
+
 /** The cue this run owes, given the version the last cue was for; undefined when it owes none. */
 export function cueFor(lastVersion: string | undefined, version: string, os: string, arch: string): InstallCue | undefined {
   if (lastVersion === version) return undefined;
@@ -47,7 +58,7 @@ export type CueDependencies = {
   writeMarker(version: string): Promise<void>;
 };
 
-export type CueOutcome = "sent" | "owed-none" | "opted-out" | "failed";
+export type CueOutcome = "sent" | "owed-none" | "opted-out" | "no-consent" | "failed";
 
 /**
  * Sends the cue this run owes. The marker is written once the counter answered: any 2xx, or a 4xx
@@ -55,6 +66,7 @@ export type CueOutcome = "sent" | "owed-none" | "opted-out" | "failed";
  */
 export async function sendInstallCue(environment: Environment, dependencies: CueDependencies = fileDependencies(environment), version = ARCHYMEDES_CLI_VERSION): Promise<CueOutcome> {
   if (cueOptedOut(environment)) return "opted-out";
+  if (!cueConsented(environment)) return "no-consent";
   const cue = cueFor(await dependencies.readMarker(), version, process.platform, process.arch);
   if (!cue) return "owed-none";
   try {

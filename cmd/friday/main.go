@@ -16,9 +16,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/log/v2"
@@ -27,6 +30,8 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/acp"
 	"github.com/chrisnkuno/friday-cli/internal/cli"
 	"github.com/chrisnkuno/friday-cli/internal/config"
+	"github.com/chrisnkuno/friday-cli/internal/core/llm"
+	"github.com/chrisnkuno/friday-cli/internal/core/update"
 	"github.com/chrisnkuno/friday-cli/internal/tui"
 )
 
@@ -135,11 +140,43 @@ func run(args []string) int {
 	})
 	program := tea.NewProgram(ui)
 	ui.SetSender(program.Send)
-	if _, err := program.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "friday:", err)
+	// This session is using the installed files, so an update must not replace them until it ends.
+	endSession := update.RegisterSession(config.Default())
+	_, runErr := program.Run()
+	endSession()
+	installPendingUpdate()
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, "friday:", runErr)
 		return 1
 	}
 	return 0
+}
+
+// installPendingUpdate is the safe moment for an update: the session has ended and, unless another
+// Friday is still open, nothing is using the files. It installs a version the hourly check found,
+// and gives up at once on Ctrl-C.
+func installPendingUpdate() {
+	if !term.IsTerminal(os.Stdin.Fd()) || !term.IsTerminal(os.Stdout.Fd()) {
+		return
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	for _, line := range update.AtExit(ctx, exitUpdateOptions(config.Default(), os.Environ()), func(line string) { fmt.Fprintln(os.Stderr, "friday:", line) }) {
+		fmt.Fprintln(os.Stderr, "friday:", line)
+	}
+}
+
+// exitUpdateOptions is the update policy when Friday closes: read from the saved settings with the
+// environment over them, exactly as the in-session check reads it. Reading the environment alone
+// would install an update for a person who saved ARCHYMEDES_AUTO_UPDATE=off in Settings.
+func exitUpdateOptions(configDir string, environ []string) update.Options {
+	env := llm.LoadEnv(configDir, environ)
+	return update.Options{
+		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: version,
+		ConfigDir: configDir, Getenv: env.Get, MoveAside: runtime.GOOS == "windows",
+	}
 }
 
 // photosOff is ARCHYMEDES_PHOTOS saying no: the interface is then text only.

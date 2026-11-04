@@ -138,13 +138,21 @@ Modes are chosen per session (`--plan`, `--build`, `--auto`, `--defender`, or sh
 setting; a resumed session keeps its own.
 
 Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) look for a new release when Friday starts and every
-hour while it stays open, between turns. By default a newer version is installed at once, and
-Friday says to restart to use it; `check` only says one is out, `off` never looks. On Windows,
-which will not let a running program be overwritten, Friday first moves its own `friday.exe`
-aside (back if the install fails) and deletes the old copy at a later start. Updates install
-through the package manager Friday was installed with, detected from the environment; set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`, `pnpm`,
-`yarn` or `bun` to force one. The newest version is read from the npm registry, or from
-`ARCHYMEDES_UPDATE_REGISTRY` when set.
+hour while it stays open, between turns. A newer version is never installed while a session is
+open, because an install replaces files the session still loads. Friday says the version is
+ready. By default it installs when you close Friday, and only if no other Friday is running from
+the same install. Each running Friday keeps a small heartbeat file in its config folder, and a
+crashed one stops counting after two minutes. One install runs at a time, under a lock that is
+broken if its holder died. Ctrl-C at the "Installing..." line skips it. An install cut short is
+retried at the next close, not marked as failed. One that fails is remembered and not offered
+again on its own. `check` only says one is out, and `off` never looks. On Windows a running
+program cannot be overwritten, so Friday first moves its own `friday.exe` aside, beside the
+outermost `node_modules` of the install. It goes back if the install fails or writes nowhere,
+and the old copy is deleted at a later start. Updates install through the package manager Friday
+was installed with, detected from the environment. Set `ARCHYMEDES_PACKAGE_MANAGER` to `npm`,
+`pnpm`, `yarn` or `bun` to force one. The newest version is read from the npm registry, which
+must be https (or this machine), or from `ARCHYMEDES_UPDATE_REGISTRY` when set. The agent behind
+the interface does not run its own update.
 
 ## Command rules
 
@@ -260,7 +268,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_SUGGEST_MODEL` | Behaviour | Ask the model for extra suggestions (a small extra call per turn) |
 | `ARCHYMEDES_NOTIFY` | Behaviour | Notifications — when a turn ends or Friday waits for you |
 | `ARCHYMEDES_NOTIFY_URL` | Behaviour | Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only) |
-| `ARCHYMEDES_AUTO_UPDATE` | Behaviour | Automatic updates — checked hourly, installed by default |
+| `ARCHYMEDES_AUTO_UPDATE` | Behaviour | Automatic updates — checked hourly, installed when Friday closes |
 | `ARCHYMEDES_TELEMETRY` | Behaviour | Install count — one anonymous cue per new version (event, version, OS) |
 | `ARCHYMEDES_TEST_FIRST` | Behaviour | Build test first — tests, then code, then static analysis |
 | `ARCHYMEDES_JEV` | Behaviour | Jev second opinion — verdicts, tool checks, ranked suggestions |

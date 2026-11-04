@@ -19,6 +19,14 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/thread"
 )
 
+// jsonString is a Go string as a JSON string. A path is spliced into hand-written requests, and on
+// Windows its backslashes are not valid JSON escapes: the server rejects the line, never replies,
+// and a test that waits for the reply waits forever.
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 func TestMain(m *testing.M) {
 	if claudetest.Active() {
 		claudetest.Main()
@@ -82,7 +90,7 @@ func TestASessionSwitchesToClaudeCodeAndBackKeepingTheConversation(t *testing.T)
 
 	send(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
 	read("1")
-	send(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + root + `"}}`)
+	send(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":` + jsonString(root) + `}}`)
 	sessionID := read("2")["result"].(map[string]any)["sessionId"].(string)
 	prompt := func(id, text string) map[string]any {
 		send(`{"jsonrpc":"2.0","id":` + id + `,"method":"session/prompt","params":{"sessionId":"` + sessionID + `","prompt":[{"type":"text","text":"` + text + `"}]}}`)
@@ -168,9 +176,9 @@ func TestASessionThatStartsOnClaudeResumesClaudesConversation(t *testing.T) {
 		send := func(line string) { _, _ = io.WriteString(clientIn, line+"\n") }
 		send(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
 		read("1")
-		params := `{"cwd":"` + root + `"}`
+		params := `{"cwd":` + jsonString(root) + `}`
 		if resume {
-			params = `{"cwd":"` + root + `","sessionId":"latest"}`
+			params = `{"cwd":` + jsonString(root) + `,"sessionId":"latest"}`
 		}
 		send(`{"jsonrpc":"2.0","id":2,"method":"` + method + `","params":` + params + `}`)
 		reply := read("2")

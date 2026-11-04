@@ -264,3 +264,34 @@ func TestThePromptNamesEachServersToolsButNotTheirSchemas(t *testing.T) {
 		t.Fatalf("%s", p)
 	}
 }
+
+// The cache is on disk by the time a listing is visible: WaitListed returns when the listing is
+// published, and a session started at that instant must find the cache, not start the server again.
+// The cache write is made slow so the order, not the luck of timing, decides the result.
+func TestTheCacheIsWrittenBeforeTheListingIsVisible(t *testing.T) {
+	beforeCacheWrite = func() { time.Sleep(300 * time.Millisecond) }
+	defer func() { beforeCacheWrite = nil }()
+	root, cache := t.TempDir(), t.TempDir()
+	logFile := fakeConfig(t, root)
+	getenv := func(k string) string {
+		if k == "FAKE_LOG" {
+			return logFile
+		}
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	first := NewManager(Files(root, ""), getenv, os.Environ(), cache)
+	first.Tools()
+	first.WaitListed(ctx)
+	entries, _ := os.ReadDir(cache)
+	first.Close()
+	if len(entries) == 0 {
+		t.Fatal("the listing was visible before the cache was on disk")
+	}
+	second := NewManager(Files(root, ""), getenv, os.Environ(), cache)
+	defer second.Close()
+	if got := len(second.Tools()); got != 3 || starts(logFile) != 1 {
+		t.Fatalf("a session started at that instant restarted the server: %d tools, %d starts", got, starts(logFile))
+	}
+}

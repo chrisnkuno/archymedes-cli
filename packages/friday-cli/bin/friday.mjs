@@ -12,6 +12,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { missingInterfaceNotice, resolveInterface } from "./launcher.mjs";
 
 const require = createRequire(import.meta.url);
@@ -29,7 +30,8 @@ function packageDirectory(name) {
 async function runAgentAlone(resolution) {
   // Read by the agent when it is asked for an interface it does not have (src/friday.ts).
   process.env.ARCHYMEDES_INTERFACE_MISSING = missingInterfaceNotice(resolution, platform, arch).join("\n");
-  await import(agentEntry);
+  // A file URL, not the path: on Windows the ESM loader rejects a drive-letter path (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+  await import(pathToFileURL(agentEntry).href);
 }
 
 const resolution = resolveInterface({

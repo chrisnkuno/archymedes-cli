@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -18,6 +19,21 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/loop"
 	"github.com/chrisnkuno/friday-cli/internal/core/policy"
 )
+
+// absPath makes a POSIX fixture path absolute on the machine running: "/p" is not absolute on
+// Windows (no drive), so a translator rooted there would not recognise a path inside it.
+func absPath(posix string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + strings.ReplaceAll(posix, "/", `\`)
+	}
+	return posix
+}
+
+// jsonStr is a Go string as a JSON string, so a Windows path's backslashes are escaped.
+func jsonStr(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
 
 func TestMain(m *testing.M) {
 	if claudetest.Active() {
@@ -46,7 +62,7 @@ func types(notices []agents.Notice) []string {
 }
 
 func TestStreamedTextArrivesOnceAndAMessageThatDidNotStreamIsSentWhole(t *testing.T) {
-	tr := newTranslator("/p")
+	tr := newTranslator(absPath("/p"))
 	tr.begin()
 	got := feedAll(tr,
 		`{"type":"stream_event","event":{"type":"message_start","message":{"id":"m1","model":"claude-x","usage":{"input_tokens":3,"cache_read_input_tokens":7}}},"parent_tool_use_id":null}`,
@@ -71,10 +87,10 @@ func TestStreamedTextArrivesOnceAndAMessageThatDidNotStreamIsSentWhole(t *testin
 }
 
 func TestEveryToolCallIsAnsweredOnceAndATurnEndsWithOneStop(t *testing.T) {
-	tr := newTranslator("/p")
+	tr := newTranslator(absPath("/p"))
 	tr.begin()
 	got := feedAll(tr,
-		`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/p/a.go","old_string":"x","new_string":"y"}},{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test"}}]},"parent_tool_use_id":null}`,
+		`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":`+jsonStr(absPath("/p/a.go"))+`,"old_string":"x","new_string":"y"}},{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test"}}]},"parent_tool_use_id":null}`,
 		`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{}}]},"parent_tool_use_id":null}`,
 		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"The file has been updated"}]},"parent_tool_use_id":null}`,
 		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"again"}]},"parent_tool_use_id":null}`,
@@ -105,11 +121,11 @@ func TestEveryToolCallIsAnsweredOnceAndATurnEndsWithOneStop(t *testing.T) {
 }
 
 func TestASubagentsWorkGoesUnderItsTaskCall(t *testing.T) {
-	tr := newTranslator("/p")
+	tr := newTranslator(absPath("/p"))
 	tr.begin()
 	got := feedAll(tr,
 		`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"task","name":"Task","input":{"description":"look around","subagent_type":"Explore"}}]},"parent_tool_use_id":null}`,
-		`{"type":"assistant","message":{"id":"s1","content":[{"type":"text","text":"thinking aloud"},{"type":"tool_use","id":"r1","name":"Read","input":{"file_path":"/p/x.go"}}]},"parent_tool_use_id":"task"}`,
+		`{"type":"assistant","message":{"id":"s1","content":[{"type":"text","text":"thinking aloud"},{"type":"tool_use","id":"r1","name":"Read","input":{"file_path":`+jsonStr(absPath("/p/x.go"))+`}}]},"parent_tool_use_id":"task"}`,
 		`{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"sub text"}},"parent_tool_use_id":"task"}`,
 		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"`+strings.Repeat("a", 500)+`"}]},"parent_tool_use_id":"task"}`,
 	)
@@ -128,7 +144,7 @@ func TestASubagentsWorkGoesUnderItsTaskCall(t *testing.T) {
 }
 
 func TestAFailedTurnSaysWhatClaudeCodeSaidAndThePlanLimit(t *testing.T) {
-	tr := newTranslator("/p")
+	tr := newTranslator(absPath("/p"))
 	feedAll(tr, `{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"seven_day","resetsAt":0}}`)
 	tr.begin()
 	_, o := tr.finish(&message{Subtype: "error_during_execution", IsError: true, Errors: []string{"overloaded"}}, false, "")

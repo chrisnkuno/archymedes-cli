@@ -346,6 +346,11 @@ func deliver(m *Model, cmd tea.Cmd) {
 	}
 }
 
+// collectWait is how long collect gives each command to finish. Two seconds is plenty for work in
+// memory; a command that starts git is given more by submitSlow, since a process start alone can take
+// that long on a loaded Windows machine.
+var collectWait = 2 * time.Second
+
 // collect runs a command (and any batch it is), each with a moment to finish, and returns what
 // they produced.
 func collect(cmd tea.Cmd) []tea.Msg {
@@ -357,7 +362,7 @@ func collect(cmd tea.Cmd) []tea.Msg {
 	var msg tea.Msg
 	select {
 	case msg = <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(collectWait):
 		return nil
 	}
 	switch msg := msg.(type) {

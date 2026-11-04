@@ -103,12 +103,28 @@ func (m *Manager) cacheFile(s Server) string {
 
 func (m *Manager) remember(s Server, tools []RemoteTool) {
 	l := listed{Tools: tools, ListedAt: time.Now()}
+	// The cache is written before the listing is published. Publishing is what WaitListed (and the
+	// next turn) waits on; if it came first, a session started the instant the listing is visible
+	// would read a cache file that is not there yet and start the server again.
+	m.saveCache(s, l)
 	m.mu.Lock()
 	m.listed[s.ID] = l
 	delete(m.failed, s.ID)
 	m.mu.Unlock()
+}
+
+// beforeCacheWrite lets a test make the cache write slow, to prove nothing is published before it is
+// done. It is nil outside tests.
+var beforeCacheWrite func()
+
+// saveCache writes a server's listing to the cache, best effort: a cache that cannot be written
+// costs one more start of the server, never a failure.
+func (m *Manager) saveCache(s Server, l listed) {
 	if m.cacheDir == "" {
 		return
+	}
+	if beforeCacheWrite != nil {
+		beforeCacheWrite()
 	}
 	if err := os.MkdirAll(m.cacheDir, 0o700); err != nil {
 		return
