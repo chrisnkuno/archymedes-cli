@@ -44,6 +44,7 @@ const (
 	sigmaHistory      = 0.5
 	z90               = 1.2816 // the standard normal's 90th percentile
 	minRecordedSecond = 1.0
+	maxBackfilledRun  = 2 * time.Hour // longer: a helper left open, not one at work
 	maxRoles          = 64
 	bookVersion       = 1
 )
@@ -52,9 +53,11 @@ const (
 const planKey = "#plan-step"
 
 type book struct {
-	Version int                       `json:"version"`
-	Roles   map[string]*testtime.Stat `json:"roles"` // a whole helper run, by role; and planKey
-	Steps   map[string]*testtime.Stat `json:"steps"` // a helper's time per step, by role
+	Version int `json:"version"`
+	// Seeded is set once the project's earlier helper runs were read in (Backfill).
+	Seeded bool                      `json:"seeded,omitempty"`
+	Roles  map[string]*testtime.Stat `json:"roles"` // a whole helper run, by role; and planKey
+	Steps  map[string]*testtime.Stat `json:"steps"` // a helper's time per step, by role
 }
 
 // Book is one project's work times, kept at .archymedes/work-times.json.
@@ -97,6 +100,7 @@ func (k *Book) load() *book {
 	if read.Steps != nil {
 		k.b.Steps = read.Steps
 	}
+	k.b.Seeded = read.Seeded
 	return k.b
 }
 
@@ -219,4 +223,41 @@ func stat(m map[string]*testtime.Stat, key string) *testtime.Stat {
 		m[key] = s
 	}
 	return s
+}
+
+// Run is one finished helper run from before the book kept times: its role, how long it took and
+// in how many steps (model calls).
+type Run struct {
+	Role  string
+	Took  time.Duration
+	Steps int
+}
+
+// Backfill learns a project's earlier helper runs, once: the first time a project is seen, collect
+// is called and its runs are learned, those under a second or over two hours left out. It reports
+// whether it ran. The book remembers it was seeded, so a restart does not read them again.
+func (k *Book) Backfill(collect func() []Run) bool {
+	k.mu.Lock()
+	if k.load().Seeded {
+		k.mu.Unlock()
+		return false
+	}
+	k.b.Seeded = true
+	k.mu.Unlock()
+	runs := collect() // outside the lock: it reads the sessions' files
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	now := time.Now()
+	for _, r := range runs {
+		seconds := r.Took.Seconds()
+		if seconds < minRecordedSecond || r.Took > maxBackfilledRun || r.Role == "" || r.Role == planKey {
+			continue
+		}
+		stat(k.b.Roles, r.Role).Add(seconds, now)
+		if r.Steps > 0 {
+			stat(k.b.Steps, r.Role).Add(seconds/float64(r.Steps), now)
+		}
+	}
+	k.save()
+	return true
 }

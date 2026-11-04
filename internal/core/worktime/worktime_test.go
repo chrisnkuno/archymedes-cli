@@ -86,3 +86,35 @@ func TestNonsenseIsNotLearned(t *testing.T) {
 		t.Errorf("learned a negative plan step: %+v", e)
 	}
 }
+
+// TestBackfillSeedsAProjectOnce: the runs a project already has are learned once, sensible ones
+// only, and a second backfill does not even look.
+func TestBackfillSeedsAProjectOnce(t *testing.T) {
+	root := t.TempDir()
+	b := For(root)
+	asked := 0
+	runs := func() []Run {
+		asked++
+		return []Run{
+			{Role: "explore", Took: 40 * time.Second, Steps: 4},
+			{Role: "explore", Took: 60 * time.Second, Steps: 6},
+			{Role: "explore", Took: 300 * time.Millisecond, Steps: 1}, // under a second
+			{Role: "general", Took: 5 * time.Hour, Steps: 20},         // left open, not worked on
+		}
+	}
+	if !b.Backfill(runs) {
+		t.Fatal("a fresh project was not backfilled")
+	}
+	if e := b.Helper("explore", 10); e.Basis != "history" || e.Runs != 2 || !near(e.StepP50, 10, 0.05) {
+		t.Fatalf("two explore runs at ten seconds a step: %+v", e)
+	}
+	if e := b.Helper("general", 25); e.Basis == "history" {
+		t.Errorf("a five-hour run was learned: %+v", e)
+	}
+	if b.Backfill(runs) || asked != 1 {
+		t.Errorf("backfilled twice (asked %d times)", asked)
+	}
+	if (&Book{path: Path(root)}).Backfill(runs) || asked != 1 {
+		t.Error("a restart backfilled again: seeded is not kept on disk")
+	}
+}

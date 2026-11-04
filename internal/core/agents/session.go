@@ -139,6 +139,8 @@ type Session struct {
 	// started them, so they keep working after that turn ends.
 	life    context.Context
 	endLife context.CancelFunc
+	// backfilled closes when the work-time book's first look at this project is over (Close waits).
+	backfilled chan struct{}
 }
 
 // ErrBusyClosed is returned by a turn asked of a closed session.
@@ -238,6 +240,11 @@ func newSession(cfg Config, store *thread.Store, meta thread.Meta, messages []fa
 		cfg.Notify(Notice{Kind: "rules_problems", Problems: all})
 	}
 	cleanStaleResults(cfg.Root)
+	s.backfilled = make(chan struct{})
+	go func() {
+		defer close(s.backfilled)
+		worktime.For(cfg.Root).Backfill(func() []worktime.Run { return pastHelperRuns(cfg.Root) })
+	}()
 	return s
 }
 
@@ -435,6 +442,9 @@ func (s *Session) Models() *llm.Models {
 
 // Close stops the running turn, every sub-agent and every background command, and waits for them.
 func (s *Session) Close() {
+	if s.backfilled != nil {
+		<-s.backfilled // it writes under the project; it is over before the session is
+	}
 	s.turnMu.Lock()
 	s.closed = true
 	if s.cancelRun != nil {

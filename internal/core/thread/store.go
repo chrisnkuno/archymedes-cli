@@ -74,6 +74,9 @@ type Thread struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	// Usage is every token the thread's model calls have used, across restarts.
 	Usage *Usage `json:"usage,omitempty"`
+	// WasInterrupted is set, on replay, for a thread that was ever interrupted: its time from
+	// start to end includes the time Friday was not running.
+	WasInterrupted bool `json:"-"`
 }
 
 // Usage is a thread's tokens, in the names the interface reads (loop.Usage, acp.Usage).
@@ -261,6 +264,7 @@ func (s *Store) Threads() ([]Thread, error) {
 			if t := byID[rec.ID]; t != nil {
 				t.Status = rec.Status
 				t.UpdatedAt = rec.At
+				t.WasInterrupted = t.WasInterrupted || rec.Status == Interrupted
 				if rec.Report != "" {
 					t.Report = rec.Report
 				}

@@ -387,7 +387,9 @@ Friday learns how long work takes in each project and keeps it in
 `.archymedes/work-times.json`: a finished helper's time and steps, by role, and each finished
 plan step. A time is treated as log-normal, as test times are, and kept as its median and its 90th
 percentile. A role with no runs yet borrows this project's time per step from the other roles.
-With nothing measured, it is a guess from the steps the role may take.
+With nothing measured, it is a guess from the steps the role may take. The first session of a
+project reads in the helpers its earlier sessions ran to the end, so estimates start from them.
+Failed or stopped helpers, ones resumed after a restart and ones open over two hours are left out.
 
 What a helper has left is not the median minus the time it has run. One still going after two
 minutes is one of the longer ones, so Friday takes the median of the runs that lasted at least that
