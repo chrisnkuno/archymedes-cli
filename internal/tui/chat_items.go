@@ -129,6 +129,8 @@ type toolItem struct {
 	added, removed int
 	// test is a test run's expected and actual time (chat_testrun.go), nil for anything else.
 	test *testRun
+	// stuck is the line that says its command or sub-agent looks stuck (chat_activity.go), or "".
+	stuck string
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -181,6 +183,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	}
 	head += th.Faint.Render(" · ") + summary + t.test.cardNote(th)
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
+	if t.stuck != "" {
+		lines = append(lines, ansi.Truncate(th.Warn.Render("  ⎿ "+t.stuck), ctx.width, "…"))
+	}
 	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open
 	if expanded {

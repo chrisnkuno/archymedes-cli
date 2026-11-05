@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os/exec"
 	"runtime"
@@ -65,7 +66,7 @@ func (w *Workspace) runCommand() *tool.Tool {
 			}
 			return nil
 		},
-		Run: func(ctx context.Context, _ tool.Context, args tool.Args) tool.Result {
+		Run: func(ctx context.Context, tctx tool.Context, args tool.Args) tool.Result {
 			command := strings.TrimSpace(tool.StringArg(args, "command"))
 			if command == "" {
 				return tool.Error("`command` is required")
@@ -97,9 +98,26 @@ func (w *Workspace) runCommand() *tool.Tool {
 					}
 				}
 			}
+			// While it runs, the person can see what it is doing, stop it, or run it again (activity.go).
+			watched := w.jobs.beginForeground(tctx.CallID, command, w.Root)
 			started := time.Now()
-			out := w.shell(ctx, command, timeout)
+			out := w.shell(ctx, command, timeout, watched)
+			restarted := 0
+			for ctx.Err() == nil && watched.again() {
+				restarted++
+				started = time.Now()
+				out = w.shell(ctx, command, timeout, watched)
+			}
+			w.jobs.endForeground(watched)
 			took := time.Since(started)
+			personal := ""
+			switch {
+			case watched.stoppedByPerson():
+				personal = "\n\n[Stopped by the person from the view of what it was doing. Do not run it again unless they ask.]"
+				out.timedOut = false
+			case restarted > 0:
+				personal = "\n\n[Restarted by the person; this is the output of the run after the restart.]"
+			}
 			if out.timedOut && trial {
 				return tool.Result{Content: fmt.Sprintf("'%s' was still running after %ds, so it was stopped: it is a long-running process, not a command that finishes. If the task needs it running, start it with background: true, read it with command_output and end it with stop_command.\n\nWhat it printed:\n%s", command, int(persistentTrial.Seconds()), out.combined()), IsError: true, Data: map[string]any{"command": command, "reason": "persistent_foreground_command"}}
 			}
@@ -110,6 +128,7 @@ func (w *Workspace) runCommand() *tool.Tool {
 			if out.timedOut {
 				body += fmt.Sprintf("\n\n[Command exceeded its %ds limit and was killed. Pass timeoutSeconds for a longer run.]", int(timeout.Seconds()))
 			}
+			body += personal
 			data := map[string]any{"command": command, "exitCode": out.exit, "stdout": out.stdout, "stderr": out.stderr}
 			result := tool.Result{Content: fmt.Sprintf("exit %d\n%s", out.exit, body), IsError: out.exit != 0, Data: data}
 			if isTest && ctx.Err() == nil && out.missing == "" && out.exit != 127 {
@@ -249,15 +268,28 @@ func (o shellOutput) combined() string {
 
 // shell runs command through the platform shell in the root, killing it (and what it started)
 // when the run is cancelled or the timeout passes.
-func (w *Workspace) shell(ctx context.Context, command string, timeout time.Duration) shellOutput {
+//
+// watched, when set, sees its output and pid as it runs, and may end it (the person's stop or restart).
+func (w *Workspace) shell(ctx context.Context, command string, timeout time.Duration, watched *foreground) shellOutput {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := shellCommand(ctx, command, w.Root)
+	attempt, stop := context.WithCancel(ctx)
+	defer stop()
+	cmd := shellCommand(attempt, command, w.Root)
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &limited{buf: &stdout, max: outputMax}
-	cmd.Stderr = &limited{buf: &stderr, max: outputMax}
+	var toOut, toErr io.Writer = &limited{buf: &stdout, max: outputMax}, &limited{buf: &stderr, max: outputMax}
+	if watched != nil {
+		toOut, toErr = io.MultiWriter(toOut, watched), io.MultiWriter(toErr, watched)
+	}
+	cmd.Stdout, cmd.Stderr = toOut, toErr
 	cmd.WaitDelay = 2 * time.Second
-	err := cmd.Run()
+	err := cmd.Start()
+	if err == nil {
+		if watched != nil {
+			watched.attempt(cmd.Process.Pid, stop)
+		}
+		err = cmd.Wait()
+	}
 	out := shellOutput{stdout: stdout.String(), stderr: stderr.String()}
 	var exit *exec.ExitError
 	switch {

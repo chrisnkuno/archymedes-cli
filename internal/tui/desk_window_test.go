@@ -19,7 +19,7 @@ var allWindows = map[string]window{
 	"notesApp": (*notesApp)(nil), "pager": (*pager)(nil), "providersApp": (*providersApp)(nil),
 	"resumePicker": (*resumePicker)(nil), "settingsApp": (*settingsApp)(nil), "showcaseApp": (*showcaseApp)(nil),
 	"statsApp": (*statsApp)(nil), "tasksApp": (*tasksApp)(nil), "themePicker": (*themePicker)(nil),
-	"wallpaperPicker": (*wallpaperPicker)(nil),
+	"wallpaperPicker": (*wallpaperPicker)(nil), "watchApp": (*watchApp)(nil),
 }
 
 // TestConformEveryWindowTakesTheWheel: the wheel scrolls what is under the pointer, so every

@@ -449,8 +449,10 @@ Every edit is shown as it lands, not only when the turn ends.
   says `longer than usual` instead. On a terminal too narrow for the rail, the top bar's agents
   chip says it: `☺ agents 2 ≈3m left alt+i`. Under **Running**
   it lists every command at work this moment, Friday's own and its helpers': who runs it, the
-  command, and for how long. A click opens it, Friday's on its card and a helper's in the
-  Inspector. Background commands follow, each with the last line it printed. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
+  command, and for how long. A click selects Friday's on its card, and a second click shows
+  [what is going on](#whats-going-on-behind-a-wait); a helper's opens in the Inspector.
+  Background commands follow, each with the last line it printed; a click selects one, a
+  second shows what is going on. One that looks stuck says so in the warning colour. It ends with the latest edit's diff, whoever made it. It is read again from git each time an edit lands. alt+d hides it or brings it
   back. On a narrower terminal the top bar counts the changed files instead.
 - **In the growth panel** (alt+v or `/growth`; 96 columns or more). The project is drawn as a tree
   that grows while the work is done. Its branches are the project's folders, and the heaviest are
@@ -479,6 +481,39 @@ Every edit is shown as it lands, not only when the turn ends.
   and space reads one in a pager.
 - **In Changes** (F10): the whole diff of every file against the last commit. A click on a file in
   the rail opens Changes on it.
+
+## What's going on behind a wait
+
+When Friday waits on something, you can see what it is actually doing. Enter on a running
+command's card or a helper at work (or a second click on it, or on its row in the rail) opens
+**What's going on**, read again every two seconds:
+
+- **A command**, foreground or background, Friday's or a helper's: the command, its pid, how long
+  it has run, its CPU, when it last printed, and its last ten lines. The CPU is the share of one
+  core it and everything it started used in the last two seconds. CPU is read from `/proc` on Linux;
+  elsewhere the view says `CPU unknown on this system`.
+- **A helper**: its role and task, how long it has worked, how long since there was news of it
+  (a call, a result, a word it said), and its last ten steps.
+
+**Looks stuck.** A running command that has printed nothing and used next to no CPU (under 1%)
+for 5 minutes is marked `looks stuck` on its card, in the rail and in the view, in the warning
+colour. A silent compile uses the processor, so it is not marked; a command waiting forever on a
+network or a lock is. Without a CPU reading nothing is marked, since a busy silent command and a
+hung one look the same from their output. A helper looks stuck when no news of it has come for
+5 minutes, unless it is waiting on a command that is still busy. Something that has ended is
+never stuck.
+
+The view's foot has its keys as buttons:
+
+| Key | Does |
+| --- | --- |
+| x | Stop it. A background command stops with everything it started. A foreground one ends, and Friday is told you stopped it and not to run it again unless you ask. A helper stops, and what it found so far becomes its report |
+| r | Restart a command: the same command in the same folder. A background one is stopped and started again under a new id; a foreground one runs again in the same call, and Friday is told it was restarted |
+| → | The card in the Inspector |
+| q, esc | Close |
+
+This needs Friday's own engine. While Claude Code or the TypeScript engine runs the session, the
+view shows what the card knows and says the engine does not report more.
 
 ## Sessions: resuming, restarts, titles
 

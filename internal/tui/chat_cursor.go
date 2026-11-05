@@ -111,6 +111,9 @@ func (m *Model) enterFirst() bool {
 // openItem is enter on a block: a tool call shows its whole output (again: folds it), a message
 // opens in a reader.
 func (m *Model) openItem(it item) tea.Cmd {
+	if t, ok := it.(*toolItem); ok && m.watchable(t) {
+		return m.openWatch(t)
+	}
 	if t, ok := it.(*toolItem); ok {
 		t.open = !t.open
 		t.touch()

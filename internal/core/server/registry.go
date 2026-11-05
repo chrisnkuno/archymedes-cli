@@ -228,6 +228,15 @@ var sessionCommands = []sessionCommand{
 		}
 		return agentAnswer(text, err)
 	}},
+	{"activity", "What every command Friday waits on is doing: pid, time, CPU, its last lines, whether it looks stuck", func(sess *session, _ string) map[string]any {
+		return activityAnswer(sess.core.Jobs().Activity())
+	}},
+	{"command-stop", "Stop a command by its id (cmd1, fg1) or its call id; a foreground one ends its call", func(sess *session, arg string) map[string]any {
+		return agentAnswer(sess.core.Jobs().StopActivity(arg))
+	}},
+	{"command-restart", "Run a command again by its id or call id: the same command in the same folder", func(sess *session, arg string) map[string]any {
+		return agentAnswer(sess.core.Jobs().RestartActivity(arg))
+	}},
 	{"agent-send", "Tell a sub-agent \"<id> <message>\": read at its next step, or a finished one starts again", func(sess *session, arg string) map[string]any {
 		id, message, _ := strings.Cut(strings.TrimSpace(arg), " ")
 		var text string

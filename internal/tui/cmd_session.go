@@ -76,6 +76,9 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		}
 		m.tr.add(item)
 	default:
+		if strings.HasPrefix(msg.command, "command-") {
+			return tea.Batch(m.toast(toastInfo, msg.result.Text), m.askActivity())
+		}
 		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" || msg.command == "spawn" || strings.HasPrefix(msg.command, "agent-") {
 			// The screen keeps what was said; the agent's conversation is what was rewound.
 			return m.toast(toastInfo, msg.result.Text)

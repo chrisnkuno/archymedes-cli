@@ -294,6 +294,9 @@ func (s *Session) Messages() []fantasy.Message {
 // Todos is the session's checklist.
 func (s *Session) Todos() []tools.TodoItem { return s.ws.Todos.Items() }
 
+// Jobs is the commands the session runs, foreground and background, its sub-agents' included.
+func (s *Session) Jobs() *tools.Jobs { return s.ws.Jobs() }
+
 func (s *Session) askApproval(ctx context.Context, r policy.Request) (policy.Decision, error) {
 	if s.cfg.Prompt == nil {
 		return policy.Deny, nil

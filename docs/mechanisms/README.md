@@ -236,6 +236,7 @@ held by the components they share rather than by each surface's own code.
 | a click | select | `listView.clickRow`, `tileGrid.clickTile` |
 | a click on the selected thing | open it, as enter does | the same |
 | a click on a button, a tab or the dock | act at once | `desk_window.go` (`hintBar`) |
+| enter, or a click on the selected thing, when it is running | what is going on behind the wait: a command's pid, CPU, last lines, or a helper's last news; `looks stuck` when it is; x stops, r restarts | `internal/tui/app_watch.go`, `chat_activity.go` |
 | alt+h, ⌂ | home over the conversation, which goes on behind; F1 or a send brings it back | `home_landing.go` (`goHome`), `desk_bars.go` |
 | the wheel | scroll what is under the pointer, never what is hidden | `desk_window.go` (`wheel`) |
 
