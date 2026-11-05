@@ -129,6 +129,8 @@ type toolItem struct {
 	added, removed int
 	// test is a test run's expected and actual time (chat_testrun.go), nil for anything else.
 	test *testRun
+	// phone is the answer given to its approval or question from the phone, "" when given here.
+	phone string
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -181,6 +183,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	}
 	head += th.Faint.Render(" · ") + summary + t.test.cardNote(th)
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
+	if t.phone != "" {
+		lines = append(lines, th.Faint.Render(ansi.Truncate("  answered from your phone: "+t.phone, ctx.width, "…")))
+	}
 	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open
 	if expanded {

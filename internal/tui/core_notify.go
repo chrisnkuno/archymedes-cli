@@ -26,6 +26,8 @@ type notifier struct {
 	pending []tea.Cmd
 	// failed is set once the push URL refused, so the notice is shown once a session.
 	failed bool
+	// phone is answers from the phone (core_phone.go).
+	phone phoneLink
 }
 
 // notifyFailedMsg is the push URL refusing a notification.
@@ -42,7 +44,11 @@ func (m *Model) notifyMode() string {
 
 // notify queues a notification. local is what the terminal shows; push is the line for the push
 // URL, which names no command, file or reply.
-func (m *Model) notify(local, push string) {
+func (m *Model) notify(local, push string) { m.notifyAsking(local, push, nil) }
+
+// notifyAsking is notify for a request waiting for the person, which the push may let the phone
+// answer (core_phone.go).
+func (m *Model) notifyAsking(local, push string, a *approval) {
 	switch m.notifyMode() {
 	case "off":
 		return
@@ -53,7 +59,11 @@ func (m *Model) notify(local, push string) {
 	}
 	m.notifier.pending = append(m.notifier.pending, tea.Raw(notificationSequence(os.Getenv, local)))
 	if url := strings.TrimSpace(firstNonEmpty(os.Getenv("ARCHYMEDES_NOTIFY_URL"), config.Setting(m.opts.ConfigDir, "ARCHYMEDES_NOTIFY_URL"))); url != "" {
-		m.notifier.pending = append(m.notifier.pending, pushNotification(url, push))
+		actions := ""
+		if a != nil {
+			actions = m.offerToPhone(url, a)
+		}
+		m.notifier.pending = append(m.notifier.pending, pushNotification(url, push, actions))
 	}
 }
 
@@ -88,13 +98,32 @@ func (m *Model) notifyTurnEnded(msg promptDoneMsg) {
 	}
 }
 
-// notifyWaiting says an approval or a question is waiting for the person.
+// notifyWaiting says an approval or a question is waiting for the person. A risky approval says
+// its risk first, so a phone that may answer it does not answer blind.
 func (m *Model) notifyWaiting(a *approval) {
 	if a.ask != nil {
-		m.notify("Friday has a question in "+m.projectName()+": "+a.ask.Question, "Friday has a question in "+m.projectName())
+		m.notifyAsking("Friday has a question in "+m.projectName()+": "+a.ask.Question, "Friday has a question in "+m.projectName(), a)
 		return
 	}
-	m.notify("Friday needs your approval in "+m.projectName()+": "+a.req.ToolCall.Title, "Friday needs your approval in "+m.projectName())
+	push := "Friday needs your approval in " + m.projectName()
+	if len(a.req.Risk) > 0 {
+		push = "Risky: " + strings.Join(a.req.Risk, "; ") + ". " + push
+	}
+	m.notifyAsking("Friday needs your approval in "+m.projectName()+": "+a.req.ToolCall.Title, push, a)
+}
+
+// notifierMsg handles what the notifications send back: a push URL refusing, a phone answering.
+func (m *Model) notifierMsg(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case phoneReplyMsg:
+		return m.phoneReply(msg.body)
+	case notifyFailedMsg:
+		if !m.notifier.failed {
+			m.notifier.failed = true
+			m.notice(noticeFaint, "The notification URL did not take the notification ("+msg.err+"); check ARCHYMEDES_NOTIFY_URL in Settings")
+		}
+	}
+	return nil
 }
 
 // notificationSequence is how this terminal shows a notification: its own escape where it has
@@ -133,8 +162,9 @@ func notificationText(text string) string {
 	return text
 }
 
-// pushNotification posts the line to an ntfy-style URL (the body is the message, Title the title).
-func pushNotification(url, text string) tea.Cmd {
+// pushNotification posts the line to an ntfy-style URL (the body is the message, Title the title,
+// Actions the phone's buttons when it may answer).
+func pushNotification(url, text, actions string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -144,6 +174,9 @@ func pushNotification(url, text string) tea.Cmd {
 		}
 		req.Header.Set("Title", "Friday")
 		req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+		if actions != "" {
+			req.Header.Set("Actions", actions)
+		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return notifyFailedMsg{err: err.Error()}

@@ -232,11 +232,15 @@ The interface tells you when a turn ends, or when an approval or a question wait
 | --- | --- | --- |
 | `ARCHYMEDES_NOTIFY` | `auto` | `auto` notifies only while the terminal is not focused, `always` notifies every time, `off` never |
 | `ARCHYMEDES_NOTIFY_URL` | — | a URL that takes a plain-text POST, such as an [ntfy](https://ntfy.sh) topic, so the notification reaches your phone |
+| `ARCHYMEDES_NOTIFY_REPLIES` | `on` | `on` puts Allow and Deny, or a short question's options, on the phone's notification; `off` keeps the push one way |
 
 The terminal shows its own notification where it has one (iTerm2, WezTerm, Ghostty, kitty, foot),
 and rings the bell elsewhere and inside tmux. A terminal that does not report focus counts as
 focused, so `auto` stays quiet there; choose `always` for it. The push URL receives one line, what
-happened and the project's folder name, never a command, a file or a reply.
+happened and the project's folder name, never a command, a file or a reply. A risky approval also
+says its risk, in the safety screen's words, such as `deployment or package publication command`.
+How the phone answers, and how to keep the topic private, is in the
+[user guide](USER_GUIDE.md#answer-from-your-phone).
 
 ## Diagnostics
 
@@ -268,6 +272,7 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_SUGGEST_MODEL` | Behaviour | Ask the model for extra suggestions (a small extra call per turn) |
 | `ARCHYMEDES_NOTIFY` | Behaviour | Notifications — when a turn ends or Friday waits for you |
 | `ARCHYMEDES_NOTIFY_URL` | Behaviour | Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only) |
+| `ARCHYMEDES_NOTIFY_REPLIES` | Behaviour | Answers from your phone — Allow, Deny or a short answer from the push |
 | `ARCHYMEDES_AUTO_UPDATE` | Behaviour | Automatic updates — checked hourly, installed when Friday closes |
 | `ARCHYMEDES_TELEMETRY` | Behaviour | Install count — one anonymous cue per new version (event, version, OS) |
 | `ARCHYMEDES_TEST_FIRST` | Behaviour | Build test first — tests, then code, then static analysis |

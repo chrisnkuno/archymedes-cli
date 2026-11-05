@@ -241,7 +241,9 @@ opens. Without the TypeScript agent they are `-32601`.
 
 `allow_pattern` appears only when a broader rule is safe (here, commands starting with `npm test`).
 For a sensitive call the title adds the safety screen's reasons, for example
-`run git push origin main — deployment or package publication command`, and no pattern is offered. Both answer shapes are read: ACP's nested
+`run git push origin main — deployment or package publication command`, and no pattern is offered.
+The same reasons come as a list in `"_meta":{"archymedes":{"risk":[…]}}`, so a client can say the
+risk without reading the title, as a phone notification does. Both answer shapes are read: ACP's nested
 `{"outcome":{"outcome":"selected","optionId":"allow"}}` and the interface's flat
 `{"outcome":"selected","selectedOptionId":"allow"}`. Anything else, an error, or no answer (the
 client went away) is a denial.

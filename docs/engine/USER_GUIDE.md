@@ -134,6 +134,33 @@ question waits: a notification from your terminal, or its bell. Set a push URL i
 (`ARCHYMEDES_NOTIFY_URL`, an [ntfy](https://ntfy.sh) topic for example) and your phone hears it
 too. See [Notifications](CONFIGURATION.md#notifications).
 
+### Answer from your phone
+
+With a push URL set, the phone can answer as well as hear. An approval's notification carries
+**Allow** and **Deny** buttons. A question that takes one of at most three answers carries one
+button for each. A question with more answers, or one that takes several, is only announced.
+
+The phone cannot reach your computer, so its answer travels through the push server. A button posts
+to a reply topic beside yours: `https://ntfy.sh/your-topic` answers on
+`https://ntfy.sh/your-topic-reply`. Friday listens there only while something waits for an answer,
+and connects again if the line drops.
+
+What Friday accepts:
+
+- Each request gets a one-time id, and each button a token signed with a secret made for this
+  session. Anything else posted to the reply topic is ignored.
+- A token answers only its own button: Allow's token cannot deny, and Deny's cannot allow.
+- The first answer wins. Answer in the terminal and the phone's buttons stop working; answer on
+  the phone and the dialog closes, its card saying "answered from your phone".
+- A risky approval, one the safety screen flags, can be answered from the phone too. Its
+  notification starts with the risk, for example `Risky: deployment or package publication
+  command.`
+
+**Topic names are secrets.** Anyone who knows your topic can read the notifications, and press
+their buttons. Pick a long random topic name. Better still, use an ntfy server that asks for a
+login (a server of your own, or an account with access control) and put the token in the URL. To
+keep the push one way, set `ARCHYMEDES_NOTIFY_REPLIES` to `off`.
+
 ## Images in a request
 
 Name a picture in your request and it is sent with it: type its path, mention it (`@shot.png`), or
