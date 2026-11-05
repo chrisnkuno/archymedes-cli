@@ -84,6 +84,9 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	if frame.Get("start").InBounds(msg) {
 		return m.runAction("start")
 	}
+	if frame.Get("home").InBounds(msg) {
+		return m.runAction("home")
+	}
 	for i := 0; i <= len(m.windows); i++ {
 		if frame.Get(fmt.Sprintf("tab:%d", i)).InBounds(msg) {
 			m.focus(i)

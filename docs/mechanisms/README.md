@@ -236,6 +236,7 @@ held by the components they share rather than by each surface's own code.
 | a click | select | `listView.clickRow`, `tileGrid.clickTile` |
 | a click on the selected thing | open it, as enter does | the same |
 | a click on a button, a tab or the dock | act at once | `desk_window.go` (`hintBar`) |
+| alt+h, ⌂ | home over the conversation, which goes on behind; F1 or a send brings it back | `home_landing.go` (`goHome`), `desk_bars.go` |
 | the wheel | scroll what is under the pointer, never what is hidden | `desk_window.go` (`wheel`) |
 
 **Windows and dialogs.** Anything browsed is a window: it floats on the wallpaper with a margin, its

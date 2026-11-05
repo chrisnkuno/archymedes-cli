@@ -245,7 +245,11 @@ its foot. esc steps out to the bars: the arrows walk the tabs and the dock, and 
 conversation, ↑ steps onto the newest message or tool call; enter opens it and space reads it in a
 reader. Earlier messages are ctrl+↑. The wheel scrolls what is under the pointer
 ([the full grammar](docs/mechanisms/README.md#10-interaction)). The top bar has a `◇` start menu
-(ctrl+space finds any app, action, session or file) and a tab per open window. The dock along the bottom has every app and its
+(ctrl+space finds any app, action, session or file), `⌂` Home beside it, and a tab per open window.
+Home (`alt+h`) shows the home screen and its desktop icons at any time, while the conversation and
+any turn in it go on behind; F1, or sending a message, brings the conversation back. A turn keeps running
+while you are in any app or on Home; the Chat tab shows `●` while it works and `?` when it waits
+for an answer, and the approval comes up over whatever is in front. The dock along the bottom has every app and its
 key: F1 Chat, F2 Files, F3 Search, F4 Sessions, F5 Models, F6 Themes, F7 Keys, F8 Help, F9 Stats,
 F10 Changes, F12 Gallery. Click or press. The Finder (`alt+g`, `/finder`) shows everything Friday
 can open as a grid of icons drawn in colour: apps, commands, sessions, the project's files folder by

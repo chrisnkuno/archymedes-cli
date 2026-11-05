@@ -156,7 +156,7 @@
   "tui": {
     "core": "The Bubble Tea model, its update loop and input routing: state, agent events, keys, mouse, paste, click zones, the screen's composition, the action registry, the rate-limit forecast",
     "chat": "The Chat window: the conversation and its cursor, items, the input and its suggestions, approvals and questions, selection, scrolling, steering a running turn",
-    "home": "The home screen before the first message: the desktop's icons, the card, the first-run welcome and walkthrough, the tour panel",
+    "home": "The home screen, before the first message and at any time after (alt+h): the desktop's icons, the card, the first-run welcome and walkthrough, the tour panel",
     "desk": "The desktop and the parts every surface shares: the floating glass window and its hint bar, lists, tile grids, the bars by keyboard, start menu, Finder, overlays, wallpaper and photographs, Sixel",
     "app": "One window each (app_<name>.go, its parts app_<name>_<part>.go): Changes, Files, Pager, Gallery, Keys, Providers, Settings, Stats, Tasks and Notifications, Tour, Sessions, Models, Themes, Wallpaper, Help",
     "dialog": "Questions that must be answered over a window: connect a provider, pick a mode",

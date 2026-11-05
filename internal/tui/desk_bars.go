@@ -64,6 +64,15 @@ func (m *Model) systemChips(room int) string {
 func (m *Model) topBar() string {
 	th := m.th
 	start := " " + lipgloss.NewStyle().Foreground(th.Bg).Background(th.Primary).Bold(true).Render(" ◇ ") + " "
+	// Home, beside Start: the desktop under the windows, a click (or alt+h) away while a turn runs.
+	home := th.Faint.Render(" ⌂ ")
+	if m.active == 0 && m.home {
+		home = th.Strong.Render(" ⌂ ")
+	}
+	start = mark(m.zones.frame, "start", start)
+	if m.width >= 40 { // narrower, the mode matters more, and alt+h still goes home
+		start += mark(m.zones.frame, "home", home) + " "
+	}
 
 	// The tray gives way to the tabs as the row narrows, but the mode always shows: it decides
 	// what the agent may do.
@@ -79,9 +88,9 @@ func (m *Model) topBar() string {
 		label := "Chat"
 		if i > 0 {
 			label = m.windows[i-1].title()
-		} else if m.active != 0 && m.phase == busy {
+		} else if (m.active != 0 || m.home) && m.phase == busy {
 			label += " ●" // the conversation is working while you are elsewhere
-		} else if m.active != 0 && m.approval != nil {
+		} else if (m.active != 0 || m.home) && m.approval != nil {
 			label += " ?"
 		}
 		label = " " + ansi.Truncate(label, 18, "…") + " "
@@ -101,7 +110,7 @@ func (m *Model) topBar() string {
 		tabs.WriteString(mark(m.zones.frame, fmt.Sprintf("tab:%d", i), tab))
 		x += w
 	}
-	return spread(mark(m.zones.frame, "start", start)+tabs.String(), tray, m.width)
+	return spread(start+tabs.String(), tray, m.width)
 }
 
 // tray is the right of the top bar: what the agent is doing, then model, workspace and mode.
@@ -198,7 +207,7 @@ func (m *Model) dock() string {
 				label += " "
 			}
 			styled := th.Faint.Render(label)
-			if (app.id == "chat" && m.active == 0) || (m.activeWindow() != nil && strings.EqualFold(m.activeWindow().title(), app.name)) {
+			if (app.id == "chat" && m.active == 0 && !m.home) || (m.activeWindow() != nil && strings.EqualFold(m.activeWindow().title(), app.name)) {
 				styled = th.Strong.Render(label)
 			}
 			if m.barFocused(-1, app.id) {

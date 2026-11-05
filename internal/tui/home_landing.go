@@ -27,9 +27,37 @@ func animTick() tea.Cmd {
 	return tea.Tick(animInterval, func(time.Time) tea.Msg { return animTickMsg{} })
 }
 
-// landingVisible is whether the landing screen is what the transcript area shows.
+// landingVisible is whether the landing screen is what the transcript area shows: before the
+// first message, or when home was asked for over a conversation (alt+h), which goes on behind it.
 func (m *Model) landingVisible() bool {
-	return len(m.tr.items) == 0 && m.phase != failed
+	return (len(m.tr.items) == 0 || m.home) && m.phase != failed
+}
+
+// goHome shows the home screen in Chat; the conversation, and any turn in it, goes on behind it.
+func (m *Model) goHome() tea.Cmd {
+	m.active, m.home = 0, len(m.tr.items) > 0
+	m.tr.sel = nil
+	return m.animate()
+}
+
+// homeStatus is home's line about the conversation behind it, or "" when there is none.
+func (m *Model) homeStatus() string {
+	if !m.home || len(m.tr.items) == 0 {
+		return ""
+	}
+	th := m.th
+	back := th.Key.Render(keyLabel(m.keys.Chat.Keys())) + th.Faint.Render(" back to it")
+	switch {
+	case m.approval != nil:
+		return th.Warn.Render("? The conversation is waiting for your answer") + th.Faint.Render(" · ") + back
+	case m.phase == busy:
+		line := m.spin.View() + " " + th.Highlight.Render("Friday is working") + th.Faint.Render(" · "+elapsed(time.Since(m.turnStart)))
+		if len(m.queue) > 0 {
+			line += th.Faint.Render(fmt.Sprintf(" · %d queued", len(m.queue)))
+		}
+		return line + th.Faint.Render(" · ") + back
+	}
+	return th.Faint.Render("Your conversation is open · ") + back
 }
 
 // The home screen: the day's photo as the wallpaper behind the whole screen, and over it one card
@@ -142,6 +170,9 @@ func (m *Model) homeInfo(width, height int) []string {
 		{0, fit(theme.Gradient("F R I D A Y", th.Primary, th.Secondary, true) + m.versionLabel())},
 		{1, fit(m.homeFacts(width)...)},
 		{3, fit(th.Strong.Render(greeting(time.Now(), m.firstRun.name)))},
+	}
+	if status := m.homeStatus(); status != "" {
+		sections = append(sections, section{0, fit(status)}) // what is behind home matters most
 	}
 	if m.phase != connecting {
 		var lines []string

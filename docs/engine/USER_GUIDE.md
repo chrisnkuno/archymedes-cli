@@ -422,6 +422,18 @@ The top bar carries `▲ growth alt+v` and `☺ agents alt+i`, and a click on ei
 Growth shows or hides the growth panel. Agents opens the Inspector on the helpers at work and
 counts them: `☺ agents 2`. On a wide terminal the dock shows the same two among its chips.
 
+## Home, at any time
+
+`⌂` beside the `◇` start menu, or alt+h, shows the home screen and its desktop icons over the
+conversation, even while a turn runs. The turn goes on behind it. Home says what the conversation
+is doing (`Friday is working · 1m 4s · 2 queued`, or that it waits for your answer), the Chat tab
+shows `●` while it works and `?` when it waits, and an approval comes up over home as over any
+app. F1, the Chat tab, or sending a message brings the conversation back with everything that
+arrived meanwhile.
+
+A mode chosen while Friday is still starting is kept and set as soon as the session exists,
+before the first message goes.
+
 ## Seeing every change
 
 Every edit is shown as it lands, not only when the turn ends.

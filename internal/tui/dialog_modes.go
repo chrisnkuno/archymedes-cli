@@ -85,8 +85,11 @@ func (m *Model) setMode(mode string) tea.Cmd {
 	if !slices.Contains(acp.Modes, mode) {
 		return m.toast(toastWarn, fmt.Sprintf("No mode %q — choose %s", mode, strings.Join(acp.Modes, ", ")))
 	}
-	if m.agent == nil {
-		return nil
+	if m.agent == nil || m.session.ID == "" {
+		// Still starting: there is no session to change yet. Kept, and set as soon as there is one,
+		// before any message goes (modeChosenEarlier, on connect).
+		m.firstRun.mode = mode
+		return m.toast(toastInfo, "Switching to "+mode+" mode once Friday has started")
 	}
 	if m.phase == busy && !switchesLive(m.mode, mode) {
 		if mode == m.mode {

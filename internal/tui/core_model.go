@@ -196,15 +196,17 @@ type Model struct {
 	queueHeld    time.Time
 	queueSeq     int
 	queueTicking bool
-	comments     []reviewComment // notes on diff lines, sent with the next message
-	rail         railState       // the changes rail beside the transcript (chat_rail.go)
-	growth       growthState     // the growth panel: the project as a growing tree (chat_growth.go)
-	lastInput    time.Time       // the last key, click or paste, for resting motion (core_motion.go)
-	goal         *goalState      // /goal in progress
-	turnStart    time.Time
-	turnUsage    usageTotals
-	usage        usageTotals
-	retrying     string
+	// home: Chat shows the home screen over the conversation (alt+h), which goes on behind it.
+	home      bool
+	comments  []reviewComment // notes on diff lines, sent with the next message
+	rail      railState       // the changes rail beside the transcript (chat_rail.go)
+	growth    growthState     // the growth panel: the project as a growing tree (chat_growth.go)
+	lastInput time.Time       // the last key, click or paste, for resting motion (core_motion.go)
+	goal      *goalState      // /goal in progress
+	turnStart time.Time
+	turnUsage usageTotals
+	usage     usageTotals
+	retrying  string
 	// text is the interface's words in the person's language (ARCHYMEDES_LANGUAGE, else the locale).
 	text *i18n.Catalog
 	// composing is the tool call the model is writing right now, shown in place of "thinking…".
@@ -596,7 +598,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.queue = append([]queuedMsg{{id: m.queueSeq, text: m.opts.Prompt}}, m.queue...)
 		}
 		cmds := []tea.Cmd{m.animate()}
-		cmds = append(cmds, m.modeChosenEarlier())
+		modeChange := m.modeChosenEarlier()
 		if first {
 			cmds = append(cmds, m.readProjectState())
 			// In the background, after the session is usable: never on the way to the prompt. Then
@@ -604,7 +606,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.upkeep())
 		}
 		if next, ok := m.nextQueued(); ok {
-			cmds = append(cmds, m.send(next))
+			// A mode chosen while starting is set before the first message, so it runs under it.
+			cmds = append(cmds, tea.Sequence(modeChange, m.send(next)))
+		} else {
+			cmds = append(cmds, modeChange)
 		}
 		return m, tea.Batch(cmds...)
 	case connectFailedMsg:
@@ -681,6 +686,7 @@ func (m *Model) submit() tea.Cmd {
 	if strings.HasPrefix(text, "//") {
 		text = text[1:] // "//x" sends "/x" to the model
 	}
+	m.home = false // a message sent from home is followed in the conversation
 	switch m.phase {
 	case busy:
 		return m.queueDuringRun(text)
@@ -697,6 +703,7 @@ func (m *Model) submit() tea.Cmd {
 func (m *Model) send(text string) tea.Cmd {
 	text = m.withReviewComments(text)
 	m.sel.clear()
+	m.home = false // a message sent from home is followed in the conversation
 	m.tr.add(&userItem{text: text})
 	m.stats.startTurn(text, time.Now())
 	m.welcome()

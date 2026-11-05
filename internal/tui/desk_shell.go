@@ -74,6 +74,9 @@ func (m *Model) focus(i int) {
 	if count := len(m.windows) + 1; count > 0 {
 		m.active = ((i % count) + count) % count
 	}
+	if m.active == 0 {
+		m.home = false // the Chat tab is the conversation; home is alt+h
+	}
 }
 
 // shellKey handles the keys that work from anywhere on the desktop; false when msg is not one.
@@ -83,7 +86,7 @@ func (m *Model) shellKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		binding key.Binding
 		id      string
 	}{
-		{k.Start, "start"}, {k.Finder, "finder"}, {k.Chat, "chat"}, {k.Files, "files"}, {k.Search, "search"}, {k.Sessions, "sessions"},
+		{k.Start, "start"}, {k.Finder, "finder"}, {k.Home, "home"}, {k.Chat, "chat"}, {k.Files, "files"}, {k.Search, "search"}, {k.Sessions, "sessions"},
 		{k.Models, "models"}, {k.Themes, "themes"}, {k.Keys, "keys"}, {k.Stats, "stats"}, {k.Changes, "changes"}, {k.Gallery, "gallery"}, {k.Tasks, "tasks"}, {k.Settings, "settings"}, {k.Providers, "providers"}, {k.TourDrawer, "tour-drawer"}, {k.Welcome, "welcome"}, {k.Undo, "undo"}, {k.Retry, "retry"}, {k.Copy, "copy"}, {k.Notifications, "notifications"}, {k.Help, "help"},
 		{k.NextWindow, "next-window"}, {k.PrevWindow, "prev-window"}, {k.CloseWindow, "close-window"},
 	} {
@@ -112,8 +115,10 @@ func (m *Model) runAction(id string) tea.Cmd {
 		return m.startMenuSources()
 	case "finder":
 		return m.openFinder()
+	case "home":
+		return m.goHome()
 	case "chat":
-		m.active = 0
+		m.active, m.home = 0, false
 	case "files":
 		return m.openFiles()
 	case "search":

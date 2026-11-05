@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -374,6 +375,15 @@ func collect(cmd tea.Cmd) []tea.Msg {
 		return out
 	case spinner.TickMsg, animTickMsg, toastExpiredMsg:
 		return nil // the clock, not the work
+	}
+	// tea.Sequence's message is unexported, a list of commands run in order: run them in order.
+	if v := reflect.ValueOf(msg); v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
+		var out []tea.Msg
+		for i := range v.Len() {
+			c, _ := v.Index(i).Interface().(tea.Cmd)
+			out = append(out, collect(c)...)
+		}
+		return out
 	}
 	return []tea.Msg{msg}
 }
