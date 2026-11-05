@@ -51,6 +51,8 @@ type Options struct {
 	Open llm.Opener
 	// Net reads the providers' model listings and checks keys; nil is the network.
 	Net llm.Getter
+	// Post sends the install cue (update.SendCue); nil is the network.
+	Post func(ctx context.Context, url string, body []byte) (int, error)
 	// Version is shown in the startup notice.
 	Version string
 	// Themes are the interface's themes, offered for the theme setting.
@@ -95,6 +97,7 @@ type Server struct {
 	pendMu  sync.Mutex
 	pending map[string]chan frame
 
+	cueOnce     sync.Once
 	initialized atomic.Bool
 	events      atomic.Bool
 	questions   atomic.Bool

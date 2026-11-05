@@ -174,8 +174,9 @@ first, at most 50 (the Go engine's sessions only).
 
 ### `_archymedes/startup`
 
-`{"notices":[…]}`: what the TypeScript agent's startup check has to say (an update is available),
-when it is installed; otherwise an empty list.
+`{"notices":[…]}`: what the engine's startup upkeep has to say, such as a newer version ready to
+install when Friday closes. The upkeep is the hourly update check and, once per process, the install
+cue ([Behaviour](CONFIGURATION.md#behaviour)); it starts no other program.
 
 ### `_archymedes/suggest`
 

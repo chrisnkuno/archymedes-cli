@@ -149,6 +149,12 @@ Without a small model, the main model does everything. What runs on which:
 Modes are chosen per session (`--plan`, `--build`, `--auto`, `--defender`, or shift+tab), not by a
 setting; a resumed session keeps its own.
 
+The install count (`ARCHYMEDES_TELEMETRY=on`, off until you say yes) sends one anonymous cue the
+first time a new version starts: `event` (install or update), `version`, `os` and `arch`, to
+`https://archymedes.xyz/api/v1/count/`, or to `ARCHYMEDES_TELEMETRY_URL` when set. It is never
+sent with `DO_NOT_TRACK`, in CI, or from a development build, and `installed.json` in the config
+folder remembers the version it was sent for.
+
 Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) look for a new release when Friday starts and every
 hour while it stays open, between turns. A newer version is never installed while a session is
 open, because an install replaces files the session still loads. Friday says the version is

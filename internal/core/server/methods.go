@@ -638,28 +638,27 @@ func (s *Server) sessionList(params json.RawMessage) (any, error) {
 }
 
 func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, error) {
-	// The update check is the Go engine's on both paths, hourly, so a TypeScript agent behind this
-	// engine neither checks on a different clock nor installs on its own. It never installs from
-	// here: a session is open and is using the files an install replaces. A newer version is
-	// announced, and installed when the interface closes (update.AtExit).
+	// The startup upkeep is the engine's own (WS-50.5): nothing here starts the TypeScript agent.
+	// The update check runs hourly and never installs from here: a session is open and is using the
+	// files an install replaces. A newer version is announced, and installed when the interface
+	// closes (update.AtExit). The defender feed the TypeScript agent refreshed belongs to its own
+	// defender playbooks, which a TypeScript session refreshes itself.
 	env := s.env()
 	notices := update.Run(ctx, update.Options{
 		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
 		ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
 		MoveAside: runtime.GOOS == "windows", // a running friday.exe cannot be overwritten there
 	})
-	if s.opts.Forward != nil {
-		// The TypeScript agent keeps the rest of its startup upkeep (the defender feed); it is told
-		// not to run the update, which is no longer its to run.
-		if raw, err := s.opts.Forward(ctx, "_archymedes/startup", json.RawMessage(`{"updates":false}`)); err == nil {
-			var more struct {
-				Notices []string `json:"notices"`
-			}
-			if json.Unmarshal(raw, &more) == nil {
-				notices = append(notices, more.Notices...)
-			}
+	s.cueOnce.Do(func() {
+		// Once per process, never waited for; a development build is not an install.
+		if s.opts.Version == "" || s.opts.Version == "dev" {
+			return
 		}
-	}
+		go update.SendCue(context.Background(), update.CueOptions{
+			Getenv: env.Get, ConfigDir: s.opts.ConfigDir, Version: s.opts.Version,
+			OS: runtime.GOOS, Arch: runtime.GOARCH, Post: s.opts.Post,
+		})
+	})
 	if notices == nil {
 		notices = []string{}
 	}

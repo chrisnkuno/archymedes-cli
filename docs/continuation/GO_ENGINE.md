@@ -148,5 +148,5 @@ prices in `/cost` (tokens are counted: WS-52.3), Jev's turn verdicts and pre-too
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own
 limits, not reserved from the parent's remaining budget as in the TypeScript agent. Settings are
-the Go engine's own since WS-50.2; setup, Providers and the model list since WS-50.3 and WS-50.4,
-so none of them starts the TypeScript agent.
+the Go engine's own since WS-50.2; setup, Providers and the model list since WS-50.3 and WS-50.4, and the
+startup upkeep (update check, install cue) since WS-50.5, so a normal start runs no Node process.

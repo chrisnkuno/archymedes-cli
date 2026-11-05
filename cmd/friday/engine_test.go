@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -321,43 +322,55 @@ func TestContractBackgroundSubAgentReportsAsAThreadEvent(t *testing.T) {
 	}
 }
 
-func TestContractForwardsWhatTheGoEngineDoesNotHave(t *testing.T) {
-	t.Setenv("ARCHYMEDES_AUTO_UPDATE", "off") // the engine now owns the update check; this test is about forwarding
-	var asked []string
-	var mu sync.Mutex
-	forward := func(_ context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
-		mu.Lock()
-		asked = append(asked, method)
-		mu.Unlock()
-		switch method {
-		case "_archymedes/providers":
-			return json.RawMessage(`{"providers":[]}`), nil
-		case "_archymedes/startup":
-			return json.RawMessage(`{"notices":["update available"]}`), nil
-		}
-		return nil, errors.New("unexpected " + method)
+// TestANormalStartStartsNoTypeScriptAgent (WS-50.5, WS-63.7): the interface's start — setup
+// status, a session, the startup upkeep — and the apps it opens (Providers' rows, the model list,
+// Settings) are all the Go engine's. The TypeScript agent here is a script that leaves a mark when
+// it is started; after all of it, there is no mark.
+func TestANormalStartStartsNoTypeScriptAgent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in agent is a shell script")
 	}
-	c := engine(t, t.TempDir(), func(fantasy.Call) (string, [][2]string) { return "x", nil }, forward)
-	// Providers are the Go engine's own since WS-50.3, settings since WS-50.2: answered here.
-	if raw, err := c.CallRaw(context.Background(), "_archymedes/providers", json.RawMessage(`{}`)); err != nil || !strings.Contains(string(raw), `"id":"free"`) {
-		t.Fatalf("providers = %s, %v", raw, err)
+	root, mark := t.TempDir(), filepath.Join(t.TempDir(), "started")
+	var n atomic.Int64
+	opts := server.Options{
+		Cwd: root, ConfigDir: t.TempDir(), Provider: "groq", Version: "3.9.0",
+		Environ: []string{"GROQ_API_KEY=test", "ARCHYMEDES_TITLES=off", "ARCHYMEDES_AUTO_UPDATE=off", "ARCHYMEDES_TELEMETRY=off", "ARCHYMEDES_MODELS_OFFLINE=1",
+			"PATH=" + root, "ARCHYMEDES_CLAUDE_PATH=/nonexistent", "ARCHYMEDES_CODEX_PATH=/nonexistent"},
+		Open: func(_ context.Context, _ llm.Selection, _ llm.Env, id string) (fantasy.LanguageModel, error) {
+			return scriptedModel{id: id, turns: func(fantasy.Call) (string, [][2]string) { return "x", nil }, n: &n}, nil
+		},
 	}
-	list, err := c.Settings(context.Background())
-	if err != nil || len(list.Rows) < 60 || !strings.HasSuffix(list.File, "settings.json") {
-		t.Fatalf("settings = %d rows in %q, %v", len(list.Rows), list.File, err)
+	ts := &lazyAgent{argv: []string{"/bin/sh", "-c", "touch '" + mark + "'; sleep 30"}, cwd: root}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	agent, err := startGoEngine(opts, ts)(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
-	mu.Lock()
-	for _, method := range asked {
-		if strings.HasPrefix(method, "_archymedes/settings/") || strings.HasPrefix(method, "_archymedes/providers") {
-			t.Errorf("%s was forwarded", method)
-		}
+	c := agent.(*acp.Client)
+	t.Cleanup(c.Close)
+	if status, err := c.SetupStatus(ctx); err != nil || !status.Configured {
+		t.Fatalf("setup status %+v, %v", status, err)
 	}
-	mu.Unlock()
-	notices, err := c.Startup(context.Background())
-	if err != nil || len(notices) != 1 || notices[0] != "update available" {
-		t.Fatalf("startup = %v, %v", notices, err)
+	if _, err := c.NewSession(ctx, root, ""); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := c.CallRaw(context.Background(), "_archymedes/nothing", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "Method not found") {
+	if _, err := c.Startup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := c.Providers(ctx); err != nil || len(rows) < 10 {
+		t.Fatalf("providers %d, %v", len(rows), err)
+	}
+	if list, err := c.Models(ctx, false); err != nil || len(list.Choices) < 10 {
+		t.Fatalf("models %+v, %v", list, err)
+	}
+	if _, err := c.Settings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mark); err == nil {
+		t.Fatal("the TypeScript agent was started")
+	}
+	if _, err := c.CallRaw(ctx, "_archymedes/nothing", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "Method not found") {
 		t.Fatalf("unknown method = %v", err)
 	}
 }
