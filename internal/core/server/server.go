@@ -49,6 +49,8 @@ type Options struct {
 	Forward Forwarder
 	// Open opens models; nil opens real providers. Tests pass a scripted model.
 	Open llm.Opener
+	// Net reads the providers' model listings and checks keys; nil is the network.
+	Net llm.Getter
 	// Version is shown in the startup notice.
 	Version string
 	// Themes are the interface's themes, offered for the theme setting.

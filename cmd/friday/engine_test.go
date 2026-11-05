@@ -338,17 +338,17 @@ func TestContractForwardsWhatTheGoEngineDoesNotHave(t *testing.T) {
 		return nil, errors.New("unexpected " + method)
 	}
 	c := engine(t, t.TempDir(), func(fantasy.Call) (string, [][2]string) { return "x", nil }, forward)
-	if raw, err := c.CallRaw(context.Background(), "_archymedes/providers", json.RawMessage(`{}`)); err != nil || string(raw) != `{"providers":[]}` {
+	// Providers are the Go engine's own since WS-50.3, settings since WS-50.2: answered here.
+	if raw, err := c.CallRaw(context.Background(), "_archymedes/providers", json.RawMessage(`{}`)); err != nil || !strings.Contains(string(raw), `"id":"free"`) {
 		t.Fatalf("providers = %s, %v", raw, err)
 	}
-	// Settings are the Go engine's own since WS-50.2: answered here, never forwarded.
 	list, err := c.Settings(context.Background())
 	if err != nil || len(list.Rows) < 60 || !strings.HasSuffix(list.File, "settings.json") {
 		t.Fatalf("settings = %d rows in %q, %v", len(list.Rows), list.File, err)
 	}
 	mu.Lock()
 	for _, method := range asked {
-		if strings.HasPrefix(method, "_archymedes/settings/") {
+		if strings.HasPrefix(method, "_archymedes/settings/") || strings.HasPrefix(method, "_archymedes/providers") {
 			t.Errorf("%s was forwarded", method)
 		}
 	}

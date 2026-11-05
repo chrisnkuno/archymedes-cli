@@ -1,0 +1,4361 @@
+{
+ "asOf": "2026-11-06",
+ "known": {
+  "anthropic": [
+   "claude-sonnet-5",
+   "claude-fable-5",
+   "claude-haiku-4-5",
+   "claude-opus-4-6",
+   "claude-opus-4-7",
+   "claude-opus-4-8",
+   "claude-opus-5",
+   "claude-sonnet-4-6"
+  ],
+  "openai": [
+   "gpt-5.6-terra"
+  ],
+  "archymedes-cloud": [
+   "auto"
+  ],
+  "openrouter": [
+   "openrouter/auto"
+  ],
+  "google": [
+   "gemini-2.5-pro",
+   "gemini-2.5-flash"
+  ],
+  "xai": [
+   "grok-4",
+   "grok-4-fast"
+  ],
+  "deepseek": [
+   "deepseek-chat",
+   "deepseek-reasoner"
+  ],
+  "mistral": [
+   "mistral-large-latest",
+   "mistral-small-latest"
+  ],
+  "groq": [
+   "llama-3.3-70b-versatile"
+  ],
+  "ollama": [
+   "llama3.1"
+  ],
+  "openai-compatible": [
+   "gpt-4o-mini"
+  ],
+  "free": [
+   "openrouter/free"
+  ]
+ },
+ "prices": [
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "$2.00/$10.00 per Mtok",
+   "input": 2000000,
+   "output": 10000000,
+   "cached": 200000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-fable-5",
+   "asOf": "2026-11-06",
+   "price": "$10.00/$50.00 per Mtok",
+   "input": 10000000,
+   "output": 50000000,
+   "cached": 1000000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-fable-5",
+   "asOf": "2026-08-01",
+   "price": "$10.00/$50.00 per Mtok",
+   "input": 10000000,
+   "output": 50000000,
+   "cached": 1000000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5",
+   "asOf": "2026-11-06",
+   "price": "$1.00/$5.00 per Mtok",
+   "input": 1000000,
+   "output": 5000000,
+   "cached": 100000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5",
+   "asOf": "2026-08-01",
+   "price": "$1.00/$5.00 per Mtok",
+   "input": 1000000,
+   "output": 5000000,
+   "cached": 100000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-6",
+   "asOf": "2026-11-06",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-6",
+   "asOf": "2026-08-01",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-7",
+   "asOf": "2026-11-06",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-7",
+   "asOf": "2026-08-01",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-8",
+   "asOf": "2026-11-06",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-4-8",
+   "asOf": "2026-08-01",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "$5.00/$25.00 per Mtok",
+   "input": 5000000,
+   "output": 25000000,
+   "cached": 500000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-4-6",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-4-6",
+   "asOf": "2026-08-01",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "$2.00/$10.00 per Mtok",
+   "input": 2000000,
+   "output": 10000000,
+   "cached": 200000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "$2.00/$10.00 per Mtok",
+   "input": 2000000,
+   "output": 10000000,
+   "cached": 200000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 300000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "$2.00/$10.00 per Mtok",
+   "input": 2000000,
+   "output": 10000000,
+   "cached": 200000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "$1.00/$5.00 per Mtok",
+   "input": 1000000,
+   "output": 5000000,
+   "cached": 100000
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "$1.00/$5.00 per Mtok",
+   "input": 1000000,
+   "output": 5000000,
+   "cached": 100000
+  },
+  {
+   "provider": "anthropic",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "anthropic",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "auto",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "auto",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "archymedes-cloud",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "openrouter/auto",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "openrouter/auto",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openrouter",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "$1.25/$10.00 per Mtok",
+   "input": 1250000,
+   "output": 10000000,
+   "cached": 310000
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "$1.25/$10.00 per Mtok",
+   "input": 1250000,
+   "output": 10000000,
+   "cached": 310000
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-flash",
+   "asOf": "2026-11-06",
+   "price": "$0.30/$2.50 per Mtok",
+   "input": 300000,
+   "output": 2500000
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-flash",
+   "asOf": "2026-08-01",
+   "price": "$0.30/$2.50 per Mtok",
+   "input": 300000,
+   "output": 2500000
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "$0.30/$2.50 per Mtok",
+   "input": 300000,
+   "output": 2500000
+  },
+  {
+   "provider": "google",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "$0.30/$2.50 per Mtok",
+   "input": 300000,
+   "output": 2500000
+  },
+  {
+   "provider": "google",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "google",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 750000
+  },
+  {
+   "provider": "xai",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "$3.00/$15.00 per Mtok",
+   "input": 3000000,
+   "output": 15000000,
+   "cached": 750000
+  },
+  {
+   "provider": "xai",
+   "model": "grok-4-fast",
+   "asOf": "2026-11-06",
+   "price": "$0.20/$0.50 per Mtok",
+   "input": 200000,
+   "output": 500000
+  },
+  {
+   "provider": "xai",
+   "model": "grok-4-fast",
+   "asOf": "2026-08-01",
+   "price": "$0.20/$0.50 per Mtok",
+   "input": 200000,
+   "output": 500000
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "xai",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "$0.28/$0.42 per Mtok",
+   "input": 280000,
+   "output": 420000,
+   "cached": 28000
+  },
+  {
+   "provider": "deepseek",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "$0.28/$0.42 per Mtok",
+   "input": 280000,
+   "output": 420000,
+   "cached": 28000
+  },
+  {
+   "provider": "deepseek",
+   "model": "deepseek-reasoner",
+   "asOf": "2026-11-06",
+   "price": "$0.28/$2.19 per Mtok",
+   "input": 280000,
+   "output": 2190000,
+   "cached": 28000
+  },
+  {
+   "provider": "deepseek",
+   "model": "deepseek-reasoner",
+   "asOf": "2026-08-01",
+   "price": "$0.28/$2.19 per Mtok",
+   "input": 280000,
+   "output": 2190000,
+   "cached": 28000
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "deepseek",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "$2.00/$6.00 per Mtok",
+   "input": 2000000,
+   "output": 6000000
+  },
+  {
+   "provider": "mistral",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "$2.00/$6.00 per Mtok",
+   "input": 2000000,
+   "output": 6000000
+  },
+  {
+   "provider": "mistral",
+   "model": "mistral-small-latest",
+   "asOf": "2026-11-06",
+   "price": "$0.20/$0.60 per Mtok",
+   "input": 200000,
+   "output": 600000
+  },
+  {
+   "provider": "mistral",
+   "model": "mistral-small-latest",
+   "asOf": "2026-08-01",
+   "price": "$0.20/$0.60 per Mtok",
+   "input": 200000,
+   "output": 600000
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "mistral",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "$0.59/$0.79 per Mtok",
+   "input": 590000,
+   "output": 790000
+  },
+  {
+   "provider": "groq",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "$0.59/$0.79 per Mtok",
+   "input": 590000,
+   "output": 790000
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "groq",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "ollama",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "ollama",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gpt-4o-mini",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gpt-4o-mini",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "openai-compatible",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "openrouter/free",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "free",
+   "model": "openrouter/free",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-20260514",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-sonnet-5-preview-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-opus-5",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-opus-5",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "claude-haiku-4-5-20251001",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gemini-2.5-pro",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gemini-2.5-flash-preview",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "grok-4",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "grok-4",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "deepseek-chat",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "deepseek-chat",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "llama-3.3-70b-versatile",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "gpt-5.6-terra",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "unknown-model",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "unknown-model",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "a/b:free",
+   "asOf": "2026-11-06",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "free",
+   "model": "a/b:free",
+   "asOf": "2026-08-01",
+   "price": "$0.00/$0.00 per Mtok",
+   "input": 0,
+   "output": 0,
+   "cached": 0
+  },
+  {
+   "provider": "free",
+   "model": "llama3.1",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "llama3.1",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "mistral-large-latest",
+   "asOf": "2026-11-06",
+   "price": "unpriced"
+  },
+  {
+   "provider": "free",
+   "model": "mistral-large-latest",
+   "asOf": "2026-08-01",
+   "price": "unpriced"
+  }
+ ],
+ "models": [
+  {
+   "id": "openrouter/free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "openrouter/free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "a/b:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "a/b:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "meta-llama/llama-4-maverick:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "meta-llama/llama-4-maverick:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "A/B:FREE",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "A/B:FREE"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "a/b:free:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "a/b:free:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "/x:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "/x:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "a/:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "a/:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "x:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "x:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "liquid/lfm-2.5-2.6b:free",
+   "free": true,
+   "size": 2.6,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "liquid/lfm-2.5-2.6b:free"
+   ],
+   "fit": "small",
+   "note": "2.6B: calls are well-formed, but 37 of 57 failed in the test task"
+  },
+  {
+   "id": "meta-llama/llama-3.2-1b-instruct",
+   "free": false,
+   "size": 1,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "meta-llama/llama-3.2-1b-instruct"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "google/gemma-270m",
+   "free": false,
+   "size": 0.27,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "google/gemma-270m"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "gpt-5.6-terra",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "gpt-5.6-terra"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "claude-sonnet-5",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "claude-sonnet-5"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "cohere/north-mini-code:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "cohere/north-mini-code:free"
+   ],
+   "fit": "agent",
+   "note": "tool calls verified; first token in about a second"
+  },
+  {
+   "id": "model-v2b3",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "model-v2b3"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "llama-3.3-70b-versatile",
+   "free": false,
+   "size": 70,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "llama-3.3-70b-versatile"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "qwen-0.5b",
+   "free": false,
+   "size": 0.5,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "qwen-0.5b"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "x/qwen3-4b:free",
+   "free": true,
+   "size": 4,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "x/qwen3-4b:free"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "x/model-4.5b:free",
+   "free": true,
+   "size": 4.5,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "x/model-4.5b:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "x/a-3b-7b",
+   "free": false,
+   "size": 3,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "x/a-3b-7b"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "x/1.5m",
+   "free": false,
+   "size": 0.0015,
+   "small": true,
+   "conversational": true,
+   "aliases": [
+    "x/1.5m"
+   ],
+   "fit": "small",
+   "note": "chat-sized: fine for chat, but it often misuses tools"
+  },
+  {
+   "id": "nvidia/nemotron-3.5-super-vl:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "nvidia/nemotron-3.5-super-vl:free"
+   ],
+   "fit": "agent",
+   "note": "tool calls verified; finished the test task in 78s"
+  },
+  {
+   "id": "thinkingmachines/inkling:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "thinkingmachines/inkling:free"
+   ],
+   "fit": "apps-only",
+   "note": "OpenRouter serves it only to apps it lists; refused (403) here"
+  },
+  {
+   "id": "poolside/laguna-s-2.1:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "poolside/laguna-s-2.1:free"
+   ],
+   "fit": "busy",
+   "note": "tool calls verified; upstream rate-limits most requests"
+  },
+  {
+   "id": "nvidia/nemotron-3.5-lightning:free",
+   "free": true,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "nvidia/nemotron-3.5-lightning:free"
+   ],
+   "fit": "slow",
+   "note": "tool calls verified, but 15s-3min before the first token"
+  },
+  {
+   "id": "text-embedding-3-large",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "text-embedding-3-large"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "whisper-1",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "whisper-1"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "gpt-4o-realtime-preview",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "gpt-4o-realtime-preview",
+    "gpt-4o-realtime"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "omni-moderation-latest",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "omni-moderation-latest",
+    "omni-moderation"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "davinci-002",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "davinci-002"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "codex-mini-latest",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "codex-mini-latest",
+    "codex-mini"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "llama-guard-3",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "llama-guard-3"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "dall-e-3",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "dall-e-3"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "stable-diffusion",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "stable-diffusion"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "gpt-4o-transcribe",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "gpt-4o-transcribe"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "tts-1",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "tts-1"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "gpt-image-1",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "gpt-image-1"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "mistral-embed",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "mistral-embed"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "orpheus-v1",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "orpheus-v1"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "babbage-002",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "babbage-002"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "text-search-ada",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "text-search-ada"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "rerank-v3",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "rerank-v3"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "gpt-4o-audio-preview",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": false,
+   "aliases": [
+    "gpt-4o-audio-preview",
+    "gpt-4o-audio"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+   "free": true,
+   "size": 550,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "nvidia/nemotron-3-ultra-550b-a55b:free"
+   ],
+   "fit": "slow",
+   "note": "every probe timed out upstream after 5 minutes"
+  },
+  {
+   "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/b:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/b:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  },
+  {
+   "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/b:free",
+   "free": false,
+   "size": null,
+   "small": false,
+   "conversational": true,
+   "aliases": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/b:free"
+   ],
+   "fit": "unmeasured",
+   "note": "tool calling not measured yet"
+  }
+ ],
+ "envs": {
+  "none": {},
+  "keys": {
+   "ANTHROPIC_API_KEY": "sk-ant",
+   "OPENAI_API_KEY": "sk-oa",
+   "OPENROUTER_API_KEY": "sk-or",
+   "GOOGLE_API_KEY": "g",
+   "XAI_API_KEY": "x",
+   "DEEPSEEK_API_KEY": "d",
+   "MISTRAL_API_KEY": "m",
+   "GROQ_API_KEY": "q",
+   "OPENAI_COMPATIBLE_API_KEY": "c"
+  },
+  "bases": {
+   "ANTHROPIC_API_KEY": "sk-ant",
+   "ANTHROPIC_BASE_URL": "https://proxy.example/",
+   "OPENAI_API_KEY": "sk-oa",
+   "OPENAI_BASE_URL": "https://oa.example/v1/",
+   "OPENROUTER_BASE_URL": "https://or.example/api/v1",
+   "GROQ_API_KEY": "q",
+   "GROQ_BASE_URL": "https://groq.example",
+   "OPENAI_COMPATIBLE_API_KEY": "c",
+   "OPENAI_COMPATIBLE_BASE_URL": "https://compat.example/v1",
+   "OLLAMA_BASE_URL": "http://box:11434"
+  },
+  "compatNoBase": {
+   "OPENAI_COMPATIBLE_API_KEY": "c"
+  }
+ },
+ "endpoints": [
+  {
+   "env": "none",
+   "provider": "anthropic"
+  },
+  {
+   "env": "none",
+   "provider": "openai"
+  },
+  {
+   "env": "none",
+   "provider": "archymedes-cloud"
+  },
+  {
+   "env": "none",
+   "provider": "openrouter",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "none",
+   "provider": "google"
+  },
+  {
+   "env": "none",
+   "provider": "xai"
+  },
+  {
+   "env": "none",
+   "provider": "deepseek"
+  },
+  {
+   "env": "none",
+   "provider": "mistral"
+  },
+  {
+   "env": "none",
+   "provider": "groq"
+  },
+  {
+   "env": "none",
+   "provider": "ollama",
+   "url": "http://localhost:11434/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "none",
+   "provider": "openai-compatible"
+  },
+  {
+   "env": "none",
+   "provider": "free",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "keys",
+   "provider": "anthropic",
+   "url": "https://api.anthropic.com/v1/models?limit=1000",
+   "headers": {
+    "x-api-key": "sk-ant",
+    "anthropic-version": "2023-06-01"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "openai",
+   "url": "https://api.openai.com/v1/models",
+   "headers": {
+    "authorization": "Bearer sk-oa"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "archymedes-cloud"
+  },
+  {
+   "env": "keys",
+   "provider": "openrouter",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {
+    "authorization": "Bearer sk-or"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "google",
+   "url": "https://generativelanguage.googleapis.com/v1beta/openai/v1/models",
+   "headers": {
+    "authorization": "Bearer g"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "xai",
+   "url": "https://api.x.ai/v1/models",
+   "headers": {
+    "authorization": "Bearer x"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "deepseek",
+   "url": "https://api.deepseek.com/v1/models",
+   "headers": {
+    "authorization": "Bearer d"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "mistral",
+   "url": "https://api.mistral.ai/v1/models",
+   "headers": {
+    "authorization": "Bearer m"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "groq",
+   "url": "https://api.groq.com/openai/v1/models",
+   "headers": {
+    "authorization": "Bearer q"
+   }
+  },
+  {
+   "env": "keys",
+   "provider": "ollama",
+   "url": "http://localhost:11434/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "keys",
+   "provider": "openai-compatible"
+  },
+  {
+   "env": "keys",
+   "provider": "free",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "bases",
+   "provider": "anthropic",
+   "url": "https://proxy.example/v1/models?limit=1000",
+   "headers": {
+    "x-api-key": "sk-ant",
+    "anthropic-version": "2023-06-01"
+   }
+  },
+  {
+   "env": "bases",
+   "provider": "openai",
+   "url": "https://oa.example/v1/models",
+   "headers": {
+    "authorization": "Bearer sk-oa"
+   }
+  },
+  {
+   "env": "bases",
+   "provider": "archymedes-cloud"
+  },
+  {
+   "env": "bases",
+   "provider": "openrouter",
+   "url": "https://or.example/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "bases",
+   "provider": "google"
+  },
+  {
+   "env": "bases",
+   "provider": "xai"
+  },
+  {
+   "env": "bases",
+   "provider": "deepseek"
+  },
+  {
+   "env": "bases",
+   "provider": "mistral"
+  },
+  {
+   "env": "bases",
+   "provider": "groq",
+   "url": "https://groq.example/v1/models",
+   "headers": {
+    "authorization": "Bearer q"
+   }
+  },
+  {
+   "env": "bases",
+   "provider": "ollama",
+   "url": "http://box:11434/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "bases",
+   "provider": "openai-compatible",
+   "url": "https://compat.example/v1/models",
+   "headers": {
+    "authorization": "Bearer c"
+   }
+  },
+  {
+   "env": "bases",
+   "provider": "free",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "anthropic"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "openai"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "archymedes-cloud"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "openrouter",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "google"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "xai"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "deepseek"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "mistral"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "groq"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "ollama",
+   "url": "http://localhost:11434/v1/models",
+   "headers": {}
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "openai-compatible"
+  },
+  {
+   "env": "compatNoBase",
+   "provider": "free",
+   "url": "https://openrouter.ai/api/v1/models",
+   "headers": {}
+  }
+ ],
+ "listings": [
+  {
+   "body": {
+    "data": [
+     {
+      "id": "b"
+     },
+     {
+      "id": "a"
+     },
+     {
+      "name": "c"
+     },
+     "d",
+     {
+      "id": 5
+     },
+     null,
+     {
+      "id": "a"
+     }
+    ]
+   },
+   "ids": [
+    "b",
+    "a",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "body": [
+    {
+     "id": "x"
+    },
+    "y"
+   ],
+   "ids": [
+    "x",
+    "y"
+   ]
+  },
+  {
+   "body": {
+    "models": [
+     {
+      "name": "llama3.1:8b"
+     },
+     {
+      "name": "qwen"
+     }
+    ]
+   },
+   "ids": [
+    "llama3.1:8b",
+    "qwen"
+   ]
+  },
+  {
+   "body": {
+    "nothing": true
+   },
+   "ids": []
+  },
+  {
+   "body": "text",
+   "ids": []
+  }
+ ],
+ "freeCatalog": {
+  "openRouterBody": {
+   "data": [
+    {
+     "id": "meta-llama/llama-4-maverick:free",
+     "name": "Llama 4\u0007 Maverick",
+     "context_length": 128000,
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "input_modalities": [
+       "text",
+       "image",
+       "text"
+      ],
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools",
+      "temperature"
+     ],
+     "top_provider": {
+      "max_completion_tokens": 8192
+     },
+     "reasoning": {
+      "mandatory": false,
+      "default_enabled": true,
+      "supported_efforts": [
+       "low",
+       "bogus",
+       "high"
+      ]
+     }
+    },
+    {
+     "id": "acme/paid:free",
+     "pricing": {
+      "prompt": "0.000001",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/notools:free",
+     "pricing": {
+      "prompt": 0,
+      "completion": "0.0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/image:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "image"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/noctx:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ]
+    },
+    {
+     "id": "acme/request:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0",
+      "request": "0.01"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/dup:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/dup:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 1000
+    },
+    {
+     "id": "acme/paid-model",
+     "pricing": {
+      "prompt": "0.1",
+      "completion": "0.2"
+     }
+    },
+    {
+     "id": "nvidia/nemotron-3.5-super-vl:free",
+     "pricing": {
+      "prompt": "0",
+      "completion": "0"
+     },
+     "architecture": {
+      "output_modalities": [
+       "text"
+      ]
+     },
+     "supported_parameters": [
+      "tools"
+     ],
+     "context_length": 262144,
+     "reasoning": {
+      "mandatory": true
+     }
+    }
+   ]
+  },
+  "discoveryBody": {
+   "models": [
+    {
+     "id": "meta-llama/llama-4-maverick:free",
+     "name": "Maverick (claimed)",
+     "provider": "Meta",
+     "context_window": 1000000,
+     "source": "https://openrouter.ai/meta-llama",
+     "modalities": [
+      "text"
+     ],
+     "rate_limit": "20/min"
+    },
+    {
+     "id": "elsewhere/model:free",
+     "name": "Elsewhere",
+     "source": "https://pollinations.ai/x"
+    },
+    {
+     "id": "bad/source:free",
+     "source": "https://evil.example/x"
+    },
+    {
+     "id": "bad id",
+     "source": "https://openrouter.ai/x"
+    }
+   ]
+  },
+  "live": [
+   {
+    "reasoning": {
+     "mandatory": false,
+     "defaultEnabled": true,
+     "efforts": [
+      "low",
+      "high"
+     ]
+    },
+    "id": "meta-llama/llama-4-maverick:free",
+    "name": "Llama 4 Maverick",
+    "provider": "meta-llama",
+    "context_window": 128000,
+    "max_output": 8192,
+    "modalities": [
+     "text",
+     "image"
+    ],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/meta-llama/llama-4-maverick:free",
+    "eligible": true
+   },
+   {
+    "id": "acme/paid:free",
+    "name": "acme/paid:free",
+    "provider": "acme",
+    "context_window": 1000,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/acme/paid:free",
+    "eligible": false,
+    "reason": "Zero pricing not confirmed"
+   },
+   {
+    "id": "acme/notools:free",
+    "name": "acme/notools:free",
+    "provider": "acme",
+    "context_window": 1000,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/acme/notools:free",
+    "eligible": false,
+    "reason": "Tool calling not confirmed"
+   },
+   {
+    "id": "acme/image:free",
+    "name": "acme/image:free",
+    "provider": "acme",
+    "context_window": 1000,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/acme/image:free",
+    "eligible": false,
+    "reason": "No text output"
+   },
+   {
+    "id": "acme/noctx:free",
+    "name": "acme/noctx:free",
+    "provider": "acme",
+    "context_window": null,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/acme/noctx:free",
+    "eligible": false,
+    "reason": "Context limit unknown"
+   },
+   {
+    "id": "acme/request:free",
+    "name": "acme/request:free",
+    "provider": "acme",
+    "context_window": 1000,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/acme/request:free",
+    "eligible": false,
+    "reason": "Zero pricing not confirmed"
+   },
+   {
+    "reasoning": {
+     "mandatory": true
+    },
+    "id": "nvidia/nemotron-3.5-super-vl:free",
+    "name": "nvidia/nemotron-3.5-super-vl:free",
+    "provider": "nvidia",
+    "context_window": 262144,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "OpenRouter account quotas apply",
+    "source": "https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free",
+    "eligible": true
+   }
+  ],
+  "discovery": [
+   {
+    "id": "meta-llama/llama-4-maverick:free",
+    "name": "Maverick (claimed)",
+    "provider": "Meta",
+    "context_window": 1000000,
+    "max_output": null,
+    "modalities": [
+     "text"
+    ],
+    "rate_limit": "20/min",
+    "source": "https://openrouter.ai/meta-llama",
+    "eligible": false,
+    "reason": "Not verified as a free OpenRouter tool model"
+   },
+   {
+    "id": "elsewhere/model:free",
+    "name": "Elsewhere",
+    "provider": "Unknown",
+    "context_window": null,
+    "max_output": null,
+    "modalities": [],
+    "rate_limit": "unknown",
+    "source": "https://pollinations.ai/x",
+    "eligible": false,
+    "reason": "Not verified as a free OpenRouter tool model"
+   }
+  ],
+  "merged": {
+   "fetchedAt": 1700000000000,
+   "models": [
+    {
+     "id": "acme/image:free",
+     "name": "acme/image:free",
+     "provider": "acme",
+     "context_window": 1000,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/acme/image:free",
+     "eligible": false,
+     "reason": "No text output"
+    },
+    {
+     "id": "acme/noctx:free",
+     "name": "acme/noctx:free",
+     "provider": "acme",
+     "context_window": null,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/acme/noctx:free",
+     "eligible": false,
+     "reason": "Context limit unknown"
+    },
+    {
+     "id": "acme/notools:free",
+     "name": "acme/notools:free",
+     "provider": "acme",
+     "context_window": 1000,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/acme/notools:free",
+     "eligible": false,
+     "reason": "Tool calling not confirmed"
+    },
+    {
+     "id": "acme/paid:free",
+     "name": "acme/paid:free",
+     "provider": "acme",
+     "context_window": 1000,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/acme/paid:free",
+     "eligible": false,
+     "reason": "Zero pricing not confirmed"
+    },
+    {
+     "id": "acme/request:free",
+     "name": "acme/request:free",
+     "provider": "acme",
+     "context_window": 1000,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/acme/request:free",
+     "eligible": false,
+     "reason": "Zero pricing not confirmed"
+    },
+    {
+     "id": "elsewhere/model:free",
+     "name": "Elsewhere",
+     "provider": "Unknown",
+     "context_window": null,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "unknown",
+     "source": "https://pollinations.ai/x",
+     "eligible": false,
+     "reason": "Not verified as a free OpenRouter tool model"
+    },
+    {
+     "reasoning": {
+      "mandatory": false,
+      "defaultEnabled": true,
+      "efforts": [
+       "low",
+       "high"
+      ]
+     },
+     "id": "meta-llama/llama-4-maverick:free",
+     "name": "Llama 4 Maverick",
+     "provider": "meta-llama",
+     "context_window": 128000,
+     "max_output": 8192,
+     "modalities": [
+      "text",
+      "image"
+     ],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/meta-llama/llama-4-maverick:free",
+     "eligible": true,
+     "discovery": {
+      "id": "meta-llama/llama-4-maverick:free",
+      "name": "Maverick (claimed)",
+      "provider": "Meta",
+      "context_window": 1000000,
+      "max_output": null,
+      "modalities": [
+       "text"
+      ],
+      "rate_limit": "20/min",
+      "source": "https://openrouter.ai/meta-llama"
+     }
+    },
+    {
+     "reasoning": {
+      "mandatory": true
+     },
+     "id": "nvidia/nemotron-3.5-super-vl:free",
+     "name": "nvidia/nemotron-3.5-super-vl:free",
+     "provider": "nvidia",
+     "context_window": 262144,
+     "max_output": null,
+     "modalities": [],
+     "rate_limit": "OpenRouter account quotas apply",
+     "source": "https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free",
+     "eligible": true
+    }
+   ],
+   "warnings": [
+    "w"
+   ]
+  }
+ },
+ "keyInfo": [
+  {
+   "body": {
+    "data": {
+     "label": "my\u0001key",
+     "limit": 10,
+     "limit_remaining": 4.5,
+     "usage": 5.5,
+     "is_free_tier": true,
+     "free_model_daily_requests": {
+      "used": 3,
+      "limit": 50
+     }
+    }
+   },
+   "info": {
+    "label": "mykey",
+    "limit": 10,
+    "limitRemaining": 4.5,
+    "usage": 5.5,
+    "isFreeTier": true,
+    "freeDailyRequests": {
+     "used": 3,
+     "limit": 50,
+     "remaining": 47
+    }
+   }
+  },
+  {
+   "body": {
+    "data": {
+     "limit": null,
+     "usage": -1,
+     "free_model_daily_requests": {
+      "remaining": 7
+     }
+    }
+   },
+   "info": {
+    "freeDailyRequests": {
+     "remaining": 7
+    }
+   }
+  },
+  {
+   "body": {
+    "data": []
+   },
+   "info": null
+  },
+  {
+   "body": {},
+   "info": null
+  },
+  {
+   "body": null,
+   "info": null
+  }
+ ],
+ "keyFailures": [
+  {
+   "reason": "invalid",
+   "text": "OpenRouter did not accept that key. Copy it again from https://openrouter.ai/keys (it starts with sk-or-)."
+  },
+  {
+   "reason": "invalid",
+   "status": 500,
+   "text": "OpenRouter did not accept that key. Copy it again from https://openrouter.ai/keys (it starts with sk-or-)."
+  },
+  {
+   "reason": "network",
+   "text": "Could not reach OpenRouter to check the key. Check your connection."
+  },
+  {
+   "reason": "network",
+   "status": 500,
+   "text": "Could not reach OpenRouter to check the key. Check your connection."
+  },
+  {
+   "reason": "error",
+   "text": "OpenRouter could not check the key right now (HTTP error). Try again shortly."
+  },
+  {
+   "reason": "error",
+   "status": 500,
+   "text": "OpenRouter could not check the key right now (HTTP 500). Try again shortly."
+  }
+ ]
+}

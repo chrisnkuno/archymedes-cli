@@ -95,6 +95,23 @@ func Remember(dir string, values map[string]string) error {
 	return err
 }
 
+// Update changes the stored settings in one read and one write: change edits them in place (values
+// already validated by the caller) and may refuse with a non-empty reason, which saves nothing. It
+// returns the file's path. A file that cannot be read is never replaced.
+func Update(dir string, change func(stored map[string]string) (refusal string)) (string, string, error) {
+	saving.Lock()
+	defer saving.Unlock()
+	stored, err := read(dir)
+	if err != nil {
+		return "", "", err
+	}
+	if refusal := change(stored); refusal != "" {
+		return "", refusal, nil
+	}
+	file, err := Save(dir, stored)
+	return file, "", err
+}
+
 // Set saves one setting; an empty value clears it. A refusal comes back as Error, never as a Go error.
 func Set(dir, key, raw string) SetResult {
 	field, ok := Lookup(key)

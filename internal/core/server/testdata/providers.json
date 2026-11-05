@@ -1,0 +1,5255 @@
+{
+ "setup": [
+  {
+   "env": "none",
+   "values": {},
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "groq",
+   "values": {
+    "GROQ_API_KEY": "gsk_secret_value_1234"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": true
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": true,
+     "missing": [],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "gsk…234"
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "openrouter",
+   "values": {
+    "OPENROUTER_API_KEY": "sk-or-v1-abcdef123456",
+    "ARCHYMEDES_PROVIDER": "free",
+    "FREE_MODEL": "a/b:free"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true,
+     "missing": [],
+     "model": "a/b:free",
+     "isDefault": true,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "sk-…456"
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true,
+     "missing": [],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "sk-…456"
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "gateway",
+   "values": {
+    "ARCHYMEDES_FREE_GATEWAY_URL": "https://gw.example/"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": true,
+     "missing": [],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "badGateway",
+   "values": {
+    "ARCHYMEDES_FREE_GATEWAY_URL": "http://gw.example"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "compat",
+   "values": {
+    "OPENAI_COMPATIBLE_API_KEY": "k",
+    "OPENAI_COMPATIBLE_BASE_URL": "https://c.example/v1",
+    "OPENAI_MODEL": "gpt-x",
+    "ARCHYMEDES_PROVIDER": "OpenAI"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": true
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": false,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": false,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "model": "gpt-x",
+     "isDefault": true,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": true,
+     "missing": [],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "set (hidden)"
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": true,
+       "value": "https://c.example/v1",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "env": "short",
+   "values": {
+    "OPENAI_API_KEY": "short",
+    "ANTHROPIC_API_KEY": "sk-ant-api03-0123456789",
+    "ANTHROPIC_BASE_URL": "https://a.example"
+   },
+   "providers": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": true
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": true
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false
+    }
+   ],
+   "overview": [
+    {
+     "id": "free",
+     "label": "Free models (OpenRouter)",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/free",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      }
+     ]
+    },
+    {
+     "id": "anthropic",
+     "label": "Anthropic",
+     "keyVariable": "ANTHROPIC_API_KEY",
+     "keyUrl": "https://console.anthropic.com/settings/keys",
+     "configured": true,
+     "missing": [],
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "ANTHROPIC_API_KEY",
+       "label": "Anthropic API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "sk-…789"
+      },
+      {
+       "key": "ANTHROPIC_BASE_URL",
+       "label": "Anthropic base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": true,
+       "value": "https://a.example",
+       "placeholder": "https://api.anthropic.com"
+      }
+     ]
+    },
+    {
+     "id": "openai",
+     "label": "OpenAI",
+     "keyVariable": "OPENAI_API_KEY",
+     "keyUrl": "https://platform.openai.com/api-keys",
+     "configured": true,
+     "missing": [],
+     "model": "gpt-5.6-terra",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_API_KEY",
+       "label": "OpenAI API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": true,
+       "value": "set (hidden)"
+      },
+      {
+       "key": "OPENAI_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.openai.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "openrouter",
+     "label": "OpenRouter",
+     "keyVariable": "OPENROUTER_API_KEY",
+     "keyUrl": "https://openrouter.ai/keys",
+     "configured": false,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "model": "openrouter/auto",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENROUTER_API_KEY",
+       "label": "OpenRouter API key (direct + free mode)",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENROUTER_BASE_URL",
+       "label": "OpenRouter base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://openrouter.ai/api/v1"
+      }
+     ]
+    },
+    {
+     "id": "google",
+     "label": "Google Gemini",
+     "keyVariable": "GOOGLE_API_KEY",
+     "keyUrl": "https://aistudio.google.com/apikey",
+     "configured": false,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "model": "gemini-2.5-pro",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GOOGLE_API_KEY",
+       "label": "Google Gemini API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GOOGLE_BASE_URL",
+       "label": "Google Gemini base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+     ]
+    },
+    {
+     "id": "xai",
+     "label": "xAI Grok",
+     "keyVariable": "XAI_API_KEY",
+     "keyUrl": "https://console.x.ai",
+     "configured": false,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "model": "grok-4",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "XAI_API_KEY",
+       "label": "xAI (Grok) API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "XAI_BASE_URL",
+       "label": "xAI base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.x.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "deepseek",
+     "label": "DeepSeek",
+     "keyVariable": "DEEPSEEK_API_KEY",
+     "keyUrl": "https://platform.deepseek.com/api_keys",
+     "configured": false,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "model": "deepseek-chat",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "DEEPSEEK_API_KEY",
+       "label": "DeepSeek API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "DEEPSEEK_BASE_URL",
+       "label": "DeepSeek base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.deepseek.com/v1"
+      }
+     ]
+    },
+    {
+     "id": "mistral",
+     "label": "Mistral",
+     "keyVariable": "MISTRAL_API_KEY",
+     "keyUrl": "https://console.mistral.ai/api-keys",
+     "configured": false,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "model": "mistral-large-latest",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "MISTRAL_API_KEY",
+       "label": "Mistral API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "MISTRAL_BASE_URL",
+       "label": "Mistral base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.mistral.ai/v1"
+      }
+     ]
+    },
+    {
+     "id": "groq",
+     "label": "Groq",
+     "keyVariable": "GROQ_API_KEY",
+     "keyUrl": "https://console.groq.com/keys",
+     "configured": false,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "GROQ_API_KEY",
+       "label": "Groq API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "GROQ_BASE_URL",
+       "label": "Groq base URL",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://api.groq.com/openai/v1"
+      }
+     ]
+    },
+    {
+     "id": "ollama",
+     "label": "Ollama (local)",
+     "configured": true,
+     "missing": [],
+     "model": "llama3.1",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OLLAMA_BASE_URL",
+       "label": "Ollama base URL (default http://localhost:11434/v1)",
+       "kind": "url",
+       "required": false,
+       "isSet": false,
+       "value": "",
+       "placeholder": "http://localhost:11434/v1"
+      }
+     ]
+    },
+    {
+     "id": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "configured": false,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "model": "gpt-4o-mini",
+     "isDefault": false,
+     "fields": [
+      {
+       "key": "OPENAI_COMPATIBLE_API_KEY",
+       "label": "OpenAI-compatible API key",
+       "kind": "secret",
+       "required": true,
+       "isSet": false,
+       "value": ""
+      },
+      {
+       "key": "OPENAI_COMPATIBLE_BASE_URL",
+       "label": "OpenAI-compatible base URL",
+       "kind": "url",
+       "required": true,
+       "isSet": false,
+       "value": "",
+       "placeholder": "https://…/v1"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "save": [
+  {
+   "params": {
+    "provider": "groq",
+    "key": " gsk_new "
+   },
+   "stored": {
+    "OPENAI_API_KEY": "x"
+   },
+   "result": {
+    "ok": true,
+    "file": "/settings.json"
+   },
+   "saved": {
+    "OPENAI_API_KEY": "x",
+    "GROQ_API_KEY": "gsk_new",
+    "ARCHYMEDES_PROVIDER": "groq"
+   }
+  },
+  {
+   "params": {
+    "provider": "free",
+    "key": "sk-or-v1-good"
+   },
+   "stored": {},
+   "check": "valid",
+   "result": {
+    "ok": true,
+    "file": "/settings.json"
+   },
+   "saved": {
+    "OPENROUTER_API_KEY": "sk-or-v1-good",
+    "ARCHYMEDES_PROVIDER": "free"
+   }
+  },
+  {
+   "params": {
+    "provider": "openrouter",
+    "key": "sk-or-v1-bad"
+   },
+   "stored": {},
+   "check": "invalid",
+   "result": {
+    "ok": false,
+    "error": "OpenRouter did not accept that key. Copy it again from https://openrouter.ai/keys (it starts with sk-or-)."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "free",
+    "key": "sk-or-v1-offline"
+   },
+   "stored": {},
+   "check": "network",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "note": "Could not reach OpenRouter to check the key. Check your connection. Saved anyway; the first request will confirm it."
+   },
+   "saved": {
+    "OPENROUTER_API_KEY": "sk-or-v1-offline",
+    "ARCHYMEDES_PROVIDER": "free"
+   }
+  },
+  {
+   "params": {
+    "provider": "groq",
+    "key": ""
+   },
+   "stored": {},
+   "result": {
+    "ok": false,
+    "error": "The key is empty."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "groq",
+    "key": "has space"
+   },
+   "stored": {},
+   "result": {
+    "ok": true,
+    "file": "/settings.json"
+   },
+   "saved": {
+    "GROQ_API_KEY": "has space",
+    "ARCHYMEDES_PROVIDER": "groq"
+   }
+  },
+  {
+   "params": {
+    "provider": "nope",
+    "key": "k"
+   },
+   "stored": {},
+   "result": {
+    "ok": false,
+    "error": "Unknown provider \"nope\"."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "ollama",
+    "key": "k"
+   },
+   "stored": {},
+   "result": {
+    "ok": false,
+    "error": "Ollama (local) needs more than a key; run friday settings."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "openai-compatible",
+    "key": "k"
+   },
+   "stored": {},
+   "result": {
+    "ok": false,
+    "error": "OpenAI-compatible needs more than a key; run friday settings."
+   },
+   "saved": null
+  },
+  {
+   "params": {},
+   "stored": {},
+   "result": {
+    "ok": false,
+    "error": "Unknown provider \"\"."
+   },
+   "saved": null
+  }
+ ],
+ "connect": [
+  {
+   "params": {
+    "provider": "openai",
+    "values": {
+     "OPENAI_API_KEY": "sk-good"
+    }
+   },
+   "stored": {},
+   "good": "sk-good",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "models": [
+     "gpt-a",
+     "gpt-b"
+    ]
+   },
+   "saved": {
+    "OPENAI_API_KEY": "sk-good"
+   },
+   "asked": [
+    "https://api.openai.com/v1/models"
+   ]
+  },
+  {
+   "params": {
+    "provider": "openai",
+    "values": {
+     "OPENAI_API_KEY": "sk-bad"
+    }
+   },
+   "stored": {},
+   "good": "sk-good",
+   "result": {
+    "ok": false,
+    "field": "OPENAI_API_KEY",
+    "error": "OpenAI refused the key (provider returned 401). Check it and paste it again."
+   },
+   "saved": null,
+   "asked": [
+    "https://api.openai.com/v1/models"
+   ]
+  },
+  {
+   "params": {
+    "provider": "openai",
+    "values": {
+     "OPENAI_API_KEY": "",
+     "OPENAI_BASE_URL": ""
+    }
+   },
+   "stored": {
+    "OPENAI_API_KEY": "sk-good",
+    "OPENAI_BASE_URL": "https://p.example/v1"
+   },
+   "good": "sk-good",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "models": [
+     "gpt-a",
+     "gpt-b"
+    ]
+   },
+   "saved": {
+    "OPENAI_API_KEY": "sk-good"
+   },
+   "asked": [
+    "https://api.openai.com/v1/models"
+   ]
+  },
+  {
+   "params": {
+    "provider": "openai",
+    "values": {
+     "OPENAI_BASE_URL": "https://proxy.example/v1"
+    }
+   },
+   "stored": {
+    "OPENAI_API_KEY": "sk-good"
+   },
+   "good": "sk-good",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "models": [
+     "gpt-a",
+     "gpt-b"
+    ]
+   },
+   "saved": {
+    "OPENAI_API_KEY": "sk-good",
+    "OPENAI_BASE_URL": "https://proxy.example/v1"
+   },
+   "asked": [
+    "https://proxy.example/v1/models"
+   ]
+  },
+  {
+   "params": {
+    "provider": "openai-compatible",
+    "values": {
+     "OPENAI_COMPATIBLE_API_KEY": "k"
+    }
+   },
+   "stored": {},
+   "good": "k",
+   "result": {
+    "ok": false,
+    "field": "OPENAI_COMPATIBLE_BASE_URL",
+    "error": "OpenAI-compatible still needs OPENAI_COMPATIBLE_BASE_URL."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "openai-compatible",
+    "values": {
+     "OPENAI_COMPATIBLE_API_KEY": "k",
+     "OPENAI_COMPATIBLE_BASE_URL": "not a url"
+    }
+   },
+   "stored": {},
+   "good": "k",
+   "result": {
+    "ok": false,
+    "field": "OPENAI_COMPATIBLE_BASE_URL",
+    "error": "Enter a complete URL, for example https://api.example.com/v1."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "ollama",
+    "values": {
+     "OLLAMA_BASE_URL": "http://down.example:9/v1"
+    }
+   },
+   "stored": {},
+   "good": "",
+   "result": {
+    "ok": false,
+    "field": "OLLAMA_BASE_URL",
+    "error": "URLs must use HTTPS (HTTP is allowed only for localhost)."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "ollama",
+    "values": {
+     "OLLAMA_BASE_URL": "http://empty.example/v1"
+    }
+   },
+   "stored": {},
+   "good": "",
+   "result": {
+    "ok": false,
+    "field": "OLLAMA_BASE_URL",
+    "error": "URLs must use HTTPS (HTTP is allowed only for localhost)."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "openrouter",
+    "values": {
+     "OPENROUTER_API_KEY": "sk-or-bad"
+    }
+   },
+   "stored": {},
+   "good": "x",
+   "check": "invalid",
+   "result": {
+    "ok": false,
+    "field": "OPENROUTER_API_KEY",
+    "error": "OpenRouter did not accept that key. Copy it again from https://openrouter.ai/keys (it starts with sk-or-)."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "openrouter",
+    "values": {
+     "OPENROUTER_API_KEY": "sk-or-ok"
+    }
+   },
+   "stored": {},
+   "good": "sk-or-ok",
+   "check": "network",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "models": [
+     "gpt-a",
+     "gpt-b"
+    ],
+    "note": "Could not reach OpenRouter to check the key. Check your connection. Saved anyway; the first request will confirm it."
+   },
+   "saved": {
+    "OPENROUTER_API_KEY": "sk-or-ok"
+   },
+   "asked": [
+    "https://openrouter.ai/api/v1/models"
+   ]
+  },
+  {
+   "params": {
+    "provider": "anthropic",
+    "values": {
+     "ANTHROPIC_API_KEY": "sk-ant-good"
+    }
+   },
+   "stored": {},
+   "good": "sk-ant-good",
+   "result": {
+    "ok": true,
+    "file": "/settings.json",
+    "models": [
+     "gpt-a",
+     "gpt-b"
+    ]
+   },
+   "saved": {
+    "ANTHROPIC_API_KEY": "sk-ant-good"
+   },
+   "asked": [
+    "https://api.anthropic.com/v1/models?limit=1000"
+   ]
+  },
+  {
+   "params": {
+    "provider": "groq",
+    "values": {
+     "GROQ_API_KEY": 5
+    }
+   },
+   "stored": {},
+   "good": "x",
+   "result": {
+    "ok": false,
+    "field": "GROQ_API_KEY",
+    "error": "Groq still needs GROQ_API_KEY."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "nope"
+   },
+   "stored": {},
+   "good": "",
+   "result": {
+    "ok": false,
+    "error": "Unknown provider \"nope\"."
+   },
+   "saved": null,
+   "asked": []
+  },
+  {
+   "params": {
+    "provider": "groq"
+   },
+   "stored": {},
+   "good": "",
+   "result": {
+    "ok": false,
+    "field": "GROQ_API_KEY",
+    "error": "Groq still needs GROQ_API_KEY."
+   },
+   "saved": null,
+   "asked": []
+  }
+ ],
+ "remember": [
+  {
+   "params": {
+    "provider": "openai",
+    "model": " gpt-b "
+   },
+   "result": {
+    "ok": true
+   },
+   "saved": {
+    "OPENAI_MODEL": "gpt-b"
+   }
+  },
+  {
+   "params": {
+    "provider": "free",
+    "model": "paid/model"
+   },
+   "result": {
+    "ok": false,
+    "error": "Choose openrouter/free or an exact publisher/model:free ID."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "free",
+    "model": "a/b:free"
+   },
+   "result": {
+    "ok": true
+   },
+   "saved": {
+    "FREE_MODEL": "a/b:free"
+   }
+  },
+  {
+   "params": {
+    "provider": "nope",
+    "model": "x"
+   },
+   "result": {
+    "ok": false,
+    "error": "A provider and a model are needed."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "groq",
+    "model": ""
+   },
+   "result": {
+    "ok": false,
+    "error": "A provider and a model are needed."
+   },
+   "saved": null
+  },
+  {
+   "params": {
+    "provider": "archymedes-cloud",
+    "model": "auto"
+   },
+   "result": {
+    "ok": true
+   },
+   "saved": {
+    "ARCHYMEDES_CLOUD_MODEL": "auto"
+   }
+  }
+ ],
+ "providerModels": [
+  {
+   "provider": "openai",
+   "env": {
+    "OPENAI_API_KEY": "sk-good"
+   },
+   "result": {
+    "models": [
+     "gpt-z"
+    ]
+   }
+  },
+  {
+   "provider": "openai",
+   "env": {
+    "OPENAI_API_KEY": "sk-bad"
+   },
+   "result": {
+    "models": [],
+    "error": "provider returned 401"
+   }
+  },
+  {
+   "provider": "openai",
+   "env": {},
+   "result": {
+    "models": [],
+    "error": "no key configured"
+   }
+  },
+  {
+   "provider": "nope",
+   "env": {},
+   "result": {
+    "models": [],
+    "error": "Unknown provider \"nope\"."
+   }
+  },
+  {
+   "provider": "ollama",
+   "env": {
+    "OLLAMA_BASE_URL": "http://down.example/v1"
+   },
+   "result": {
+    "models": [],
+    "error": "ECONNREFUSED"
+   }
+  }
+ ],
+ "list": [
+  {
+   "name": "anthropic",
+   "env": {
+    "ANTHROPIC_API_KEY": "sk-ant-x",
+    "ANTHROPIC_MODEL": "claude-opus-5"
+   },
+   "params": {},
+   "asked": [
+    "http://localhost:11434/v1/models",
+    "https://api.anthropic.com/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json"
+   ],
+   "choices": [
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-fable-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$10.00/$50.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-haiku-4-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$1.00/$5.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-7",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-8",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-5",
+     "isDefault": true,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-new-model",
+     "isDefault": false,
+     "live": true,
+     "price": "unpriced",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "ollama",
+     "providerLabel": "Ollama (local)",
+     "model": "llama3.1",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "openai",
+     "providerLabel": "OpenAI",
+     "model": "gpt-5.6-terra",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "openrouter/auto",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/dup:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/noctx:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/notools:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid-model",
+     "isDefault": false,
+     "live": true,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/request:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-pro",
+     "isDefault": true,
+     "live": false,
+     "price": "$1.25/$10.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-flash",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.30/$2.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4-fast",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-chat",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.28/$0.42 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-reasoner",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.28/$2.19 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-large-latest",
+     "isDefault": true,
+     "live": false,
+     "price": "$2.00/$6.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-small-latest",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.60 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "groq",
+     "providerLabel": "Groq",
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.59/$0.79 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai-compatible",
+     "providerLabel": "OpenAI-compatible",
+     "model": "gpt-4o-mini",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "openrouter/free",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "meta-llama/llama-4-maverick:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "nvidia/nemotron-3.5-super-vl:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "agent",
+     "fitNote": "tool calls verified; finished the test task in 78s"
+    }
+   ],
+   "unconfigured": [
+    {
+     "provider": "openai",
+     "label": "OpenAI",
+     "missing": [
+      "OPENAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "openrouter",
+     "label": "OpenRouter",
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ]
+    },
+    {
+     "provider": "google",
+     "label": "Google Gemini",
+     "missing": [
+      "GOOGLE_API_KEY"
+     ]
+    },
+    {
+     "provider": "xai",
+     "label": "xAI Grok",
+     "missing": [
+      "XAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "deepseek",
+     "label": "DeepSeek",
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ]
+    },
+    {
+     "provider": "mistral",
+     "label": "Mistral",
+     "missing": [
+      "MISTRAL_API_KEY"
+     ]
+    },
+    {
+     "provider": "groq",
+     "label": "Groq",
+     "missing": [
+      "GROQ_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ]
+    },
+    {
+     "provider": "free",
+     "label": "Free models (OpenRouter)",
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ]
+    }
+   ],
+   "errors": [
+    "free: ClawLabsAI discovery unavailable; showing verified OpenRouter metadata only"
+   ]
+  },
+  {
+   "name": "nothing",
+   "env": {},
+   "params": {},
+   "asked": [
+    "http://localhost:11434/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json"
+   ],
+   "choices": [
+    {
+     "provider": "ollama",
+     "providerLabel": "Ollama (local)",
+     "model": "llama3.1",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-5",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-fable-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$10.00/$50.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-haiku-4-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$1.00/$5.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-7",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-8",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai",
+     "providerLabel": "OpenAI",
+     "model": "gpt-5.6-terra",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "openrouter/auto",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/dup:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/noctx:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/notools:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid-model",
+     "isDefault": false,
+     "live": true,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/request:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-pro",
+     "isDefault": true,
+     "live": false,
+     "price": "$1.25/$10.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-flash",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.30/$2.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4-fast",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-chat",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.28/$0.42 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-reasoner",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.28/$2.19 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-large-latest",
+     "isDefault": true,
+     "live": false,
+     "price": "$2.00/$6.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-small-latest",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.60 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "groq",
+     "providerLabel": "Groq",
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.59/$0.79 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GROQ_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai-compatible",
+     "providerLabel": "OpenAI-compatible",
+     "model": "gpt-4o-mini",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "openrouter/free",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "meta-llama/llama-4-maverick:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "nvidia/nemotron-3.5-super-vl:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false,
+     "fit": "agent",
+     "fitNote": "tool calls verified; finished the test task in 78s"
+    }
+   ],
+   "unconfigured": [
+    {
+     "provider": "anthropic",
+     "label": "Anthropic",
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai",
+     "label": "OpenAI",
+     "missing": [
+      "OPENAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "openrouter",
+     "label": "OpenRouter",
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ]
+    },
+    {
+     "provider": "google",
+     "label": "Google Gemini",
+     "missing": [
+      "GOOGLE_API_KEY"
+     ]
+    },
+    {
+     "provider": "xai",
+     "label": "xAI Grok",
+     "missing": [
+      "XAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "deepseek",
+     "label": "DeepSeek",
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ]
+    },
+    {
+     "provider": "mistral",
+     "label": "Mistral",
+     "missing": [
+      "MISTRAL_API_KEY"
+     ]
+    },
+    {
+     "provider": "groq",
+     "label": "Groq",
+     "missing": [
+      "GROQ_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ]
+    },
+    {
+     "provider": "free",
+     "label": "Free models (OpenRouter)",
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ]
+    }
+   ],
+   "errors": [
+    "free: ClawLabsAI discovery unavailable; showing verified OpenRouter metadata only"
+   ]
+  },
+  {
+   "name": "offline",
+   "env": {
+    "ARCHYMEDES_MODELS_OFFLINE": "1",
+    "GROQ_API_KEY": "q"
+   },
+   "params": {},
+   "asked": [],
+   "choices": [
+    {
+     "provider": "groq",
+     "providerLabel": "Groq",
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.59/$0.79 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "ollama",
+     "providerLabel": "Ollama (local)",
+     "model": "llama3.1",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-5",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-fable-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$10.00/$50.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-haiku-4-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$1.00/$5.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-7",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-8",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai",
+     "providerLabel": "OpenAI",
+     "model": "gpt-5.6-terra",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "openrouter/auto",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-pro",
+     "isDefault": true,
+     "live": false,
+     "price": "$1.25/$10.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-flash",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.30/$2.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4-fast",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-chat",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.28/$0.42 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-reasoner",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.28/$2.19 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-large-latest",
+     "isDefault": true,
+     "live": false,
+     "price": "$2.00/$6.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-small-latest",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.60 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai-compatible",
+     "providerLabel": "OpenAI-compatible",
+     "model": "gpt-4o-mini",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "openrouter/free",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": true,
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ],
+     "small": false
+    }
+   ],
+   "unconfigured": [
+    {
+     "provider": "anthropic",
+     "label": "Anthropic",
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai",
+     "label": "OpenAI",
+     "missing": [
+      "OPENAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "openrouter",
+     "label": "OpenRouter",
+     "missing": [
+      "OPENROUTER_API_KEY"
+     ]
+    },
+    {
+     "provider": "google",
+     "label": "Google Gemini",
+     "missing": [
+      "GOOGLE_API_KEY"
+     ]
+    },
+    {
+     "provider": "xai",
+     "label": "xAI Grok",
+     "missing": [
+      "XAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "deepseek",
+     "label": "DeepSeek",
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ]
+    },
+    {
+     "provider": "mistral",
+     "label": "Mistral",
+     "missing": [
+      "MISTRAL_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ]
+    },
+    {
+     "provider": "free",
+     "label": "Free models (OpenRouter)",
+     "missing": [
+      "ARCHYMEDES_FREE_GATEWAY_URL (a self-hosted free gateway) or OPENROUTER_API_KEY"
+     ]
+    }
+   ],
+   "errors": []
+  },
+  {
+   "name": "groq-refresh",
+   "env": {
+    "GROQ_API_KEY": "q",
+    "OPENROUTER_API_KEY": "sk-or"
+   },
+   "params": {
+    "refresh": true
+   },
+   "asked": [
+    "http://localhost:11434/v1/models",
+    "https://api.groq.com/openai/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/api/v1/models",
+    "https://raw.githubusercontent.com/ClawLabsAI/free-ai-models/main/data/models.json"
+   ],
+   "choices": [
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "openrouter/auto",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/dup:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/noctx:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/notools:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid-model",
+     "isDefault": false,
+     "live": true,
+     "price": "unpriced",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/paid:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "openrouter",
+     "providerLabel": "OpenRouter",
+     "model": "acme/request:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "groq",
+     "providerLabel": "Groq",
+     "model": "llama-3.3-70b-versatile",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.59/$0.79 per Mtok",
+     "free": false,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "ollama",
+     "providerLabel": "Ollama (local)",
+     "model": "llama3.1",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "openrouter/free",
+     "isDefault": true,
+     "live": false,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "meta-llama/llama-4-maverick:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "unmeasured",
+     "fitNote": "tool calling not measured yet"
+    },
+    {
+     "provider": "free",
+     "providerLabel": "Free models (OpenRouter)",
+     "model": "nvidia/nemotron-3.5-super-vl:free",
+     "isDefault": false,
+     "live": true,
+     "price": "free",
+     "free": true,
+     "locked": false,
+     "missing": [],
+     "small": false,
+     "fit": "agent",
+     "fitNote": "tool calls verified; finished the test task in 78s"
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-5",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-fable-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$10.00/$50.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-haiku-4-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$1.00/$5.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-7",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-4-8",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-opus-5",
+     "isDefault": false,
+     "live": false,
+     "price": "$5.00/$25.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "anthropic",
+     "providerLabel": "Anthropic",
+     "model": "claude-sonnet-4-6",
+     "isDefault": false,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai",
+     "providerLabel": "OpenAI",
+     "model": "gpt-5.6-terra",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-pro",
+     "isDefault": true,
+     "live": false,
+     "price": "$1.25/$10.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "google",
+     "providerLabel": "Google Gemini",
+     "model": "gemini-2.5-flash",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.30/$2.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "GOOGLE_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4",
+     "isDefault": true,
+     "live": false,
+     "price": "$3.00/$15.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "xai",
+     "providerLabel": "xAI Grok",
+     "model": "grok-4-fast",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.50 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "XAI_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-chat",
+     "isDefault": true,
+     "live": false,
+     "price": "$0.28/$0.42 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "deepseek",
+     "providerLabel": "DeepSeek",
+     "model": "deepseek-reasoner",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.28/$2.19 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-large-latest",
+     "isDefault": true,
+     "live": false,
+     "price": "$2.00/$6.00 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "mistral",
+     "providerLabel": "Mistral",
+     "model": "mistral-small-latest",
+     "isDefault": false,
+     "live": false,
+     "price": "$0.20/$0.60 per Mtok",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "MISTRAL_API_KEY"
+     ],
+     "small": false
+    },
+    {
+     "provider": "openai-compatible",
+     "providerLabel": "OpenAI-compatible",
+     "model": "gpt-4o-mini",
+     "isDefault": true,
+     "live": false,
+     "price": "unpriced",
+     "free": false,
+     "locked": true,
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ],
+     "small": false
+    }
+   ],
+   "unconfigured": [
+    {
+     "provider": "anthropic",
+     "label": "Anthropic",
+     "missing": [
+      "ANTHROPIC_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai",
+     "label": "OpenAI",
+     "missing": [
+      "OPENAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "google",
+     "label": "Google Gemini",
+     "missing": [
+      "GOOGLE_API_KEY"
+     ]
+    },
+    {
+     "provider": "xai",
+     "label": "xAI Grok",
+     "missing": [
+      "XAI_API_KEY"
+     ]
+    },
+    {
+     "provider": "deepseek",
+     "label": "DeepSeek",
+     "missing": [
+      "DEEPSEEK_API_KEY"
+     ]
+    },
+    {
+     "provider": "mistral",
+     "label": "Mistral",
+     "missing": [
+      "MISTRAL_API_KEY"
+     ]
+    },
+    {
+     "provider": "openai-compatible",
+     "label": "OpenAI-compatible",
+     "missing": [
+      "OPENAI_COMPATIBLE_API_KEY",
+      "OPENAI_COMPATIBLE_BASE_URL"
+     ]
+    }
+   ],
+   "errors": [
+    "groq: provider returned 500",
+    "free: ClawLabsAI discovery unavailable; showing verified OpenRouter metadata only"
+   ]
+  }
+ ]
+}

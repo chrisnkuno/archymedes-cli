@@ -50,12 +50,13 @@ verification gate and steering need to decide what happens after the model says 
 | `roles` | Sub-agent roles: built-ins, role files, which tools a role gets, the delegation guidance (`subagents.ts`), plus each role's model and background default | `tool` |
 | `testtime` | How long a test run will take, learned per project (whole runs and their parts: Go packages, test files, Rust binaries), whether it can wait for the end, and reuse of a pass on an unchanged tree | `tool`, `policy` |
 | `tools` | Built-in tools on a local workspace: files, search, commands, todos, git | `tool`, `policy`, `gate`, `testtime` |
-| `llm` | Which provider and model, from settings.json and the environment, as Fantasy models; the main/small pair | — |
+| `llm` | Which provider and model, from settings.json and the environment, as Fantasy models; the main/small pair; the model catalog: known models, prices, providers' listings and their cache, the free catalog and each free model's measured fit, the OpenRouter key check (WS-50.3, WS-50.4) | — |
+| `codex` | The person's Codex before a session: where it is, whether it is signed in (WS-50.3; sessions follow in WS-50.8) | — |
 | `settings` | The Settings list: fields, choices, validation, masking, settings.json (WS-50.2, ported from `platform/settings.ts`) | `llm` |
 | `loop` | One run: stream the model, run tools, fold in steering, detect loops, hold to the gate, compact | `tool`, `policy`, `gate` |
 | `thread` | The thread tree on disk: an append-only log per session, fork modes, recovery of runs in flight | — |
 | `agents` | The coordinator (accept, prompt, cancel, queue, summarize), sub-agents in the foreground or background, worktrees, prompts, compaction, titles | `tool`, `policy`, `gate`, `roles`, `tools`, `llm`, `loop`, `thread` |
-| `server` | ACP v1 over a reader and writer: the methods the interface calls, events, forwarding the rest | `agents`, `llm`, `loop`, `thread`, `policy`, `gate`, `settings` |
+| `server` | ACP v1 over a reader and writer: the methods the interface calls (setup, Providers and the model list since WS-50.3 and WS-50.4), events, forwarding the rest | `agents`, `claude`, `codex`, `llm`, `loop`, `thread`, `policy`, `gate`, `settings` |
 
 The matrix is enforced: `tooling/check/go-sections.json` lists each as `core/<pkg>`, and the
 `go-layering` guard reads packages under `internal/core` as sections of their own.
@@ -146,6 +147,6 @@ engine (Claude Code runs here: `internal/core/claude`, WS-49), the LSP client, D
 prices in `/cost` (tokens are counted: WS-52.3), Jev's turn verdicts and pre-tool checks (Jev ranks suggestions and notes edits here: `internal/core/advise`, WS-47), the free gateway (keyless free mode) and Archymedes Cloud providers, money
 budgets (RWF) and prices, reasoning effort per call, images, defender playbooks,
 `start_application`, web search, the headless `--json` mode. Sub-agent budgets are the role's own
-limits, not reserved from the parent's remaining budget as in the TypeScript agent. Forwarded to
-the TypeScript agent when it is installed: providers, setup, the model list and the startup
-update check (being ported: WS-50). Settings are the Go engine's own since WS-50.2.
+limits, not reserved from the parent's remaining budget as in the TypeScript agent. Settings are
+the Go engine's own since WS-50.2; setup, Providers and the model list since WS-50.3 and WS-50.4,
+so none of them starts the TypeScript agent.
