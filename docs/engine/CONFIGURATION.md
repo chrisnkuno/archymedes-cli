@@ -102,6 +102,17 @@ A session that remembered free mode never falls through to a paid provider when 
 Claude Code runs with the environment Friday was started in, never with the keys Friday keeps in
 its settings file for other providers. It needs no key of its own: it is signed in, or not.
 
+## Codex
+
+Codex sessions run on the TypeScript engine until it is ported (WS-50.8); Providers and the model
+list show Codex on either engine.
+
+| Variable | Default | Does |
+| --- | --- | --- |
+| `ARCHYMEDES_CODEX_PATH` | the `PATH`, then `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin` | where the `codex` program is |
+| `ARCHYMEDES_CODEX_BILLING` | — | `api` passes `OPENAI_API_KEY` to Codex, which then bills that key instead of your plan |
+| `CODEX_MODEL` | `default` | the model new Codex sessions start on |
+
 ## Models
 
 | Variable | Default | Does |
@@ -110,6 +121,7 @@ its settings file for other providers. It needs no key of its own: it is signed 
 | `<PREFIX>_SMALL_MODEL` | — | the small model, for this provider |
 | `ARCHYMEDES_SMALL_MODEL` | — | the small model, for any provider without its own |
 | `ARCHYMEDES_CONTEXT_LIMIT` | `128000` | the main model's context window in tokens (at least 8000); compaction starts at 80% of it |
+| `ARCHYMEDES_MODELS_OFFLINE` | — | `1` keeps the model list to its cache (`models.json`, six hours) unless you ask it to refresh |
 
 Without a small model, the main model does everything. What runs on which:
 
@@ -136,6 +148,12 @@ Without a small model, the main model does everything. What runs on which:
 
 Modes are chosen per session (`--plan`, `--build`, `--auto`, `--defender`, or shift+tab), not by a
 setting; a resumed session keeps its own.
+
+The install count (`ARCHYMEDES_TELEMETRY=on`, off until you say yes) sends one anonymous cue the
+first time a new version starts: `event` (install or update), `version`, `os` and `arch`, to
+`https://archymedes.xyz/api/v1/count/`, or to `ARCHYMEDES_TELEMETRY_URL` when set. It is never
+sent with `DO_NOT_TRACK`, in CI, or from a development build, and `installed.json` in the config
+folder remembers the version it was sent for.
 
 Automatic updates (`ARCHYMEDES_AUTO_UPDATE`) look for a new release when Friday starts and every
 hour while it stays open, between turns. A newer version is never installed while a session is
@@ -376,7 +394,9 @@ not do yet is read by the TypeScript engine.
 | `ARCHYMEDES_DEFER_TOOLS` | Go engine | [Behaviour](#behaviour) |
 | `ARCHYMEDES_PACKAGE_MANAGER`, `ARCHYMEDES_UPDATE_REGISTRY` | Go engine | [Behaviour](#behaviour) |
 | `OPENROUTER_BASE_URL` | Go engine (free mode) | [Providers and keys](#providers-and-keys) |
-| `ARCHYMEDES_FREE_GATEWAY_URL` | TypeScript engine; the binary reads it to choose the engine | [Providers and keys](#providers-and-keys) |
+| `ARCHYMEDES_FREE_GATEWAY_URL` | TypeScript engine; the binary reads it to choose the engine, and Providers counts it for free mode | [Providers and keys](#providers-and-keys) |
+| `ARCHYMEDES_MODELS_OFFLINE` | Go engine | [Models](#models) |
+| `ARCHYMEDES_CODEX_PATH`, `ARCHYMEDES_CODEX_BILLING` | both engines | [Codex](#codex) |
 | `ARCHYMEDES_ACP_TRACE`, `ARCHYMEDES_DEBUG_LOG`, `ARCHYMEDES_AGENT` | the `friday` binary | [Diagnostics](#diagnostics) |
 | `ARCHYMEDES_THEME`, `ARCHYMEDES_LANGUAGE`, `ARCHYMEDES_PHOTOS`, `ARCHYMEDES_WALLPAPER`, `ARCHYMEDES_REDUCE_MOTION`, `ARCHYMEDES_GLYPHS` | the `friday` binary | [The interface](#the-interface) |
 

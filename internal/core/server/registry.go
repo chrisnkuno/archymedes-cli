@@ -30,12 +30,9 @@ var methods []method
 // methodByName indexes methods.
 var methodByName = map[string]method{}
 
-// forwarded are the methods the TypeScript agent answers while this engine does not: providers
-// and setup, which only read and write the shared settings file (ported in WS-50.3).
-var forwarded = map[string]bool{
-	"_archymedes/providers/models":         true,
-	"_archymedes/providers/remember-model": true, "_archymedes/setup/save": true,
-}
+// forwarded are the methods the TypeScript agent answers while this engine does not. None since
+// WS-50.4: setup, providers and the model list are this engine's own.
+var forwarded = map[string]bool{}
 
 func init() {
 	methods = []method{
@@ -63,6 +60,11 @@ func init() {
 		{"_archymedes/settings/set", "Save one setting, or clear it with an empty value", func(s *Server, _ context.Context, p json.RawMessage) (any, error) { return s.settingsSet(p), nil }},
 		{"_archymedes/providers", "List every provider, what it needs and whether it is ready", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.providers(ctx, p) }},
 		{"_archymedes/providers/connect", "Check and save what a provider needs, and list its models", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.connectProvider(ctx, p) }},
+		{"_archymedes/providers/models", "Ask a provider for its models now, and remember them for the pickers", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.providerModels(ctx, p) }},
+		{"_archymedes/providers/remember-model", "Remember the model picked for a provider, for its next session", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) {
+			return s.rememberProviderModel(ctx, p)
+		}},
+		{"_archymedes/setup/save", "Check one key, save it, and start new sessions on its provider", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.setupSave(ctx, p) }},
 		{"_archymedes/models", "List the models the session can switch to", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.models(ctx, p) }},
 	}
 	for _, m := range methods {

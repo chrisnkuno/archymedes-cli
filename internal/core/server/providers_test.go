@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -10,107 +11,91 @@ import (
 	"github.com/chrisnkuno/friday-cli/internal/core/claude/claudetest"
 )
 
-// claudeServer is a server whose `claude` is the fake, with a TypeScript agent that answers
-// providers as it does when Anthropic's Agent SDK is missing, and records what reached it.
-func claudeServer(t *testing.T, environ ...string) (*Server, *[]string) {
+// claudeServer is a server whose `claude` is the fake (signed in with Claude Max unless
+// FAKE_CLAUDE_SIGNED_OUT=1), with no Codex and no TypeScript agent: nothing may be forwarded.
+func claudeServer(t *testing.T, environ ...string) *Server {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(claudetest.Env, "1")
-	var forwarded []string
-	forward := func(_ context.Context, method string, _ json.RawMessage) (json.RawMessage, error) {
-		forwarded = append(forwarded, method)
-		switch method {
-		case "_archymedes/providers":
-			return json.RawMessage(`{"providers":[{"id":"groq","configured":true,"missing":[]},` +
-				`{"id":"claude","configured":false,"missing":["Anthropic's Agent SDK (installed when you connect)"],"note":"Signed in with Claude Max: turns use your plan's limits."}]}`), nil
-		case "_archymedes/providers/connect":
-			return json.RawMessage(`{"ok":true,"file":"/x","models":["llama"]}`), nil
-		}
-		return nil, nil
-	}
-	env := append(os.Environ(), append([]string{"ARCHYMEDES_CLAUDE_PATH=" + exe}, environ...)...)
-	return New(nil, Options{ConfigDir: t.TempDir(), Environ: env, Forward: forward}), &forwarded
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	env := append([]string{claudetest.Env + "=1", "HOME=" + home, "PATH=" + home, "ARCHYMEDES_CLAUDE_PATH=" + exe, "ARCHYMEDES_CODEX_PATH=/nonexistent/codex"}, environ...)
+	s := New(nil, Options{ConfigDir: t.TempDir(), Environ: env, Net: (&portNet{}).get, Forward: func(_ context.Context, method string, _ json.RawMessage) (json.RawMessage, error) {
+		t.Errorf("%s was forwarded", method)
+		return nil, errors.New("forwarded")
+	}})
+	s.initialized.Store(true)
+	return s
 }
 
-// TestProvidersShowsClaudeReadyWithoutTheAgentSDK: the Go engine drives Claude Code itself, so the
-// Providers app must not say Claude needs the SDK.
+// TestProvidersShowsClaudeReadyWithoutTheAgentSDK: the Go engine drives Claude Code itself, so
+// Claude is ready when Claude Code is installed and signed in, and its row says with which plan.
+// It comes right after free; Codex, not installed, after it.
 func TestProvidersShowsClaudeReadyWithoutTheAgentSDK(t *testing.T) {
-	s, _ := claudeServer(t)
-	got, err := s.providers(context.Background(), json.RawMessage(`{}`))
-	if err != nil {
-		t.Fatal(err)
+	s := claudeServer(t)
+	rows, _ := call(t, s, "_archymedes/providers", json.RawMessage(`{}`))["providers"].([]any)
+	if len(rows) < 3 {
+		t.Fatalf("rows %v", rows)
 	}
-	text := string(got.(json.RawMessage))
-	if !strings.Contains(text, `"configured":true,"id":"claude"`) && !strings.Contains(text, `"id":"claude","missing":[]`) {
-		var o struct{ Providers []map[string]any }
-		_ = json.Unmarshal([]byte(text), &o)
-		t.Fatalf("claude row: %v", o.Providers[1])
+	free, claudeRow, codexRow := rows[0].(map[string]any), rows[1].(map[string]any), rows[2].(map[string]any)
+	if free["id"] != "free" || claudeRow["id"] != "claude" || codexRow["id"] != "codex" {
+		t.Fatalf("order: %v, %v, %v", free["id"], claudeRow["id"], codexRow["id"])
 	}
-	if !strings.Contains(text, "Claude Max") {
-		t.Errorf("the plan note was lost: %s", text)
+	if claudeRow["configured"] != true || len(claudeRow["missing"].([]any)) != 0 || claudeRow["note"] != "Signed in with Claude Max: turns use your plan's limits." {
+		t.Fatalf("claude row: %v", claudeRow)
+	}
+	if codexRow["configured"] != false || codexRow["keyUrl"] != "https://developers.openai.com/codex/cli" || !strings.Contains(codexRow["about"].(string), "ChatGPT plan") {
+		t.Fatalf("codex row: %v", codexRow)
 	}
 }
 
-// TestConnectingClaudeChecksTheSignInAndInstallsNothing: Claude is answered here, never forwarded
-// (the TypeScript agent would install the Agent SDK); other providers are forwarded.
+// TestConnectingClaudeChecksTheSignInAndInstallsNothing: connecting Claude asks Claude Code whether
+// it is signed in, and says how to sign in when it is not.
 func TestConnectingClaudeChecksTheSignInAndInstallsNothing(t *testing.T) {
-	s, forwarded := claudeServer(t)
-	got, _ := s.connectProvider(context.Background(), json.RawMessage(`{"provider":"claude"}`))
-	if r := got.(map[string]any); r["ok"] != true || len(r["models"].([]string)) == 0 {
-		t.Fatalf("signed in: %v", r)
+	got := call(t, claudeServer(t), "_archymedes/providers/connect", json.RawMessage(`{"provider":"claude"}`))
+	if got["ok"] != true || len(got["models"].([]any)) == 0 || !strings.Contains(got["note"].(string), "Claude Max") {
+		t.Fatalf("signed in: %v", got)
 	}
-	if _, err := s.connectProvider(context.Background(), json.RawMessage(`{"provider":"groq","values":{}}`)); err != nil {
-		t.Fatal(err)
+	got = call(t, claudeServer(t, "FAKE_CLAUDE_SIGNED_OUT=1"), "_archymedes/providers/connect", json.RawMessage(`{"provider":"claude"}`))
+	if got["ok"] != false || !strings.Contains(got["error"].(string), "claude auth login") {
+		t.Fatalf("signed out: %v", got)
 	}
-	if strings.Join(*forwarded, ",") != "_archymedes/providers/connect" {
-		t.Fatalf("forwarded %v; only groq's connect should be", *forwarded)
-	}
-
-	out, _ := claudeServer(t, "FAKE_CLAUDE_SIGNED_OUT=1")
-	got, _ = out.connectProvider(context.Background(), json.RawMessage(`{"provider":"claude"}`))
-	if r := got.(map[string]any); r["ok"] != false || !strings.Contains(r["error"].(string), "claude auth login") {
-		t.Fatalf("signed out: %v", r)
+	got = call(t, claudeServer(t), "_archymedes/providers/connect", json.RawMessage(`{"provider":"codex"}`))
+	if got["ok"] != false || !strings.Contains(got["error"].(string), "Install Codex first") {
+		t.Fatalf("codex: %v", got)
 	}
 }
 
-// TestARememberedClaudeIsReadyWithoutTheAgentSDK: the TypeScript agent says Claude needs Anthropic's
-// Agent SDK, which only it uses; the Go engine drives Claude Code itself. A start on a remembered
-// Claude must open a session, not the first-run connect screen (it waited there for good).
-func TestARememberedClaudeIsReadyWithoutTheAgentSDK(t *testing.T) {
-	sdkMissing := json.RawMessage(`{"configured":false,"reason":"Claude needs Anthropic's Agent SDK (installed when you connect).","providers":[]}`)
+// TestARememberedClaudeIsReadyWhenClaudeCodeIs: a start on a remembered Claude opens a session when
+// Claude Code is installed and signed in, and the first-run screen with the reason otherwise.
+func TestARememberedClaudeIsReadyWhenClaudeCodeIs(t *testing.T) {
 	status := func(s *Server) map[string]any {
 		t.Helper()
-		got, err := s.setupStatus(context.Background(), json.RawMessage(`{}`))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out map[string]any
-		raw, _ := json.Marshal(got)
-		_ = json.Unmarshal(raw, &out)
-		return out
+		return call(t, s, "_archymedes/setup/status", json.RawMessage(`{}`))
 	}
-	s, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "CLAUDE_MODEL=sonnet")
-	s.opts.Forward = func(context.Context, string, json.RawMessage) (json.RawMessage, error) { return sdkMissing, nil }
-	if got := status(s); got["configured"] != true || got["reason"] != nil {
+	if got := status(claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "CLAUDE_MODEL=sonnet")); got["configured"] != true || got["reason"] != nil {
 		t.Fatalf("Claude Code is installed and signed in, yet: %v", got)
 	}
-
-	// Without Claude Code at all, the answer stands.
-	gone, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "ARCHYMEDES_CLAUDE_PATH=/nonexistent/claude", "PATH=/nonexistent")
-	gone.opts.Forward = s.opts.Forward
-	if got := status(gone); got["configured"] != false {
-		t.Fatalf("no Claude Code, yet configured: %v", got)
+	if got := status(claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "ARCHYMEDES_CLAUDE_PATH=/nonexistent/claude")); got["configured"] != false ||
+		got["reason"] != "Claude needs Claude Code installed (https://code.claude.com/docs/en/setup)." {
+		t.Fatalf("no Claude Code: %v", got)
 	}
-
-	// Any other reason stands too: only the SDK is the TypeScript agent's own concern.
-	other, _ := claudeServer(t, "ARCHYMEDES_PROVIDER=claude")
-	other.opts.Forward = func(context.Context, string, json.RawMessage) (json.RawMessage, error) {
-		return json.RawMessage(`{"configured":false,"reason":"Claude needs you to sign in (claude auth login)."}`), nil
+	if got := status(claudeServer(t, "ARCHYMEDES_PROVIDER=claude", "FAKE_CLAUDE_SIGNED_OUT=1")); got["configured"] != false || !strings.Contains(got["reason"].(string), "claude auth login") {
+		t.Fatalf("signed out: %v", got)
 	}
-	if got := status(other); got["configured"] != false {
-		t.Fatalf("a sign-in problem was hidden: %v", got)
+	if got := status(claudeServer(t, "ARCHYMEDES_PROVIDER=codex")); got["configured"] != false || !strings.HasPrefix(got["reason"].(string), "Codex needs Codex installed") {
+		t.Fatalf("codex: %v", got)
+	}
+	if got := status(claudeServer(t, "GROQ_API_KEY=k")); got["configured"] != true {
+		t.Fatalf("groq: %v", got)
+	}
+	if got := status(claudeServer(t)); got["configured"] != false || !strings.Contains(got["reason"].(string), "no model provider") {
+		t.Fatalf("nothing set up: %v", got)
 	}
 }
+
+// TestClaudeAndCodexInTheModelList: Claude's models are usable once Claude Code is, between the
+// usable models and the locked ones; Codex's, not installed, come last, locked, with what is missing.

@@ -132,11 +132,15 @@
       "core/tool",
       "conform"
     ],
+    "core/codex": [
+      "conform"
+    ],
     "core/server": [
       "core/advise",
       "core/agents",
       "core/checkpoint",
       "core/claude",
+      "core/codex",
       "core/gate",
       "core/hooks",
       "core/llm",

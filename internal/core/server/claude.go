@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,116 +87,6 @@ func (s *Server) claudeTurn(ctx context.Context, p acceptedPrompt, c *claude.Ses
 	return result
 }
 
-// claudeChoices are Claude Code's models for the model picker, when it is installed.
-func claudeChoices(get func(string) string) []any {
-	if claude.Find(get) == "" {
-		return nil
-	}
-	preferred := firstNonEmpty(get("CLAUDE_MODEL"), "default")
-	var out []any
-	for _, m := range claude.Models() {
-		out = append(out, map[string]any{"provider": claude.Provider, "providerLabel": claude.Label, "model": m, "isDefault": m == preferred,
-			"price": "your Claude plan", "free": false, "small": m == "haiku"})
-	}
-	return out
-}
-
-// sdkOnly says a TypeScript readiness answer lacks nothing but Anthropic's Agent SDK. The
-// TypeScript agent checks the sign-in first, so such an answer also means signed in.
-func sdkOnly(missing any) bool {
-	list, _ := missing.([]any)
-	for _, m := range list {
-		if text, _ := m.(string); !strings.Contains(text, "Agent SDK") {
-			return false
-		}
-	}
-	return len(list) > 0
-}
-
-// unlockClaude opens Claude's rows in the TypeScript agent's model list when all they lack is
-// Anthropic's Agent SDK: the TypeScript engine drives Claude Code through it, this engine does not.
-func unlockClaude(raw json.RawMessage, get func(string) string) json.RawMessage {
-	if claude.Find(get) == "" {
-		return raw
-	}
-	var listing map[string]any
-	if json.Unmarshal(raw, &listing) != nil {
-		return raw
-	}
-	changed := false
-	choices, _ := listing["choices"].([]any)
-	for _, entry := range choices {
-		if c, ok := entry.(map[string]any); ok && c["provider"] == claude.Provider && c["locked"] == true && sdkOnly(c["missing"]) {
-			c["locked"], c["missing"], changed = false, []any{}, true
-		}
-	}
-	if unconfigured, ok := listing["unconfigured"].([]any); ok {
-		kept := unconfigured[:0]
-		for _, entry := range unconfigured {
-			if u, ok := entry.(map[string]any); ok && u["provider"] == claude.Provider && sdkOnly(u["missing"]) {
-				changed = true
-				continue
-			}
-			kept = append(kept, entry)
-		}
-		listing["unconfigured"] = kept
-	}
-	if !changed {
-		return raw
-	}
-	return mustJSON(listing)
-}
-
-// providers answers `_archymedes/providers` from the TypeScript agent, with Claude's row as this
-// engine sees it: ready when Claude Code is installed and signed in, whatever the Agent SDK.
-func (s *Server) providers(ctx context.Context, params json.RawMessage) (any, error) {
-	raw, err := s.forward(ctx, "_archymedes/providers", params)
-	if err != nil || claude.Find(s.env().Get) == "" {
-		return raw, err
-	}
-	var overview map[string]any
-	if json.Unmarshal(raw, &overview) != nil {
-		return raw, nil
-	}
-	rows, _ := overview["providers"].([]any)
-	for _, entry := range rows {
-		if row, ok := entry.(map[string]any); ok && row["id"] == claude.Provider && row["configured"] == false && sdkOnly(row["missing"]) {
-			row["configured"], row["missing"] = true, []any{}
-			return mustJSON(overview), nil
-		}
-	}
-	return raw, nil
-}
-
-// connectProvider answers `_archymedes/providers/connect`. Claude is checked here, so choosing it
-// never installs the Agent SDK this engine does not use; every other provider is forwarded.
-func (s *Server) connectProvider(ctx context.Context, params json.RawMessage) (any, error) {
-	var p struct {
-		Provider string `json:"provider"`
-	}
-	_ = json.Unmarshal(params, &p)
-	if !strings.EqualFold(p.Provider, claude.Provider) {
-		return s.forward(ctx, "_archymedes/providers/connect", params)
-	}
-	executable := claude.Find(s.env().Get)
-	if executable == "" {
-		return map[string]any{"ok": false, "error": "Install Claude Code first: " + claude.InstallURL}, nil
-	}
-	auth, err := claude.SignedIn(ctx, executable, claudeEnviron(s.opts.Environ, s.env()))
-	if err != nil || !auth.LoggedIn {
-		return map[string]any{"ok": false, "error": "Sign in to Claude first: enter runs `claude auth login`, Claude Code's own sign-in."}, nil
-	}
-	return map[string]any{"ok": true, "file": "", "models": claude.Models()}, nil
-}
-
-// forward sends a method to the TypeScript agent, or says it is not there to answer.
-func (s *Server) forward(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
-	if s.opts.Forward == nil {
-		return nil, errorf(codeMethodNotFound, "%s needs the TypeScript agent, which is not installed", method)
-	}
-	return s.opts.Forward(ctx, method, params)
-}
-
 // claudeEnviron is the environment Claude Code runs in, with the profile's CLAUDE_CONFIG_DIR: a
 // profile can be another Claude account, which Claude Code keeps in a config folder of its own.
 func claudeEnviron(environ []string, env llm.Env) []string {
@@ -230,24 +119,4 @@ func claudeHelper(sess *session, c *claude.Session, arg string) map[string]any {
 		}
 	}
 	return map[string]any{"kind": "error", "text": "The helper could not start: " + err.Error()}
-}
-
-// readyClaude corrects the TypeScript agent's setup status for a session on Claude: it says Claude
-// needs Anthropic's Agent SDK, which only it uses, while this engine drives Claude Code itself. Left
-// as it was, a start on a remembered Claude opened the first-run connect screen instead of a
-// session. Any other reason (signed out, no Claude Code) stands.
-func readyClaude(raw json.RawMessage, provider string, get func(string) string) json.RawMessage {
-	if !strings.EqualFold(provider, claude.Provider) || claude.Find(get) == "" {
-		return raw
-	}
-	var status map[string]any
-	if json.Unmarshal(raw, &status) != nil || status["configured"] != false {
-		return raw
-	}
-	if reason, _ := status["reason"].(string); !strings.Contains(reason, "Agent SDK") {
-		return raw
-	}
-	status["configured"] = true
-	delete(status, "reason")
-	return mustJSON(status)
 }

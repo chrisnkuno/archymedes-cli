@@ -222,11 +222,6 @@ func Resolve(env Env, provider, model string) (Selection, error) {
 	return Selection{Provider: spec, Model: chosen, Small: small}, nil
 }
 
-// IsFreeModel is free mode's guard: the free router, or an explicit `:free` model.
-func IsFreeModel(model string) bool {
-	return model == FreeRouter || strings.HasSuffix(model, ":free")
-}
-
 // remembered is the provider a previous session chose, if it can still run. A remembered free
 // provider is kept even without its key: losing a free key must never auto-select a paid provider.
 func remembered(env Env) (Provider, bool) {

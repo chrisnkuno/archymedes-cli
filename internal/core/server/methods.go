@@ -638,81 +638,31 @@ func (s *Server) sessionList(params json.RawMessage) (any, error) {
 }
 
 func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, error) {
-	// The update check is the Go engine's on both paths, hourly, so a TypeScript agent behind this
-	// engine neither checks on a different clock nor installs on its own. It never installs from
-	// here: a session is open and is using the files an install replaces. A newer version is
-	// announced, and installed when the interface closes (update.AtExit).
+	// The startup upkeep is the engine's own (WS-50.5): nothing here starts the TypeScript agent.
+	// The update check runs hourly and never installs from here: a session is open and is using the
+	// files an install replaces. A newer version is announced, and installed when the interface
+	// closes (update.AtExit). The defender feed the TypeScript agent refreshed belongs to its own
+	// defender playbooks, which a TypeScript session refreshes itself.
 	env := s.env()
 	notices := update.Run(ctx, update.Options{
 		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,
 		ConfigDir: s.opts.ConfigDir, Getenv: env.Get,
 		MoveAside: runtime.GOOS == "windows", // a running friday.exe cannot be overwritten there
 	})
-	if s.opts.Forward != nil {
-		// The TypeScript agent keeps the rest of its startup upkeep (the defender feed); it is told
-		// not to run the update, which is no longer its to run.
-		if raw, err := s.opts.Forward(ctx, "_archymedes/startup", json.RawMessage(`{"updates":false}`)); err == nil {
-			var more struct {
-				Notices []string `json:"notices"`
-			}
-			if json.Unmarshal(raw, &more) == nil {
-				notices = append(notices, more.Notices...)
-			}
+	s.cueOnce.Do(func() {
+		// Once per process, never waited for; a development build is not an install.
+		if s.opts.Version == "" || s.opts.Version == "dev" {
+			return
 		}
-	}
+		go update.SendCue(context.Background(), update.CueOptions{
+			Getenv: env.Get, ConfigDir: s.opts.ConfigDir, Version: s.opts.Version,
+			OS: runtime.GOOS, Arch: runtime.GOARCH, Post: s.opts.Post,
+		})
+	})
 	if notices == nil {
 		notices = []string{}
 	}
 	return map[string]any{"notices": notices}, nil
-}
-
-func (s *Server) setupStatus(ctx context.Context, params json.RawMessage) (any, error) {
-	if s.opts.Forward != nil {
-		if raw, err := s.opts.Forward(ctx, "_archymedes/setup/status", params); err == nil {
-			env := s.env()
-			return readyClaude(raw, firstNonEmpty(s.opts.Provider, env.Get("ARCHYMEDES_PROVIDER")), env.Get), nil
-		}
-	}
-	env := s.env()
-	_, err := llm.Resolve(env, s.opts.Provider, s.opts.Model)
-	var providers []any
-	for _, p := range llm.Providers {
-		if p.Kind == llm.KindUnsupported {
-			continue
-		}
-		key := ""
-		if len(p.Requires) == 1 {
-			key = p.Requires[0]
-		}
-		providers = append(providers, map[string]any{"id": p.ID, "label": p.Label, "keyVariable": key, "keyUrl": "", "configured": len(llm.Missing(p, env)) == 0})
-	}
-	status := map[string]any{"configured": err == nil, "providers": providers}
-	if err != nil {
-		status["reason"] = err.Error()
-	}
-	return status, nil
-}
-
-func (s *Server) models(ctx context.Context, params json.RawMessage) (any, error) {
-	env := s.env()
-	if s.opts.Forward != nil {
-		if raw, err := s.opts.Forward(ctx, "_archymedes/models", params); err == nil {
-			return unlockClaude(raw, env.Get), nil
-		}
-	}
-	choices := []any{}
-	for _, p := range llm.Configured(env) {
-		if p.Kind == llm.KindUnsupported {
-			continue
-		}
-		sel, err := llm.Resolve(env, p.ID, "")
-		if err != nil {
-			continue
-		}
-		choices = append(choices, map[string]any{"provider": p.ID, "providerLabel": p.Label, "model": sel.Model, "isDefault": true, "free": p.ID == "free"})
-	}
-	choices = append(choices, claudeChoices(env.Get)...)
-	return map[string]any{"choices": choices, "unconfigured": []any{}, "errors": []any{}}, nil
 }
 
 func firstNonEmpty(values ...string) string {

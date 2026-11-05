@@ -177,8 +177,9 @@ first, at most 50 (the Go engine's sessions only).
 
 ### `_archymedes/startup`
 
-`{"notices":[…]}`: what the TypeScript agent's startup check has to say (an update is available),
-when it is installed; otherwise an empty list.
+`{"notices":[…]}`: what the engine's startup upkeep has to say, such as a newer version ready to
+install when Friday closes. The upkeep is the hourly update check and, once per process, the install
+cue ([Behaviour](CONFIGURATION.md#behaviour)); it starts no other program.
 
 ### `_archymedes/suggest`
 
@@ -193,11 +194,27 @@ Params: `input` (what is being typed) and `options` (the completions the client 
 TypeSafe key, with `ARCHYMEDES_JEV` or `ARCHYMEDES_SUGGEST` off, or when Jev does not answer within
 3 seconds, the reply is `{"ranked":false}` and the client keeps its own order.
 
-### `_archymedes/setup/status` and `_archymedes/models`
+### `_archymedes/setup/status` and `_archymedes/setup/save`
 
-Answered by the TypeScript agent when it is installed (it has key links and the live model
-catalog). Without it, the engine answers itself: whether a provider is ready and which could be,
-and one model per ready provider.
+`setup/status` takes no params. The reply is `{"configured", "reason", "providers"}`: whether a
+session can open as things are set up, and if not why. Each provider is `id`, `label`,
+`keyVariable` (when one key is all it needs), `keyUrl` (where to get that key) and `configured`,
+free first. A session on Claude or Codex is ready when that program is installed and signed in.
+
+`setup/save` takes `provider` and `key`. The key is checked (an OpenRouter key with OpenRouter),
+saved, and the provider becomes the one new sessions start on: `{"ok": true, "file", "note"}`, or
+`{"ok": false, "error"}` saying what to do instead.
+
+### `_archymedes/models`
+
+Params: `refresh` (ask the providers rather than the cache). The reply is `{"choices",
+"unconfigured", "errors"}`: every model of every provider, usable ones first, then Claude's and
+Codex's, then the locked ones with what each lacks. A choice is `provider`, `providerLabel`,
+`model`, `isDefault`, `live` (listed by the provider, not known to this build), `price`, `free`,
+`locked`, `missing` and `small` (a chat-sized model). A `:free` model adds `fit` and `fitNote`:
+how it measured as an agent (`agent`, `busy`, `slow`, `apps-only`, `small` or `unmeasured`).
+The providers' own listings are cached for six hours in `models.json` beside settings.json;
+`ARCHYMEDES_MODELS_OFFLINE=1` keeps the list off the network unless `refresh` is set.
 
 ### `_archymedes/settings/list` and `_archymedes/settings/set`
 
@@ -213,18 +230,29 @@ when the value is refused. The next session reads the file again.
 
 ### `_archymedes/providers` and `_archymedes/providers/connect`
 
-Answered with the TypeScript agent's help until they are ported (WS-50.3). Claude is the engine's
-own: its row in `providers` is ready when Claude Code is installed and signed in, and `connect`
-with `{"provider": "claude"}` checks the sign-in here and replies `{"ok": true, "models": [...]}`,
-or `{"ok": false, "error"}` saying what to do; nothing is installed. Every other provider is sent
-to the TypeScript agent as it is.
+`providers` takes no params and returns `{"providers": [...]}`, free first, then Claude and Codex,
+then the rest. A row is a setup row with `missing`, `model`, `isDefault` and `fields` (`key`,
+`label`, `kind` of `secret`, `url` or `text`, `required`, `isSet`, `value` masked for a secret,
+`placeholder` for a URL). Claude's and Codex's rows add `login` (the command that signs in, when
+signed out), `note` (the plan it is signed in with) and `about`.
+
+`connect` takes `provider` and `values` (field key to text). The values are checked, the provider
+is asked for its models with them, and only then are they saved: `{"ok": true, "file", "models",
+"note"}`, or `{"ok": false, "error", "field"}` naming the field to fix. An empty secret keeps the
+saved one; an empty URL goes back to the default. For Claude and Codex it checks the sign-in and
+saves nothing.
+
+### `_archymedes/providers/models` and `_archymedes/providers/remember-model`
+
+`providers/models` takes `provider` and asks it for its models now: `{"models": [...], "error"}`;
+the answer is cached for the pickers. `providers/remember-model` takes `provider` and `model` and
+saves `<PREFIX>_MODEL`, so the provider's next session starts there: `{"ok": true}`, or
+`{"ok": false, "error"}`. For Claude and Codex, `default` clears it.
 
 ## Forwarded methods
 
-Sent to the TypeScript agent unchanged, started on first need:
-`_archymedes/providers/models`, `_archymedes/providers/remember-model`, `_archymedes/setup/save`.
-They only read and write the shared settings file, which the Go engine reads when the next session
-opens. Without the TypeScript agent they are `-32601`.
+None since WS-50.4: every method above is answered by the engine itself. A method the engine does
+not know is `-32601`.
 
 ## Engine → client requests
 
