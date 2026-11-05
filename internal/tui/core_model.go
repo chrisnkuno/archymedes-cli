@@ -626,12 +626,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.FocusMsg, tea.BlurMsg:
 		_, m.notifier.blurred = msg.(tea.BlurMsg) // notifications wait for it, motion rests on it
 		return m, nil
-	case notifyFailedMsg:
-		if !m.notifier.failed {
-			m.notifier.failed = true
-			m.notice(noticeFaint, "The notification URL did not take the notification ("+msg.err+"); check ARCHYMEDES_NOTIFY_URL in Settings")
-		}
-		return m, nil
+	case notifyFailedMsg, phoneReplyMsg:
+		return m, m.notifierMsg(msg)
 	case modeSetMsg:
 		if msg.err != nil {
 			m.notice(noticeError, "Mode change failed: "+msg.err.Error())

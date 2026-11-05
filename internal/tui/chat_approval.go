@@ -21,6 +21,7 @@ type approval struct {
 	cursor int
 	typed  []rune       // a question's own answer, typed in place of an option
 	picked map[int]bool // a multi-select question's chosen options
+	phone  string       // its prompt on the phone (core_phone.go), "" when the phone cannot answer
 }
 
 // queueApproval shows a request from the agent, or queues it behind the one on screen. Parallel
@@ -37,6 +38,7 @@ func (m *Model) queueApproval(a *approval) {
 
 // nextApproval closes the answered request and shows the next one waiting, if any.
 func (m *Model) nextApproval() {
+	m.forgetPhone(m.approval)
 	m.approval = nil
 	if len(m.approvals) > 0 {
 		m.approval, m.approvals = m.approvals[0], m.approvals[1:]

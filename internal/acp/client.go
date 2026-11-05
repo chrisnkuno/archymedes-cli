@@ -290,11 +290,16 @@ func (c *Client) permissionRequest(f frame) PermissionRequest {
 	var params struct {
 		ToolCall ToolCallRef        `json:"toolCall"`
 		Options  []PermissionOption `json:"options"`
+		Meta     struct {
+			Archymedes struct {
+				Risk []string `json:"risk"`
+			} `json:"archymedes"`
+		} `json:"_meta"`
 	}
 	_ = json.Unmarshal(f.Params, &params)
 	var once sync.Once
 	id := f.ID
-	return PermissionRequest{ToolCall: params.ToolCall, Options: params.Options, answer: func(optionID string) {
+	return PermissionRequest{ToolCall: params.ToolCall, Options: params.Options, Risk: params.Meta.Archymedes.Risk, answer: func(optionID string) {
 		once.Do(func() {
 			outcome := map[string]any{"outcome": "cancelled"}
 			if optionID != "" {

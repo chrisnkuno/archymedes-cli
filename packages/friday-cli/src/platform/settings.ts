@@ -69,6 +69,11 @@ const NOTIFY_CHOICES: readonly SettingChoice[] = [
   { value: "off", label: "Off — no notifications" },
 ];
 
+const NOTIFY_REPLIES_CHOICES: readonly SettingChoice[] = [
+  { value: "on", label: "On — approvals and short questions get buttons on the phone (default)" },
+  { value: "off", label: "Off — the push only tells, the phone cannot answer" },
+];
+
 const TELEMETRY_CHOICES: readonly SettingChoice[] = [
   { value: "off", label: "Off — nothing is sent (default)" },
   { value: "on", label: "On — one anonymous cue when a new version first runs" },
@@ -205,6 +210,7 @@ export const SETTING_FIELDS = [
   // Read by the Go interface (internal/tui/core_notify.go).
   { key: "ARCHYMEDES_NOTIFY", label: "Notifications — when a turn ends or Friday waits for you", choices: NOTIFY_CHOICES },
   { key: "ARCHYMEDES_NOTIFY_URL", label: "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)", url: true },
+  { key: "ARCHYMEDES_NOTIFY_REPLIES", label: "Answers from your phone — Allow, Deny or a short answer from the push", choices: NOTIFY_REPLIES_CHOICES },
   { key: "ARCHYMEDES_AUTO_UPDATE", label: "Automatic updates — checked hourly, installed when Friday closes", choices: AUTO_UPDATE_CHOICES },
   { key: "ARCHYMEDES_TELEMETRY", label: "Install count — one anonymous cue per new version (event, version, OS)", choices: TELEMETRY_CHOICES },
   // On by default: writing the tests first is how Friday builds, and the setting is the way out.
@@ -390,6 +396,7 @@ const ENUM_SETTINGS: Partial<Record<SettingKey, readonly string[]>> = {
   ARCHYMEDES_AUTO_UPDATE: ["install", "check", "off"],
   ARCHYMEDES_TELEMETRY: ["on", "off"],
   ARCHYMEDES_NOTIFY: ["auto", "always", "off"],
+  ARCHYMEDES_NOTIFY_REPLIES: ["on", "off"],
   ARCHYMEDES_VIM: ["on", "off"],
   ARCHYMEDES_REASONING: ["auto", "minimal", "low", "medium", "high", "xhigh", "max"],
 };

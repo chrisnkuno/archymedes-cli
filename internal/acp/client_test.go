@@ -67,7 +67,7 @@ func fakeAgent() {
 			send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{"sessionId": "s1", "update": map[string]any{"sessionUpdate": "tool_call", "toolCallId": "c1"}}})
 			send(map[string]any{"jsonrpc": "2.0", "method": EventMethod, "params": map[string]any{"sessionId": "s1", "event": map[string]any{"type": "runtime", "event": map[string]any{"type": "tool_call", "toolCallId": "c1", "toolName": "run_command", "arguments": map[string]any{"command": "ls"}}}}})
 			// Ask permission and wait for the answer before finishing the turn, as the agent does.
-			send(map[string]any{"jsonrpc": "2.0", "id": "archymedes-1", "method": "session/request_permission", "params": map[string]any{"sessionId": "s1", "toolCall": map[string]any{"toolCallId": "c1", "title": "run command: ls"}, "options": []any{map[string]any{"optionId": "allow", "name": "Allow", "kind": "allow_once"}}}})
+			send(map[string]any{"jsonrpc": "2.0", "id": "archymedes-1", "method": "session/request_permission", "params": map[string]any{"sessionId": "s1", "toolCall": map[string]any{"toolCallId": "c1", "title": "run command: ls"}, "_meta": map[string]any{"archymedes": map[string]any{"risk": []any{"destructive command"}}}, "options": []any{map[string]any{"optionId": "allow", "name": "Allow", "kind": "allow_once"}}}})
 			var answer map[string]any
 			for in.Scan() {
 				json.Unmarshal(in.Bytes(), &answer)
@@ -128,7 +128,7 @@ func TestPromptStreamsTextEventsAndRoundTripsApproval(t *testing.T) {
 			case AgentEvent:
 				sawToolEvent = m.Event.Event != nil && m.Event.Event.ToolName == "run_command" && m.Event.Event.Arguments["command"] == "ls"
 			case PermissionRequest:
-				if m.ToolCall.Title != "run command: ls" || len(m.Options) != 1 {
+				if m.ToolCall.Title != "run command: ls" || len(m.Options) != 1 || len(m.Risk) != 1 || m.Risk[0] != "destructive command" {
 					t.Fatalf("request = %+v", m)
 				}
 				m.Answer("allow")

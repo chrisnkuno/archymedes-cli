@@ -261,7 +261,10 @@ type AgentEvent struct{ Event Event }
 type PermissionRequest struct {
 	ToolCall ToolCallRef
 	Options  []PermissionOption
-	answer   func(optionID string)
+	// Risk is why the engine's safety screen wants a person to decide (`_meta.archymedes.risk`);
+	// empty for an ordinary approval.
+	Risk   []string
+	answer func(optionID string)
 }
 
 // Answer replies to the agent. Calling it more than once has no further effect.

@@ -28,18 +28,23 @@ func permissionOptions(pattern *policy.Pattern) []map[string]any {
 	return options
 }
 
+// permissionParams is one approval as ACP's request. A sensitive call's reasons are in its title,
+// for a person, and in `_meta.archymedes.risk`, for a client that says the risk elsewhere (a phone).
+func permissionParams(sessionID string, r policy.Request) map[string]any {
+	title := r.Summary
+	params := map[string]any{"sessionId": sessionID, "options": permissionOptions(r.Pattern)}
+	if r.Safety.Sensitive && len(r.Safety.Reasons) > 0 {
+		title += " — " + strings.Join(r.Safety.Reasons, "; ")
+		params["_meta"] = map[string]any{"archymedes": map[string]any{"risk": r.Safety.Reasons}}
+	}
+	params["toolCall"] = map[string]any{"toolCallId": r.Call.ID, "title": title, "kind": toolKind(r.Call.Name), "status": "pending"}
+	return params
+}
+
 // askPermission puts one approval to the client. Anything but a selected allow is a denial: a
 // client that went away has not consented.
 func (s *Server) askPermission(ctx context.Context, sessionID string, r policy.Request) (policy.Decision, error) {
-	title := r.Summary
-	if r.Safety.Sensitive && len(r.Safety.Reasons) > 0 {
-		title += " — " + strings.Join(r.Safety.Reasons, "; ")
-	}
-	raw, err := s.request(ctx, "session/request_permission", map[string]any{
-		"sessionId": sessionID,
-		"toolCall":  map[string]any{"toolCallId": r.Call.ID, "title": title, "kind": toolKind(r.Call.Name), "status": "pending"},
-		"options":   permissionOptions(r.Pattern),
-	})
+	raw, err := s.request(ctx, "session/request_permission", permissionParams(sessionID, r))
 	if err != nil {
 		if ctx.Err() != nil {
 			return policy.Deny, ctx.Err()

@@ -20,6 +20,7 @@ var Fields = []Field{
 	{Key: "ARCHYMEDES_SUGGEST_MODEL", Label: "Ask the model for extra suggestions (a small extra call per turn)", Choices: onOffChoices},
 	{Key: "ARCHYMEDES_NOTIFY", Label: "Notifications — when a turn ends or Friday waits for you", Choices: notifyChoices},
 	{Key: "ARCHYMEDES_NOTIFY_URL", Label: "Push URL for notifications, such as https://ntfy.sh/your-topic (event and folder name only)", URL: true},
+	{Key: "ARCHYMEDES_NOTIFY_REPLIES", Label: "Answers from your phone — Allow, Deny or a short answer from the push", Choices: notifyRepliesChoices},
 	{Key: "ARCHYMEDES_AUTO_UPDATE", Label: "Automatic updates — checked hourly, installed when Friday closes", Choices: autoUpdateChoices},
 	{Key: "ARCHYMEDES_TELEMETRY", Label: "Install count — one anonymous cue per new version (event, version, OS)", Choices: telemetryChoices},
 	{Key: "ARCHYMEDES_TEST_FIRST", Label: "Build test first — tests, then code, then static analysis", Choices: testFirstChoices},
@@ -207,6 +208,11 @@ var notifyChoices = []Choice{
 	{"auto", "Auto — only while the terminal is not focused (default)"},
 	{"always", "Always — even while you are looking"},
 	{"off", "Off — no notifications"},
+}
+
+var notifyRepliesChoices = []Choice{
+	{"on", "On — approvals and short questions get buttons on the phone (default)"},
+	{"off", "Off — the push only tells, the phone cannot answer"},
 }
 
 var vimChoices = []Choice{

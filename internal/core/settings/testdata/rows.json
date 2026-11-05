@@ -288,6 +288,22 @@
     "kind": "text"
   },
   {
+    "key": "ARCHYMEDES_NOTIFY_REPLIES",
+    "label": "Answers from your phone — Allow, Deny or a short answer from the push",
+    "section": "Behaviour",
+    "kind": "choice",
+    "choices": [
+      {
+        "value": "on",
+        "label": "On — approvals and short questions get buttons on the phone (default)"
+      },
+      {
+        "value": "off",
+        "label": "Off — the push only tells, the phone cannot answer"
+      }
+    ]
+  },
+  {
     "key": "ARCHYMEDES_AUTO_UPDATE",
     "label": "Automatic updates — checked hourly, installed when Friday closes",
     "section": "Behaviour",
