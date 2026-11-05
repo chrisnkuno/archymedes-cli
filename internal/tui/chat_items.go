@@ -266,6 +266,11 @@ const (
 	noticeFaint
 )
 
+// notice adds a line to the conversation that stays (docs/mechanisms/README.md, "Which channel").
+func (m *Model) notice(kind noticeKind, text string) {
+	m.tr.add(&noticeItem{kind: kind, text: text})
+}
+
 type noticeItem struct {
 	versioned
 	kind noticeKind

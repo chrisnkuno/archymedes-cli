@@ -57,7 +57,7 @@ func (m *Model) handleAgentMsgs(msgs []any) tea.Cmd {
 		}
 		m.handleAgent(msg)
 	}
-	return tea.Batch(append(cmds, m.railReread(), m.growthReread(), m.flushNotifications())...)
+	return tea.Batch(append(cmds, m.railReread(), m.growthReread(), m.ciAfterEvents(), m.flushNotifications())...)
 }
 
 // handleAgent turns one agent message into transcript changes.
@@ -153,6 +153,7 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			t.finish(ev.Content, ev.IsError)
 			m.editLanded(t)
 			m.noteCommands(t.name, t.args, ev.Content)
+			m.noteGitPush(t.name, t.args, ev.Content, ev.IsError)
 			m.growthPlan(t.name, ev.Content, ev.IsError, ev.Data)
 		}
 	case "model_turn":

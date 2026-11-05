@@ -205,6 +205,9 @@ func newTestModel(t testing.TB) (*Model, *fakeAgent) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(startedMsg{agent: agent, status: acp.SetupStatus{Configured: true}})
 	m.Update(connectedMsg{session: acp.Session{ID: "s1", Info: acp.SessionInfo{Model: "m1", ProviderLabel: "Free", Mode: "build"}}})
+	// CI is never followed through the real gh in a test: the CI tests give a fake of their own.
+	m.ci = newCIState()
+	m.ci.gh = &fakeGh{missing: true}
 	return m, agent
 }
 

@@ -48,6 +48,19 @@ func PushRemote(ctx context.Context, root string) string {
 	return ""
 }
 
+// Upstream is the commit the branch's upstream is at, as this repository last saw it (after a push
+// or a fetch; nothing is fetched here), or "" when the branch has none or this is no repository.
+func Upstream(ctx context.Context, root, branch string) string {
+	if branch == "" {
+		return ""
+	}
+	out, err := git(ctx, root, "rev-parse", "--verify", "-q", branch+"@{upstream}")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // NewBranch creates a branch at HEAD and switches to it, carrying uncommitted work along.
 func NewBranch(ctx context.Context, root, name string) error {
 	_, err := gitErr(ctx, root, "switch", "-c", name)
