@@ -247,9 +247,8 @@ saves `<PREFIX>_MODEL`, so the provider's next session starts there: `{"ok": tru
 
 ## Forwarded methods
 
-`_archymedes/models` is sent to the TypeScript agent unchanged, started on first need, until the
-model list is ported (WS-50.4); without it the method is `-32601`. A method the engine does not
-know is `-32601`.
+None since WS-50.4: every method above is answered by the engine itself. A method the engine does
+not know is `-32601`.
 
 ## Engine → client requests
 

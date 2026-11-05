@@ -30,9 +30,9 @@ var methods []method
 // methodByName indexes methods.
 var methodByName = map[string]method{}
 
-// forwarded are the methods the TypeScript agent answers while this engine does not: the model
-// list, until it is ported (WS-50.4). Setup and providers are this engine's own since WS-50.3.
-var forwarded = map[string]bool{"_archymedes/models": true}
+// forwarded are the methods the TypeScript agent answers while this engine does not. None since
+// WS-50.4: setup, providers and the model list are this engine's own.
+var forwarded = map[string]bool{}
 
 func init() {
 	methods = []method{
@@ -65,6 +65,7 @@ func init() {
 			return s.rememberProviderModel(ctx, p)
 		}},
 		{"_archymedes/setup/save", "Check one key, save it, and start new sessions on its provider", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.setupSave(ctx, p) }},
+		{"_archymedes/models", "List the models the session can switch to", func(s *Server, ctx context.Context, p json.RawMessage) (any, error) { return s.models(ctx, p) }},
 	}
 	for _, m := range methods {
 		methodByName[m.name] = m
