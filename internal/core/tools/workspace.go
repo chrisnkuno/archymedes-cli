@@ -34,6 +34,9 @@ type Workspace struct {
 	seen map[string][32]byte
 	// written is every file written this session, so running one counts as exercising it.
 	written map[string]bool
+	// instructed is every subdirectory whose instruction file has been shown this session (or that
+	// has none), so a nested AGENTS.md comes once (instructions.go).
+	instructed map[string]bool
 }
 
 // NewWorkspace is a workspace at root.

@@ -3,11 +3,14 @@ package tui
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/chrisnkuno/friday-cli/internal/acp"
 )
 
 // Rate-limit forecasting. A free model's limit is not a surprise so much as arithmetic nobody did: a
@@ -28,7 +31,9 @@ const (
 
 type limitTracker struct {
 	calls, errors, rates []time.Time
-	remaining, limit     int // the provider's daily allowance; limit 0 until one is reported
+	remaining, limit     int       // the provider's daily allowance; limit 0 until one is reported
+	resets               time.Time // when that allowance resets; zero when not said
+	plan                 *acp.PlanLimit
 	free                 bool
 }
 
@@ -36,10 +41,55 @@ func (t *limitTracker) call(at time.Time)        { t.calls = append(t.calls, at)
 func (t *limitTracker) toolError(at time.Time)   { t.errors = append(t.errors, at) }
 func (t *limitTracker) rateLimited(at time.Time) { t.rates = append(t.rates, at) }
 
-func (t *limitTracker) allowance(remaining, limit int) {
+func (t *limitTracker) allowance(remaining, limit int, resetsAt string) {
 	if limit > 0 {
 		t.remaining, t.limit = remaining, limit
+		t.resets, _ = time.Parse(time.RFC3339, resetsAt)
 	}
+}
+
+// planGauge is the tray's word on a subscription plan's limit, shown from half used or once Claude
+// Code warns: "5h 72% · resets 14:30", "week 100% · resets Sun 09:00"; warn from the warning on.
+// Nothing once the reset time has passed, since the figure is then stale.
+func planGauge(p *acp.PlanLimit, now time.Time) (text string, warn bool) {
+	if p == nil {
+		return "", false
+	}
+	var reset time.Time
+	if p.ResetsAt > 0 {
+		reset = time.Unix(p.ResetsAt, 0).In(now.Location())
+		if !reset.After(now) {
+			return "", false
+		}
+	}
+	warn = p.Status != "" && p.Status != "allowed"
+	used := clamp01(p.Utilization)
+	if !warn && used < 0.5 {
+		return "", false
+	}
+	name := "plan"
+	switch {
+	case p.Kind == "five_hour":
+		name = "5h"
+	case strings.HasPrefix(p.Kind, "seven_day"):
+		name = "week"
+	}
+	switch {
+	case p.Utilization > 0:
+		text = fmt.Sprintf("%s %d%%", name, int(used*100+0.5))
+	case p.Status == "rejected":
+		text = name + " used up"
+	default:
+		return "", false
+	}
+	if !reset.IsZero() {
+		layout := "15:04"
+		if reset.Sub(now) >= 24*time.Hour {
+			layout = "Mon 15:04"
+		}
+		text += " · resets " + reset.Format(layout)
+	}
+	return text, warn
 }
 
 // trim forgets what no longer counts, so the slices stay small however long the session runs.
@@ -211,6 +261,12 @@ func (m *Model) limitDetail() string {
 	line := fmt.Sprintf("requests %d/%d per minute", f.InMinute, f.Cap)
 	if m.limits.limit > 0 {
 		line += fmt.Sprintf(" · %d/%d today", m.limits.remaining, m.limits.limit)
+		if !m.limits.resets.IsZero() {
+			line += ", resets " + m.limits.resets.Local().Format("15:04")
+		}
+	}
+	if text, _ := planGauge(m.limits.plan, time.Now()); text != "" {
+		line += " · plan " + text
 	}
 	line += " · forecast " + f.Level.String()
 	if f.Reason != "" {

@@ -538,7 +538,11 @@ func (t *translator) modelTurn(model string, u apiUsage, toolCalls int) agents.N
 	t.totals.Output += counted.OutputTokens
 	t.totals.CacheRead += counted.CachedInputTokens
 	t.totals.CacheWrite += u.CacheCreationInputTokens
-	return runtimeNotice(loop.Event{Type: loop.EventModelTurn, Iteration: t.iteration, Model: model, ToolCallCount: toolCalls, Usage: &counted})
+	ev := loop.Event{Type: loop.EventModelTurn, Iteration: t.iteration, Model: model, ToolCallCount: toolCalls, Usage: &counted}
+	if r := t.rateLimit; r != nil {
+		ev.PlanLimit = &loop.PlanLimit{Kind: r.RateLimitType, Status: r.Status, Utilization: r.Utilization, ResetsAt: r.ResetsAt}
+	}
+	return runtimeNotice(ev)
 }
 
 // outcome is what a turn came to.

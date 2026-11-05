@@ -496,6 +496,13 @@ the step in progress. (Add `.archymedes/` to your project's `.gitignore` if it i
 - Sessions of the two engines are kept apart: `--resume <id>` of a session the TypeScript engine
   wrote opens it on the TypeScript engine.
 
+## Plan limits and when they reset
+
+On Claude Code with a Claude plan, the top bar shows the plan's limit beside `ctx` once half of it is
+used, or as soon as Claude Code warns: `5h 72% · resets 14:30`. A reset a day or more away shows
+its day: `week 100% · resets Sun 09:00`. It turns the warning colour at the warning. A free model's
+daily request budget says when it resets in the Tasks app: `12/50 today, resets 02:00`.
+
 ## Long conversations: compaction
 
 A conversation that nears the model's context window is **compacted**. The small model summarizes

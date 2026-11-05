@@ -61,7 +61,8 @@ func (w *Workspace) readFile() *tool.Tool {
 			if total == 0 {
 				b.WriteString("(empty file)")
 			}
-			return tool.Result{Content: strings.TrimSuffix(b.String(), "\n"), Data: map[string]any{"path": rel, "startLine": offset, "totalLines": total, "truncated": truncated}}
+			content, info := w.withInstructions(rel, strings.TrimSuffix(b.String(), "\n"), map[string]any{"path": rel, "startLine": offset, "totalLines": total, "truncated": truncated})
+			return tool.Result{Content: content, Data: info}
 		},
 	}
 }
@@ -92,7 +93,8 @@ func (w *Workspace) writeFile() *tool.Tool {
 			}
 			w.remember(rel, []byte(content))
 			w.markWritten(rel)
-			return tool.Result{Content: fmt.Sprintf("Wrote %s (%d bytes).", rel, len(content)), Data: map[string]any{"path": rel, "bytesWritten": len(content)}}
+			text, info := w.withInstructions(rel, fmt.Sprintf("Wrote %s (%d bytes).", rel, len(content)), map[string]any{"path": rel, "bytesWritten": len(content)})
+			return tool.Result{Content: text, Data: info}
 		},
 	}
 }
@@ -141,7 +143,8 @@ func (w *Workspace) editFile() *tool.Tool {
 			}
 			w.remember(rel, []byte(content))
 			w.markWritten(rel)
-			return tool.Result{Content: fmt.Sprintf("Edited %s (%d replacement%s).", rel, count, plural(count)), Data: map[string]any{"path": rel, "replacements": count}}
+			text, info := w.withInstructions(rel, fmt.Sprintf("Edited %s (%d replacement%s).", rel, count, plural(count)), map[string]any{"path": rel, "replacements": count})
+			return tool.Result{Content: text, Data: info}
 		},
 	}
 }

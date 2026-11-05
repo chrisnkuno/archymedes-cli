@@ -169,7 +169,10 @@ func (m *Model) handleRuntime(ev acp.RuntimeEvent) {
 			m.effort = [2]string{effort, ev.EffortReason}
 		}
 		if a := ev.Allowance; a != nil && a.RemainingRequests != nil && a.RequestLimit != nil {
-			m.limits.allowance(*a.RemainingRequests, *a.RequestLimit)
+			m.limits.allowance(*a.RemainingRequests, *a.RequestLimit, a.ResetsAt)
+		}
+		if ev.PlanLimit != nil {
+			m.limits.plan = ev.PlanLimit
 		}
 		if ev.Usage != nil {
 			m.contextUsed = ev.Usage.InputTokens + ev.Usage.OutputTokens

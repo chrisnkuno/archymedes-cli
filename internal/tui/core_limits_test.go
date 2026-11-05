@@ -53,7 +53,7 @@ func TestFailedToolCallsRaiseTheForecastBecauseEachCostsAnotherRequest(t *testin
 
 func TestADailyBudgetRunningOutIsForecastFromThePace(t *testing.T) {
 	var l limitTracker
-	l.allowance(30, 1000)
+	l.allowance(30, 1000, "")
 	for i := range 6 {
 		l.call(t0.Add(time.Duration(i) * 8 * time.Second))
 	}
@@ -61,7 +61,7 @@ func TestADailyBudgetRunningOutIsForecastFromThePace(t *testing.T) {
 	if f.Exhausted <= 0 || f.Exhausted > 10*time.Minute || f.Level < levelHigh || !strings.Contains(f.Reason, "30 of 1000") {
 		t.Fatalf("%+v", f)
 	}
-	l.allowance(0, 1000)
+	l.allowance(0, 1000, "")
 	if got := l.predict(t0.Add(50 * time.Second)); got.Level != levelLimited {
 		t.Fatalf("an empty budget is a limit: %+v", got)
 	}

@@ -78,6 +78,15 @@ type Usage struct {
 	ReasoningTokens   int `json:"reasoningTokens"`
 }
 
+// PlanLimit is a subscription plan's limit: kind (five_hour, seven_day, …), status (allowed,
+// allowed_warning, rejected), how much is used (0–1, when known) and when it resets (Unix seconds).
+type PlanLimit struct {
+	Kind        string  `json:"kind"`
+	Status      string  `json:"status"`
+	Utilization float64 `json:"utilization"`
+	ResetsAt    int64   `json:"resetsAt"`
+}
+
 // Allowance is what is left of a daily request budget.
 type Allowance struct {
 	RemainingRequests *int   `json:"remainingRequests"`
@@ -107,6 +116,8 @@ type RuntimeEvent struct {
 	Usage         *Usage `json:"usage"`
 	// Allowance is the free tier's daily budget as the provider last reported it.
 	Allowance *Allowance `json:"allowance"`
+	// PlanLimit is a subscription plan's limit (Claude Code's), as last reported.
+	PlanLimit *PlanLimit `json:"planLimit"`
 	// Effort is how hard the model was asked to think for this call, and EffortReason why.
 	Effort       string `json:"effort"`
 	EffortReason string `json:"effortReason"`

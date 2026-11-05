@@ -487,3 +487,22 @@ func TestAChangedEffortAppliesAtTheNextTurn(t *testing.T) {
 		t.Fatalf("starts:\n%s", strings.Join(starts, "\n"))
 	}
 }
+
+// The plan's limit, as Claude Code last reported it, rides on every model call so the interface can
+// show how much is used and when it resets, before it is used up.
+func TestEachModelCallCarriesThePlanLimit(t *testing.T) {
+	tr := newTranslator(absPath("/p"))
+	if n := tr.modelTurn("claude", apiUsage{InputTokens: 1}, 0); n.Event.PlanLimit != nil {
+		t.Fatalf("a plan limit before Claude Code reported one: %+v", n.Event.PlanLimit)
+	}
+	feedAll(tr, `{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":1793900000,"utilization":0.72}}`)
+	n := tr.modelTurn("claude", apiUsage{InputTokens: 1}, 0)
+	got := n.Event.PlanLimit
+	if got == nil || got.Kind != "five_hour" || got.Status != "allowed_warning" || got.ResetsAt != 1793900000 || got.Utilization != 0.72 {
+		t.Fatalf("plan limit = %+v", got)
+	}
+	raw, _ := json.Marshal(n.Event)
+	if !strings.Contains(string(raw), `"planLimit":{"kind":"five_hour"`) {
+		t.Fatalf("not on the wire as planLimit: %s", raw)
+	}
+}

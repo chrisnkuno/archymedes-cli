@@ -210,6 +210,11 @@ instructions from the people who work there: `AGENTS.override.md`, `ARCHYMEDES.m
 `CLAUDE.md`, `.archymedesrules`. Up to 20,000 characters are used. Sub-agents do not receive it;
 their brief says what they need.
 
+A subdirectory can have its own, in the same names and order: `web/AGENTS.md` for the web app,
+`pkg/parser/CLAUDE.md` for the parser. The first time a file under it is read, written or edited,
+its instructions come with that result, the outer directory's before the inner one's, once a
+session each. Sub-agents get these too, as they open files there.
+
 ## The interface
 
 Read by the `friday` binary itself, for what the screen looks like. Each is also a row of Settings

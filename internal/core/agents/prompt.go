@@ -2,8 +2,6 @@ package agents
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -60,24 +58,14 @@ const choosingTools = `Choosing tools:
 - Read tool results carefully. An error says what to change; never send the same failing call again unchanged.
 - Some tools are not listed until you search for them with tool_search.`
 
-// instructionFiles are read from the project root, first found wins (INSTRUCTION_FILES in prompt.ts).
-var instructionFiles = []string{"AGENTS.override.md", "ARCHYMEDES.md", "AGENTS.md", "CLAUDE.md", ".archymedesrules"}
-
-const instructionsMax = 20_000
-
+// projectInstructions is the project root's instruction file for the system prompt; a
+// subdirectory's comes with the first file tool result under it (tools.ReadInstructions).
 func projectInstructions(root string) string {
-	for _, name := range instructionFiles {
-		data, err := os.ReadFile(filepath.Join(root, name))
-		if err != nil || len(strings.TrimSpace(string(data))) == 0 {
-			continue
-		}
-		text := string(data)
-		if len(text) > instructionsMax {
-			text = text[:instructionsMax] + "\n[… cut]"
-		}
-		return fmt.Sprintf("Project instructions (%s), from the people who work here; follow them:\n%s", name, strings.TrimSpace(text))
+	name, text := tools.ReadInstructions(root)
+	if name == "" {
+		return ""
 	}
-	return ""
+	return fmt.Sprintf("Project instructions (%s), from the people who work here; follow them. A subdirectory's own AGENTS.md (or CLAUDE.md) comes with the first file you open under it:\n%s", name, text)
 }
 
 func (s *Session) environment(model string) string {

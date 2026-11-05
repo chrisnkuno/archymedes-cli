@@ -150,6 +150,13 @@ func (m *Model) tray() string {
 		}
 		tray += style.Render(text) + " "
 	}
+	if text, warn := planGauge(m.limits.plan, time.Now()); text != "" { // the plan's limit, beside ctx
+		style := th.Faint
+		if warn {
+			style = th.Warn
+		}
+		tray += style.Render(text) + " "
+	}
 	if where := m.session.Info.Workspace; where != "" && where != "local" {
 		tray += th.SoftPill(where, th.Warning) + " "
 	}

@@ -9,6 +9,16 @@ package loop
 
 import "github.com/chrisnkuno/friday-cli/internal/core/gate"
 
+// PlanLimit is a subscription plan's limit: its kind (five_hour, seven_day, …), its status
+// (allowed, allowed_warning, rejected), how much is used (0–1, when known) and when it resets (Unix
+// seconds, 0 when unknown).
+type PlanLimit struct {
+	Kind        string  `json:"kind"`
+	Status      string  `json:"status"`
+	Utilization float64 `json:"utilization,omitempty"`
+	ResetsAt    int64   `json:"resetsAt,omitempty"`
+}
+
 // Usage is one model call's tokens, in the field names the interface already reads (acp.Usage).
 type Usage struct {
 	InputTokens       int `json:"inputTokens"`
@@ -45,6 +55,9 @@ type Event struct {
 	Model         string `json:"model,omitempty"`
 	ToolCallCount int    `json:"toolCallCount,omitempty"`
 	Usage         *Usage `json:"usage,omitempty"`
+	// PlanLimit is the subscription plan's limit as last reported (Claude Code), so the interface
+	// can say how much is used and when it resets.
+	PlanLimit *PlanLimit `json:"planLimit,omitempty"`
 	// tool_compose: a call still being written
 	Index   int    `json:"index,omitempty"`
 	Subject string `json:"subject,omitempty"`
