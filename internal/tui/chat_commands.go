@@ -22,6 +22,7 @@ type bgCommand struct {
 	id, command, status string
 	last                string // the last line it printed, as last read
 	seen                time.Time
+	stuck               bool // the engine's reading says it looks stuck (chat_activity.go)
 }
 
 func (c *bgCommand) running() bool { return c.status == "running" }

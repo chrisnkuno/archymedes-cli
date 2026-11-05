@@ -458,6 +458,31 @@ type CommandResult struct {
 	Status string `json:"status"`
 	Reason string `json:"reason"`
 	Next   string `json:"next"`
+	// activity: every command the session waits on, as the "what's going on" view shows it
+	Activities []Activity `json:"activities"`
+}
+
+// Activity is one command the session waits on (the `activity` session command): a background
+// one (ID cmd1) or a foreground one (fg1, under the run_command call CallID). Times are
+// milliseconds; LastOutputAt is 0 while it has printed nothing. CPU is its process tree's share of
+// one core, meaningful only when CPUKnown. Stuck: running, nothing printed and next to no CPU for
+// the engine's threshold.
+type Activity struct {
+	ID           string   `json:"id"`
+	CallID       string   `json:"callId"`
+	Command      string   `json:"command"`
+	Dir          string   `json:"dir"`
+	Pid          int      `json:"pid"`
+	Background   bool     `json:"background"`
+	Status       string   `json:"status"`
+	StartedAt    int64    `json:"startedAt"`
+	ElapsedMs    int64    `json:"elapsedMs"`
+	LastOutputAt int64    `json:"lastOutputAt"`
+	QuietMs      int64    `json:"quietMs"`
+	CPU          float64  `json:"cpu"`
+	CPUKnown     bool     `json:"cpuKnown"`
+	Stuck        bool     `json:"stuck"`
+	Tail         []string `json:"tail"`
 }
 
 // CommandItem is one item of a command's list: a todo (text, status), or a role (its name, whether

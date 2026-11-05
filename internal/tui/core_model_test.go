@@ -46,6 +46,8 @@ type fakeAgent struct {
 	cannotSteer bool
 	cwds        []string // where each session was opened
 	goalChecks  int
+	// activity is what the activity command answers; nil answers as an engine without it.
+	activity []acp.Activity
 }
 
 func (f *fakeAgent) NewSession(_ context.Context, cwd string, resumeID string) (acp.Session, error) {
@@ -75,6 +77,14 @@ func (f *fakeAgent) Command(_ context.Context, _ string, command, argument strin
 	f.commands = append(f.commands, command+":"+argument)
 	f.mu.Unlock()
 	switch command {
+	case "activity":
+		f.mu.Lock()
+		all := f.activity
+		f.mu.Unlock()
+		if all != nil {
+			return acp.CommandResult{Kind: "activity", Activities: all}, nil
+		}
+		return acp.CommandResult{Kind: "error", Text: "/activity is not in the Go engine yet"}, nil
 	case "goal-prompt":
 		return acp.CommandResult{Kind: "goal", Status: "continue", Next: "Work until: " + argument}, nil
 	case "goal-check":

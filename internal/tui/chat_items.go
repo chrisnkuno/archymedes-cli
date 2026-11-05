@@ -131,6 +131,8 @@ type toolItem struct {
 	test *testRun
 	// phone is the answer given to its approval or question from the phone, "" when given here.
 	phone string
+	// stuck is the line that says its command or sub-agent looks stuck (chat_activity.go), or "".
+	stuck string
 }
 
 func (t *toolItem) finish(result string, isError bool) {
@@ -185,6 +187,9 @@ func (t *toolItem) render(ctx renderCtx) []string {
 	lines := []string{mark(ctx.zones, "tool:"+t.id, ansi.Truncate(head, ctx.width, "…"))}
 	if t.phone != "" {
 		lines = append(lines, th.Faint.Render(ansi.Truncate("  answered from your phone: "+t.phone, ctx.width, "…")))
+	}
+	if t.stuck != "" {
+		lines = append(lines, ansi.Truncate(th.Warn.Render("  ⎿ "+t.stuck), ctx.width, "…"))
 	}
 	lines = append(lines, editNotes(ctx, t.notes)...)
 	expanded := ctx.expanded || t.open

@@ -69,6 +69,10 @@ type Job struct {
 	notify chan struct{}
 	// mark is where the last read with no cursor left off.
 	mark int64
+	// lastOutput is when it last printed, by clock; watch is the stall rule's memory (stall.go).
+	lastOutput time.Time
+	clock      func() time.Time
+	watch      *stallWatch
 
 	cmd     *exec.Cmd
 	pipe    *os.File
@@ -116,6 +120,7 @@ func (j *Job) wakeLocked() {
 func (j *Job) write(p []byte) {
 	j.mu.Lock()
 	j.out.write(p)
+	j.lastOutput = j.clock()
 	j.wakeLocked()
 	j.mu.Unlock()
 }
@@ -314,11 +319,18 @@ type Jobs struct {
 	// limits, set from the exported constants; tests lower them.
 	maxRunning, kept, headBytes, tailBytes int
 	grace, window                          time.Duration
+	// now and cpu are the clock and the CPU reading the stall rule uses (activity.go); tests
+	// replace them.
+	now func() time.Time
+	cpu func(pid int) (uint64, bool)
+	// foreground are the run_command calls waiting on a command right now.
+	foreground []*foreground
+	fgNext     int
 }
 
 // NewJobs is an empty set held to the package limits.
 func NewJobs() *Jobs {
-	return &Jobs{maxRunning: MaxBackgroundCommands, kept: KeptBackgroundCommands, headBytes: CommandHeadBytes, tailBytes: CommandTailBytes, grace: CommandStopGrace, window: CommandStartWindow}
+	return &Jobs{maxRunning: MaxBackgroundCommands, kept: KeptBackgroundCommands, headBytes: CommandHeadBytes, tailBytes: CommandTailBytes, grace: CommandStopGrace, window: CommandStartWindow, now: time.Now, cpu: groupCPUTicks}
 }
 
 // errLimit is a start refused for the number already running.
@@ -363,10 +375,11 @@ func (s *Jobs) Start(command, dir string) (*Job, error) {
 	_ = pw.Close() // the child holds its own copy; the pipe ends when the last holder closes it
 	s.next++
 	j := &Job{
-		ID: fmt.Sprintf("cmd%d", s.next), Command: command, Dir: dir, Pid: cmd.Process.Pid, Started: time.Now(),
+		ID: fmt.Sprintf("cmd%d", s.next), Command: command, Dir: dir, Pid: cmd.Process.Pid, Started: s.now(), clock: s.now,
 		out: newOutputBuffer(s.headBytes, s.tailBytes), status: JobRunning,
 		cmd: cmd, pipe: pr, cancel: cancel, done: make(chan struct{}), drained: make(chan struct{}),
 	}
+	j.watch = newStallWatch(j.Started)
 	go j.pump()
 	go j.reap()
 	s.jobs = append(s.jobs, j)

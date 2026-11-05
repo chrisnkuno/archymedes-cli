@@ -57,7 +57,7 @@ func (m *Model) handleAgentMsgs(msgs []any) tea.Cmd {
 		}
 		m.handleAgent(msg)
 	}
-	return tea.Batch(append(cmds, m.railReread(), m.growthReread(), m.ciAfterEvents(), m.flushNotifications())...)
+	return tea.Batch(append(cmds, m.railReread(), m.growthReread(), m.ciAfterEvents(), m.flushNotifications(), m.activityTicker())...)
 }
 
 // handleAgent turns one agent message into transcript changes.

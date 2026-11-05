@@ -19,6 +19,7 @@ type runningCommand struct {
 	who, command string
 	started      time.Time
 	card         *toolItem // Friday's own call, or the delegation card of the sub-agent running it
+	stuck        bool      // the engine's reading says it looks stuck (chat_activity.go)
 }
 
 // isCommand is whether a call runs a command in the foreground.
@@ -45,14 +46,16 @@ func (m *Model) commandsAtWork() []runningCommand {
 			continue
 		}
 		if !t.done && isCommand(t.name, t.args) {
-			out = append(out, runningCommand{who: "friday", command: commandText(t.args), started: t.started, card: t})
+			a, read := m.activityFor(t)
+			out = append(out, runningCommand{who: "friday", command: commandText(t.args), started: t.started, card: t, stuck: read && a.Stuck})
 		}
 		if t.sub == nil || !delegationTools[t.name] || !agentWorking(t) {
 			continue
 		}
 		for _, st := range t.sub.steps {
 			if !st.done && !st.said && isCommand(st.tool, st.args) {
-				out = append(out, runningCommand{who: subagentRole(t), command: commandText(st.args), started: st.started, card: t})
+				id, read := m.activity.byCall[st.id]
+				out = append(out, runningCommand{who: subagentRole(t), command: commandText(st.args), started: st.started, card: t, stuck: read && m.activity.byID[id].Stuck})
 			}
 		}
 	}
@@ -75,6 +78,10 @@ func (m *Model) railRunningRows(running []runningCommand, inner int) []string {
 		who := th.SoftPill(c.who, th.Secondary)
 		if c.who == "friday" {
 			who = th.SoftPill(c.who, th.Primary)
+		}
+		if c.stuck {
+			// First after who runs it: the command line is the first to be cut.
+			who += " " + th.Warn.Render("looks stuck")
 		}
 		rows = append(rows, mark(m.zones.frame, fmt.Sprintf("rail:run:%d", i), m.spin.View()+" "+who+" "+th.Body.Render("$ "+c.command)+took))
 	}

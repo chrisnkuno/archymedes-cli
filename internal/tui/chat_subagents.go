@@ -61,6 +61,8 @@ type subagentRun struct {
 	maxSteps int
 	estimate *acp.WorkEstimate
 	turns    int
+	// lastEvent is when news of it last came, for the stall rule (chat_activity.go).
+	lastEvent time.Time
 }
 
 // agentStopped reports whether a card's sub-agent was stopped (x, close_agent, Claude Code's own
@@ -163,6 +165,7 @@ func (m *Model) handleSubagent(ev acp.Event) {
 
 // apply folds one event into the run; it returns the step the event was about, if any.
 func (s *subagentRun) apply(ev acp.RuntimeEvent, now time.Time) *subagentStep {
+	s.lastEvent = now
 	switch ev.Type {
 	case "assistant_delta":
 		s.say(ev.Text, ev.Iteration, now)

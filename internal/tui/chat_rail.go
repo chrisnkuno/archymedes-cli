@@ -38,6 +38,8 @@ type railState struct {
 	touched      string       // the file edited last
 	latest       *railEdit    // the edit edited last, by anyone
 	commands     []*bgCommand // background commands of the session (chat_commands.go)
+	// picked is the background command a first click selected; a second click opens it.
+	picked string
 }
 
 // railEdit is the latest edit: whose, which file, and its diff.
@@ -227,7 +229,9 @@ func (m *Model) railLines(height int) []string {
 			if backgroundRunning(t) {
 				timing = strings.TrimPrefix(timing+" · background", " · ") // last: the first to give way
 			}
-			if timing != "" {
+			if t.stuck != "" {
+				add(th.Warn.Render("  looks stuck") + th.Faint.Render(" · "+timing))
+			} else if timing != "" {
 				add(th.Faint.Render("  " + timing))
 			}
 		}
@@ -237,7 +241,7 @@ func (m *Model) railLines(height int) []string {
 	if commands := m.railCommands(); len(commands) > 0 {
 		add("")
 		add(section("Commands", th.Faint.Render(fmt.Sprintf("%d running", m.runningCommands()))))
-		for _, c := range commands {
+		for i, c := range commands {
 			glyph, state := m.spin.View(), th.Faint
 			switch {
 			case c.status == "failed" || (strings.HasPrefix(c.status, "exited") && c.status != "exited 0"):
@@ -245,7 +249,15 @@ func (m *Model) railLines(height int) []string {
 			case !c.running():
 				glyph = th.OK.Render("✓")
 			}
-			add(glyph + " " + th.Key.Render(c.id) + " " + th.Body.Render(c.command) + state.Render(" · "+c.status))
+			id := th.Key.Render(c.id)
+			if c.id == m.rail.picked {
+				id = th.Highlight.Render("▸" + c.id)
+			}
+			if c.stuck && c.running() {
+				// Before the command, which is the first to be cut.
+				id += " " + th.Warn.Render("looks stuck")
+			}
+			add(mark(m.zones.frame, fmt.Sprintf("rail:cmd:%d", i), glyph+" "+id+" "+th.Body.Render(c.command)+state.Render(" · "+c.status)))
 			if c.last != "" && c.running() {
 				add(th.Faint.Render("  ⎿ " + c.last))
 			}
@@ -358,10 +370,22 @@ func (m *Model) railClick(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 	for i, c := range m.commandsAtWork() {
 		if i < maxRailRunning && frame.Get(fmt.Sprintf("rail:run:%d", i)).InBounds(msg) {
 			if c.who == "friday" {
+				if m.tr.sel == c.card {
+					return m.openWatch(c.card), true // a second click opens what is going on
+				}
 				m.selectItem(c.card) // its own card, in Chat
 				return nil, true
 			}
 			return m.openInspector(c.card), true
+		}
+	}
+	for i, c := range m.railCommands() {
+		if frame.Get(fmt.Sprintf("rail:cmd:%d", i)).InBounds(msg) {
+			if m.rail.picked == c.id {
+				return m.openWatchJob(c.id), true
+			}
+			m.rail.picked = c.id
+			return nil, true
 		}
 	}
 	return nil, false

@@ -53,6 +53,8 @@ func TestConformDocumentedMeasures(t *testing.T) {
 		{"TOOLS.md", fmt.Sprintf("default %d, at most %s |", seconds(agents.WaitDefault), thousands(seconds(agents.WaitCeiling)))},
 		{"TOOLS.md", fmt.Sprintf("what it printed in its first %d seconds", seconds(tools.CommandStartWindow))},
 		{"TOOLS.md", fmt.Sprintf("At most %d run at once", tools.MaxBackgroundCommands)},
+		{"USER_GUIDE.md", fmt.Sprintf("for %d minutes is marked `looks stuck`", int(tools.StallAfter/time.Minute))},
+		{"PROTOCOL.md", fmt.Sprintf("`tail` is the last %d lines", tools.ActivityTailLines)},
 		{"TOOLS.md", fmt.Sprintf("the last %d are remembered", tools.KeptBackgroundCommands)},
 		{"TOOLS.md", fmt.Sprintf("the first %s bytes of its output and the last %s;", thousands(tools.CommandHeadBytes), thousands(tools.CommandTailBytes))},
 		{"TOOLS.md", fmt.Sprintf("or the command's end; at most %d |", seconds(tools.CommandWaitCeiling))},

@@ -200,6 +200,7 @@ type Model struct {
 	home      bool
 	comments  []reviewComment // notes on diff lines, sent with the next message
 	rail      railState       // the changes rail beside the transcript (chat_rail.go)
+	activity  activityState   // what the engine says its commands are doing (chat_activity.go)
 	growth    growthState     // the growth panel: the project as a growing tree (chat_growth.go)
 	lastInput time.Time       // the last key, click or paste, for resting motion (core_motion.go)
 	goal      *goalState      // /goal in progress
@@ -538,6 +539,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.steerDone(msg)
 	case queueTickMsg:
 		return m, m.queueTicked()
+	case activityTickMsg:
+		return m, m.activityTicked()
+	case activityMsg:
+		return m, m.activityRead(msg)
 	case pushPlanMsg:
 		return m, m.pushPlanned(msg)
 	case pushedMsg:
