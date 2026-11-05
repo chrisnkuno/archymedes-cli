@@ -17,7 +17,8 @@ import (
 // The changes rail: a column beside the transcript, on a terminal wide enough for both, that keeps
 // what the work has done in view while it is being done. Every file changed since the last commit
 // with its lines added and removed (the one edited last marked), the sub-agents at work and what
-// each is doing, the background commands and the last line each printed, and the latest edit's diff. It is read again from git each time an edit lands, by
+// each is doing, the background commands and the last line each printed, the CI of the commit pushed
+// last, and the latest edit's diff. It is read again from git each time an edit lands, by
 // Friday or by a sub-agent, not only when the turn ends. alt+d hides it; on a narrow terminal a chip
 // in the top bar counts the changed files instead, and opens Changes.
 
@@ -147,7 +148,7 @@ func (m *Model) railWidth() int {
 	if m.rail.hidden || m.width-m.growthWidth() < railMinWidth || m.landingVisible() {
 		return 0
 	}
-	if len(m.rail.files) == 0 && m.rail.latest == nil && len(m.workingAgents()) == 0 && len(m.rail.commands) == 0 && len(m.commandsAtWork()) == 0 {
+	if len(m.rail.files) == 0 && m.rail.latest == nil && len(m.workingAgents()) == 0 && len(m.rail.commands) == 0 && len(m.commandsAtWork()) == 0 && m.ci.watch == nil {
 		return 0
 	}
 	return min(max(m.width*28/100, 32), 46)
@@ -248,6 +249,14 @@ func (m *Model) railLines(height int) []string {
 			if c.last != "" && c.running() {
 				add(th.Faint.Render("  ⎿ " + c.last))
 			}
+		}
+	}
+
+	// The CI of the commit pushed last (chat_rail_ci.go).
+	if ci := m.railCIRows(inner); len(ci) > 0 {
+		add("")
+		for _, row := range ci {
+			add(row)
 		}
 	}
 

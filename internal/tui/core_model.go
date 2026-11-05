@@ -224,6 +224,7 @@ type Model struct {
 	limitBar   progress.Model
 	forecast   forecast
 	notifier   notifier
+	ci         ciState // CI followed after a push (cmd_ci.go)
 	vim        vimState
 	// contextUsed is the main conversation's size at its last model call (input and output), the
 	// figure compaction measures; 0 after a compaction until the next call.
@@ -241,7 +242,7 @@ type Model struct {
 // New builds the model; Init connects.
 func New(opts Options) *Model {
 	th, _ := theme.Load(opts.Theme)
-	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th), safe: detectSafeGlyphs()}
+	m := &Model{opts: opts, tr: newTranscript(), tools: map[string]*toolItem{}, mode: "build", th: th, md: render.NewMarkdown(th), safe: detectSafeGlyphs(), ci: newCIState()}
 	m.keyOverrides = map[string][]string{}
 	m.queueSel = -1
 	m.vim.on = vimOn(opts.ConfigDir)
@@ -408,6 +409,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if cmd, ok := m.adviceMsg(msg); ok {
 		return m, cmd
+	}
+	if cmd, ok := m.ciMsg(msg); ok {
+		return m, tea.Batch(cmd, m.flushNotifications())
 	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -602,8 +606,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if first {
 			cmds = append(cmds, m.readProjectState())
 			// In the background, after the session is usable: never on the way to the prompt. Then
-			// again every hour while Friday stays open, so a new release is found and installed.
-			cmds = append(cmds, m.upkeep())
+			// every hour while Friday stays open (a new release installed); and CI's upstream poll.
+			cmds = append(cmds, m.upkeep(), m.ciStart())
 		}
 		if next, ok := m.nextQueued(); ok {
 			// A mode chosen while starting is set before the first message, so it runs under it.
@@ -802,8 +806,4 @@ func (m *Model) quit() tea.Cmd {
 	// exit). Quitting draws nothing instead, and the process ends with the managers.
 	m.quitting = true
 	return tea.Quit
-}
-
-func (m *Model) notice(kind noticeKind, text string) {
-	m.tr.add(&noticeItem{kind: kind, text: text})
 }

@@ -160,6 +160,6 @@
     "desk": "The desktop and the parts every surface shares: the floating glass window and its hint bar, lists, tile grids, the bars by keyboard, start menu, Finder, overlays, wallpaper and photographs, Sixel",
     "app": "One window each (app_<name>.go, its parts app_<name>_<part>.go): Changes, Files, Pager, Gallery, Keys, Providers, Settings, Stats, Tasks and Notifications, Tour, Sessions, Models, Themes, Wallpaper, Help",
     "dialog": "Questions that must be answered over a window: connect a provider, pick a mode",
-    "cmd": "Slash commands: the registry, custom commands, session commands, and the commands that run git, worktrees, review, rewind, goals, dev tools and handoffs"
+    "cmd": "Slash commands: the registry, custom commands, session commands, and the commands that run git, worktrees, review, rewind, goals, dev tools and handoffs, and CI followed after a push"
   }
 }

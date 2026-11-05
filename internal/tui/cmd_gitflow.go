@@ -106,10 +106,11 @@ func (m *Model) pushed(msg pushedMsg) tea.Cmd {
 	if c := m.changesWindow(); c != nil {
 		c.br.loaded = false // the branch's upstream changed
 	}
+	follow := m.readPush(msg.branch) // the person's push: its CI is followed (cmd_ci.go)
 	if msg.intent != "pr" {
-		return nil
+		return follow
 	}
-	return m.sendPrompt(prPrompt(msg.branch, msg.defaultBranch, msg.guidance))
+	return tea.Batch(follow, m.sendPrompt(prPrompt(msg.branch, msg.defaultBranch, msg.guidance)))
 }
 
 func prPrompt(branch, base, guidance string) string {

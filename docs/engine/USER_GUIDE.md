@@ -13,6 +13,7 @@ setting see [Configuration](CONFIGURATION.md); for every tool see [Tools](TOOLS.
 - [Suggestions while you work](#suggestions-while-you-work)
 - [Sub-agents](#sub-agents)
 - [Seeing every change](#seeing-every-change)
+- [CI after you push](#ci-after-you-push)
 - [Sessions: resuming, restarts, titles](#sessions-resuming-restarts-titles)
 - [Long conversations: compaction](#long-conversations-compaction)
 - [Models: the main one and the small one](#models-the-main-one-and-the-small-one)
@@ -507,6 +508,31 @@ Every edit is shown as it lands, not only when the turn ends.
 - **In Changes** (F10): the whole diff of every file against the last commit. A click on a file in
   the rail opens Changes on it.
 
+## CI after you push
+
+Friday never pushes or merges on its own. When you push, it follows the CI run for the commit you
+pushed with the GitHub CLI (`gh`), and tells you how it went. A push is any of these:
+
+- a `git push` Friday ran with your approval;
+- `/push` or `/pr`;
+- a new commit on the current branch's upstream, from a push in another terminal. Friday reads
+  git's own record of the upstream every 30 seconds while it is open, and fetches nothing.
+
+The first look at the commit's runs comes after 10 seconds. Later looks are spaced further apart,
+at most 60 seconds apart. In the changes rail a CI section lists each run with its workflow, its
+status and how long it has run: `✓` when it passed, `✗` when it failed. Friday stops following
+when every run has ended, or after 3 hours, or when you type `/ci stop`.
+
+- **It passed.** A quiet line in the conversation and a tick in the rail. A notification comes
+  only when the terminal is not focused.
+- **It failed.** A notification, and an offer in the conversation:
+  `CI failed: test · Run go test. Fix it?` Nothing happens until you say yes. `/ci fix` (tab puts
+  it in the input) starts a turn with the failed job's log, trimmed to its last 80 lines. Friday
+  fixes it here and leaves the push to you.
+
+Without `gh`, or in a repository that is not on GitHub, Friday says so once and follows nothing.
+`/ci` shows the latest run for the branch, or the one being followed.
+
 ## Sessions: resuming, restarts, titles
 
 Every session is saved as it goes, in `.archymedes/go-sessions/<id>/` in the project. Each step is
@@ -624,6 +650,7 @@ Type `/` to see every command with what it does. Those that matter most on this 
 | `/agent [role] <task>` | start a helper in the background; alt+a sends what you typed to one |
 | `/subagents` | the helpers of this session: role, status, brief, branch |
 | `/todos` | Friday's checklist for the task: what is done, doing and left |
+| `/ci [stop\|fix]` | the CI run of this branch; `stop` stops following it, `fix` sends a failure to Friday |
 | `/compact [focus]` | summarize the conversation now, keeping what you name |
 | `/mode`, `/plan`, `/build`, `/auto`, `/defender` | how much Friday may do on its own |
 | `/model [name]` | switch the model; the conversation carries on |
