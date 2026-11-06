@@ -137,7 +137,8 @@ too. See [Notifications](CONFIGURATION.md#notifications).
 
 ### Answer from your phone
 
-With a push URL set, the phone can answer as well as hear. An approval's notification carries
+With a push URL set and `ARCHYMEDES_NOTIFY_REPLIES` set to `on`, the phone can answer as well as
+hear. It is off until you turn it on. An approval's notification carries
 **Allow** and **Deny** buttons. A question that takes one of at most three answers carries one
 button for each. A question with more answers, or one that takes several, is only announced.
 
@@ -153,14 +154,14 @@ What Friday accepts:
 - A token answers only its own button: Allow's token cannot deny, and Deny's cannot allow.
 - The first answer wins. Answer in the terminal and the phone's buttons stop working; answer on
   the phone and the dialog closes, its card saying "answered from your phone".
-- A risky approval, one the safety screen flags, can be answered from the phone too. Its
-  notification starts with the risk, for example `Risky: deployment or package publication
-  command.`
+- A risky approval, one the safety screen flags, has Deny alone on the phone. Its notification
+  starts with the risk, for example `Risky: deployment or package publication command.`, and
+  allowing it takes the terminal, where the command can be read.
 
 **Topic names are secrets.** Anyone who knows your topic can read the notifications, and press
 their buttons. Pick a long random topic name. Better still, use an ntfy server that asks for a
-login (a server of your own, or an account with access control) and put the token in the URL. To
-keep the push one way, set `ARCHYMEDES_NOTIFY_REPLIES` to `off`.
+login (a server of your own, or an account with access control) and put the token in the URL.
+Leave `ARCHYMEDES_NOTIFY_REPLIES` at `off` to keep the push one way.
 
 ## Images in a request
 

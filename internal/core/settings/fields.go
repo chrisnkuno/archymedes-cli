@@ -211,8 +211,8 @@ var notifyChoices = []Choice{
 }
 
 var notifyRepliesChoices = []Choice{
-	{"on", "On — approvals and short questions get buttons on the phone (default)"},
-	{"off", "Off — the push only tells, the phone cannot answer"},
+	{"off", "Off — the push only tells, the phone cannot answer (default)"},
+	{"on", "On — approvals and short questions get buttons on the phone; keep the topic secret"},
 }
 
 var vimChoices = []Choice{

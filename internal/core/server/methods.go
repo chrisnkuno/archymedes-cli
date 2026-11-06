@@ -641,8 +641,9 @@ func (s *Server) startup(ctx context.Context, params json.RawMessage) (any, erro
 	// The startup upkeep is the engine's own (WS-50.5): nothing here starts the TypeScript agent.
 	// The update check runs hourly and never installs from here: a session is open and is using the
 	// files an install replaces. A newer version is announced, and installed when the interface
-	// closes (update.AtExit). The defender feed the TypeScript agent refreshed belongs to its own
-	// defender playbooks, which a TypeScript session refreshes itself.
+	// closes (update.AtExit). The defender feed is not refreshed here: only the TypeScript agent's
+	// defender playbooks read it, and its startup (run when the interface talks to that agent)
+	// refreshes it; the Go engine's defender mode uses its built-in playbooks (tools/defender.go).
 	env := s.env()
 	notices := update.Run(ctx, update.Options{
 		Mode: update.ReadMode(env.Get), Interactive: true, CurrentVersion: s.opts.Version,

@@ -141,7 +141,7 @@ func phoneActions(reply string, labels, bodies []string) string {
 }
 
 // phoneChoices is what the phone may answer: Allow and Deny for an approval (never a standing
-// rule), or each option of a question that takes one of at most three (ntfy's limit).
+// rule; Deny alone for a risky one), or each option of a question that takes one of at most three (ntfy's limit).
 func phoneChoices(a *approval) (labels, choices []string) {
 	if a.ask != nil {
 		if a.ask.MultiSelect || len(a.ask.Options) == 0 || len(a.ask.Options) > 3 {
@@ -153,6 +153,9 @@ func phoneChoices(a *approval) (labels, choices []string) {
 		return labels, choices
 	}
 	for _, c := range [][2]string{{"allow", "Allow"}, {"deny", "Deny"}} {
+		if c[0] == "allow" && len(a.req.Risk) > 0 {
+			continue // a risky one is allowed at the terminal, where its command can be read
+		}
 		if a.offers(c[0]) {
 			labels, choices = append(labels, c[1]), append(choices, c[0])
 		}
@@ -169,9 +172,10 @@ type phoneLink struct {
 // phoneReplyMsg is one message from the reply topic.
 type phoneReplyMsg struct{ body string }
 
-// phoneRepliesOff is ARCHYMEDES_NOTIFY_REPLIES=off: push one way, take no answers.
+// phoneRepliesOff is whether answers from the phone are off: they are taken only with
+// ARCHYMEDES_NOTIFY_REPLIES=on, since anyone who can read the push topic can press its buttons.
 func (m *Model) phoneRepliesOff() bool {
-	return strings.EqualFold(strings.TrimSpace(firstNonEmpty(os.Getenv("ARCHYMEDES_NOTIFY_REPLIES"), config.Setting(m.opts.ConfigDir, "ARCHYMEDES_NOTIFY_REPLIES"))), "off")
+	return !strings.EqualFold(strings.TrimSpace(firstNonEmpty(os.Getenv("ARCHYMEDES_NOTIFY_REPLIES"), config.Setting(m.opts.ConfigDir, "ARCHYMEDES_NOTIFY_REPLIES"))), "on")
 }
 
 // offerToPhone opens a prompt to the phone and returns the buttons for its notification, or "" when
@@ -288,15 +292,16 @@ const phoneBackoffMax = 30 * time.Second
 func listenPhone(stream string, send func(tea.Msg)) (stop func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	since := time.Now().Add(-time.Minute).Unix()
+	first := phoneBackoff // read once, here: the goroutine never reads the package variable
 	go func() {
-		wait := phoneBackoff
+		wait := first
 		for ctx.Err() == nil {
 			if readPhoneStream(ctx, stream, since, func(body string) {
 				if ctx.Err() == nil {
 					send(phoneReplyMsg{body: body})
 				}
 			}) {
-				wait = phoneBackoff
+				wait = first
 			}
 			select {
 			case <-ctx.Done():

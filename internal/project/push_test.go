@@ -49,3 +49,41 @@ func TestUpstreamIsWhatTheBranchLastPushedOrNothing(t *testing.T) {
 		t.Fatalf("outside a repository: %q", got)
 	}
 }
+
+func TestUpstreamPushedTellsAPushFromAFetch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	base := t.TempDir()
+	remote, clone, other := filepath.Join(base, "remote.git"), filepath.Join(base, "clone"), filepath.Join(base, "other")
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git(base, "init", "-q", "--bare", "-b", "main", remote)
+	git(base, "clone", "-q", remote, clone)
+	os.WriteFile(filepath.Join(clone, "a.txt"), []byte("a\n"), 0o644)
+	git(clone, "add", ".")
+	git(clone, "commit", "-q", "-m", "init")
+	ctx := context.Background()
+	if _, pushed := UpstreamPushed(ctx, clone, "main"); pushed {
+		t.Fatal("no upstream yet, yet pushed")
+	}
+	git(clone, "push", "-q", "-u", "origin", "main")
+	if sha, pushed := UpstreamPushed(ctx, clone, "main"); sha == "" || !pushed {
+		t.Fatalf("after a push: %q pushed=%v", sha, pushed)
+	}
+	git(base, "clone", "-q", remote, other)
+	os.WriteFile(filepath.Join(other, "a.txt"), []byte("b\n"), 0o644)
+	git(other, "commit", "-q", "-am", "theirs")
+	git(other, "push", "-q")
+	git(clone, "fetch", "-q")
+	if sha, pushed := UpstreamPushed(ctx, clone, "main"); sha == "" || pushed {
+		t.Fatalf("after a fetch: %q pushed=%v, want not pushed", sha, pushed)
+	}
+}

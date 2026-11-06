@@ -211,7 +211,7 @@ func phoneModel(t *testing.T, n *ntfy) (*Model, chan tea.Msg) {
 	t.Helper()
 	t.Setenv("ARCHYMEDES_NOTIFY_URL", n.srv.URL+"/friday-topic")
 	t.Setenv("ARCHYMEDES_NOTIFY", "")
-	t.Setenv("ARCHYMEDES_NOTIFY_REPLIES", "")
+	t.Setenv("ARCHYMEDES_NOTIFY_REPLIES", "on")
 	m, _ := newTestModel(t)
 	got := make(chan tea.Msg, 16)
 	m.SetSender(func(msg tea.Msg) {
@@ -281,8 +281,23 @@ func TestARiskyApprovalSaysItsRiskOnThePhone(t *testing.T) {
 	if p.body != "Risky: deployment or package publication command. Friday needs your approval in project" {
 		t.Fatalf("body %q", p.body)
 	}
-	if len(actionsOf(t, p.actions)) != 2 {
-		t.Fatal("a risky approval lost its buttons")
+	// A risky approval can be refused from the phone but only allowed at the terminal, where the
+	// command can be read.
+	if got := actionsOf(t, p.actions); len(got) != 1 || got[0].Label != "Deny" {
+		t.Fatalf("a risky approval's buttons = %+v, want Deny alone", got)
+	}
+}
+
+// Answers from the phone are a choice the person makes: a push URL set for one-way notices does
+// not start taking answers after an upgrade.
+func TestPhoneRepliesAreOffUntilTurnedOn(t *testing.T) {
+	n := newNtfy(t)
+	m, _ := phoneModel(t, n)
+	t.Setenv("ARCHYMEDES_NOTIFY_REPLIES", "")
+	var to answers
+	runAll(ask(m, "c1", nil, &to))
+	if p := n.last(t, "friday-topic"); p.body == "" || p.actions != "" {
+		t.Fatalf("push %+v: buttons without ARCHYMEDES_NOTIFY_REPLIES=on", p)
 	}
 }
 
@@ -394,11 +409,8 @@ func TestAnApprovalTravelsToThePhoneAndBack(t *testing.T) {
 	n := newNtfy(t)
 	m, delivered := phoneModel(t, n)
 	var to answers
-	runAll(ask(m, "c1", []string{"destructive command"}, &to))
+	runAll(ask(m, "c1", nil, &to))
 	p := n.last(t, "friday-topic")
-	if !strings.HasPrefix(p.body, "Risky: destructive command.") {
-		t.Fatalf("body %q", p.body)
-	}
 	allow := actionsOf(t, p.actions)[0]
 
 	// Someone else on the topic posts a forged reply first; it changes nothing.

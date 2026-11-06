@@ -75,6 +75,7 @@ type (
 	ciUpstreamTickMsg struct{}
 	ciUpstreamMsg     struct {
 		branch, sha string
+		pushed      bool // this clone's own push moved it, not a fetch
 		notRepo     bool
 	}
 	ciPushMsg    struct{ branch, sha string }
@@ -152,7 +153,8 @@ func (m *Model) readUpstream() tea.Cmd {
 		if errors.Is(err, project.ErrNotRepository) {
 			return ciUpstreamMsg{notRepo: true}
 		}
-		return ciUpstreamMsg{branch: branch, sha: project.Upstream(ctx, root, branch)}
+		sha, pushed := project.UpstreamPushed(ctx, root, branch)
+		return ciUpstreamMsg{branch: branch, sha: sha, pushed: pushed}
 	}
 }
 
@@ -164,7 +166,7 @@ func (m *Model) upstreamRead(msg ciUpstreamMsg) tea.Cmd {
 		return nil
 	}
 	var push tea.Cmd
-	if m.ci.baseline && msg.sha != "" && msg.branch == m.ci.branch && msg.sha != m.ci.upstream {
+	if m.ci.baseline && msg.sha != "" && msg.pushed && msg.branch == m.ci.branch && msg.sha != m.ci.upstream {
 		push = m.pushSeen(ciPushMsg{branch: msg.branch, sha: msg.sha})
 	}
 	m.ci.baseline, m.ci.branch, m.ci.upstream = true, msg.branch, msg.sha
@@ -173,7 +175,8 @@ func (m *Model) upstreamRead(msg ciUpstreamMsg) tea.Cmd {
 
 // gitPush matches a command that runs git push; a dry run pushes nothing.
 var (
-	gitPush    = regexp.MustCompile(`\bgit\b[^;&|\n]*?\bpush\b`)
+	// git, its global options (-C dir, -c key=value, --no-pager…), then push: not `git stash push`.
+	gitPush    = regexp.MustCompile(`\bgit(\s+(-C\s+\S+|-c\s+\S+|--?[\w-]+(=\S+)?))*\s+push\b`)
 	gitDryPush = regexp.MustCompile(`\bpush\b.*(--dry-run|\s-n\b)`)
 )
 
@@ -220,6 +223,9 @@ func (m *Model) readPush(branch string) tea.Cmd {
 func (m *Model) pushSeen(push ciPushMsg) tea.Cmd {
 	if push.sha == "" {
 		return nil
+	}
+	if m.ci.baseline && push.branch == m.ci.branch && push.sha == m.ci.upstream {
+		return nil // the branch did not move: a push of tags, another branch, or nothing new
 	}
 	m.ci.branch, m.ci.upstream = push.branch, push.sha // the poll knows this commit now
 	if w := m.ci.watch; w != nil && w.sha == push.sha {

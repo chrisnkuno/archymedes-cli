@@ -257,7 +257,7 @@ The interface tells you when a turn ends, or when an approval or a question wait
 | --- | --- | --- |
 | `ARCHYMEDES_NOTIFY` | `auto` | `auto` notifies only while the terminal is not focused, `always` notifies every time, `off` never |
 | `ARCHYMEDES_NOTIFY_URL` | — | a URL that takes a plain-text POST, such as an [ntfy](https://ntfy.sh) topic, so the notification reaches your phone |
-| `ARCHYMEDES_NOTIFY_REPLIES` | `on` | `on` puts Allow and Deny, or a short question's options, on the phone's notification; `off` keeps the push one way |
+| `ARCHYMEDES_NOTIFY_REPLIES` | `off` | `on` puts Allow and Deny (Deny alone on a risky approval), or a short question's options, on the phone's notification; `off` keeps the push one way |
 
 The terminal shows its own notification where it has one (iTerm2, WezTerm, Ghostty, kitty, foot),
 and rings the bell elsewhere and inside tmux. A terminal that does not report focus counts as

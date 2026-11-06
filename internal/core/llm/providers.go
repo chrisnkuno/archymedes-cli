@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -91,8 +92,21 @@ func (p Provider) Prefix() string {
 // Env is the settings the engine reads: settings.json under the environment.
 type Env map[string]string
 
-// Get is one trimmed value, "" when unset.
-func (e Env) Get(key string) string { return strings.TrimSpace(e[key]) }
+// envFoldCase is whether environment names ignore case, as on Windows (where PATH is kept as Path).
+var envFoldCase = runtime.GOOS == "windows"
+
+// Get is one trimmed value, "" when unset. On Windows the name's case does not matter.
+func (e Env) Get(key string) string {
+	if v, ok := e[key]; ok || !envFoldCase {
+		return strings.TrimSpace(v)
+	}
+	for k, v := range e {
+		if strings.EqualFold(k, key) {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
 
 // LoadEnv reads <configDir>/settings.json (flat keys to strings, as platform/settings.ts writes it),
 // lays the active profile over it (profiles/<name>.json, ARCHYMEDES_PROFILE), and lays environ

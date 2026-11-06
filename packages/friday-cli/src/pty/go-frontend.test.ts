@@ -221,8 +221,8 @@ describe.skipIf(!goAvailable() || CONPTY)("go front end over acp", () => {
     await screenShows(screen, "files  ");
     proc.write("\x1b[18~"); // F7
     await screenShows(screen, "enter change");
-    // Move to "files", rebind it to ctrl+e.
-    for (let i = 0; i < 2; i++) proc.write("\x1b[B");
+    // Move to "files" (start menu → home → chat → files), rebind it to ctrl+e.
+    for (let i = 0; i < 3; i++) proc.write("\x1b[B");
     proc.write("\r");
     await screenShows(screen, "press a key");
     proc.write("\x05"); // ctrl+e

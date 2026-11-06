@@ -70,8 +70,8 @@ const NOTIFY_CHOICES: readonly SettingChoice[] = [
 ];
 
 const NOTIFY_REPLIES_CHOICES: readonly SettingChoice[] = [
-  { value: "on", label: "On — approvals and short questions get buttons on the phone (default)" },
-  { value: "off", label: "Off — the push only tells, the phone cannot answer" },
+  { value: "off", label: "Off — the push only tells, the phone cannot answer (default)" },
+  { value: "on", label: "On — approvals and short questions get buttons on the phone; keep the topic secret" },
 ];
 
 const TELEMETRY_CHOICES: readonly SettingChoice[] = [

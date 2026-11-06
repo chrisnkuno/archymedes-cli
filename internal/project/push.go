@@ -61,6 +61,18 @@ func Upstream(ctx context.Context, root, branch string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// UpstreamPushed is the branch's upstream commit and whether this clone's own push put it there:
+// the remote-tracking ref's last reflog entry says "update by push". A fetch or pull that brought
+// someone else's commit says otherwise.
+func UpstreamPushed(ctx context.Context, root, branch string) (sha string, pushed bool) {
+	sha = Upstream(ctx, root, branch)
+	if sha == "" {
+		return "", false
+	}
+	out, err := git(ctx, root, "reflog", "-1", "--format=%gs", branch+"@{upstream}")
+	return sha, err == nil && strings.Contains(string(out), "update by push")
+}
+
 // NewBranch creates a branch at HEAD and switches to it, carrying uncommitted work along.
 func NewBranch(ctx context.Context, root, name string) error {
 	_, err := gitErr(ctx, root, "switch", "-c", name)
