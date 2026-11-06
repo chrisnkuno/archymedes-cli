@@ -231,7 +231,9 @@ their brief says what they need.
 A subdirectory can have its own, in the same names and order: `web/AGENTS.md` for the web app,
 `pkg/parser/CLAUDE.md` for the parser. The first time a file under it is read, written or edited,
 its instructions come with that result, the outer directory's before the inner one's, once a
-session each. Sub-agents get these too, as they open files there.
+session each. Sub-agents get these too, as they open files there. Folders of someone else's code or
+build output never count: `node_modules`, `vendor`, `third_party`, `.venv`, `target`, `dist` and the
+like, so a dependency cannot pass itself off as the project's instructions.
 
 ## The interface
 

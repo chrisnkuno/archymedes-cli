@@ -15,6 +15,14 @@ var InstructionFiles = []string{"AGENTS.override.md", "ARCHYMEDES.md", "AGENTS.m
 // InstructionsMax is the most of one instruction file sent to the model.
 const InstructionsMax = 20_000
 
+// notTheProject are directories holding someone else's code or build output. Instruction files at
+// or under them are never offered: a dependency must not speak to the model as the project.
+var notTheProject = map[string]bool{
+	"node_modules": true, "vendor": true, "third_party": true, "third-party": true, ".git": true,
+	".venv": true, "venv": true, "site-packages": true, "target": true, "dist": true, "build": true,
+	".next": true, "bower_components": true, "Pods": true, ".gradle": true, ".cargo": true,
+}
+
 // ReadInstructions is dir's instruction file and its text, cut to InstructionsMax; "" when it has
 // none or only blank ones.
 func ReadInstructions(dir string) (name, text string) {
@@ -49,6 +57,9 @@ func (w *Workspace) nestedInstructions(rel string) (string, []string) {
 	var b strings.Builder
 	var carried []string
 	for _, d := range dirs {
+		if notTheProject[filepath.Base(d)] {
+			break // this directory and everything under it is someone else's
+		}
 		if w.instructed[d] {
 			continue
 		}
