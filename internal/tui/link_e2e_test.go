@@ -66,7 +66,7 @@ func TestE2EThroughTheRealRelay(t *testing.T) {
 	var heard []string
 	l.m.Update(agentMsg{acp.NewPermissionRequestForTest(acp.ToolCallRef{ToolCallID: "c1", Title: "run_command: make deploy"},
 		[]acp.PermissionOption{{OptionID: "allow", Name: "Allow"}, {OptionID: "deny", Name: "Deny"}}, func(id string) { heard = append(heard, id) })})
-	a := l.drain(t).state["approval"].(map[string]any)
+	a := l.until(t, func(s map[string]any) bool { return s["approval"] != nil }, "the approval never reached the phone")["approval"].(map[string]any)
 	if ack := l.ask(t, map[string]any{"type": "answer", "approval": a["id"], "choice": "allow"}); ack["ok"] != true {
 		t.Fatalf("answer: %v", ack)
 	}
@@ -162,4 +162,18 @@ func TestE2EThePagesOwnCodeDrivesFriday(t *testing.T) {
 	if u := lastItem(last, "user"); u == nil || u["text"] != "from the page's own code" {
 		t.Fatalf("the page's picture lacks the message: %v", last)
 	}
+}
+
+// until takes what the phone is sent into its view until cond holds of its picture, or fails after
+// a deadline: over the internet, a quiet spell is no sign that everything has arrived.
+func (l *linked) until(t *testing.T, cond func(map[string]any) bool, what string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if v := l.drain(t); v != nil && v.state != nil && cond(v.state) {
+			return v.state
+		}
+	}
+	t.Fatal(what)
+	return nil
 }
