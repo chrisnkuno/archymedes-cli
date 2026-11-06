@@ -57,7 +57,9 @@ func NewSecret() (Secret, error) {
 	return s, err
 }
 
-var b64 = base64.RawURLEncoding
+// b64 is unpadded base64url, read strictly: the spare bits of a last character must be zero, so
+// every frame and pairing has exactly one spelling.
+var b64 = base64.RawURLEncoding.Strict()
 
 // Encode is the secret as the link carries it.
 func (s Secret) Encode() string { return b64.EncodeToString(s[:]) }

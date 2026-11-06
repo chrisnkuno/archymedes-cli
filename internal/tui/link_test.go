@@ -94,7 +94,9 @@ func (l *linked) run(command string) {
 	deliver(l.m, cmd)
 }
 
-// pump delivers what the link sent the model until cond holds.
+// pump delivers what the link sent the model until cond holds. Commands run as Bubble Tea runs
+// them, each on its own goroutine with its message back through the inbox, so a clock that keeps
+// ticking (a refused steer retried while the turn runs) never holds the test.
 func (l *linked) pump(t *testing.T, cond func() bool, what string) {
 	t.Helper()
 	deadline := time.After(8 * time.Second)
@@ -102,11 +104,43 @@ func (l *linked) pump(t *testing.T, cond func() bool, what string) {
 		select {
 		case msg := <-l.inbox:
 			_, cmd := l.m.Update(msg)
-			deliver(l.m, cmd)
+			l.exec(cmd)
 		case <-time.After(20 * time.Millisecond):
-			deliver(l.m, l.m.linkAfter())
+			l.exec(l.m.linkAfter())
 		case <-deadline:
 			t.Fatal(what)
+		}
+	}
+}
+
+// exec runs a command as Bubble Tea would: off the update loop, a batch's parts side by side, a
+// sequence's in order, each message back into the inbox.
+func (l *linked) exec(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	go func() { l.feed(cmd()) }()
+}
+
+func (l *linked) feed(msg tea.Msg) {
+	switch msg := msg.(type) {
+	case nil:
+	case tea.BatchMsg:
+		for _, c := range msg {
+			l.exec(c)
+		}
+	default:
+		if v := reflect.ValueOf(msg); v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
+			for i := range v.Len() { // tea.Sequence: in order
+				if c, _ := v.Index(i).Interface().(tea.Cmd); c != nil {
+					l.feed(c())
+				}
+			}
+			return
+		}
+		select {
+		case l.inbox <- msg:
+		default:
 		}
 	}
 }
@@ -649,4 +683,26 @@ func diffJSON(a, b map[string]any) string {
 	}
 	slices.Sort(out)
 	return strings.Join(out, " ; ")
+}
+
+// BEHAVIOUR: a message sent from the phone while Friday works goes into the running turn after the
+// steer delay, as one typed at the terminal does, and the phone sees it leave the queue and join the
+// conversation.
+func TestAMessageFromThePhoneDuringATurnReachesTheTurn(t *testing.T) {
+	l := newLinked(t)
+	l.hello(t)
+	l.ask(t, map[string]any{"type": "send", "text": "first"})
+	l.ask(t, map[string]any{"type": "send", "text": "use tabs, not spaces"})
+	l.pump(t, func() bool {
+		l.agent.mu.Lock()
+		defer l.agent.mu.Unlock()
+		return slices.Contains(l.agent.steered, "use tabs, not spaces")
+	}, "the phone's message never reached the running turn")
+	v := l.drain(t)
+	if q, _ := v.state["queue"].([]any); len(q) != 0 {
+		t.Fatalf("the phone still shows it queued: %v", q)
+	}
+	if u := lastItem(v.state, "user"); u == nil || u["text"] != "use tabs, not spaces" {
+		t.Fatalf("the phone does not show it in the conversation: %v", itemsOf(v.state))
+	}
 }

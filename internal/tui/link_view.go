@@ -115,15 +115,19 @@ func (m *Model) linkNewest(budget int) []map[string]any {
 func (m *Model) linkParts() map[string]any {
 	info := m.session.Info
 	ctxText, _ := contextGauge(m.contextUsed, info)
-	session := map[string]any{"project": m.projectName(), "model": info.Model, "mode": m.mode, "ctx": ctxText}
+	session := map[string]any{"project": m.projectName(), "model": info.Model, "mode": m.mode, "ctx": ctxText, "theme": m.linkTheme()}
 	phase := map[phase]string{connecting: "starting", ready: "ready", busy: "busy", failed: "failed"}[m.phase]
-	parts := map[string]any{"session": session, "phase": phase, "since": nil, "approval": m.linkApproval(), "plan": nil}
+	parts := map[string]any{"session": session, "phase": phase, "since": nil, "approval": m.linkApproval(), "plan": nil, "commands": linkCommands()}
 	if m.phase == busy {
 		parts["since"] = m.turnStart.UnixMilli()
 	}
 	queue := []map[string]any{}
 	for _, q := range m.queue {
-		queue = append(queue, map[string]any{"id": "q" + strconv.Itoa(q.id), "text": m.linkText(q.text)})
+		entry := map[string]any{"id": "q" + strconv.Itoa(q.id), "text": m.linkText(q.text), "sending": q.sending, "retry": q.retry, "due": nil}
+		if !q.due.IsZero() && m.phase == busy {
+			entry["due"] = q.due.UnixMilli() // the page counts down itself
+		}
+		queue = append(queue, entry)
 	}
 	parts["queue"] = queue
 	if n := len(m.growth.plan); n > 0 {
@@ -208,7 +212,10 @@ func (m *Model) linkItem(it item) (map[string]any, bool) {
 	case *toolItem:
 		e["kind"] = "tool"
 		if v.sub != nil || delegationTools[v.name] {
-			e["kind"] = "helper"
+			e["kind"], e["helper"], e["working"] = "helper", agentID(v), agentWorking(v)
+		}
+		if v.added+v.removed > 0 {
+			e["added"], e["removed"] = v.added, v.removed
 		}
 		title := v.name
 		if isCommand(v.name, v.args) {
@@ -234,8 +241,6 @@ func (m *Model) linkItem(it item) (map[string]any, bool) {
 		}
 	case *noticeItem:
 		e["kind"], e["text"] = "notice", m.linkText(v.text)
-	case *turnItem:
-		return nil, false
 	default:
 		ctx := renderCtx{th: m.th, md: m.md, width: 72, root: m.projectRoot(), zones: m.zones.frame}
 		e["kind"], e["text"] = "notice", m.linkText(ansi.Strip(strings.Join(it.render(ctx), "\n")))

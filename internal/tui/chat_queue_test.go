@@ -116,12 +116,15 @@ func TestAnEngineThatCannotSteerKeepsTheMessageForTheNextTurn(t *testing.T) {
 	typeText(m, "second")
 	run(m, press(m, tea.KeyEnter, 0))
 	dueNow(m)
-	if strings.Join(queued(m), "|") != "second" || !m.queue[0].due.IsZero() {
+	// Refused (Claude Code takes a message only while one of its tools runs): it stays queued and is
+	// offered again while the turn runs, rather than waiting for the turn to end.
+	if strings.Join(queued(m), "|") != "second" || m.queue[0].due.IsZero() || m.queue[0].sending {
 		t.Fatalf("refused steer: queue %+v", m.queue)
 	}
-	if !strings.Contains(screen(m), "next turn") {
-		t.Errorf("a message waiting for the next turn does not say so:\n%s", screen(m))
+	if !strings.Contains(screen(m), "next step") {
+		t.Errorf("a message waiting for a step Friday can take it at does not say so:\n%s", screen(m))
 	}
+	dueNow(m) // refused again
 	run(m, first)
 	if len(agent.prompts) != 2 || agent.prompts[1] != "second" {
 		t.Fatalf("prompts = %q", agent.prompts)
@@ -180,5 +183,57 @@ func TestTheQueueCanBeWorkedWithTheKeys(t *testing.T) {
 	}
 	if d := time.Until(m.queue[0].due); d <= 0 {
 		t.Errorf("leaving the queue did not restart its countdown: %v", d)
+	}
+}
+
+// A message the engine refuses at first (Claude Code between its tools) goes into the turn as soon
+// as the engine takes it, in the same turn: never stuck until the turn ends.
+func TestARefusedMessageIsOfferedAgainAndLandsInTheSameTurn(t *testing.T) {
+	m, agent := newTestModel(t)
+	agent.cannotSteer = true
+	typeText(m, "first")
+	press(m, tea.KeyEnter, 0)
+	typeText(m, "use tabs")
+	run(m, press(m, tea.KeyEnter, 0))
+	dueNow(m)
+	if len(m.queue) != 1 {
+		t.Fatalf("refused, it should still be queued: %+v", m.queue)
+	}
+	agent.mu.Lock()
+	agent.cannotSteer = false // a tool started: the engine takes messages now
+	agent.mu.Unlock()
+	dueNow(m)
+	if len(m.queue) != 0 || m.phase != busy {
+		t.Fatalf("not taken into the running turn: queue %+v, phase %v", m.queue, m.phase)
+	}
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if n := len(agent.steered); n < 2 || agent.steered[n-1] != "use tabs" {
+		t.Fatalf("steered %q", agent.steered)
+	}
+}
+
+// INVARIANT: however often the engine refuses, a message is offered at most once per steerRetry
+// (counted against the time that really passed) and is never on its way twice at once.
+func TestRefusedMessagesAreOfferedAtAMeasuredPace(t *testing.T) {
+	m, agent := newTestModel(t)
+	agent.cannotSteer = true
+	typeText(m, "first")
+	press(m, tea.KeyEnter, 0)
+	typeText(m, "later")
+	run(m, press(m, tea.KeyEnter, 0))
+	began := time.Now()
+	dueNow(m)
+	for range 12 {
+		tick(m) // each runs the queue's real half-second clock
+		if len(m.queue) == 1 && m.queue[0].sending {
+			t.Fatal("left on its way after the engine answered")
+		}
+	}
+	agent.mu.Lock()
+	offers := len(agent.steered)
+	agent.mu.Unlock()
+	if most := 1 + int(time.Since(began)/steerRetry); offers > most || offers < 2 {
+		t.Fatalf("offered %d times in %v; between 2 and %d expected", offers, time.Since(began).Round(time.Millisecond), most)
 	}
 }

@@ -85,6 +85,13 @@ added or replaced by `id`, and `removed` lists ids that went. A phone that sees 
 one above its own asks for `resync`.
 
 - `phase` is `starting`, `ready`, `busy` or `failed`.
+- `session.theme` is the session's theme as hex colours (`primary`, `accent`, `bg`, `surface`,
+  `text`, `muted`, `success`, `warning`, `error`, `border`), so the page draws as Friday does.
+- `commands` lists the Friday commands the phone may run: `name`, `args`, `help` and `needsArg`.
+- A queued message has `id`, `text`, `sending`, `retry` (offered again at the turn's next step)
+  and `due` (Unix ms when it goes into the running turn, or `null` for the next turn).
+- A tool item may have `added` and `removed` (an edit's lines). A helper item has `helper` (its id)
+  and `working`.
 - An item's `kind` is `user`, `assistant`, `tool`, `helper` or `notice`. Its `status` is `running`,
   `done` or `failed`. Its `text` is at most 4,000 characters: the end of what it said or printed,
   or its diff.
@@ -118,6 +125,11 @@ Every request from the phone has an `id`, which its `ack` names.
 | `{"type":"undo","id":"r8"}` | `/undo` |
 | `{"type":"mode","id":"r9","mode":"auto"}` | Switches the mode |
 | `{"type":"command","id":"r10","command":"cmd1","action":"stop"}` | Stops a command; `restart` runs it again |
+| `{"type":"slash","id":"r11","command":"compact","arg":"…"}` | Runs one of the commands in `commands`, as typed in the terminal |
+| `{"type":"queue","id":"r12","item":"q3","action":"up"}` | Works a queued message: `up`, `down`, `send` (now) or `drop` |
+| `{"type":"helper","id":"r13","helper":"t-1","action":"stop"}` | Stops a helper; `send` with `text` tells it something |
+
+A line the terminal shows as a toast is sent as a `notice` too.
 
 ## Rules both ends keep
 

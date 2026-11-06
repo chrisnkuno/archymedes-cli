@@ -18,6 +18,10 @@ import (
 // steerDelay is how long a message sent during a run waits before it goes into the turn.
 const steerDelay = 5 * time.Second
 
+// steerRetry is how soon a message the engine would not take yet is offered again while the turn
+// runs (Claude Code takes one only while one of its tools runs).
+const steerRetry = 2 * time.Second
+
 // maxQueueRows is how many queued messages are listed at once; the rest are counted.
 const maxQueueRows = 5
 
@@ -28,6 +32,7 @@ type queuedMsg struct {
 	text    string
 	due     time.Time
 	sending bool
+	retry   bool // the engine would not take it yet: offered again at its next step
 }
 
 type queueTickMsg struct{}
@@ -230,6 +235,8 @@ func (m *Model) queueLines(width int) []string {
 			when = "sending…"
 		case q.due.IsZero() || m.phase != busy:
 			when = "next turn"
+		case q.retry && m.queueSel < 0:
+			when = "into this turn at its next step"
 		case m.queueSel >= 0:
 			when = "held"
 		default:

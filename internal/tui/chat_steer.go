@@ -9,9 +9,9 @@ import (
 
 // A message sent while a turn runs waits in the queue a few seconds (chat_queue.go), then is handed
 // to that turn: the agent gives it to the model after the tool calls in flight, so "use tabs, not
-// spaces" lands before the next edit instead of after the whole turn. An agent that cannot take it
-// (a turn just concluding, an engine without steering) says so, and the message stays in the queue
-// as a turn of its own.
+// spaces" lands before the next edit instead of after the whole turn. An agent that cannot take it yet
+// (Claude Code between its tools, a turn just concluding) says so: the message is offered again
+// every steerRetry while the turn runs, and runs as a turn of its own if the turn ends first.
 
 type steerDoneMsg struct {
 	queued   int // the queue entry it came from
@@ -37,6 +37,12 @@ func (m *Model) steer(queued int, text string) tea.Cmd {
 // not take stays queued, for the next turn.
 func (m *Model) steerDone(msg steerDoneMsg) tea.Cmd {
 	i := m.queueIndex(msg.queued)
+	if !msg.accepted && m.phase == busy && i >= 0 {
+		// Not taken yet (Claude Code between its tools): offered again soon, while the turn runs;
+		// if the turn ends first, it runs as the next turn.
+		m.queue[i].sending, m.queue[i].retry, m.queue[i].due = false, true, time.Now().Add(steerRetry)
+		return m.queueTicker()
+	}
 	if !msg.accepted || m.phase != busy {
 		if i >= 0 {
 			m.queue[i].sending, m.queue[i].due = false, time.Time{}

@@ -99,6 +99,7 @@ const toastLife = 3 * time.Second
 
 func (m *Model) toast(kind toastKind, text string) tea.Cmd {
 	m.remember(kind, text)
+	m.linkNotice(text) // someone working from the phone hears it too
 	m.toastSeq++
 	id := m.toastSeq
 	m.toasts = append(m.toasts, toast{id: id, kind: kind, text: text})

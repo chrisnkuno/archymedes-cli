@@ -25,6 +25,9 @@ type linkRequest struct {
 	Mode     string   `json:"mode"`
 	Command  string   `json:"command"`
 	Action   string   `json:"action"`
+	Arg      string   `json:"arg"`
+	Item     string   `json:"item"`
+	Helper   string   `json:"helper"`
 }
 
 // linkRequest handles one request from the phone.
@@ -74,6 +77,12 @@ func (m *Model) linkRequest(raw json.RawMessage) tea.Cmd {
 			return refuse("No mode " + strconv.Quote(r.Mode))
 		}
 		return ok("Mode "+r.Mode, m.setMode(r.Mode))
+	case "slash":
+		return m.linkSlash(r)
+	case "queue":
+		return m.linkQueue(r)
+	case "helper":
+		return m.linkHelper(r)
 	case "command":
 		if r.Command == "" {
 			return refuse("Which command?")
