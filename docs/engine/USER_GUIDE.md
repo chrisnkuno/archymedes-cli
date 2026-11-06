@@ -163,6 +163,33 @@ their buttons. Pick a long random topic name. Better still, use an ntfy server t
 login (a server of your own, or an account with access control) and put the token in the URL.
 Leave `ARCHYMEDES_NOTIFY_REPLIES` at `off` to keep the push one way.
 
+## Friday on your phone
+
+Pair your phone once and keep working while you are away from the computer, as long as it is on.
+Type `/phone`: a QR code opens. Scan it with the phone's camera, or open the link under it on the
+phone. Close the window with q.
+
+From the phone you can:
+
+- **Watch** the session live: your messages, Friday's replies as they stream, each tool call with
+  its output or diff, the plan, the queue, commands running and any that look stuck.
+- **Send** a message. While Friday works it waits in the queue, as one typed here does.
+- **Answer** an approval, with its whole command and any risk shown first, or a question, by
+  option or in your own words. The first answer counts, here or on the phone.
+- **Control** the work: stop the turn, undo the last one, switch the mode, or stop or restart a
+  command.
+
+While a phone is there, a turn runs, or an approval waits, Friday keeps the computer from going to
+sleep. `/phone status` says whether a phone is watching. With a push URL set, a notification wakes
+the phone and opens the page; it never carries the pairing.
+
+**Privacy.** The phone and the computer talk through a relay that forwards sealed messages and can
+read none of them. The key is in the QR code and the link, after `#`, which a browser never sends
+to a server. Keys, tokens and passwords from your environment and settings are hidden from
+anything the phone is shown. Anyone with the link can drive this session, so keep it private.
+`/phone new` pairs afresh and shuts out every phone paired before; `/phone off` unpairs.
+[The protocol](PHONE_PROTOCOL.md) has the details.
+
 ## Images in a request
 
 Name a picture in your request and it is sent with it: type its path, mention it (`@shot.png`), or

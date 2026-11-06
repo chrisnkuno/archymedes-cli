@@ -66,6 +66,29 @@ func Setting(dir, key string) string {
 	return value
 }
 
+// Settings is every string value in settings.json; empty when it, the file or the directory is
+// missing or broken.
+func Settings(dir string) map[string]string {
+	out := map[string]string{}
+	if dir == "" {
+		return out
+	}
+	data, err := os.ReadFile(filepath.Join(dir, SettingsFile))
+	if err != nil {
+		return out
+	}
+	var values map[string]any
+	if json.Unmarshal(data, &values) != nil {
+		return out
+	}
+	for k, v := range values {
+		if s, ok := v.(string); ok {
+			out[k] = s
+		}
+	}
+	return out
+}
+
 // KeysFile holds only the bindings someone changed: action id → keys.
 const KeysFile = "keys.json"
 

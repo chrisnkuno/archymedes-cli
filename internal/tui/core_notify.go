@@ -59,11 +59,14 @@ func (m *Model) notifyAsking(local, push string, a *approval) {
 	}
 	m.notifier.pending = append(m.notifier.pending, tea.Raw(notificationSequence(os.Getenv, local)))
 	if url := strings.TrimSpace(firstNonEmpty(os.Getenv("ARCHYMEDES_NOTIFY_URL"), config.Setting(m.opts.ConfigDir, "ARCHYMEDES_NOTIFY_URL"))); url != "" {
-		actions := ""
-		if a != nil {
+		actions, click := "", ""
+		switch {
+		case m.link != nil:
+			click = linkPage // paired: the phone page answers, so the push only wakes and opens it
+		case a != nil:
 			actions = m.offerToPhone(url, a)
 		}
-		m.notifier.pending = append(m.notifier.pending, pushNotification(url, push, actions))
+		m.notifier.pending = append(m.notifier.pending, pushNotification(url, push, actions, click))
 	}
 }
 
@@ -164,7 +167,7 @@ func notificationText(text string) string {
 
 // pushNotification posts the line to an ntfy-style URL (the body is the message, Title the title,
 // Actions the phone's buttons when it may answer).
-func pushNotification(url, text, actions string) tea.Cmd {
+func pushNotification(url, text, actions, click string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -176,6 +179,9 @@ func pushNotification(url, text, actions string) tea.Cmd {
 		req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 		if actions != "" {
 			req.Header.Set("Actions", actions)
+		}
+		if click != "" {
+			req.Header.Set("Click", click) // the phone page, never with its secret
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

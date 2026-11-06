@@ -225,7 +225,10 @@ type Model struct {
 	limitBar   progress.Model
 	forecast   forecast
 	notifier   notifier
-	ci         ciState // CI followed after a push (cmd_ci.go)
+	ci         ciState    // CI followed after a push (cmd_ci.go)
+	link       *linkState // the phone link, nil while unpaired (link_run.go); linkAwake keeps the computer up
+	linkAwake  linkAwaker
+	linkTried  bool
 	vim        vimState
 	// contextUsed is the main conversation's size at its last model call (input and output), the
 	// figure compaction measures; 0 after a compaction until the next call.
@@ -389,7 +392,7 @@ func (m *Model) SetSender(send func(tea.Msg)) { m.sender = send }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	woke := m.noteActivity(msg, time.Now())
 	model, cmd := m.update(msg)
-	cmd = tea.Batch(cmd, m.wake(woke)) // motion that rested (core_motion.go) moves again
+	cmd = tea.Batch(cmd, m.wake(woke), m.linkAfter()) // motion that rested moves again; the phone hears what changed
 	// Sixel pictures are drawn over the frame, not in it: after any change, draw them again.
 	if sixel := m.sixelAfter(); sixel != nil {
 		cmd = tea.Batch(cmd, sixel)
@@ -413,6 +416,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if cmd, ok := m.ciMsg(msg); ok {
 		return m, tea.Batch(cmd, m.flushNotifications())
+	}
+	if cmd, ok := m.linkMsg(msg); ok {
+		return m, cmd
 	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:

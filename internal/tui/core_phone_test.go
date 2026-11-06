@@ -107,7 +107,7 @@ type ntfy struct {
 }
 
 type published struct {
-	topic, body, title, actions string
+	topic, body, title, actions, click string
 }
 
 func newNtfy(t *testing.T) *ntfy {
@@ -146,7 +146,7 @@ func (n *ntfy) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := io.ReadAll(r.Body)
 	n.mu.Lock()
-	n.published = append(n.published, published{topic: path, body: string(body), title: r.Header.Get("Title"), actions: r.Header.Get("Actions")})
+	n.published = append(n.published, published{topic: path, body: string(body), title: r.Header.Get("Title"), actions: r.Header.Get("Actions"), click: r.Header.Get("Click")})
 	listeners := n.listeners[path]
 	n.mu.Unlock()
 	for _, ch := range listeners {

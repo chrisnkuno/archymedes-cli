@@ -36,6 +36,7 @@ func init() {
 		{"undo", "[code|conversation]", "Revert the last turn: files, conversation, or both; again for the one before", func(m *Model, arg string) tea.Cmd { return m.sessionCommand("undo", arg) }},
 		{"push", "", "Push this branch to its remote (on the default branch, a new branch is offered first)", (*Model).cmdPush},
 		{"pr", "[guidance]", "Push this branch and have the agent open a pull request for it with the GitHub CLI", (*Model).cmdPR},
+		{"phone", "[new|off|status]", "Work from your phone: a QR code pairs it; watch live, send, answer, stop and undo from there", (*Model).cmdPhone},
 		{"ci", "[stop|fix]", "The CI run of this branch; Friday follows it after you push, and fixes a failure if you say so", (*Model).cmdCI},
 		{"goal", "[condition|stop]", "Keep the agent working, turn after turn, until the condition holds (checked after each turn)", (*Model).cmdGoal},
 		{"worktree", "[name|back]", "Start a session on a new branch in its own worktree (runs .archymedes/setup.sh); back returns", (*Model).cmdWorktree},
