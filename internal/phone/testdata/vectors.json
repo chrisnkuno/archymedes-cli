@@ -1,0 +1,27 @@
+{
+  "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "room": "hTWVjT_BxioUJqDG0X30Rw",
+  "now": 1793900000000,
+  "cases": [
+    {
+      "direction": "c2p",
+      "message": "{\"type\":\"send\",\"text\":\"héllo 🙂\"}",
+      "frame": {
+        "v": 1,
+        "e": "AAAAAAAAAAA",
+        "n": 1,
+        "c": "AAECAwQFBgcICQoLV1Y8BS3ttHDaODgfBdHd3U9aTQJMh_WkOn0yBk7oAlaKZ0iE8olwIxbP2pX3XXyqjtnNkD-gAM0O3YhWPsSPz18owGuBmIL2T3yZiA"
+      }
+    },
+    {
+      "direction": "p2c",
+      "message": "{\"type\":\"send\",\"text\":\"héllo 🙂\"}",
+      "frame": {
+        "v": 1,
+        "e": "BBBBBBBBBBB",
+        "n": 1,
+        "c": "AQIDBAUGBwgJCgsMk2llvJC7pYtVjvop8HWNagw5t7PrNV_iTwxfFnTEGX-edeTSGHBffURVgdwDIM0ETyDU_seJp7H3T-A-14nnWtzM9jIzhd8AKc1CtA"
+      }
+    }
+  ]
+}
