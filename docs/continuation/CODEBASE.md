@@ -17,6 +17,8 @@ cmd/friday ──▶ internal/tui ──ACP over stdio──▶ packages/friday-
                   ├─ internal/theme                       │              permissions, sessions
                   ├─ internal/project (git)               ├─ agent-runtime.ts  the model/tool loop
                   ├─ internal/config                      └─ providers/  one adapter per vendor
+                  ├─ internal/phone  (the phone link:
+                  │   sealing, relay client, QR, awake)
                   └─ internal/gallery
 ```
 
