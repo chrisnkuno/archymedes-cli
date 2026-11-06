@@ -26,6 +26,9 @@ type linkRequest struct {
 	Command  string   `json:"command"`
 	Action   string   `json:"action"`
 	Arg      string   `json:"arg"`
+	Path     string   `json:"path"`
+	Offset   int64    `json:"offset"`
+	Query    string   `json:"query"`
 	Item     string   `json:"item"`
 	Helper   string   `json:"helper"`
 }
@@ -77,6 +80,8 @@ func (m *Model) linkRequest(raw json.RawMessage) tea.Cmd {
 			return refuse("No mode " + strconv.Quote(r.Mode))
 		}
 		return ok("Mode "+r.Mode, m.setMode(r.Mode))
+	case "files", "file", "search", "changes", "diff", "overview", "log":
+		return m.linkProject(r)
 	case "slash":
 		return m.linkSlash(r)
 	case "queue":

@@ -177,7 +177,11 @@ From the phone you can:
 - **Answer** an approval, with its whole command and any risk shown first, or a question, by
   option or in your own words. The first answer counts, here or on the phone.
 - **Control** the work: stop the turn, undo the last one, switch the mode, or stop or restart a
-  command.
+  command. A dock and a palette (◇) hold Friday's other commands that make sense from afar.
+- **Read the project**: browse its files, search them, and open code with line numbers and
+  colours, Markdown rendered, images, and PDFs. See what changed since the last commit with each
+  file's diff, the latest commits, and an overview of the languages and the README. Files of keys
+  and passwords, such as `.env`, stay on the computer.
 
 While a phone is there, a turn runs, or an approval waits, Friday keeps the computer from going to
 sleep. `/phone status` says whether a phone is watching. With a push URL set, a notification wakes

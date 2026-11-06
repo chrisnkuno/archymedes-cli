@@ -131,6 +131,23 @@ Every request from the phone has an `id`, which its `ack` names.
 
 A line the terminal shows as a toast is sent as a `notice` too.
 
+The project can be read from the phone. Each of these is answered by an `ack` with `data`:
+
+| Message | Answers with |
+| --- | --- |
+| `{"type":"files","id":"r14","path":"internal"}` | `entries`: a folder's folders, then its files, with `size`, and `secret` on files kept on the computer |
+| `{"type":"file","id":"r15","path":"README.md","offset":0}` | One chunk: `data` (base64), `offset`, `size`, `more`, `mime`, `text` and `language`. Ask again from `offset` plus the chunk's length until `more` is false |
+| `{"type":"search","id":"r16","query":"todo"}` | `hits`: `path`, `line` and `text`, at most 200 |
+| `{"type":"changes","id":"r17"}` | `changes`: each changed file since the last commit, with its status and its lines added and removed |
+| `{"type":"diff","id":"r18","path":"main.go"}` | `diff`: one changed file's unified diff |
+| `{"type":"overview","id":"r19"}` | The project's name, branch, files, bytes, languages, README, latest commits and changed files |
+| `{"type":"log","id":"r20"}` | `commits`: the newest 50 |
+
+Nothing outside the project is read, by path or by link. Files of keys and passwords (`.env`,
+`*.pem`, `id_rsa` and the like) stay on the computer, and known keys are hidden inside the text of
+any file. A file over 25 MB is not sent. A chunk is at most 150,000 bytes, so a message stays
+under the limit.
+
 ## Rules both ends keep
 
 - The computer acts on nothing the relay says, only on frames that open.

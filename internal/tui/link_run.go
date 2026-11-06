@@ -164,6 +164,9 @@ func (m *Model) linkMsg(msg tea.Msg) (tea.Cmd, bool) {
 			return m.toast(toastWarn, "Another Friday took the phone link; /phone here takes it back"), true
 		}
 		return nil, true
+	case linkResultMsg:
+		m.linkResult(msg)
+		return nil, true
 	case linkTickMsg:
 		if l != nil {
 			l.ticking = false

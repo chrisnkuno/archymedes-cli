@@ -2,6 +2,8 @@ package tui
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -176,4 +178,75 @@ func (l *linked) until(t *testing.T, cond func(map[string]any) bool, what string
 	}
 	t.Fatal(what)
 	return nil
+}
+
+// FUNCTIONAL, real relay and the page's own code: a large binary file and a text file arrive on the
+// phone byte for byte, chunk by chunk through the Worker.
+func TestE2EThePageReadsTheProjectsFiles(t *testing.T) {
+	relay := e2eRelay(t)
+	page := os.Getenv("FRIDAY_PHONE_E2E_PAGE")
+	if page == "" {
+		t.Skip("set FRIDAY_PHONE_E2E_PAGE to the workers/phone folder")
+	}
+	l := linkedTo(t, relay)
+	root := t.TempDir()
+	big := make([]byte, 700_000)
+	for i := range big {
+		big[i] = byte(i*31 + i/7)
+	}
+	_ = os.WriteFile(root+"/manual.pdf", append([]byte("%PDF-1.7\n"), big...), 0o644)
+	_ = os.WriteFile(root+"/README.md", []byte("# Read me\n\nFrom the phone.\n"), 0o644)
+	l.m.opts.Cwd, l.m.session.Info.Root = root, root
+	steps, _ := json.Marshal([]map[string]any{{"type": "hello"}, {"fetch": "manual.pdf"}, {"fetch": "README.md"}})
+	cmd := exec.Command("bun", "test/e2e-phone.js", relay, l.secret(t).Encode(), string(steps))
+	cmd.Dir = page
+	out, _ := cmd.StdoutPipe()
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	lines := make(chan map[string]any, 256)
+	go func() {
+		s := bufio.NewScanner(out)
+		s.Buffer(make([]byte, 1<<20), 1<<22)
+		for s.Scan() {
+			var m map[string]any
+			if json.Unmarshal(s.Bytes(), &m) == nil {
+				lines <- m
+			}
+		}
+		close(lines)
+	}()
+	fetched := map[string]string{}
+	deadline := time.After(60 * time.Second)
+	for done := false; !done; {
+		select {
+		case msg := <-l.inbox:
+			_, c := l.m.Update(msg)
+			l.exec(c)
+		case line, ok := <-lines:
+			if !ok {
+				t.Fatal("the page's phone ended early")
+			}
+			if line["badChunk"] != nil || line["refused"] != nil || line["timeout"] != nil || line["closed"] != nil {
+				t.Fatalf("the page's phone: %v", line)
+			}
+			if p, ok := line["fetched"].(string); ok {
+				fetched[p] = line["sha256"].(string)
+			}
+			done = line["done"] == true
+		case <-time.After(30 * time.Millisecond):
+			l.exec(l.m.linkAfter())
+		case <-deadline:
+			t.Fatalf("the page did not finish reading; got %v", fetched)
+		}
+	}
+	for _, name := range []string{"manual.pdf", "README.md"} {
+		disk, _ := os.ReadFile(root + "/" + name)
+		sum := sha256.Sum256(disk)
+		if fetched[name] != hex.EncodeToString(sum[:]) {
+			t.Fatalf("%s on the phone is not the file on disk (%s vs %x)", name, fetched[name], sum)
+		}
+	}
 }
