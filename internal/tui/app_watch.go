@@ -21,6 +21,8 @@ import (
 type watchApp struct {
 	card *toolItem // the card it was opened on: a command's call, or a sub-agent's delegation
 	job  string    // a background command's id, when it runs in the background
+	// restarting is set while its r waits for the engine, which answers with the new id to follow.
+	restarting bool
 }
 
 func (w *watchApp) title() string { return "What's going on" }
@@ -123,6 +125,7 @@ func (w *watchApp) handle(m *Model, msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		if w.job == "" && !w.running(m) {
 			return false, m.toast(toastInfo, "That call has ended; ask Friday to run it again")
 		}
+		w.restarting = true
 		return false, tea.Batch(m.toast(toastInfo, "Running it again…"), m.sessionCommand("command-restart", w.commandID()))
 	case "right":
 		if w.card != nil {
@@ -273,3 +276,16 @@ func (w *watchApp) helperLines(m *Model, now time.Time, add func(string)) []butt
 
 // watchTail is how many of a sub-agent's last steps the view shows, as many as a command's lines.
 const watchTail = 10
+
+// followRestart points the view whose r was pressed at the id its command now runs under, so a
+// second r restarts that one instead of starting another copy beside it.
+func (m *Model) followRestart(now string) {
+	for _, win := range m.windows {
+		if w, ok := win.(*watchApp); ok && w.restarting {
+			w.restarting = false
+			if now != "" && w.job != "" {
+				w.job = now
+			}
+		}
+	}
+}

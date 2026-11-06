@@ -4,6 +4,9 @@ package tools
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -150,5 +153,35 @@ func TestAForegroundRestartRunsItAgainInTheSameCall(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("restart did not run it again")
+	}
+}
+
+// A test run the person stops is a cancel, not a timing: it must not teach the project's test-time
+// history that the suite takes as long as the person waited.
+func TestATestRunThePersonStopsIsNotLearned(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a shell script stands in for go")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte("#!/bin/sh\necho running tests\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	w, tools := bg(t)
+	done := make(chan tool.Result, 1)
+	go func() {
+		done <- tools["run_command"].Run(context.Background(), tool.Context{CallID: "call-t"}, tool.Args{"command": "go test ./..."})
+	}()
+	a := activityOf(t, w, "call-t", func(a Activity) bool { return a.Pid > 0 && len(a.Tail) == 1 })
+	if _, err := w.jobs.StopActivity(a.ID); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stop did not end the test run")
+	}
+	if data, err := os.ReadFile(filepath.Join(w.Root, ".archymedes", "test-times.json")); err == nil && strings.Contains(string(data), "./...") {
+		t.Fatalf("a stopped run was learned as a timing:\n%s", data)
 	}
 }

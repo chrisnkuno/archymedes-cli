@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/chrisnkuno/friday-cli/internal/core/llm"
@@ -84,6 +85,7 @@ func loadProvidersFixture(t *testing.T) providersFixture {
 // counted among the listings asked.
 type portNet struct {
 	good, check string
+	mu          sync.Mutex // the model list asks several providers at once
 	asked       []string
 	routes      func(url string) (int, string, bool)
 }
@@ -98,7 +100,9 @@ func (n *portNet) get(_ context.Context, url string, headers map[string]string) 
 		}
 		return 200, []byte(`{"data":{}}`), nil
 	}
+	n.mu.Lock()
 	n.asked = append(n.asked, url)
+	n.mu.Unlock()
 	if n.routes != nil {
 		if status, body, ok := n.routes(url); ok {
 			return status, []byte(body), nil

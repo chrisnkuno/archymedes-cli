@@ -506,8 +506,9 @@ Every edit is shown as it lands, not only when the turn ends.
 - **Every call, readable in full.** A card shows one line for what a call was given and a few
   rows of what it returned. When more is folded away, `▸ show all` under it names what: the full
   command or script it ran, its other arguments, how many lines of output. A click on it (or enter
-  on the selected card) opens that card in place; `▾ fold` closes it. ctrl+o opens every card,
-  and space reads one in a pager.
+  on the selected card) opens that card in place; `▾ fold` closes it. While a command still runs,
+  or a helper still works, enter opens What's going on instead, and a click on `▸ show all` still
+  opens the card. ctrl+o opens every card, and space reads one in a pager.
 - **In Changes** (F10): the whole diff of every file against the last commit. A click on a file in
   the rail opens Changes on it.
 

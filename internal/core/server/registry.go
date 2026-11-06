@@ -237,7 +237,12 @@ var sessionCommands = []sessionCommand{
 		return agentAnswer(sess.core.Jobs().StopActivity(arg))
 	}},
 	{"command-restart", "Run a command again by its id or call id: the same command in the same folder", func(sess *session, arg string) map[string]any {
-		return agentAnswer(sess.core.Jobs().RestartActivity(arg))
+		text, now, err := sess.core.Jobs().Restart(arg)
+		answer := agentAnswer(text, err)
+		if err == nil && now != "" {
+			answer["id"] = now // a background command's new id, so the view follows it
+		}
+		return answer
 	}},
 	{"agent-send", "Tell a sub-agent \"<id> <message>\": read at its next step, or a finished one starts again", func(sess *session, arg string) map[string]any {
 		id, message, _ := strings.Cut(strings.TrimSpace(arg), " ")

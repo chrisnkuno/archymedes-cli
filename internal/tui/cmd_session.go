@@ -77,6 +77,9 @@ func (m *Model) commandDone(msg commandDoneMsg) tea.Cmd {
 		m.tr.add(item)
 	default:
 		if strings.HasPrefix(msg.command, "command-") {
+			if msg.command == "command-restart" {
+				m.followRestart(msg.result.ID)
+			}
 			return tea.Batch(m.toast(toastInfo, msg.result.Text), m.askActivity())
 		}
 		if msg.command == "undo" || msg.command == "rewind" || msg.command == "compact" || msg.command == "spawn" || strings.HasPrefix(msg.command, "agent-") {

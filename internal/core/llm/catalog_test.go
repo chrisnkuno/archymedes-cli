@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -148,11 +149,14 @@ func TestKeyInfoAndFailuresAreTypeScripts(t *testing.T) {
 // fakeNet answers by URL prefix; it records what was asked and with which headers.
 type fakeNet struct {
 	routes map[string]func(headers map[string]string) (int, string, error)
+	mu     sync.Mutex // the free catalog asks two URLs at once
 	asked  []string
 }
 
 func (n *fakeNet) get(_ context.Context, url string, headers map[string]string) (int, []byte, error) {
+	n.mu.Lock()
 	n.asked = append(n.asked, url)
+	n.mu.Unlock()
 	for prefix, answer := range n.routes {
 		if strings.HasPrefix(url, prefix) {
 			status, body, err := answer(headers)

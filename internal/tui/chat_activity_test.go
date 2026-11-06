@@ -103,6 +103,15 @@ func TestABackgroundCommandOpensFromTheRailOnASecondClickAndRestarts(t *testing.
 	if got := sentCommands(agent); !slices.Contains(got, "command-restart:cmd1") {
 		t.Fatalf("r restarts it by its id: %v", got)
 	}
+	// The view follows the command to its new id: r again restarts the new one, never starts a
+	// second copy beside it.
+	if w, _ := windowOf[*watchApp](m); w.job != "cmd2" {
+		t.Fatalf("after a restart the view still watches %q, want cmd2", w.job)
+	}
+	run(m, press(m, 'r', 0))
+	if got := sentCommands(agent); !slices.Contains(got, "command-restart:cmd2") || strings.Count(strings.Join(got, " "), "command-restart:cmd1") != 1 {
+		t.Fatalf("a second r restarted the old id again: %v", got)
+	}
 }
 
 func TestTheViewSaysWhenTheCPUCannotBeRead(t *testing.T) {

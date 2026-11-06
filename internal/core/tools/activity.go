@@ -217,6 +217,13 @@ func (s *Jobs) StopActivity(id string) (string, error) {
 // RestartActivity runs a command again, the same in the same folder: a background one is stopped
 // and started anew under a new id; a foreground one is ended and run again in the same call.
 func (s *Jobs) RestartActivity(id string) (string, error) {
+	text, _, err := s.Restart(id)
+	return text, err
+}
+
+// Restart is RestartActivity with the id the command now runs under: a background one's new id,
+// or "" for a foreground one, which keeps its call.
+func (s *Jobs) Restart(id string) (text, now string, err error) {
 	j, f := s.find(id)
 	switch {
 	case f != nil:
@@ -227,18 +234,18 @@ func (s *Jobs) RestartActivity(id string) (string, error) {
 		if cancel != nil {
 			cancel()
 		}
-		return fmt.Sprintf("Running %s again", f.command), nil
+		return fmt.Sprintf("Running %s again", f.command), "", nil
 	case j != nil:
 		if j.View().Status == JobRunning {
 			s.Stop(j)
 		}
 		again, err := s.Start(j.Command, j.Dir)
 		if err != nil {
-			return "", fmt.Errorf("%s could not start again: %w", j.ID, err)
+			return "", "", fmt.Errorf("%s could not start again: %w", j.ID, err)
 		}
-		return fmt.Sprintf("Started %s again as %s (pid %d)", j.ID, again.ID, again.Pid), nil
+		return fmt.Sprintf("Started %s again as %s (pid %d)", j.ID, again.ID, again.Pid), again.ID, nil
 	}
-	return "", fmt.Errorf("no command %s this session", strings.TrimSpace(id))
+	return "", "", fmt.Errorf("no command %s this session", strings.TrimSpace(id))
 }
 
 // tailLines is the last n lines b holds, oldest first: a carriage return keeps what was drawn

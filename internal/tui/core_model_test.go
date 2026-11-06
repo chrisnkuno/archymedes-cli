@@ -77,6 +77,12 @@ func (f *fakeAgent) Command(_ context.Context, _ string, command, argument strin
 	f.commands = append(f.commands, command+":"+argument)
 	f.mu.Unlock()
 	switch command {
+	case "command-restart":
+		// A background command starts again under the next id, as the engine does.
+		if again, ok := map[string]string{"cmd1": "cmd2", "cmd2": "cmd3"}[argument]; ok {
+			return acp.CommandResult{Kind: "text", Text: "Started " + argument + " again as " + again, ID: again}, nil
+		}
+		return acp.CommandResult{Kind: "text", Text: "Running it again"}, nil
 	case "activity":
 		f.mu.Lock()
 		all := f.activity

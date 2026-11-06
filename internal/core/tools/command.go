@@ -131,7 +131,9 @@ func (w *Workspace) runCommand() *tool.Tool {
 			body += personal
 			data := map[string]any{"command": command, "exitCode": out.exit, "stdout": out.stdout, "stderr": out.stderr}
 			result := tool.Result{Content: fmt.Sprintf("exit %d\n%s", out.exit, body), IsError: out.exit != 0, Data: data}
-			if isTest && ctx.Err() == nil && out.missing == "" && out.exit != 127 {
+			// A run the person stopped is a cancel, like a cancelled turn: it says nothing of how long
+			// the suite takes.
+			if isTest && ctx.Err() == nil && !watched.stoppedByPerson() && out.missing == "" && out.exit != 127 {
 				w.tests().Record(advice.Run, took, out.stdout+"\n"+out.stderr, out.timedOut)
 				if out.exit != 0 {
 					w.tests().Forget(reuseKey(command))
